@@ -68,17 +68,13 @@ if (!window.__abContentInstalled) {
 
   async function fillField({ field, value, label, mode }) {
     if (!FIELD_RE.test(field || '')) return { ok: false, reason: 'bad-field' };
-    let text = String(value ?? '');
+    const text = String(value ?? '');
     if (!text) return { ok: false, reason: 'bad-field' };
-    // Never overwrite what the agent already typed: add below it.
-    if (mode === 'append') {
-      const current = await tryCallPage('getFormValues', [[field]]);
-      const existing = current?.[field];
-      if (existing && existing.trim()) text = `${existing.replace(/\s+$/, '')}\n\n${text}`;
-    }
     if (text.length > MAX_INSERT_CHARS) return { ok: false, reason: 'too-long' };
     try {
-      return (await callPage('fillField', [field, text, label || ''])) || { ok: false, reason: 'no-form' };
+      // 'append' = never overwrite what the agent already typed: the bridge adds the text below it, on a classic form
+      // (g_form) and on a Workspace page (the control it finds in the DOM) alike.
+      return (await callPage('fillField', [field, text, label || '', mode === 'append'])) || { ok: false, reason: 'no-form' };
     } catch {
       return { ok: false, reason: 'no-form' };
     }

@@ -6,6 +6,8 @@
 // Modes (fakeAi.setMode):
 //   'echo'            (default) a short answer that mentions every placeholder it received
 //   'markdown-image'  the answer also contains ![x](https://evil.example/?q=1), as a model that obeyed an injection would
+//   'bare-secret'     a short answer that repeats a secret as a bare value, with no "password:" label in front of it
+//   'slow'            the normal answer after 1.5 seconds (to switch tabs while a request is in flight)
 //   'bad-key'         HTTP 401, as a provider rejecting the key
 //   'error'           HTTP 500
 const http = require('http');
@@ -30,7 +32,7 @@ function echoAnswer(userText) {
   return [
     `Issue: ${person} reports a recurring VPN problem.`,
     `Impact: One user. Contact on file: ${mention(['EMAIL', 'PHONE'])}.`,
-    `Done so far: The notes also mention ${mention(['CARD', 'SECRET'])}.`,
+    `Done so far: The notes also mention card ${(p.CARD || ['none'])[0]} and password: ${(p.SECRET || ['none'])[0]}.`,
     `Current state: Handled by ${p.PERSON?.[1] || 'the team'}.`,
     `Next step: Hello ${person}, please confirm your details.`,
   ].join('\n');
@@ -40,13 +42,15 @@ function startFakeAi() {
   const state = { mode: 'echo' };
   /** Every chat request received: { path, method, auth, body (parsed), raw, at } */
   const requests = [];
+  /** Every chat request of the whole run (reset() does not clear it): the final leak sweep reads this. */
+  const all = [];
   /** Anything that was not a chat completion (should stay empty). */
   const other = [];
 
   const server = http.createServer((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
-    req.on('end', () => {
+    req.on('end', async () => {
       const raw = Buffer.concat(chunks).toString('utf8');
       const send = (status, body) => {
         res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' });
@@ -64,7 +68,9 @@ function startFakeAi() {
         /* recorded below with body null */
       }
       const auth = req.headers.authorization || '';
-      requests.push({ method: req.method, path: req.url, auth, body, raw, at: Date.now() });
+      const record = { method: req.method, path: req.url, auth, origin: req.headers.origin || '', body, raw, at: Date.now() };
+      requests.push(record);
+      all.push(record);
 
       if (state.mode === 'bad-key' || auth !== `Bearer ${EXPECTED_KEY}`) return send(401, { error: { message: 'Incorrect API key provided', type: 'invalid_request_error' } });
       if (state.mode === 'error') return send(500, { error: { message: 'The fake AI is having a bad day' } });
@@ -76,6 +82,11 @@ function startFakeAi() {
         const person = placeholdersIn(userText).PERSON?.[0] || 'the caller';
         content = `Summary for ${person}.\n\n![x](https://evil.example/?q=1)\n\nSee [the report](https://evil.example/report?q=2) for more.`;
       }
+      if (state.mode === 'bare-secret') {
+        const p = placeholdersIn(userText);
+        content = `Hello ${p.PERSON?.[0] || 'there'}, your temporary sign-in value is ${p.SECRET?.[0] || '(none)'} - please use it once.`;
+      }
+      if (state.mode === 'slow') await new Promise((r) => setTimeout(r, 1500));
       return send(200, {
         id: 'chatcmpl-e2e',
         object: 'chat.completion',
@@ -95,6 +106,7 @@ function startFakeAi() {
         baseUrl: `http://localhost:${port}/v1`,
         key: EXPECTED_KEY,
         requests,
+        all,
         other,
         setMode: (mode) => {
           state.mode = mode;

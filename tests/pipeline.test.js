@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-import { prepareRun, executeRun, previewRequired, assertRunnable, RunBlocked, errorReason } from '../src/lib/pipeline.js';
+import { prepareRun, executeRun, previewRequired, assertRunnable, connectionProblem, RunBlocked, errorReason } from '../src/lib/pipeline.js';
 import { featureById, featuresFor, partsFor } from '../src/features/registry.js';
 import { packToParts, peopleFor } from '../src/features/parts.js';
 import { normalizePolicy, effectiveSettings } from '../src/policy/policy.js';
@@ -90,6 +90,15 @@ test('runs are refused before anything is built when policy or setup says no', (
   assert.throws(run({ values: { piiMode: 'local-only' } }), (e) => e.code === 'NOT_LOCAL');
   assert.throws(run({ policy: { aiProvider: 'openai' } }), (e) => e.code === 'PROVIDER_BLOCKED');
   assert.throws(run({ config: config({ invalidBaseUrl: 'bad' }) }), (e) => e.code === 'BAD_URL');
+  // "Other (OpenAI-compatible server)" with no address would fall back to OpenAI's own API with the person's key.
+  assert.throws(run({ config: resolveProviderConfig({ provider: 'custom', models: { custom: 'm' } }, 'k') }), (e) => e.code === 'BAD_URL' && /address of your AI server/.test(e.message));
+});
+
+test('connectionProblem: a custom provider needs an address; a hosted one may use its own API', () => {
+  assert.match(connectionProblem(resolveProviderConfig({ provider: 'custom', models: { custom: 'm' } }, 'k')), /address of your AI server/);
+  assert.equal(connectionProblem(resolveProviderConfig({ provider: 'custom', baseUrls: { custom: 'http://localhost:1234/v1' } }, 'k')), '');
+  assert.equal(connectionProblem(resolveProviderConfig({ provider: 'openai' }, 'k')), '');
+  assert.match(connectionProblem(resolveProviderConfig({ provider: 'custom', baseUrls: { custom: 'ftp://x' } }, 'k')), /not valid/);
 });
 
 test('HR content is blocked unless the organisation allows it', () => {

@@ -100,10 +100,17 @@
       if (tag !== 'TEXTAREA' && tag !== 'INPUT') return false;
       var attrs = [el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('data-field-name')];
       if (attrs.some(function (a) { return a && (a === name || a.slice(-(name.length + 1)) === '.' + name); })) return true;
+      // Workspace controls carry only an aria-label ("Work notes", sometimes "Work notes (internal)"): match the whole phrase.
       var aria = (el.getAttribute('aria-label') || '').toLowerCase();
-      return Boolean(wanted) && aria === wanted;
+      return Boolean(wanted) && Boolean(aria) && (aria === wanted || aria.indexOf(wanted) !== -1);
     }, [], 0);
     return found[0] || null;
+  }
+
+  // `text` below what a field holds already (nothing is added above or in place of it).
+  function appendBelow(existing, text) {
+    var current = existing == null ? '' : String(existing);
+    return current.trim() ? current.replace(/\s+$/, '') + '\n\n' + text : text;
   }
 
   function setNativeValue(el, value) {
@@ -178,8 +185,9 @@
     },
 
     // THE ONLY WRITE: put a value into one existing field on the open form. Nothing is saved.
+    // With append === true the text goes BELOW whatever the field already holds, so what the agent typed is never lost.
     // Returns { ok, method: 'gform' | 'dom', reason }.
-    fillField: function (name, value, label) {
+    fillField: function (name, value, label, append) {
       if (typeof name !== 'string' || !FIELD_RE.test(name) || SECRET_NAME_RE.test(name)) return { ok: false, reason: 'bad-field' };
       var text = String(value == null ? '' : value);
       if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
@@ -200,6 +208,8 @@
             // getEditableFields() is trustworthy; isReadOnly() answers true for everything on current releases.
             if (editable && editable.length && editable.indexOf(name) === -1) return { ok: false, reason: 'read-only' };
           }
+          if (append === true) text = appendBelow(f.getValue(name), text);
+          if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
           f.setValue(name, text);
           return { ok: true, method: 'gform' };
         } catch (e) {
@@ -211,6 +221,8 @@
       if (!el) return { ok: false, reason: 'no-form' };
       if (el.disabled || el.readOnly) return { ok: false, reason: 'read-only' };
       try {
+        if (append === true) text = appendBelow(el.value, text);
+        if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
         setNativeValue(el, text);
         return { ok: true, method: 'dom' };
       } catch (e) {

@@ -1,5 +1,7 @@
 // b. Turning on an instance registers the content scripts, and the page state (which record is open) is found on a classic
 //    form (through the page bridge), on a Workspace-style page without g_form (from the URL), and inside the classic frame.
+const { clickButton, waitForText } = require('../ui.js');
+
 module.exports = {
   id: 'b',
   title: 'Enable the instance: content scripts, record detection on classic and Workspace pages',
@@ -86,14 +88,25 @@ module.exports = {
     t.check('a different origin (127.0.0.1) that was not enabled gets no content script', Boolean(otherState.sendError), otherState.sendError || JSON.stringify(otherState));
     await other.close();
 
-    // 9. Turning the instance off removes the scripts; turning it on again brings them back.
+    // 9. Turning the instance off removes the scripts.
     await ctx.ext((origin) => chrome.runtime.sendMessage({ type: 'ab:disable-instance', origin }), inst.origin);
     t.check('DISABLE_INSTANCE unregisters the scripts', (await ctx.ext(() => chrome.scripting.getRegisteredContentScripts())).length === 0);
-    await ctx.ext((origin) => chrome.runtime.sendMessage({ type: 'ab:enable-instance', origin }), inst.origin);
-    t.check('ENABLE_INSTANCE registers them again', (await ctx.ext(() => chrome.scripting.getRegisteredContentScripts())).length === 2);
+    t.check('DISABLE_INSTANCE removes the instance from the settings', (await ctx.settings()).instances.length === 0);
+    await classic.close();
+
+    // 10. The panel on a page that is not turned on offers "Turn on for this site"; the click (a real user gesture) enables it.
+    //     (The browser's own permission prompt is skipped here: the patched copy already holds the localhost permission.)
+    const fresh = await ctx.openInstancePage(classicPath, 'ticket-fresh');
+    const panel = await ctx.openPanel();
+    await waitForText(panel.page, 'Not turned on for this page', { timeout: 15000 });
+    const setup = await panel.text();
+    t.check('panel on a page that is not turned on: says so and names the instance address', setup.includes(`localhost:${inst.port}`) && /Turn on for this site/.test(setup), setup.replace(/\s+/g, ' ').slice(0, 160));
+    await clickButton(panel.page, /^Turn on for this site/);
+    await waitForText(panel.page, data.INCIDENT_NUMBER, { timeout: 20000 });
+    t.check('"Turn on for this site" registers the scripts and the open ticket is then recognised without a reload', (await ctx.ext(() => chrome.scripting.getRegisteredContentScripts())).length === 2 && /Summarise this ticket|Add an AI key/.test(await panel.text()));
     const settings = await ctx.settings();
     t.check('settings.instances holds exactly the instance', JSON.stringify(settings.instances) === JSON.stringify([inst.origin]), JSON.stringify(settings.instances));
-
-    await classic.close();
+    await panel.close();
+    await fresh.close();
   },
 };

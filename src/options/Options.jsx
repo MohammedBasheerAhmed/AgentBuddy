@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PROVIDERS, resolveProviderConfig } from '../providers/config.js';
 import { sendChat } from '../providers/index.js';
 import { createFirewall } from '../pii/index.js';
@@ -6,6 +6,7 @@ import { validateBaseUrl } from '../lib/aiUsage.js';
 import { ensureAiPermission } from '../lib/aiPermission.js';
 import { loadEffective, saveSettings, keyStore, readAudit, clearAudit } from '../lib/storage.js';
 import { auditToCsv } from '../audit/auditLog.js';
+import { connectionProblem } from '../lib/pipeline.js';
 import { MSG } from '../lib/messages.js';
 import { instancePattern, normalizeInstance, isInstanceAllowed, PII_MODES, PREVIEW_MODES, KEY_STORAGE_MODES } from '../policy/policy.js';
 
@@ -25,6 +26,46 @@ function Locked({ why }) {
   return why ? <span className="ab-locked">{why}</span> : null;
 }
 
+/**
+ * A text box that keeps what is typed in the box itself and saves a moment later (and on leaving it). Saving on every keystroke
+ * and drawing the box again from storage loses characters whenever typing is faster than the save, which corrupts an address.
+ */
+function DraftInput({ value, onSave, delay = 300, ...rest }) {
+  const [draft, setDraft] = useState(value);
+  const pending = useRef(null); // the text waiting to be saved, or null
+  const timer = useRef(0);
+  const save = useRef(onSave);
+  save.current = onSave;
+
+  // A change from outside (another provider chosen, a policy applied) shows up unless the person is mid-edit.
+  useEffect(() => {
+    if (pending.current === null) setDraft(value);
+  }, [value]);
+
+  const flush = useCallback(() => {
+    clearTimeout(timer.current);
+    if (pending.current === null) return;
+    const text = pending.current;
+    pending.current = null;
+    save.current(text);
+  }, []);
+  useEffect(() => flush, [flush]); // leaving the page saves what was typed
+
+  return (
+    <input
+      {...rest}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        pending.current = e.target.value;
+        clearTimeout(timer.current);
+        timer.current = setTimeout(flush, delay);
+      }}
+      onBlur={flush}
+    />
+  );
+}
+
 function ProviderSection({ eff, reload }) {
   const v = eff.values;
   const def = PROVIDERS[v.provider];
@@ -42,6 +83,7 @@ function ProviderSection({ eff, reload }) {
 
   const baseUrlTyped = v.baseUrls?.[v.provider] || '';
   const model = v.models?.[v.provider] || def.defaultModel;
+  const needsAddress = v.provider === 'custom'; // there is no public API to fall back on
 
   async function change(patch) {
     await saveSettings(patch);
@@ -78,6 +120,9 @@ function ProviderSection({ eff, reload }) {
     setBusy(true);
     try {
       const cfg = resolveProviderConfig(v, eff.apiKey);
+      // The same refusal as every real send: no address for "my own server" must never fall back to a public API with this key.
+      const problem = connectionProblem(cfg);
+      if (problem) throw new Error(problem);
       // A hosted provider needs the browser's permission for its address first (requested from this click).
       await ensureAiPermission(cfg);
       // The test goes through the same firewall as everything else: there is no side door to the provider.
@@ -109,17 +154,19 @@ function ProviderSection({ eff, reload }) {
 
       {(def.userBaseUrl || def.baseUrl) && (
         <div className="ab-field">
-          <label className="ab-label" htmlFor="baseurl">Address {def.userBaseUrl ? '(optional)' : ''}</label>
-          <input
+          <label className="ab-label" htmlFor="baseurl">Address {def.userBaseUrl ? (needsAddress ? '(required)' : '(optional)') : ''}</label>
+          <DraftInput
             id="baseurl"
             className="ab-input ab-mono"
             value={def.baseUrl || baseUrlTyped}
             readOnly={!def.userBaseUrl || Boolean(eff.locked.baseUrl)}
             placeholder="https://your-gateway.example.com/v1"
-            onChange={(e) => change({ baseUrls: { ...v.baseUrls, [v.provider]: e.target.value } })}
+            onSave={(text) => change({ baseUrls: { ...v.baseUrls, [v.provider]: text } })}
           />
           {!baseCheck.ok && <span className="ab-locked" role="alert">{baseCheck.error}</span>}
-          <span className="ab-hint">Leave empty to use the provider's own API. Azure OpenAI and internal gateways go here.</span>
+          <span className="ab-hint">
+            {needsAddress ? 'The address of your OpenAI-compatible server, for example http://localhost:11434/v1.' : "Leave empty to use the provider's own API. Azure OpenAI and internal gateways go here."}
+          </span>
           <Locked why={eff.locked.baseUrl} />
         </div>
       )}
@@ -127,7 +174,7 @@ function ProviderSection({ eff, reload }) {
       <div className="ab-field">
         <label className="ab-label" htmlFor="model">Model</label>
         {def.freeModel || def.userBaseUrl ? (
-          <input id="model" className="ab-input ab-mono" list="models" value={model} disabled={Boolean(eff.locked.model)} onChange={(e) => change({ models: { ...v.models, [v.provider]: e.target.value } })} />
+          <DraftInput id="model" className="ab-input ab-mono" list="models" value={model} disabled={Boolean(eff.locked.model)} onSave={(text) => change({ models: { ...v.models, [v.provider]: text } })} />
         ) : (
           <select id="model" className="ab-select" value={model} disabled={Boolean(eff.locked.model)} onChange={(e) => change({ models: { ...v.models, [v.provider]: e.target.value } })}>
             {def.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { SafeText } from '../render/SafeText.jsx';
 import { parseSafeText, toPlainText } from '../render/safeText.js';
-import { checkOutgoing } from '../safeSend/index.js';
+import { checkOutgoing, maskExcerpt } from '../safeSend/index.js';
 import { MSG } from '../lib/messages.js';
 
 const REASONS = {
@@ -16,7 +16,29 @@ const REASONS = {
 // Fields whose content the customer can read: checked for personal data and secrets before insert.
 const CUSTOMER_VISIBLE = new Set(['comments', 'close_notes']);
 
-export default function ResultView({ feature, text, page, people, onAgain, onClose, audit }) {
+// Kinds the firewall masks on the way out and that must never come back into a message the customer reads.
+const NEVER_BACK = new Set(['SECRET', 'URL_CREDENTIALS', 'CARD', 'IBAN', 'NATIONAL_ID']);
+const NEVER_BACK_ADVICE = 'This is a password, key, card number or ID that was hidden from the AI, and it is back in the draft. Remove it before it reaches the customer.';
+
+/**
+ * checkOutgoing() plus the firewall's own memory. The firewall learns every secret it masks, so a password the model repeats
+ * bare ("your sign-in value is Winter2026...", no "password:" in front) is still recognised. Findings come back masked.
+ */
+function seriousFindings(plain, people, scan) {
+  const found = checkOutgoing(plain, { people }).findings.filter((f) => f.severity !== 'low');
+  let remembered = [];
+  try {
+    remembered = (scan ? scan(plain) : []).filter((f) => NEVER_BACK.has(f.kind));
+  } catch {
+    /* the text check above still applies */
+  }
+  const extra = remembered
+    .filter((f) => !found.some((g) => g.start < f.end && f.start < g.end))
+    .map((f) => ({ kind: f.kind, severity: 'high', start: f.start, end: f.end, excerpt: maskExcerpt(f.value), advice: NEVER_BACK_ADVICE }));
+  return [...found, ...extra];
+}
+
+export default function ResultView({ feature, text, page, people, scan, onAgain, onClose, audit }) {
   const [note, setNote] = useState(null);
   const [findings, setFindings] = useState(null);
   const plain = toPlainText(parseSafeText(text));
@@ -35,8 +57,7 @@ export default function ResultView({ feature, text, page, people, onAgain, onClo
     setNote(null);
     const field = feature.insert.field;
     if (!force && CUSTOMER_VISIBLE.has(field)) {
-      const check = checkOutgoing(plain, { people });
-      const serious = check.findings.filter((f) => f.severity !== 'low');
+      const serious = seriousFindings(plain, people, scan);
       if (serious.length) {
         setFindings(serious);
         return;
@@ -45,7 +66,8 @@ export default function ResultView({ feature, text, page, people, onAgain, onClo
     setFindings(null);
     let answer;
     try {
-      answer = await chrome.tabs.sendMessage(page.tabId, { type: MSG.FILL_FIELD, field, value: plain, label: feature.insert.label, mode: 'append' });
+      // `label` is how the control is named on a Workspace page (its aria-label), not the button text.
+      answer = await chrome.tabs.sendMessage(page.tabId, { type: MSG.FILL_FIELD, field, value: plain, label: feature.insert.fieldLabel || feature.insert.label, mode: 'append' });
     } catch {
       answer = { ok: false, reason: 'no-form' };
     }
@@ -73,7 +95,7 @@ export default function ResultView({ feature, text, page, people, onAgain, onClo
           </ul>
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => insert(true)}>Insert anyway</button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setFindings(null)}>Edit first (copy instead)</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => { setFindings(null); copy('Not inserted.'); }}>Edit first (copy instead)</button>
           </div>
         </div>
       )}

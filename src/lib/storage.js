@@ -15,10 +15,16 @@ export async function loadSettings() {
   return { ...DEFAULT_SETTINGS, ...(stored && typeof stored === 'object' ? stored : {}) };
 }
 
-export async function saveSettings(patch) {
-  const next = { ...(await loadSettings()), ...patch };
-  await chrome.storage.local.set({ [SETTINGS_KEY]: next });
-  return next;
+// Two saves at once (the address and the model typed in quick succession, or the settings page and the service worker) are
+// read-modify-write: without a lock the second would start from the old settings and silently undo the first.
+const withSettingsLock = (fn) => (typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request('agentbuddy-settings', fn) : fn());
+
+export function saveSettings(patch) {
+  return withSettingsLock(async () => {
+    const next = { ...(await loadSettings()), ...patch };
+    await chrome.storage.local.set({ [SETTINGS_KEY]: next });
+    return next;
+  });
 }
 
 /** The organisation's policy from chrome.storage.managed, normalised. An empty policy is the normal case. */

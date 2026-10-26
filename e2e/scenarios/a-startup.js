@@ -22,8 +22,20 @@ module.exports = {
     t.check('real dist/manifest.json is unchanged and has no host_permissions', sha256(ctx.extension.realManifestPath) === ctx.extension.realManifestHash && !real.host_permissions);
     t.info('Only the temp COPY of the manifest is patched (localhost host_permissions, so automation needs no permission prompt). The shipped manifest is untouched.');
 
+    // Self-test of the harness' own watchers, so that "no errors" and "no stray requests" below mean something.
+    const marker = `e2e-selftest-${Date.now()}`;
+    await ctx.ctl.evaluate((m) => {
+      console.error(m);
+      setTimeout(() => { throw new Error(m); }, 0);
+      fetch(`https://selftest.invalid/${m}`).catch(() => {});
+    }, marker);
+    await ctx.sleep(700);
+    const seen = (list) => list.filter((x) => `${x.text || ''} ${x.url || ''}`.includes(marker));
+    t.check('harness self-test: a console error, a page error and a network request are all noticed', seen(ctx.errors).some((e) => e.kind === 'console') && seen(ctx.errors).some((e) => e.kind === 'pageerror') && seen(ctx.net).length === 1, `errors=${seen(ctx.errors).length} net=${seen(ctx.net).length}`);
+    for (const list of [ctx.errors, ctx.net]) for (const x of seen(list)) list.splice(list.indexOf(x), 1);
+
     // The settings page is already open (the control page). Give it a moment, then look for errors.
-    await ctx.sleep(1200);
+    await ctx.sleep(500);
     const pageErrors = () => ctx.errors.filter((e) => e.url.startsWith(`chrome-extension://${ctx.extId}/`) || e.from === 'service-worker');
     t.check('options.html: no page errors, console errors or CSP violations', pageErrors().length === 0, pageErrors().map((e) => `${e.kind}: ${e.text}`).join(' | '));
     t.check('options.html: renders the settings form', (await ctx.ctl.evaluate(() => document.body.innerText)).includes('Agent Buddy settings'));

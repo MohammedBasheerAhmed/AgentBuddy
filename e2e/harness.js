@@ -42,18 +42,42 @@ function prepareExtension() {
   if (manifest.host_permissions) throw new Error('The real manifest already has host_permissions; this harness assumes it has none.');
   manifest.host_permissions = ['https://localhost/*', 'http://localhost/*', 'http://127.0.0.1/*'];
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-  return { dir, manifest, realManifestHash, realManifestPath: path.join(dist, 'manifest.json') };
+  const mutation = process.env.E2E_MUTATE || '';
+  if (mutation) applyMutation(dir, mutation);
+  return { dir, manifest, realManifestHash, realManifestPath: path.join(dist, 'manifest.json'), mutation };
+}
+
+// SELF-CHECK OF THE HARNESS (not part of a normal run): `E2E_MUTATE=<name> node e2e/run.js` breaks the COPY of the extension on
+// purpose, to show that the run then FAILS. A test that cannot fail proves nothing. Each mutation must match exactly once.
+const MUTATIONS = {
+  // the content script sends PATCH instead of GET -> the read-only checks must fail
+  write: ['content.bundle.js', 'method: "GET" });', 'method: "PATCH" });'],
+  // the first provider adapter adds raw personal data to the request body -> the leak sweep must fail
+  leak: ['sidepanel.bundle.js', 'body: JSON.stringify(body)', 'body: JSON.stringify({ ...body, note: "caller Abel Tuter card 4111 1111 1111 1111" })'],
+  // the panel phones home -> the network checks must fail
+  beacon: ['sidepanel.bundle.js', '(0, import_client.createRoot)(document.getElementById("root"))', '(fetch("https://telemetry.example/ping").catch(() => {}), 0, import_client.createRoot)(document.getElementById("root"))'],
+};
+
+function applyMutation(dir, name) {
+  const m = MUTATIONS[name];
+  if (!m) throw new Error(`Unknown E2E_MUTATE "${name}". Known: ${Object.keys(MUTATIONS).join(', ')}`);
+  const file = path.join(dir, m[0]);
+  const text = fs.readFileSync(file, 'utf8');
+  if (!text.includes(m[1])) throw new Error(`Mutation ${name} does not match the build any more (${m[1].slice(0, 50)}).`);
+  fs.writeFileSync(file, text.replace(m[1], () => m[2])); // the first match only
+  console.log(`!! MUTATION "${name}" applied to the COPY of the extension (self-check of the harness: failures are expected)`);
 }
 
 // ---- Network and error bookkeeping ----------------------------------------------------------------------------------
 
-const INTERNAL_SCHEMES = /^(chrome-extension|data|blob|about|chrome|devtools):/i;
 
 /**
  * Create the context every scenario shares.
- * @param {{ headed?: boolean, log?: Function }} options
+ * @param {{ headed?: boolean, watchWorker?: boolean }} options
+ *   watchWorker: attach a DevTools session to the service worker to log its errors and requests (default). An attached session
+ *   keeps the worker alive, so a test of the idle shut-down (30 s) must turn it off.
  */
-async function createContext({ headed = false } = {}) {
+async function createContext({ headed = false, watchWorker = true } = {}) {
   fs.mkdirSync(TMP, { recursive: true });
   const puppeteer = require('puppeteer-core');
   const { makeCertificate } = require('./tls.js');
@@ -71,6 +95,7 @@ async function createContext({ headed = false } = {}) {
     executablePath: CHROME,
     headless: headed ? false : 'new',
     pipe: true, // required for enableExtensions
+    protocolTimeout: 30000, // one stuck DevTools call must not hold the whole run for the default three minutes
     enableExtensions: [ext.dir],
     acceptInsecureCerts: true,
     args: ['--no-sandbox', '--ignore-certificate-errors', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--window-size=1200,900'],
@@ -80,6 +105,8 @@ async function createContext({ headed = false } = {}) {
   const net = [];
   /** Page errors and console errors: { from, kind: 'pageerror'|'console'|'csp', text, url }. */
   const errors = [];
+  /** Every console line of every page and the service worker (any level), to prove personal data is never logged. */
+  const consoleLog = [];
   /** Every browser target ever created: { type, url }. */
   const targets = [];
   const tracked = new WeakSet();
@@ -90,8 +117,9 @@ async function createContext({ headed = false } = {}) {
     page.on('request', (req) => net.push({ from: label, url: req.url(), method: req.method() }));
     page.on('pageerror', (err) => errors.push({ from: label, kind: 'pageerror', text: String(err?.message || err), url: page.url() }));
     page.on('console', (msg) => {
-      if (msg.type() !== 'error') return;
       const text = msg.text();
+      consoleLog.push({ from: label, type: msg.type(), text });
+      if (msg.type() !== 'error') return;
       errors.push({ from: label, kind: /content security policy|refused to/i.test(text) ? 'csp' : 'console', text, url: msg.location()?.url || page.url() });
     });
     // CSP violations are also reported as DOM events; collect them even if the console line was missed.
@@ -110,6 +138,7 @@ async function createContext({ headed = false } = {}) {
       session.on('Network.requestWillBeSent', (e) => net.push({ from: 'service-worker', url: e.request.url, method: e.request.method }));
       session.on('Runtime.exceptionThrown', (e) => errors.push({ from: 'service-worker', kind: 'pageerror', text: e.exceptionDetails?.exception?.description || e.exceptionDetails?.text || 'exception', url: target.url() }));
       session.on('Runtime.consoleAPICalled', (e) => {
+        consoleLog.push({ from: 'service-worker', type: e.type, text: (e.args || []).map((a) => a.value ?? a.description ?? '').join(' ') });
         if (e.type === 'error') errors.push({ from: 'service-worker', kind: 'console', text: (e.args || []).map((a) => a.value ?? a.description ?? '').join(' '), url: target.url() });
       });
     } catch {
@@ -119,7 +148,7 @@ async function createContext({ headed = false } = {}) {
 
   browser.on('targetcreated', async (target) => {
     targets.push({ type: target.type(), url: target.url() });
-    if (target.type() === 'service_worker') trackWorker(target);
+    if (target.type() === 'service_worker' && watchWorker) trackWorker(target);
     else if (target.type() === 'page') {
       const page = await target.page().catch(() => null);
       if (page) trackPage(page, `page:${target.url().slice(0, 60) || 'new'}`);
@@ -127,12 +156,12 @@ async function createContext({ headed = false } = {}) {
   });
 
   const swTarget = await browser.waitForTarget((t) => t.type() === 'service_worker' && t.url().includes('background.bundle.js'), { timeout: 20000 });
-  trackWorker(swTarget);
+  if (watchWorker) trackWorker(swTarget);
   const extId = new URL(swTarget.url()).host;
   const extUrl = (file) => `chrome-extension://${extId}/${file}`;
 
   const ctx = {
-    TMP, data, inst, ai, extension: ext, browser, extId, extUrl, net, errors, targets, swTarget, sleep, KEYS,
+    TMP, data, inst, ai, extension: ext, browser, extId, extUrl, net, errors, consoleLog, targets, swTarget, sleep, KEYS,
     origin: inst.origin,
     shots: [],
 
@@ -163,7 +192,8 @@ async function createContext({ headed = false } = {}) {
     async shot(page, name) {
       const file = path.join(TMP, `${name.replace(/[^a-z0-9-]+/gi, '_')}.png`);
       try {
-        await page.screenshot({ path: file });
+        // A page in a background tab can refuse to paint: do not let a debugging aid hang the run.
+        await Promise.race([page.screenshot({ path: file }), sleep(4000).then(() => { throw new Error('screenshot timed out'); })]);
         ctx.shots.push(file);
         return file;
       } catch {
@@ -175,6 +205,8 @@ async function createContext({ headed = false } = {}) {
       await browser.close().catch(() => {});
       await inst.close().catch(() => {});
       await ai.close().catch(() => {});
+      // The throw-away TLS key and the extension copy are not needed any more (screenshots of failures stay).
+      for (const dir of ['tls', 'extension']) fs.rmSync(path.join(TMP, dir), { recursive: true, force: true });
     },
   };
 
@@ -192,6 +224,12 @@ async function createContext({ headed = false } = {}) {
       await chrome.storage.local.set({ [settingsKey]: { ...cur, ...patch } });
       if (keyArg) await chrome.storage.local.set({ [keyArg.slot]: keyArg.value });
     }, KEYS.settings, patch, key ? { slot: KEYS.keyFor(key.provider), value: key.value } : null);
+  };
+
+  /** Turn the fake instance on if an earlier scenario has not (so each scenario can also run alone). */
+  ctx.ensureEnabled = async () => {
+    const scripts = await ctx.ext(() => chrome.scripting.getRegisteredContentScripts());
+    if (scripts.length !== 2) await ctx.ext((origin) => chrome.runtime.sendMessage({ type: 'ab:enable-instance', origin }), inst.origin);
   };
 
   ctx.settings = () => ctx.ext(async (k) => (await chrome.storage.local.get(k))[k] || {}, KEYS.settings);

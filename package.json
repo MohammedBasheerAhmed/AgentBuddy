@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node build.js",
     "watch": "node build.js --watch",
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "e2e": "node build.js && node e2e/run.js"
   },
   "dependencies": {
     "react": "^18.3.1",

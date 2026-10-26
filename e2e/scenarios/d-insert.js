@@ -10,6 +10,7 @@ module.exports = {
   async run(t, ctx) {
     const { ai, inst, data } = ctx;
     ai.reset();
+    await ctx.ensureEnabled();
     inst.setBehaviour();
     await ctx.configure(
       { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin] },
@@ -51,10 +52,31 @@ module.exports = {
     t.check('safe-to-send check intercepts the insert and says what it found', /Check before sending to the customer/.test(warn) && /card/i.test(warn) && /password|secret|credential|token/i.test(warn), warn.replace(/\s+/g, ' '));
     t.check('the warning shows masked excerpts only (never the full card number or password)', !warn.includes(data.SEED.card) && !warn.includes(data.SEED.cardDigits) && !warn.includes(data.SEED.password));
     t.check('nothing was written to the comments field while the warning is shown', (await ticket.evaluate(() => window.__gformCalls.length)) === callsBefore && (await ticket.evaluate(() => window.g_form.getValue('comments'))) === '');
+    // "Edit first (copy instead)": the warning goes away, nothing is written, and the text is copied (or the browser says it blocked that).
+    await clickButton(panel.page, /^Edit first/);
+    await waitForText(panel.page, /Not inserted\. Copied to the clipboard instead|blocked copying/, { timeout: 8000 });
+    t.check("'Edit first (copy instead)' closes the warning, copies instead of inserting, and writes nothing", (await panel.page.$('.ab-note-warn[role="alert"]')) === null && (await ticket.evaluate(() => window.__gformCalls.length)) === callsBefore);
+    await clickButton(panel.page, /^Insert as customer comment/);
+    await panel.page.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
     await clickButton(panel.page, /^Insert anyway/);
     await waitForText(panel.page, /Inserted into the form/, { timeout: 8000 });
     const forced = await ticket.evaluate(() => window.__gformCalls.slice(-1)[0]);
     t.check("'Insert anyway' is a deliberate override: then the comments field is filled", forced?.name === 'comments' && forced.value.includes('Issue:'), JSON.stringify(forced).slice(0, 120));
+
+    // A secret that comes back as a BARE value (no "password:" in front of it). The firewall learned that value when it
+    // masked it, but the safe-to-send check on insert only knows the usual patterns. A real gap if it is not flagged.
+    ai.setMode('bare-secret');
+    await clickButton(panel.page, /^Close/);
+    const bare = await runFeature(panel.page, /^Draft a reply to the customer/);
+    t.check('bare-secret draft contains the real password (rehydrated)', Boolean(bare.result) && bare.result.includes(data.SEED.password), bare.error || '');
+    const bareCalls = await ticket.evaluate(() => window.__gformCalls.length);
+    await clickButton(panel.page, /^Insert as customer comment/);
+    await panel.page.waitForFunction(() => document.querySelector('.ab-note-warn[role="alert"]') || /Inserted into the form|Copied to the clipboard|blocked copying/.test(document.body.innerText), { timeout: 8000 });
+    const bareStopped = (await panel.page.$('.ab-note-warn[role="alert"]')) !== null;
+    const bareWritten = (await ticket.evaluate(() => window.__gformCalls.length)) > bareCalls;
+    if (bareStopped && !bareWritten) t.check('a secret repeated as a bare value is also stopped before it goes into a customer-visible comment', true);
+    else t.check('a secret repeated as a bare value is also stopped before it goes into a customer-visible comment', false, 'the password was inserted into the customer comment without a warning');
+    ai.setMode('echo');
     await panel.close();
 
     // ---- 3. Workspace page: no g_form -> DOM fallback ------------------------------------------------------------------

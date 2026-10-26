@@ -55,7 +55,7 @@ export function buildTables() {
   const tables = buildInstance();
 
   // 1. The main incident: the seeded notes, both as journal rows and as the record's own comments string.
-  tables.incident = tables.incident.map((row) => (row.sys_id?.value === INCIDENT_ID ? { ...row, comments: v('', COMMENTS_WITH_SEEDS) } : row));
+  tables.incident = tables.incident.map((row) => (row.sys_id?.value === INCIDENT_ID ? { ...row, active: v('true', 'true'), comments: v('', COMMENTS_WITH_SEEDS) } : row));
   const journalRow = (n, by, when, value) => ({ sys_id: `e2ej${n}`, name: 'incident', element_id: INCIDENT_ID, element: 'comments', sys_created_on: when, sys_created_by: by, value });
   tables.sys_journal_field.push(
     journalRow(10, ABEL.login, '2026-10-26 09:30:00', SEEDED_COMMENT_CARD),

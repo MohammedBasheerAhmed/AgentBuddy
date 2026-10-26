@@ -8,10 +8,14 @@
 //   GET /api/now/stats/<table>                Aggregate API (count, group by)
 //
 // API rules (they imitate what matters about the real thing):
-//   - X-UserToken must equal the page's g_ck, else 401 (what an expired session looks like to the extension)
+//   - X-UserToken must equal the page's g_ck, else 401 with the Basic challenge a real instance sends (a browser would pop
+//     up a login box for it, which is why the extension never sends a read without the token)
 //   - tables listed in behaviour.denied answer 403; tables in behaviour.hidden answer 200 with no rows (an ACL filter)
+//   - behaviour.expired: every API call answers 401 with X-Is-Logged-In: false (a timed-out session)
 //   - ANY method other than GET/HEAD answers 405, on every path
-// Every request is recorded ({ method, path, kind }) so the test can prove the extension only ever read.
+// Every request is recorded ({ method, path, kind, status, tokenOk, headers }) so the test can prove the extension only ever read.
+//
+// What the pages hold is seeded in e2e/data.entry.js: the shared sn-* fixtures plus the personal data the test hunts for.
 //
 // The pages carry a strict Content-Security-Policy and load all scripts from files (no inline code), like a page that
 // ships with CSP on: this proves the page bridge can still be injected and that nothing depends on inline script.
@@ -49,7 +53,7 @@ function startFakeInstance(tls, { tables, makeApi, user }) {
   const gck = crypto.randomBytes(24).toString('hex'); // the session token; also what g_ck holds
   const state = {
     tables,
-    behaviour: { denied: [], hidden: [] },
+    behaviour: { denied: [], hidden: [], expired: false },
   };
   /** Every request the browser made, in order. `kind` is 'api' for /api/now/*, else 'page'. */
   const requests = [];
@@ -104,9 +108,13 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
   async function handleApi(req, res, url, entry) {
     const m = /^\/api\/now\/(table|stats)\/([a-z][a-z0-9_]*)$/.exec(url.pathname);
     if (!m) return sendJson(res, 404, { error: { message: 'Requested URI does not represent any resource', detail: null }, status: 'failure' });
-    if (req.headers['x-usertoken'] !== gck) {
-      entry.note = 'no/wrong X-UserToken';
-      return sendJson(res, 401, { error: { message: 'User Not Authenticated', detail: 'Required to provide Auth information' }, status: 'failure' }, { 'WWW-Authenticate': 'Basic realm="Service-Now"' });
+    entry.tokenOk = req.headers['x-usertoken'] === gck;
+    if (state.behaviour.expired || !entry.tokenOk) {
+      entry.note = state.behaviour.expired ? 'session expired (simulated)' : 'no/wrong X-UserToken';
+      // A timed-out session is signalled with X-Is-Logged-In: false. A request without the right token gets the Basic challenge
+      // a real instance sends, which makes a browser pop up a login box; the extension never sends one without a token.
+      const headers = state.behaviour.expired ? { 'x-is-logged-in': 'false' } : { 'WWW-Authenticate': 'Basic realm="Service-Now"' };
+      return sendJson(res, 401, { error: { message: 'User Not Authenticated', detail: 'Required to provide Auth information' }, status: 'failure' }, headers);
     }
     const [, api, tableName] = m;
     const q = url.searchParams;
@@ -115,7 +123,7 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
     const limit = Math.max(0, Number(q.get('sysparm_limit') || 10000));
     const offset = Math.max(0, Number(q.get('sysparm_offset') || 0));
     const dv = q.get('sysparm_display_value') || 'false';
-    const deps = makeApi(state.tables, state.behaviour);
+    const deps = makeApi(state.tables, { denied: state.behaviour.denied, hidden: state.behaviour.hidden });
     try {
       if (api === 'table') {
         const rows = await deps.queryTable(tableName, query, fields, { limit, offset, displayValue: dv === 'all' || dv === 'true' });
@@ -192,7 +200,7 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
 
   const server = https.createServer({ key: tls.key, cert: tls.cert }, (req, res) => {
     const url = new URL(req.url, 'https://localhost');
-    const entry = { method: req.method, path: url.pathname, search: url.search, kind: url.pathname.startsWith('/api/') ? 'api' : 'page', probe: Boolean(req.headers['x-e2e-probe']), status: 0 };
+    const entry = { method: req.method, path: url.pathname, search: url.search, kind: url.pathname.startsWith('/api/') ? 'api' : 'page', probe: Boolean(req.headers['x-e2e-probe']), headers: req.headers, status: 0, site: req.headers['sec-fetch-site'] || '', mode: req.headers['sec-fetch-mode'] || '' };
     requests.push(entry);
     res.on('finish', () => {
       entry.status = res.statusCode;
@@ -217,9 +225,9 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
         user,
         requests,
         state,
-        /** Change which tables answer 403 / 200-empty. Resets everything else to defaults when called with nothing. */
-        setBehaviour: ({ denied = [], hidden = [] } = {}) => {
-          state.behaviour = { denied, hidden };
+        /** Change which tables answer 403 / 200-empty, or make every API call answer 401 (expired). No argument = back to normal. */
+        setBehaviour: ({ denied = [], hidden = [], expired = false } = {}) => {
+          state.behaviour = { denied, hidden, expired };
         },
         /** Requests the browser made (the harness' own probes excluded). */
         browserRequests: () => requests.filter((r) => !r.probe),

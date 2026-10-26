@@ -60,7 +60,13 @@ export default function RelatedView({ page, eff }) {
   const load = useCallback(async () => {
     setState({ phase: 'loading', pack: null, history: null, similar: null, duplicates: null, knowledge: null, error: '' });
     try {
-      const pack = await ask(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: 'similar', allowSensitive });
+      // The 'similar' pack carries only what the look-alike search needs, not who the caller is (that column is not on its
+      // allowlist), so the caller comes from the 'caller-history' pack.
+      const [searchPack, whoPack] = await Promise.all([
+        ask(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: 'similar', allowSensitive }),
+        ask(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: 'caller-history', allowSensitive }),
+      ]);
+      const pack = { ...searchPack, people: whoPack.people || [] };
       setState((s) => ({ ...s, pack }));
       const caller = (pack.people || []).find((p) => p.sysId && CALLER_ROLES.includes(p.role)) || (pack.people || []).find((p) => p.sysId);
       const slim = { table: pack.table, sysId: pack.sysId, number: pack.number, fields: pack.fields };

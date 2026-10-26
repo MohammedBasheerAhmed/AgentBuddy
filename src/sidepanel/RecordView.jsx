@@ -30,6 +30,7 @@ export default function RecordView({ page, eff }) {
   const [prepared, setPrepared] = useState(null);
   const [result, setResult] = useState(null);
   const [people, setPeople] = useState([]); // everyone on the record, for the safe-to-send check on what gets inserted
+  const [scan, setScan] = useState(null); // the firewall's scan(): also recognises values it masked on the way out
   const [error, setError] = useState('');
   const [tab, setTab] = useState('actions'); // 'actions' | 'related'
   const token = useRef(0); // a newer run (or Close) invalidates an older one still in flight
@@ -78,6 +79,7 @@ export default function RecordView({ page, eff }) {
       const out = await executeRun({ prepared: p, config: cfg, values: eff.values, host, previewShown, sendChat, logAudit });
       if (mine !== token.current) return;
       setPeople(peopleFor(p.pack));
+      setScan(() => (text) => p.firewall.scan(text)); // (a function stored in state: wrapped so React does not call it)
       setResult(out.text);
       setPhase('done');
     } catch (err) {
@@ -202,6 +204,7 @@ export default function RecordView({ page, eff }) {
           text={result}
           page={page}
           people={people}
+          scan={scan}
           onAgain={() => run(active)}
           onClose={reset}
           audit={(outcome) => logAudit({ feature: active.id, table: record.table, sysId: record.sysId, provider: config.provider, model: config.model, mode: eff.values.piiMode, outcome })}

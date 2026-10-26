@@ -37,12 +37,16 @@ async function waitForText(page, text, { timeout = 15000 } = {}) {
 /** Text of the first element matching a selector, or null. */
 const textOf = (page, selector) => page.evaluate((s) => document.querySelector(s)?.innerText ?? null, selector);
 
-/** Open the preview, approve it, and return what the person saw. `feature` is a regexp for the action button. */
+/**
+ * Open the preview, approve it, and return what the person saw. `feature` is a regexp for the action button.
+ * With the preview switched off the answer (or the error) simply appears: preview is then null.
+ */
 async function runFeature(page, feature, { approve = true } = {}) {
   await clickButton(page, feature);
-  await page.waitForSelector('.ab-dialog, .ab-note-danger', { timeout: 15000 });
+  await page.waitForSelector('.ab-dialog, .ab-note-danger, .ab-output', { timeout: 15000 });
   const preview = await textOf(page, '.ab-preview');
-  if (!approve || preview === null) return { preview, result: null, error: await textOf(page, '.ab-note-danger') };
+  if (preview === null) return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, '.ab-note-danger') };
+  if (!approve) return { preview, result: null, error: null };
   await clickButton(page, /^Send to AI/);
   await page.waitForSelector('.ab-output, .ab-note-danger', { timeout: 15000 });
   return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, '.ab-note-danger') };

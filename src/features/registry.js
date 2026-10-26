@@ -17,7 +17,7 @@ export const FEATURES = [
     wave: 1,
     kinds: ALL_TASKS,
     journal: 15,
-    insert: { field: 'work_notes', label: 'Add to work notes' },
+    insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
     system:
       'You help a service desk agent understand a ServiceNow ticket in seconds.\n' +
       'Write a summary with exactly these five lines, in this order, each one to two short sentences:\n' +
@@ -36,7 +36,7 @@ export const FEATURES = [
     wave: 1,
     kinds: WORKABLE,
     journal: 10,
-    insert: { field: 'comments', label: 'Insert as customer comment' },
+    insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
     system:
       'You help a service desk agent reply to the person who raised a ticket.\n' +
       'Write the next customer-visible reply to the most recent customer message, using the rest of the ticket for context.\n' +
@@ -54,7 +54,7 @@ export const FEATURES = [
     wave: 1,
     kinds: ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'task'],
     journal: 25,
-    insert: { field: 'close_notes', label: 'Insert into resolution notes' },
+    insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes' },
     system:
       'You help a service desk agent write resolution notes for a ServiceNow ticket they are about to resolve.\n' +
       'Write exactly these lines:\n' +
@@ -73,7 +73,7 @@ export const FEATURES = [
     wave: 1,
     kinds: WORKABLE,
     journal: 20,
-    insert: { field: 'work_notes', label: 'Add to work notes' },
+    insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
     system:
       'You help a service desk agent hand a ticket to another team or shift.\n' +
       'Write an internal hand-off note with exactly these headings, each followed by short bullet points:\n' +
@@ -88,7 +88,7 @@ export const FEATURES = [
     wave: 1,
     kinds: WORKABLE,
     journal: 8,
-    insert: { field: 'comments', label: 'Insert as customer comment' },
+    insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
     system:
       'You help a service desk agent get the information needed to resolve a ticket.\n' +
       'First write one line starting "Missing:" that lists the key details not yet in the ticket (for example affected user or device, exact error text, when it started, steps to reproduce, business impact).\n' +

@@ -65,7 +65,8 @@ export default function MyDayView({ page }) {
 
       {state.access.length > 0 && (
         <p className="ab-hint" style={{ marginTop: 8 }}>
-          {state.access.map((a) => (a.status === 'denied' ? `${a.source}: you cannot read this.` : a.note)).join(' ')}
+          {/* A denied queue gets a short line; a denied SLA table keeps its own note, which says why the order changed. */}
+          {state.access.map((a) => (a.status === 'denied' && a.source !== 'task_sla' ? `${a.source}: you cannot read this.` : a.note)).join(' ')}
         </p>
       )}
     </section>

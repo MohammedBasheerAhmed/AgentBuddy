@@ -27,6 +27,18 @@ export function previewRequired(previewMode, featureId, seen = []) {
 }
 
 /**
+ * Why this provider setup cannot be used to reach an AI endpoint ('' when it can). Shared by every send, including the
+ * Settings page's "Test connection", so no path can skip it.
+ * 'custom' means "my own server": without an address the provider layer would fall back to OpenAI's own API and send the
+ * person's key (and the masked ticket text) there.
+ */
+export function connectionProblem(config) {
+  if (config.invalidBaseUrl) return `The AI address is not valid: ${config.invalidBaseUrl}`;
+  if (config.provider === 'custom' && !config.baseUrl) return 'Enter the address of your AI server in Settings first.';
+  return '';
+}
+
+/**
  * Everything that can be refused before a single byte is built. Throws RunBlocked with a message fit for the person.
  * @param {object} p { feature, pack, values (effective settings), policy, config (resolveProviderConfig), hasKey }
  */
@@ -36,7 +48,8 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey }
   if (isHrTable(pack.table) && !policy?.allowHrContent) {
     throw new RunBlocked('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.', 'HR_BLOCKED');
   }
-  if (config.invalidBaseUrl) throw new RunBlocked(`The AI address is not valid: ${config.invalidBaseUrl}`, 'BAD_URL');
+  const problem = connectionProblem(config);
+  if (problem) throw new RunBlocked(problem, 'BAD_URL');
   const allowed = checkProviderAllowed(config, policy);
   if (!allowed.ok) throw new RunBlocked(allowed.reason, 'PROVIDER_BLOCKED');
   if (values.piiMode === 'local-only' && !config.local) {
