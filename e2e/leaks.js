@@ -1,0 +1,49 @@
+// What counts as a leak when we read a request the fake AI server received.
+//
+//   critical  data the firewall is built to mask and that the ticket plainly contains: the caller and the agent by name
+//             and email, a full phone number, a card number, a password. Seeing any of it at the AI is a FAIL.
+//   gaps      data a person would also call personal but that the firewall documents it cannot find reliably (a name that
+//             only appears inside a sentence, a short local phone number, an employee id written without a label).
+//             Seeing these is reported as a WARN with the exact string, because the lead needs to know, but it does not
+//             fail the run: it is a limit of pattern matching, which is why the preview exists.
+const squash = (s) => String(s).replace(/[\s\-().]/g, '').toLowerCase();
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Whole-word match, so "Abel" is found in "Abel Tuter" but not inside "label".
+const word = (value) => ({ value, test: (text) => new RegExp(String.raw`(?<![\p{L}\p{N}])` + escapeRe(value) + String.raw`(?![\p{L}\p{N}])`, 'iu').test(text) });
+// Plain substring (emails, numbers, secrets are long and distinctive); digit strings also match with separators removed.
+const literal = (value) => ({
+  value,
+  test: (text) => text.toLowerCase().includes(value.toLowerCase()) || (/\d{6,}/.test(value) && squash(text).includes(squash(value))),
+});
+
+function criticalList(data) {
+  const { SEED, ABEL, BETH } = data;
+  const parts = (n) => n.split(' ');
+  return [
+    literal(SEED.callerName), word(parts(ABEL.name)[0]), word(parts(ABEL.name)[1]), literal(SEED.callerEmail), literal('abel.tuter'),
+    literal(BETH.name), word(parts(BETH.name)[0]), word(parts(BETH.name)[1]), literal(BETH.email),
+    literal('+1 555-0134'), literal('555-0134'), literal(SEED.card), literal(SEED.cardDigits), literal(SEED.password),
+  ];
+}
+
+function gapList(data) {
+  const { SEED } = data;
+  return [
+    { ...literal('555-0199'), why: 'short local phone number after "Call me on"' },
+    { ...literal('555-0123'), why: 'short local phone number after "please call"' },
+    { ...literal(SEED.proseName), why: 'a person named only inside a sentence' },
+    { ...word('E12345'), why: 'employee id written as "employee id is E12345"' },
+  ];
+}
+
+/** @returns {{ critical: string[], gaps: {value: string, why: string}[] }} what is present in `text`. */
+function findLeaks(text, data) {
+  const t = String(text);
+  return {
+    critical: [...new Set(criticalList(data).filter((c) => c.test(t)).map((c) => c.value))],
+    gaps: gapList(data).filter((g) => g.test(t)).map((g) => ({ value: g.value, why: g.why })),
+  };
+}
+
+module.exports = { findLeaks };

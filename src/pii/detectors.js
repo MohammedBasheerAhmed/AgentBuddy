@@ -238,7 +238,6 @@ function detectUrlCredentials(text, out) {
 // -----BEGIN ... PRIVATE KEY----- ... -----END ... PRIVATE KEY-----, also when the block is cut off before the END line.
 function detectPrivateKeys(text, out) {
   const BEGIN = '-----BEGIN ';
-  let noMoreEnd = false;
   let i = text.indexOf(BEGIN);
   while (i !== -1) {
     const headerClose = text.indexOf('-----', i + BEGIN.length);
@@ -249,17 +248,35 @@ function detectPrivateKeys(text, out) {
     }
     const bodyStart = headerClose + 5;
     let end = -1;
-    const endAt = noMoreEnd ? -1 : text.indexOf('-----END ', bodyStart);
-    if (endAt === -1) noMoreEnd = true;
-    if (endAt !== -1 && endAt - bodyStart <= 20000) {
-      const close = text.indexOf('-----', endAt + 9);
-      end = close === -1 ? endAt + 9 : close + 5;
+    // The matching END line must come before the next BEGIN and within 20k characters, so a cut-off key does not
+    // swallow everything up to some later key's END line (and the search stays bounded however many BEGIN lines there are).
+    const nextBegin = text.indexOf(BEGIN, bodyStart);
+    const limit = Math.min(nextBegin === -1 ? text.length : nextBegin, bodyStart + 20000);
+    const endMarker = `-----END ${label}-----`;
+    const endRel = text.slice(bodyStart, limit).indexOf(endMarker);
+    if (endRel !== -1) {
+      end = bodyStart + endRel + endMarker.length;
     } else {
-      // No END line close enough: take the run of base64 and whitespace that follows (a truncated paste).
+      // No END line close enough (a truncated paste): take the lines that look like base64 and nothing else, so the
+      // sentence after a cut-off key is not swallowed with it. Line breaks may be real or JSON-escaped (backslash n).
+      const breaks = /(?:\\[rn]|[\r\n])*/y;
+      const pemHeader = /(?:Proc-Type|DEK-Info):[^\r\n\\]*/y;
+      const base64 = /[A-Za-z0-9+/=]{16,}/y;
       let k = bodyStart;
-      const stop = Math.min(text.length, bodyStart + 20000);
-      while (k < stop && /[A-Za-z0-9+/=\s:,.-]/.test(text[k]) && text.slice(k, k + 5) !== '-----') k++;
-      if (k - bodyStart >= 16) end = k;
+      while (k - bodyStart <= 20000) {
+        breaks.lastIndex = k;
+        breaks.exec(text);
+        const next = breaks.lastIndex;
+        pemHeader.lastIndex = next;
+        if (pemHeader.exec(text)) {
+          k = pemHeader.lastIndex; // headers of an encrypted key come before the body
+          continue;
+        }
+        base64.lastIndex = next;
+        if (!base64.exec(text)) break;
+        k = base64.lastIndex;
+        end = k;
+      }
     }
     if (end === -1) {
       i = text.indexOf(BEGIN, i + BEGIN.length); // only a mention of the header, no key material
@@ -343,10 +360,14 @@ function placeholderish(v) {
 
 const complex = (v) => /\d/.test(v) || /[^A-Za-z0-9]/.test(v) || (/[a-z]/.test(v) && /[A-Z]/.test(v) && v.length >= 6);
 
+// A script reading a property ("password = gs.getProperty(...)") names where the secret lives; it is not the secret.
+const CODE_REFERENCE = /^(?:gs|gr|current|previous|g_form|g_user|this|request|response|input|output|params|config|process|window|document|self|args|options)(?:\.[A-Za-z_$][\w$]*|\[[^\]]*\])*\(?;?$/;
+
 function secretValueOk(cls, symbolic, quoted, raw) {
   // Judge the value without sentence punctuation ("password is incorrect." is prose); the masked span keeps it.
   const v = quoted ? raw : raw.replace(/[.,;:!?)\]]+$/, '');
   if (!v || STOP_VALUES.has(v.toLowerCase()) || placeholderish(v)) return false;
+  if (!quoted && CODE_REFERENCE.test(v)) return false;
   if (cls === 'strong') return symbolic ? v.length >= (quoted ? 3 : 4) : v.length >= 5 && complex(v);
   if (cls === 'weak') return symbolic && v.length >= 6 && complex(v); // "pass"
   if (v.length < 8) return false; // token-like labels need a long value

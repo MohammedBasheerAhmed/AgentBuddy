@@ -14,8 +14,9 @@
 // attributed to either; it gets its own placeholder instead of being guessed.
 
 const APOSTROPHES = "'" + String.fromCharCode(0x2019);
-const WORD = new RegExp(`[\\p{L}\\p{M}\\p{N}_]+(?:[${APOSTROPHES}\\-][\\p{L}\\p{M}\\p{N}_]+)*`, 'gu');
-const JOINERS = new RegExp(`[-${APOSTROPHES}]`); // hyphen and apostrophes inside a name token
+// A word is letters, marks and digits with apostrophes inside it (O'Brien). A hyphen separates words: "Abel-Tuter" is two.
+const WORD = new RegExp(`[\\p{L}\\p{M}\\p{N}_]+(?:[${APOSTROPHES}][\\p{L}\\p{M}\\p{N}_]+)*`, 'gu');
+const JOINERS = new RegExp(`[${APOSTROPHES}]`); // apostrophes inside a name token (D'Souza)
 const ASCII_ONLY = /^[\x00-\x7f]*$/;
 const COMBINING = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
 const CURLY_APOS = String.fromCharCode(0x2019);
@@ -81,9 +82,23 @@ const PARTICLES = new Set(['van', 'von', 'der', 'den', 'dos', 'das', 'del', 'del
 // Accounts that are not people. "System Administrator" in prose is just prose.
 const NOT_A_PERSON = new Set(['system administrator', 'system', 'admin', 'administrator', 'guest', 'servicenow', 'service account', 'itil', 'root', 'anonymous', 'unknown', 'none', 'n/a', 'tbd', 'api user', 'integration user']);
 
+// Shared mailboxes: the local part of "info@" or "helpdesk@" names a function, not a person, so it is not a username.
+const SHARED_MAILBOXES = new Set([
+  'info', 'admin', 'administrator', 'support', 'helpdesk', 'servicedesk', 'itsupport', 'help', 'hr', 'it', 'sales', 'contact',
+  'noreply', 'donotreply', 'service', 'services', 'team', 'office', 'billing', 'accounts', 'accounting', 'security', 'webmaster',
+  'postmaster', 'hello', 'mail', 'email', 'notifications', 'alerts', 'jobs', 'careers', 'press', 'marketing', 'finance', 'legal',
+  'ops', 'devops', 'privacy', 'abuse', 'enquiries', 'inquiries', 'reception', 'orders', 'feedback',
+]);
+
 const letterCount = (s) => (s.match(/\p{L}/gu) || []).length;
-const trimPunct = (s) => s.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+// Marks are kept: a Devanagari or Arabic word often ends in a combining mark that is part of the word.
+const trimPunct = (s) => s.replace(/^[^\p{L}\p{M}\p{N}]+|[^\p{L}\p{M}\p{N}]+$/gu, '');
 const str = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
+// A name needs at least one letter or digit ("..." and "-" are junk).
+const nameStr = (v) => {
+  const s = str(v);
+  return /[\p{L}\p{N}]/u.test(s) ? s : '';
+};
 
 function newNode() {
   return { kids: new Map(), hit: null };
@@ -93,7 +108,7 @@ function newNode() {
 function nameTokens(name) {
   const comma = name.indexOf(',');
   const parts = comma === -1 ? [name] : [name.slice(0, comma), name.slice(comma + 1)];
-  const lists = parts.map((p) => p.split(/\s+/).map(trimPunct).filter(Boolean));
+  const lists = parts.map((p) => p.split(/[\s-]+/).map(trimPunct).filter(Boolean)); // "Mary-Jane" is two tokens
   if (comma === -1 || !lists[0].length || !lists[1].length) return { forward: lists.flat(), written: lists.flat() };
   return { forward: [...lists[1], ...lists[0]], written: [...lists[0], ...lists[1]] };
 }
@@ -110,7 +125,7 @@ export function createDictionary(people = []) {
   // 1. People who are the same human (same sysId, or same email) share one identity, whatever their role.
   for (const p of Array.isArray(people) ? people : []) {
     if (!p || typeof p !== 'object') continue;
-    const name = str(p.name);
+    const name = nameStr(p.name);
     const email = str(p.email).toLowerCase();
     const sysId = str(p.sysId).toLowerCase();
     if (NOT_A_PERSON.has(fold(name))) {
@@ -171,10 +186,11 @@ export function createDictionary(people = []) {
         // Full name, in the order of the record and in natural order, with and without middle names.
         addSequence(forward, identity, 0.97, false);
         addSequence(written, identity, 0.97, false);
+        const last = forward[forward.length - 1];
+        addSequence([last, ...forward.slice(0, -1)], identity, 0.97, false); // "Tuter, Abel" and "Smith, Mary Ann"
         if (forward.length >= 3) {
-          const ends = [forward[0], forward[forward.length - 1]];
-          addSequence(ends, identity, 0.97, false);
-          addSequence([...ends].reverse(), identity, 0.97, false);
+          addSequence([forward[0], last], identity, 0.97, false);
+          addSequence([last, forward[0]], identity, 0.97, false);
         }
         // Concatenated forms such as "AbelTuter" are not matched; they are rare in ticket text.
       }
@@ -193,7 +209,7 @@ export function createDictionary(people = []) {
       const local = email.slice(0, email.indexOf('@'));
       const f = fold(local);
       // "abel.tuter" on its own is a username for this person; "admin" or "support" is a shared mailbox, not a person.
-      if (local && f.length >= 4 && !COMMON_WORDS.has(f)) literals.push({ term: local, kind: 'PERSON', entity: identity.id, confidence: 0.85, boundary: true });
+      if (local && f.length >= 4 && !COMMON_WORDS.has(f) && !SHARED_MAILBOXES.has(f)) literals.push({ term: local, kind: 'PERSON', entity: identity.id, confidence: 0.93, boundary: true });
     }
   }
 
@@ -203,12 +219,17 @@ export function createDictionary(people = []) {
   }
   const canonicalOf = (entity) => byId.find((i) => i.id === entity)?.canonical;
 
+  // Does a sentence (or a quoted sentence, after a colon) begin at `pos`? Looks back over spaces, quotes and brackets.
   function sentenceStart(text, pos) {
     let k = pos - 1;
-    while (k >= 0 && OPENERS.has(text[k])) k--;
+    let quoted = false;
+    while (k >= 0 && OPENERS.has(text[k])) {
+      if (text[k] === '"' || text[k] === String.fromCharCode(0x201c)) quoted = true;
+      k--;
+    }
     if (k < 0) return true;
     const ch = text[k];
-    return ch === '\n' || ch === '\r' || ch === '.' || ch === '!' || ch === '?';
+    return ch === '\n' || ch === '\r' || ch === '.' || ch === '!' || ch === '?' || (quoted && ch === ':');
   }
 
   const isUpperFirst = (s) => {
@@ -216,8 +237,8 @@ export function createDictionary(people = []) {
     return c !== c.toLowerCase();
   };
 
-  const GAP = /^(?:\.?[ \t\xa0]{1,3}|[ \t\xa0]{0,2},[ \t\xa0]{0,2})$/;
-  const MERGE_GAP = /^[ \t\xa0]{0,2}[.,]?[ \t\xa0]{0,2}$/;
+  const GAP = /^(?:\.?[ \t\xa0]{1,3}|[ \t\xa0]{0,2},[ \t\xa0]{0,2}|-)$/;
+  const MERGE_GAP = /^[ \t\xa0]{1,2}$/;
 
   function nameFindings(text, unconditionalOnly) {
     const found = [];
@@ -265,7 +286,8 @@ export function createDictionary(people = []) {
       });
       i = best.last;
     }
-    // "Abel" followed by "Tuter" with no joined entry (Abel M. Tuter): one placeholder for the run.
+    // Two hits of one person with only a space between them ("Mary" "Smith" for a record "Mary Ann Smith") become one hit.
+    // A middle initial ("Abel M. Tuter") keeps them apart: both halves are still masked.
     const merged = [];
     for (const f of found) {
       const prev = merged[merged.length - 1];

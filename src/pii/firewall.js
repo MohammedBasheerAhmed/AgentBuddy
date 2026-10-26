@@ -89,16 +89,18 @@ function isFreeText(part) {
 // Text hygiene
 // ---------------------------------------------------------------------------------------------------------------
 
-// Zero-width, soft-hyphen and bidi-control characters can hide a value from a detector ("a<ZWSP>b@x.com") or reorder text
-// on screen. They are removed, along with other control characters except tab and newline. ZWJ/ZWNJ stay (they matter
-// in some scripts).
+// Look-alike and invisible characters can hide a value from a detector: zero-width and soft-hyphen characters ("a<ZWSP>b@x.com"),
+// full-width digits and "@" (a card number typed in full-width digits), bidi controls that reorder text on screen. The text is
+// put through Unicode compatibility normalisation (NFKC), which turns full-width and similar forms into their plain
+// equivalents, and the invisible characters are removed, along with control characters other than tab and newline. ZWJ and
+// ZWNJ stay (they matter in some scripts). The cost: exotic characters in a ticket reach the model in their plain form.
 const INVISIBLE = new RegExp(
   `[${String.fromCharCode(0x200b, 0x2060, 0xfeff, 0xad, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069)}\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]`,
   'g'
 );
 
 function sanitize(text) {
-  return text.normalize('NFC').replace(INVISIBLE, '');
+  return text.replace(INVISIBLE, '').normalize('NFKC');
 }
 
 // Inside <ticket_data> every angle bracket is escaped, so ticket text can never contain a closing tag (or any tag).
@@ -227,8 +229,9 @@ export function createFirewall(options = {}) {
         throw new FirewallError('BLOCKED_FIELD', `The field "${attrSafe(name)}" is blocked by policy, so nothing was sent.`);
       }
       if (mode !== 'strict') continue;
-      if (part.field !== undefined && isSensitiveField(part.field)) {
-        throw new FirewallError('BLOCKED_FIELD', `Strict mode: the field "${attrSafe(String(part.field))}" is sensitive and is never sent.`);
+      // The field name decides; a part with no field is judged by its label.
+      if (name && isSensitiveField(name)) {
+        throw new FirewallError('BLOCKED_FIELD', `Strict mode: the field "${attrSafe(name)}" is sensitive and is never sent.`);
       }
       if (table.toLowerCase().startsWith('sn_hr_') && !allowHrFreeText && isFreeText(part)) {
         throw new FirewallError('BLOCKED_FIELD', 'Strict mode: free text from HR tables is not sent.');
