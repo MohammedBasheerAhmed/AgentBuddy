@@ -549,6 +549,8 @@ const PHONE_IN_MOBILE = /(?<![\w.+/-])(?:(?:\+91|91|0)[ -]?)?[6-9]\d{4}[ -]?\d{5
 const PHONE_IN_LANDLINE = /(?<![\w.+/-])0\d{2,4}[ -]\d{6,8}(?!\d|[.-]\d)/g;
 const PHONE_LABELLED = /(?<![A-Za-z])(?:phone|tel|telephone|mobile|mob|cell|fax|whatsapp|contact(?:[ \t]+(?:no|number|num))?|ph|msisdn)\b\.?[ \t]{0,3}(?:no\.?|number|num|#)?[ \t]{0,3}[:=-]?[ \t]{0,3}(\+?\(?\d[\d ().\xa0-]{5,22}\d)/gid;
 const PHONE_LABEL_BEFORE = /(?:phone|tel|telephone|mobile|mob|cell|fax|whatsapp|contact|call|dial|ph|msisdn)\b[^\n]{0,14}$/i;
+// "call me on 555-0199": a 7-digit local number with no area code, safe to report only because a calling verb leads into it.
+const PHONE_LOCAL_AFTER_VERB = /(?<![A-Za-z])(?:call|dial|ring|phone|text|reach)\b(?:[ \t]+(?:me|us|him|her|them|back|on|at|number|is|him))*[ \t:]{0,3}(\d{3}[ .-]\d{4})(?!\d|[ .-]\d)/gid;
 
 const DATE_LIKE = /^(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/;
 
@@ -591,6 +593,10 @@ function detectPhones(text, out, regions) {
     const n = digitsOf(body).length;
     if (n < 7 || n > 15 || DATE_LIKE.test(body)) return;
     push(s, s + body.length, 0.9);
+  });
+  each(PHONE_LOCAL_AFTER_VERB, text, (m) => {
+    const [s, e] = m.indices[1];
+    if (!DATE_LIKE.test(m[1])) push(s, e, 0.85);
   });
   if (regions.has('US')) {
     each(PHONE_US, text, (m) => push(m.index, m.index + m[0].length, 0.8));
@@ -693,7 +699,7 @@ const DOB = new RegExp(
   'gid'
 );
 
-const EMPLOYEE_LABELLED = /(?<![A-Za-z])(?:employee|emp|staff|personnel|worker|badge)[ \t_-]{0,2}(?:id|no|number|num|#|code)\b\.?[ \t]{0,3}[:=#-]?[ \t]{0,3}([A-Za-z]{0,4}-?\d[A-Za-z0-9-]{2,14})/gid;
+const EMPLOYEE_LABELLED = /(?<![A-Za-z])(?:employee|emp|staff|personnel|worker|badge)[ \t_-]{0,2}(?:id|no|number|num|#|code)\b\.?[ \t]{0,3}(?:is|was)?[ \t]{0,3}[:=#-]?[ \t]{0,3}([A-Za-z]{0,4}-?\d[A-Za-z0-9-]{2,14})/gid;
 const EMPLOYEE_PREFIXED = /(?<![A-Za-z0-9])(?:EMP|EID|STF)[-_]?\d{4,8}(?![A-Za-z0-9])/g;
 
 const SUFFIX_CLEAR = 'Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Nagar|Marg';

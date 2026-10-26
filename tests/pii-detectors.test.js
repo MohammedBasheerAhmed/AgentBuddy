@@ -199,6 +199,24 @@ test('placeholders are never findings', () => {
   assert.deepEqual(detect('password: <redacted> pwd=**** token=${TOKEN}'), []);
 });
 
+test('a 7-digit local number is a phone only after a calling verb', () => {
+  for (const text of ['Call me on 555-0199', 'please call 555-0123 after lunch', 'Dial 555 0142', 'can you ring them back on 555.0188?']) {
+    assert.deepEqual(kindsOf(text), ['PHONE'], text);
+  }
+  assert.equal(valuesOf('Call me on 555-0199')[0], '555-0199');
+  // Without the verb it is any seven digits: an extension, a part number, an order id.
+  for (const text of ['part 555-0199 is out of stock', 'order 555-0123 shipped', 'the call lasted 12 minutes, ref 2026-1027']) {
+    assert.deepEqual(kindsOf(text), [], text);
+  }
+});
+
+test('"employee id is E12345" is found, not only "employee id: E12345"', () => {
+  assert.deepEqual(kindsOf('employee id is E12345'), ['EMPLOYEE_ID']);
+  assert.equal(valuesOf('Her employee number was 40817')[0], '40817');
+  assert.equal(valuesOf('employee id: E12345')[0], 'E12345');
+  assert.deepEqual(kindsOf('every employee is invited'), []);
+});
+
 test('non-string or empty input is handled', () => {
   for (const v of [undefined, null, 42, {}, '']) assert.deepEqual(detect(v), []);
 });

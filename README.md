@@ -19,6 +19,7 @@ Details: `docs/plan.md` (the approved plan and use-case catalogue), `docs/securi
 npm install
 npm run build        # writes dist/
 npm test             # unit tests
+npm i --no-save puppeteer-core && npm run e2e   # real Chrome against a fake ServiceNow and a stub AI server
 ```
 
 Load `dist/` at `chrome://extensions` (Developer mode, Load unpacked), click the Agent Buddy toolbar button to open the side panel,
@@ -40,4 +41,5 @@ src/reports      My Day (more reports to come)
 src/render       safe plain-text renderer for model output
 src/snippets     canned replies with variables
 src/sidepanel    the side panel UI        src/options   the settings page
+e2e              end-to-end harness: leak detector, request log checks, scenarios a-k
 ```

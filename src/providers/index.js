@@ -15,6 +15,8 @@ import { assertWithinCaps, recordCall } from './budget.js';
 export async function sendChat(config, sealed, { host = '', kind = 'chat', skipBudget = false } = {}) {
   // First line of defence: anything that did not come through the firewall is refused before it can leave the browser.
   assertSealed(sealed);
+  // 'custom' is "my own server". With no address the OpenAI adapter would fall back to api.openai.com and send the key there.
+  if (config.provider === 'custom' && !config.baseUrl) throw new Error('Enter the address of your AI server in Settings first.');
   // A spend cap that is reached refuses the call here too.
   if (!skipBudget) await assertWithinCaps(config.provider);
   const started = Date.now();

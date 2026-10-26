@@ -15,11 +15,31 @@ Probe of the real firewall on a hostile ticket: caller/author names, emails, pho
 
 Backlog ideas (not built): select text in the preview and "Mask this too"; enterprise build with baked-in instance hosts; A2/A3/C4 "Related" tab (caller history, similar tickets, KB suggestions, duplicates; the reads exist in `src/context` and `reads.js`, only the panel UI is missing); email composer (B2); snippets UI (B5); request explainer (A9).
 
-An end-to-end harness (`e2e/`, real Chrome + fake ServiceNow + stub AI server) was started by an agent; see its report in the commit log / this file once it lands.
+Also built since: the Related tab (caller history, solved look-alikes, open duplicates, KB suggestions; no AI call) and My Day.
+
+### End-to-end harness (2026-10-27)
+
+`npm i --no-save puppeteer-core` once, then `npm run e2e` (rebuilds `dist/`, drives it in real Chrome against a fake ServiceNow and a
+stub AI server; `node e2e/run.js c,g` runs only some scenarios). Verified by me: **202 checks pass, 0 fail, 1 warning (~40 s)**,
+unit suite **453 pass**.
+- Scenarios a-k: startup, enable + record detection, full AI path, insert, read-only + network proof, failure modes, My Day, settings UI,
+  Related tab, panel state, key storage modes.
+- Proved: preview text and every AI request body contain none of the seeded name, email, phone, card or password; the instance saw only
+  GETs to `/api/now/table|stats` with the token; nothing else was contacted; no ticket data in storage or console; the injected image/link
+  is never fetched. `E2E_MUTATE=write|leak|beacon` breaks a copy of the extension on purpose and the run then fails, as it should.
+- Bugs it found and fixed: Workspace Insert used the button text as the field label (never matched) and replaced the agent's typed text;
+  a bare repeated password passed the safe-to-send check; Related caller history was always empty (the `similar` pack has no caller);
+  My Day dropped the SLA-denied note; provider `custom` with an empty address fell back to api.openai.com (now refused in the pipeline
+  AND inside `sendChat`); fast typing in Settings dropped characters and concurrent `saveSettings` calls undid each other.
+- Two PII gaps it found are closed: `call me on 555-0199` (7-digit number after a calling verb) and `employee id is E12345`.
+- Still open (documented limit): a person named only inside a sentence ("manager is María-José O'Neil") reaches the AI; the preview shows it.
+- NOT verified (needs a person): real Chrome side-panel chrome and permission prompts (a new AI host's `permissions.request` hangs headless,
+  so NOT_LOCAL / BLOCKED_FIELD through the UI were not driven; only HR_BLOCKED was), managed policy, real ServiceNow/Workspace behaviour
+  including real aria-labels, a real 401 login popup on an expired session, service-worker idle wake-up inside the suite.
 
 Open next:
 1. Live check on the PDI (dev364920) as a NON-admin user: record detection (classic + workspace), reads, ACL-hidden tables, journal fallback, Insert on classic and workspace forms.
-3. Wave 1 features still to build: A2 caller history, A3 similar, C4 KB recs, A9 request explainer, B2 email composer, B3 safe-to-send wiring (done in ResultView), B5 snippets UI, F1 My Day.
+3. Wave 1 features still to build: A9 request explainer, B2 email composer, B5 snippets UI (A1/A2/A3/A4/A6/B1/B3/C1/C4/F1 are in).
 4. M4 security review pack (`docs/security.md`, threat model, data-flow diagram, permission table, DPIA template, SBOM).
 
 ## Live-instance questions (cannot be settled without a real non-admin PDI user)
