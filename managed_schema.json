@@ -1,0 +1,84 @@
+{
+  "type": "object",
+  "properties": {
+    "allowedInstances": {
+      "title": "Approved ServiceNow instances",
+      "description": "Only these instances can be enabled. Exact origins (https://acme.service-now.com) or wildcards (*.corp.example.com). Leave unset to let people enable their own instance.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "aiProvider": {
+      "title": "Required AI provider",
+      "description": "anthropic, openai (also Azure OpenAI and internal gateways), gemini, mistral, groq, openrouter, ollama or custom.",
+      "type": "string"
+    },
+    "aiBaseUrl": {
+      "title": "Required AI endpoint",
+      "description": "Address of the organisation's AI gateway, for example https://ai-gateway.corp.example/v1.",
+      "type": "string"
+    },
+    "allowedModels": {
+      "title": "Allowed models",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "piiMode": {
+      "title": "Minimum personal-data protection",
+      "description": "standard masks detected personal data; strict also refuses sensitive fields and HR free text; local-only refuses any AI endpoint that is not on this computer. People can choose a stricter mode, never a looser one.",
+      "type": "string",
+      "enum": ["standard", "strict", "local-only"]
+    },
+    "previewMode": {
+      "title": "Show what will be sent",
+      "description": "always shows the exact outgoing text before every AI call; first shows it the first time per feature; never skips it.",
+      "type": "string",
+      "enum": ["always", "first", "never"]
+    },
+    "keyStorage": {
+      "title": "Where the AI key is kept",
+      "description": "local = browser storage; session = memory only, cleared when the browser closes; encrypted = passphrase-protected.",
+      "type": "string",
+      "enum": ["local", "session", "encrypted"]
+    },
+    "providedApiKey": {
+      "title": "AI key supplied by the organisation",
+      "description": "Optional. When set, people never enter a key. Visible to the browser's policy store; prefer a gateway that authenticates by other means where possible.",
+      "type": "string"
+    },
+    "disabledFeatures": {
+      "title": "Disabled features",
+      "description": "Feature ids to switch off, for example coaching-snapshot.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blockedTables": {
+      "title": "Tables that are never read or sent",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blockedFields": {
+      "title": "Fields that are never sent",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "allowHrContent": {
+      "title": "Allow free text from HR cases",
+      "description": "HR case text is special-category personal data. It is excluded unless this is true and the AI endpoint is approved.",
+      "type": "boolean"
+    },
+    "tokenBudgetPerDay": {
+      "title": "Daily token budget per person",
+      "type": "integer",
+      "minimum": 0
+    },
+    "auditExport": {
+      "title": "Allow audit log export",
+      "type": "boolean"
+    },
+    "coachingEnabled": {
+      "title": "Enable the coaching snapshot",
+      "description": "Reviews samples of closed tickets against a rubric. Off by default; confirm HR and works-council requirements first.",
+      "type": "boolean"
+    }
+  }
+}
