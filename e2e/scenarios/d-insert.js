@@ -48,7 +48,7 @@ module.exports = {
     await clickButton(panel.page, /^Insert as customer comment/);
     await panel.page.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
     const warn = await textOf(panel.page, '.ab-note-warn[role="alert"]');
-    t.check('safe-to-send check intercepts the insert and says what it found', /Check before sending to the customer/.test(warn) && /card/i.test(warn) && /password|secret|credential|token/i.test(warn), warn.replace(/\s+/g, ' ').slice(0, 220));
+    t.check('safe-to-send check intercepts the insert and says what it found', /Check before sending to the customer/.test(warn) && /card/i.test(warn) && /password|secret|credential|token/i.test(warn), warn.replace(/\s+/g, ' '));
     t.check('the warning shows masked excerpts only (never the full card number or password)', !warn.includes(data.SEED.card) && !warn.includes(data.SEED.cardDigits) && !warn.includes(data.SEED.password));
     t.check('nothing was written to the comments field while the warning is shown', (await ticket.evaluate(() => window.__gformCalls.length)) === callsBefore && (await ticket.evaluate(() => window.g_form.getValue('comments'))) === '');
     await clickButton(panel.page, /^Insert anyway/);

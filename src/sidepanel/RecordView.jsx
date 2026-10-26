@@ -10,6 +10,7 @@ import { createFirewall } from '../pii/index.js';
 import { logAudit, saveSettings } from '../lib/storage.js';
 import PreviewDialog from './PreviewDialog.jsx';
 import ResultView from './ResultView.jsx';
+import RelatedView from './RelatedView.jsx';
 
 const ask = async (tabId, message) => {
   const answer = await chrome.tabs.sendMessage(tabId, message);
@@ -30,6 +31,7 @@ export default function RecordView({ page, eff }) {
   const [result, setResult] = useState(null);
   const [people, setPeople] = useState([]); // everyone on the record, for the safe-to-send check on what gets inserted
   const [error, setError] = useState('');
+  const [tab, setTab] = useState('actions'); // 'actions' | 'related'
   const token = useRef(0); // a newer run (or Close) invalidates an older one still in flight
 
   const key = `${record.table}:${record.sysId}`;
@@ -47,6 +49,7 @@ export default function RecordView({ page, eff }) {
     setPrepared(null);
     setError('');
     setHeader(null);
+    setTab('actions');
     let cancelled = false;
     ask(page.tabId, { type: MSG.READ, op: 'header', args: { table: record.table, sysId: record.sysId } })
       .then((h) => !cancelled && setHeader(h))
@@ -152,7 +155,17 @@ export default function RecordView({ page, eff }) {
         </p>
       )}
 
-      {(phase === 'idle' || phase === 'error') && (
+      <div className="ab-row" role="tablist" aria-label="Panel sections">
+        {[['actions', 'Actions'], ['related', 'Related']].map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} className={`ab-btn ab-btn-sm${tab === id ? ' ab-btn-primary' : ''}`} onClick={() => setTab(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'related' && <RelatedView key={key} page={page} eff={eff} />}
+
+      {tab === 'actions' && (phase === 'idle' || phase === 'error') && (
         <section className="ab-features" aria-label="Actions">
           {features.map((f) => (
             <button key={f.id} type="button" className="ab-feature" disabled={!aiReady} onClick={() => run(f)}>
