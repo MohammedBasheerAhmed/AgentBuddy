@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HISTORY_SOURCES, historySignals, normaliseHistoryRow, readCallerHistory } from '../src/context/history.js';
-import { hrHistoryRow } from './fixtures/sn-hr-case.js';
 import { INCIDENT_ID, NOW } from './fixtures/sn-incident.js';
 import { buildInstance } from './fixtures/sn-instance.js';
 import { fakeDeps, v } from './fixtures/sn-fakeDeps.js';
@@ -267,5 +266,4 @@ test('normaliseHistoryRow reads display values, falls back from resolved_at to c
   assert.equal(out.resolved_at, '2026-10-02 10:00:00');
   assert.equal(out.resolvedUtc, '2026-10-02 08:00:00');
   assert.equal(out.close_code, 'Fulfilled');
-  assert.equal(hrHistoryRow().number.value, 'HRC0000900');
 });

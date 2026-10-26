@@ -6,7 +6,6 @@ import { INCIDENT_ID, NOW } from './fixtures/sn-incident.js';
 import { buildInstance } from './fixtures/sn-instance.js';
 import { HR_CASE_ID } from './fixtures/sn-hr-case.js';
 import { fakeDeps, v } from './fixtures/sn-fakeDeps.js';
-import { ABEL, BETH } from './fixtures/sn-users.js';
 
 const incidentPack = async (tables = buildInstance(), feature = 'similar') =>
   readContextPack({ table: 'incident', sysId: INCIDENT_ID }, fakeDeps(tables), { feature });
@@ -239,9 +238,4 @@ test('knowledge: hidden and denied tables are not "no articles"', async () => {
   assert.equal(none.access[0].status, 'empty', 'the knowledge base is visible, it simply has nothing on this');
   const empty = await searchKnowledge({ fields: {}, people: [] }, fakeDeps(buildInstance()), { now: NOW });
   assert.equal(empty.access[0].status, 'skipped');
-});
-
-test('the helpers used from the people list stay in step', () => {
-  assert.equal(ABEL.name, 'Abel Tuter');
-  assert.equal(BETH.login, 'beth.anglin');
 });

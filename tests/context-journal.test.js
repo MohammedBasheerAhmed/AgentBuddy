@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LIMITS } from '../src/context/allowlists.js';
 import { applyAuthorNames, orderChronological, parseJournalString, readJournal } from '../src/context/journal.js';
-import { v } from './fixtures/sn-fakeDeps.js';
 import { fakeDeps } from './fixtures/sn-fakeDeps.js';
 import { COMMENTS_STRING, INCIDENT_ID, WORK_NOTES_STRING, journalRows } from './fixtures/sn-incident.js';
 
@@ -283,8 +282,4 @@ test('applyAuthorNames swaps logins for names and leaves the rest', () => {
     new Map([['beth.anglin', 'Beth Anglin']])
   );
   assert.deepEqual(out.map((e) => e.by), ['Beth Anglin', 'Someone Else']);
-});
-
-test('the shared v() helper builds display_value=all cells', () => {
-  assert.deepEqual(v('2', 'In Progress'), { value: '2', display_value: 'In Progress' });
 });

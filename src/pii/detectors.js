@@ -411,13 +411,19 @@ function detectCards(text, out) {
     const digitGroup = /\d+/g;
     let g;
     while ((g = digitGroup.exec(m[0])) !== null) spans.push([g.index, g.index + g[0].length]);
+    const digitsBefore = [0]; // digits before group k, so a run's length is a subtraction
+    for (const [s, e] of spans) digitsBefore.push(digitsBefore[digitsBefore.length - 1] + (e - s));
     let i = 0;
     while (i < spans.length) {
+      const first = m[0][spans[i][0]];
       let matched = false;
-      for (let j = spans.length - 1; j >= i; j--) {
-        const segment = m[0].slice(spans[i][0], spans[j][1]);
-        if (digitsOf(segment).length < 13) break; // shorter runs only get shorter
-        if (cardOk(segment)) {
+      if (first >= '2' && first <= '8') {
+        for (let j = spans.length - 1; j >= i; j--) {
+          const length = digitsBefore[j + 1] - digitsBefore[i];
+          if (length > 19) continue;
+          if (length < 13) break; // shorter runs only get shorter
+          const segment = m[0].slice(spans[i][0], spans[j][1]);
+          if (!cardOk(segment)) continue;
           out.push(make('CARD', text, m.index + spans[i][0], m.index + spans[j][1], 0.97));
           i = j + 1;
           matched = true;

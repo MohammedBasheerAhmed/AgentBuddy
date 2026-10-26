@@ -19,6 +19,8 @@ const common = {
   target: ['chrome116', 'edge116'],
   format: 'iife',
   legalComments: 'none',
+  // React's production build: smaller, no development warnings. Not minified, so the bundle stays readable for review.
+  define: { 'process.env.NODE_ENV': '"production"' },
 };
 
 const builds = [
