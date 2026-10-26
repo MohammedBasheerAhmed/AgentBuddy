@@ -119,6 +119,19 @@ function summarise(counts) {
   return parts.length ? parts.join(', ') : 'none';
 }
 
+/**
+ * The last gate: throws REDACTION_FAILED when `text` still contains a high-confidence PII or secret pattern. Placeholders are
+ * not PII. buildRequest() runs it on the finished outgoing text, independently of how that text was produced, so a pattern
+ * the first pass could not see (one that only appears once its neighbour is replaced) still stops the request.
+ */
+export function assertNoHighConfidencePii(text, regions) {
+  const left = detect(text, { regions }).filter((f) => f.confidence >= HIGH_CONFIDENCE);
+  if (!left.length) return;
+  const counts = {};
+  for (const f of left) counts[f.kind] = (counts[f.kind] || 0) + 1;
+  throw new FirewallError('REDACTION_FAILED', `The final check still found unmasked data (${summarise(counts)}), so nothing was sent.`);
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // The firewall
 // ---------------------------------------------------------------------------------------------------------------
@@ -225,12 +238,7 @@ export function createFirewall(options = {}) {
 
   // The finished text is checked again, independently of how it was produced.
   function verify(redactedPieces, finalText) {
-    const left = detect(finalText, { regions }).filter((f) => f.confidence >= HIGH_CONFIDENCE);
-    if (left.length) {
-      const counts = {};
-      for (const f of left) counts[f.kind] = (counts[f.kind] || 0) + 1;
-      throw new FirewallError('REDACTION_FAILED', `The final check still found unmasked data (${summarise(counts)}), so nothing was sent.`);
-    }
+    assertNoHighConfidencePii(finalText, regions);
     const originals = tokenizer.originals().filter((o) => o.length >= 6).map((o) => o.toLowerCase());
     for (const piece of redactedPieces) {
       const lower = piece.toLowerCase();

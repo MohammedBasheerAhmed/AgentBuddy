@@ -186,7 +186,14 @@ function detectEmails(text, out) {
     const labels = text.slice(at + 1, e).split('.');
     if (labels.length < 2) continue;
     if (labels.some((l) => !l || l.length > 63 || l[0] === '-' || l[l.length - 1] === '-')) continue;
-    const tld = labels[labels.length - 1];
+    let tld = labels[labels.length - 1];
+    // No real top-level domain has digits, so "abel@example.com5551234567" (a number pasted straight after the address)
+    // ends at "com"; punycode ("xn--...") is the one exception.
+    const glued = /^(\p{L}{2,24})\d+$/u.exec(tld);
+    if (glued) {
+      e -= tld.length - glued[1].length;
+      tld = glued[1];
+    }
     if (!(/^\p{L}{2,24}$/u.test(tld) || /^xn--[a-z0-9-]{2,20}$/i.test(tld))) continue;
     if (NOT_A_TLD.has(tld.toLowerCase())) continue; // icon@2x.png
     out.push(make('EMAIL', text, s, e, 0.98));
