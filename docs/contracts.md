@@ -83,3 +83,72 @@ No HTML, no images, no links that load anything; URLs are shown as text. `<SafeT
 ## Messages (service worker ↔ content script ↔ panel)
 
 Defined in src/lib/messages.js (`MSG` constants). The worker validates the sender of every message (src/lib/senderCheck.js).
+
+## Extension points (how a feature is added without touching shared files)
+
+Each area has its own files; add yours, do not edit another area's.
+
+### Feature definition (`src/features/packs/<area>.js`, `export default [ ... ]`)
+
+```js
+{
+  id: 'sentiment-risk',              // unique; also what policy `disabledFeatures` names
+  title, description,                // shown on the Actions button
+  wave: 1 | 2 | 3,
+  kinds: ['incident', ...],          // record kinds whose Actions list shows it. [] = not on the Actions list (a report or
+                                     // compose feature that a view runs itself)
+  context: 'record-summary',         // optional: the context spec (allowlist) to read the pack with; default = id
+  journal: 15,                       // how many notes/comments go into the parts
+  parts: (pack) => [{label, field, text}],   // optional: custom parts (default packToParts(pack, {journal}))
+  insert: { field, label, fieldLabel, pick? } | [ ... ] | omitted,   // omitted = Copy only. pick(plainText) chooses the part
+                                     // of the answer this button inserts. Customer-visible fields (comments, close_notes)
+                                     // get the safe-to-send check first.
+  system: '...',                     // the task for the model. No ticket data in it, ever.
+  instruction: '...',
+  requires: { minMode: 'strict' },   // optional: refuse unless the person's privacy mode is at least this (standard < strict < local-only)
+  defaultOff: true,                  // optional: off until the organisation's policy turns coaching on (coachingEnabled)
+}
+```
+
+Everything an AI feature sends goes through `prepareRun` (policy, firewall, seal) and `executeRun` (provider, audit) in
+src/lib/pipeline.js. Views never call `sendChat` themselves; they use `useRun()` (src/sidepanel/useRun.js).
+
+### Context specs (`src/context/specs/<area>.js`)
+
+```js
+export default {
+  spec:    { 'sentiment-risk': { common: [columns...], by: { incident: [columns...] } } },   // what that feature may READ
+  journal: { 'sentiment-risk': true },                                                       // read notes and comments?
+  related: { 'sentiment-risk': ['slas', 'approvals'] },                                      // which extras (related.js)
+  fieldsByKind: { knowledge: [columns...] },                                                 // display ceiling for a new kind
+};
+```
+
+A column outside the ceiling (`FIELDS_BY_KIND`) can never be read; `spec` is intersected with it. Add a column only with a reason.
+
+### READ operations (`src/content/ops/<area>.js`)
+
+```js
+export default { opName: async (args, { deps, checkRecord, checkPack }) => plainJson };
+```
+
+GET-only through the context engine or src/content/tableApi.js; validate every argument (identifiers with `isIdentifier`, sys_ids with
+`SYS_ID_RE`); never return more than the person's own session could read. The panel calls it with `read(tabId, 'opName', args)`
+(src/sidepanel/ask.js).
+
+### Panel sections and record tabs
+
+- Top-level sections (src/sidepanel/App.jsx): This page, My day, Team (`tabs/ReportsView.jsx`), Write (`tabs/ComposeView.jsx`),
+  Knowledge (`tabs/KnowledgeToolsView.jsx`). Props `{ page, eff }`. They work from any page of an enabled site.
+- Record tabs (src/sidepanel/recordTabs.js): extra tabs on a record for given kinds. Props `{ page, eff, record, header, run, aiReady }`.
+- `page` carries `{ tabId, href, surface: 'classic'|'workspace'|'portal'|'other', record, newRecord: {table, kind}|null, user }`.
+- To run AI: `const run = useRun({ page, eff, record })`, then `run.run(feature, { getPack })` and render `<RunPanel run={run} eff page />`.
+  A view that is not about one record builds a ContextPack-shaped object in `getPack` (its text goes through the firewall like any other).
+- To open another record in the same tab: `openRecord(page, {table, sysId})` (src/sidepanel/openRecord.js). It picks the classic or
+  the portal address for the page the agent is on, and never leaves the instance.
+
+### Surfaces
+
+Fulfillers work on the classic UI, Workspaces and portals (Service Portal, Employee Center, customer service portal). A record is
+found from the form (classic), the URL (Workspace, portal) and Insert falls back to the DOM when there is no `g_form`. Nothing
+may assume `g_form` or `g_user` exists.

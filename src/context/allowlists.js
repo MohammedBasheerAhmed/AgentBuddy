@@ -7,8 +7,13 @@
 // Tables in the HR family drop free text and identities unless the caller passes { allowSensitive: true }.
 
 import { isSensitiveTable, kindForTable } from './kinds.js';
+import { EXTRA } from './specs/index.js';
 
-export const FEATURES = ['record-summary', 'reply-draft', 'resolution-notes', 'handoff-brief', 'missing-info', 'caller-history', 'similar', 'kb-recs'];
+// The first eight features are defined in this file. Every later one is defined in src/context/specs/<area>.js and merged
+// below (see docs/contracts.md, 'Context specs'), so people can add features without editing the same file.
+const BASE_FEATURES = ['record-summary', 'reply-draft', 'resolution-notes', 'handoff-brief', 'missing-info', 'caller-history', 'similar', 'kb-recs'];
+
+export const FEATURES = [...BASE_FEATURES, ...Object.keys(EXTRA.spec).filter((id) => !BASE_FEATURES.includes(id))];
 
 // ---- Limits ---------------------------------------------------------------------------------------
 
@@ -51,7 +56,7 @@ export function fieldLimit(name) {
 
 const list = (...names) => Object.freeze(names);
 
-export const FIELDS_BY_KIND = Object.freeze({
+const BASE_FIELDS_BY_KIND = {
   incident: list(
     'number', 'short_description', 'description', 'state', 'hold_reason', 'priority', 'impact', 'urgency',
     'category', 'subcategory', 'assignment_group', 'assigned_to', 'caller_id', 'opened_by', 'cmdb_ci',
@@ -98,7 +103,10 @@ export const FIELDS_BY_KIND = Object.freeze({
     'number', 'short_description', 'description', 'state', 'priority', 'assignment_group', 'assigned_to', 'opened_by',
     'opened_at', 'sys_updated_on', 'closed_at', 'close_notes', 'parent'
   ),
-});
+};
+
+/** The display ceiling per kind: the built-in kinds plus any kind a spec module adds (knowledge, chat, ...). */
+export const FIELDS_BY_KIND = Object.freeze({ ...BASE_FIELDS_BY_KIND, ...EXTRA.fieldsByKind });
 
 // Free text, and the columns that say WHO a sensitive record is about. On an HR-family table these stay unread
 // unless the caller allows sensitive data. (Non-HR tables are not affected.)
@@ -116,7 +124,7 @@ export const HR_HIDDEN = Object.freeze(new Set([...FREE_TEXT_FIELDS, ...IDENTITY
 
 const WHO = ['caller_id', 'requested_for', 'contact', 'consumer'];
 
-const FEATURE_SPEC = {
+const BASE_SPEC = {
   'record-summary': {
     common: [
       'number', 'short_description', 'description', 'state', 'hold_reason', 'priority', 'category', 'assignment_group',
@@ -214,6 +222,7 @@ const FEATURE_SPEC = {
 
 // Which features read notes and comments, and which extras (SLAs, approvals, ...) of a record they may include.
 export const FEATURE_JOURNAL = Object.freeze({
+  ...EXTRA.journal,
   'record-summary': true,
   'reply-draft': true,
   'resolution-notes': true,
@@ -225,6 +234,7 @@ export const FEATURE_JOURNAL = Object.freeze({
 });
 
 export const FEATURE_RELATED = Object.freeze({
+  ...EXTRA.related,
   'record-summary': ['slas', 'approvals', 'childTasks', 'variables', 'items', 'catalogTasks', 'changeTasks'],
   'reply-draft': ['slas', 'approvals', 'variables'],
   'resolution-notes': ['variables', 'childTasks', 'catalogTasks', 'changeTasks'],
@@ -234,6 +244,8 @@ export const FEATURE_RELATED = Object.freeze({
   similar: [],
   'kb-recs': [],
 });
+
+const FEATURE_SPEC = { ...BASE_SPEC, ...EXTRA.spec };
 
 function buildFeatureFields() {
   const out = {};

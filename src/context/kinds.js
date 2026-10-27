@@ -3,7 +3,7 @@
 import { parseRecordNumber } from '../lib/recordNumber.js';
 import { SYS_ID_RE, TABLE_RE } from './util.js';
 
-export const KINDS = ['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task', 'other'];
+export const KINDS = ['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task', 'knowledge', 'chat', 'other'];
 
 const KIND_BY_TABLE = {
   incident: 'incident',
@@ -20,6 +20,12 @@ const KIND_BY_TABLE = {
   problem_task: 'task',
   sn_customerservice_task: 'task',
   sn_hr_core_task: 'task',
+  // Knowledge articles, and the conversations of a chat or messaging session (the interaction record and its chat tables).
+  kb_knowledge: 'knowledge',
+  interaction: 'chat',
+  sys_cs_conversation: 'chat',
+  live_group_profile: 'chat',
+  chat_queue_entry: 'chat',
 };
 
 /** The pack kind for a table name; a table we know nothing about is 'other'. */

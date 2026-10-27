@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MSG } from '../lib/messages.js';
+import { openRecord } from './openRecord.js';
 
 // A2, A3, C4 and the outage check (E2): what happened before for this person, tickets solved like this one, open tickets on
 // the same service, and knowledge that may help. All of it is read with the person's own session and ranked locally: no AI
@@ -12,15 +13,6 @@ const ask = async (tabId, op, args) => {
   if (answer?.error) throw new Error(answer.error.message);
   return answer;
 };
-
-function open(page, { table, sysId }) {
-  try {
-    const origin = new URL(page.href).origin;
-    chrome.tabs.update(page.tabId, { url: `${origin}/nav_to.do?uri=${encodeURIComponent(`${table}.do?sys_id=${sysId}`)}` });
-  } catch {
-    /* the tab went away */
-  }
-}
 
 const clip = (text, n) => (text && text.length > n ? `${text.slice(0, n).trimEnd()}…` : text || '');
 
@@ -37,7 +29,7 @@ function Section({ title, count, children, defaultOpen = true }) {
 
 function Item({ page, item, line, extra }) {
   return (
-    <button type="button" className="ab-feature" onClick={() => open(page, item)}>
+    <button type="button" className="ab-feature" onClick={() => openRecord(page, item)}>
       <span className="ab-record-number">{item.number}</span>
       <span className="ab-feature-title">{item.short_description}</span>
       {line && <span className="ab-feature-desc">{line}</span>}

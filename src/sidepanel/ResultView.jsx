@@ -3,6 +3,7 @@ import { SafeText } from '../render/SafeText.jsx';
 import { parseSafeText, toPlainText } from '../render/safeText.js';
 import { checkOutgoing, maskExcerpt } from '../safeSend/index.js';
 import { MSG } from '../lib/messages.js';
+import { insertsFor } from '../features/registry.js';
 
 const REASONS = {
   'no-form': 'Agent Buddy could not reach a form field on this page.',
@@ -43,9 +44,21 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   const [findings, setFindings] = useState(null);
   const plain = toPlainText(parseSafeText(text));
 
-  async function copy(why = '') {
+  const inserts = insertsFor(feature);
+
+  // A feature may offer several inserts (title and body of an article, say). `pick(text)` chooses the part for one of them.
+  const textFor = (spec) => {
+    if (typeof spec?.pick !== 'function') return plain;
     try {
-      await navigator.clipboard.writeText(plain);
+      return String(spec.pick(plain) || '').trim();
+    } catch {
+      return '';
+    }
+  };
+
+  async function copy(why = '', value = plain) {
+    try {
+      await navigator.clipboard.writeText(value);
       setNote({ kind: 'ok', text: why ? `${why} Copied to the clipboard instead.` : 'Copied to the clipboard.' });
       audit('copied');
     } catch {
@@ -53,13 +66,18 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     }
   }
 
-  async function insert(force = false) {
+  async function insert(spec, force = false) {
     setNote(null);
-    const field = feature.insert.field;
+    const field = spec.field;
+    const value = textFor(spec);
+    if (!value) {
+      setNote({ kind: 'danger', text: 'That part is not in the text, so there is nothing to insert. Use Copy instead.' });
+      return;
+    }
     if (!force && CUSTOMER_VISIBLE.has(field)) {
-      const serious = seriousFindings(plain, people, scan);
+      const serious = seriousFindings(value, people, scan);
       if (serious.length) {
-        setFindings(serious);
+        setFindings({ items: serious, spec });
         return;
       }
     }
@@ -67,7 +85,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     let answer;
     try {
       // `label` is how the control is named on a Workspace page (its aria-label), not the button text.
-      answer = await chrome.tabs.sendMessage(page.tabId, { type: MSG.FILL_FIELD, field, value: plain, label: feature.insert.fieldLabel || feature.insert.label, mode: 'append' });
+      answer = await chrome.tabs.sendMessage(page.tabId, { type: MSG.FILL_FIELD, field, value, label: spec.fieldLabel || spec.label, mode: 'append' });
     } catch {
       answer = { ok: false, reason: 'no-form' };
     }
@@ -75,7 +93,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       setNote({ kind: 'ok', text: 'Inserted into the form. Review it, then save the record yourself.' });
       audit('inserted');
     } else {
-      await copy(REASONS[answer?.reason] || 'Could not insert it.');
+      await copy(REASONS[answer?.reason] || 'Could not insert it.', value);
     }
   }
 
@@ -89,19 +107,21 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
         <div className="ab-note ab-note-warn" role="alert" style={{ marginTop: 8 }}>
           <strong>Check before sending to the customer:</strong>
           <ul style={{ margin: '4px 0 6px', paddingLeft: 18 }}>
-            {findings.map((f, i) => (
+            {findings.items.map((f, i) => (
               <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
             ))}
           </ul>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => insert(true)}>Insert anyway</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => insert(findings.spec, true)}>Insert anyway</button>
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => { setFindings(null); copy('Not inserted.'); }}>Edit first (copy instead)</button>
           </div>
         </div>
       )}
       {note && <p className={`ab-note ab-note-${note.kind}`} style={{ marginTop: 8 }}>{note.text}</p>}
       <div className="ab-row" style={{ marginTop: 8 }}>
-        <button type="button" className="ab-btn ab-btn-primary ab-btn-sm" onClick={() => insert(false)}>{feature.insert.label}</button>
+        {inserts.map((spec, i) => (
+          <button key={spec.field + i} type="button" className={`ab-btn ab-btn-sm${i === 0 ? ' ab-btn-primary' : ''}`} onClick={() => insert(spec, false)}>{spec.label}</button>
+        ))}
         <button type="button" className="ab-btn ab-btn-sm" onClick={() => copy()}>Copy</button>
         <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>Try again</button>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>Close</button>

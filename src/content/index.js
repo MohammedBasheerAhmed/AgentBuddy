@@ -13,6 +13,7 @@ import { queryTable } from './tableApi.js';
 import { parseRecordRef, kindForTable } from '../context/kinds.js';
 import { SYS_ID_RE, TABLE_RE, disp } from '../context/util.js';
 import { handleRead } from './reads.js';
+import { surfaceOf } from '../context/surface.js';
 
 const FIELD_RE = /^[a-z][a-z0-9_]{0,79}$/;
 const MAX_INSERT_CHARS = 20000;
@@ -45,12 +46,20 @@ if (!window.__abContentInstalled) {
     return { table: ref.table, sysId, number: number || '', kind: kindForTable(ref.table) };
   }
 
+  // A blank form on the classic UI (new incident, new article...): there is no record yet, but the table is known.
+  async function newRecordState() {
+    const meta = await tryCallPage('getFormMeta');
+    return meta?.isNewRecord && TABLE_RE.test(meta.table || '') ? { table: meta.table, kind: kindForTable(meta.table) } : null;
+  }
+
   async function pageState() {
-    const [record, session] = await Promise.all([resolveRecord().catch(() => null), tryCallPage('getSessionInfo')]);
+    const [record, session, newRecord] = await Promise.all([resolveRecord().catch(() => null), tryCallPage('getSessionInfo'), newRecordState().catch(() => null)]);
     return {
       href: location.href,
       title: document.title,
+      surface: surfaceOf(location.href),
       record,
+      newRecord: record ? null : newRecord,
       user: session ? { name: [session.firstName, session.lastName].filter(Boolean).join(' '), roles: session.roles || [], userId: session.userId || '' } : null,
     };
   }

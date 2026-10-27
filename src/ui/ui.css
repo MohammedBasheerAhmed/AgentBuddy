@@ -99,3 +99,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ab-table th { color: var(--ab-fg-muted); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.ab-nav { padding: 6px 12px 0; gap: 6px; }
+.ab-nav .ab-btn { flex: 1 1 auto; }

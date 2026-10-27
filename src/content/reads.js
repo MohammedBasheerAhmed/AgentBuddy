@@ -4,20 +4,11 @@
 // 32 hex characters, and a feature must be one the context engine knows.
 import { readContextPack, readCallerHistory, findSimilarTickets, findOpenDuplicates, searchKnowledge, FEATURES } from '../context/index.js';
 import { createLiveDeps } from '../context/live.js';
-import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
+import { SYS_ID_RE } from '../context/util.js';
+import { OPS } from './ops/index.js';
+import { checkRecord, checkPack } from './ops/validate.js';
 import { readMyDay } from '../reports/myDay.js';
 import { tryCallPage } from './pageBridge.js';
-
-function checkRecord({ table, sysId }) {
-  if (!TABLE_RE.test(table || '') || !SYS_ID_RE.test(sysId || '')) throw new Error('That is not a valid record.');
-}
-
-// A pack passed back by the panel is only used for its table, id and the few fields the similarity search reads.
-function checkPack(pack) {
-  if (!pack || typeof pack !== 'object') throw new Error('A ticket is needed for this search.');
-  checkRecord(pack);
-  return pack;
-}
 
 export async function handleRead(op, args) {
   const deps = createLiveDeps();
@@ -42,7 +33,10 @@ export async function handleRead(op, args) {
       return findOpenDuplicates(checkPack(args.pack), deps, { windowHours: Number(args.windowHours) || 24, allowSensitive: args.allowSensitive === true });
     case 'knowledge':
       return searchKnowledge(checkPack(args.pack), deps, { limit: 5 });
-    default:
+    default: {
+      // Operations added by area modules (src/content/ops). Own-property check: no prototype lookups.
+      if (Object.prototype.hasOwnProperty.call(OPS, op)) return OPS[op](args || {}, { deps, checkRecord, checkPack });
       throw new Error('Unknown request.');
+    }
   }
 }
