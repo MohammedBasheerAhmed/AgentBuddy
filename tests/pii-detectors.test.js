@@ -204,6 +204,11 @@ test('a 7-digit local number is a phone only after a calling verb', () => {
     assert.deepEqual(kindsOf(text), ['PHONE'], text);
   }
   assert.equal(valuesOf('Call me on 555-0199')[0], '555-0199');
+  // past tense and a first name in between
+  for (const text of ['Called Dana on 555-0177', 'rang Priya back on 555-0166', 'He phoned 555-0155 twice', 'texted Beth Anglin on 555 0144']) {
+    assert.deepEqual(kindsOf(text), ['PHONE'], text);
+  }
+  assert.deepEqual(kindsOf('Dana called about order 555-0177'), [], 'a word that is not a name or filler breaks the link to the number');
   // Without the verb it is any seven digits: an extension, a part number, an order id.
   for (const text of ['part 555-0199 is out of stock', 'order 555-0123 shipped', 'the call lasted 12 minutes, ref 2026-1027']) {
     assert.deepEqual(kindsOf(text), [], text);

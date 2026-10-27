@@ -1,4 +1,6 @@
-// The extras next to a record: SLAs, approvals, child and catalog tasks, request items, requested-item variables.
+// The extras next to a record: SLAs, approvals, child and catalog tasks, request items, requested-item variables, and for the
+// domain features the incidents linked to a problem, other changes overlapping a change's window, and recent changes on a
+// case's configuration item.
 // Each one is optional and fails soft: a refused read becomes an `access` note, never an error, and an empty answer is
 // only called "empty" when the user can see rows of that table at all (see access.js).
 //
@@ -6,21 +8,22 @@
 // ignores a condition on a column that does not exist and then returns every row, which must never pass for "the
 // approvals of this ticket".
 
-import { FEATURE_RELATED, LIMITS } from './allowlists.js';
-import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
-import { SYS_ID_RE, TABLE_RE, disp, mapLimit, oneLine, raw } from './util.js';
+import { FEATURE_RELATED, FIELDS_BY_KIND, LIMITS } from './allowlists.js';
+import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, isSessionExpired, softRead } from './access.js';
+import { kindForTable } from './kinds.js';
+import { SYS_ID_RE, TABLE_RE, disp, formatSnTime, mapLimit, oneLine, parseSnTime, raw } from './util.js';
 
 const CONCURRENCY = 3;
 
 // What a kind of record can have. The feature narrows this (FEATURE_RELATED) and a sensitive table narrows it to SLAs.
 export const RELATED_BY_KIND = Object.freeze({
   incident: ['slas', 'childTasks'],
-  problem: ['childTasks'],
-  change: ['approvals', 'changeTasks'],
+  problem: ['childTasks', 'linkedIncidents'],
+  change: ['approvals', 'changeTasks', 'conflicts'],
   request: ['items', 'approvals'],
   requested_item: ['variables', 'approvals', 'catalogTasks', 'slas'],
   catalog_task: ['slas'],
-  case: ['slas', 'childTasks'],
+  case: ['slas', 'childTasks', 'recentChanges'],
   hr_case: ['slas', 'childTasks'],
   task: ['slas', 'childTasks'],
   other: [],
@@ -262,6 +265,222 @@ async function readVariables({ sysId }, deps, memo) {
   return { items: shownItems, access: accessEntry(source, STATUS.OK, notes.join(' ')) };
 }
 
+// ---- Domain extras: linked incidents, schedule conflicts, recent changes ----------------------------------------------------
+// These three need more than "rows whose link column is this record": a problem's incidents can be many (so the oldest and the
+// newest are read and the rest counted), and a change's conflicts are searched by the change's own CI, service and planned
+// window. Those few values are read from the record itself (recordColumns) and only ever used to build the condition.
+
+const DAY = 86400000;
+const CHANGE_TABLE = 'change_request';
+const INCIDENT_TABLE = 'incident';
+
+// `deps.now` is optional (tests pin the clock with it); the live deps do not have it.
+const nowOf = (deps) => (typeof deps.now === 'function' ? Number(deps.now()) : Date.now());
+
+/**
+ * A few columns of the record itself, needed to know what to look for (its configuration item, its planned window).
+ * Only columns on the kind's display ceiling are asked for, and the values are not copied into the pack. One read per record
+ * and column set, shared by every extra that needs it (memo).
+ * @returns {Promise<{ row?: object, failure?: { status: string, note: string } }>}
+ */
+function recordColumns({ table, sysId }, columns, deps, memo) {
+  const key = `record:${sysId}:${columns.join(',')}`;
+  if (memo?.has(key)) return memo.get(key);
+  const promise = (async () => {
+    const ceiling = FIELDS_BY_KIND[kindForTable(table)] || [];
+    const outside = columns.filter((name) => !ceiling.includes(name));
+    if (outside.length) return { failure: { status: STATUS.ERROR, note: `Could not check ${table}: ${outside.join(', ')} may not be read for this kind of record.` } };
+    const { rows, failure } = await softRead(deps, table, `sys_id=${sysId}`, columns, { limit: 1, displayValue: false });
+    if (failure) return { failure };
+    if (!rows.length) return { failure: { status: STATUS.ERROR, note: `Could not read ${table} again to find what to look for.` } };
+    return { row: rows[0] };
+  })();
+  memo?.set(key, promise);
+  return promise;
+}
+
+const skipped = (source, note) => ({ access: accessEntry(source, STATUS.SKIPPED, note) });
+
+// ---- Incidents linked to a problem
+
+const INCIDENT_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'opened_at', 'resolved_at', 'cmdb_ci', 'close_notes', 'problem_id'];
+
+function shapeIncident(row) {
+  return {
+    number: text(row.number, 40),
+    short_description: text(row.short_description),
+    state: text(row.state, 40),
+    opened: text(row.opened_at, 40),
+    resolved: text(row.resolved_at, 40),
+    ci: text(row.cmdb_ci, 100),
+    closeNotes: oneLine(disp(row.close_notes), LIMITS.historyCloseNotes),
+  };
+}
+
+// Oldest first, by the stored (UTC) time so the order does not depend on the reader's date format.
+const byOpened = (a, b) => (Number.isFinite(a.t) && Number.isFinite(b.t) ? a.t - b.t : 0);
+
+/**
+ * The incidents linked to a problem (incident.problem_id): at most 20. Up to 20 are all read; more than that, the oldest 10 and
+ * the newest 10 are read (the start and the latest state of the story) and the total is counted, not read.
+ * The summary { total, shown } says how much is missing (total is null when the count could not be read).
+ */
+async function readLinkedIncidents({ sysId, table: ownTable }, deps, memo) {
+  const source = INCIDENT_TABLE;
+  const cap = LIMITS.relatedRows;
+  const half = Math.floor(cap / 2);
+  const read = (order, limit) => softRead(deps, source, `problem_id=${sysId}^${order}`, INCIDENT_FIELDS, { limit, displayValue: true });
+  // The instance ignoring a condition shows up as rows of other problems: none of them may be used.
+  const wrongRows = (rows) => rows.some((row) => !sameId(raw(row.problem_id), sysId));
+
+  const first = await read('ORDERBYopened_at', cap + 1);
+  if (first.failure) return { access: accessEntry(source, first.failure.status, first.failure.note) };
+  if (wrongRows(first.rows)) {
+    return { access: accessEntry(source, STATUS.ERROR, `Could not check ${source}: the instance did not apply the filter on this problem, so its rows were not used.`) };
+  }
+  if (!first.rows.length) return emptyResult(source, ownTable, deps, memo, []);
+
+  const shaped = (rows) => rows.map((row) => ({ id: raw(row.sys_id).toLowerCase(), t: parseSnTime(raw(row.opened_at)), item: shapeIncident(row) }));
+  const finish = (entries, total, note) => {
+    const sorted = [...entries].sort(byOpened);
+    return { items: sorted.map((e) => e.item), summary: { total, shown: sorted.length }, access: accessEntry(source, STATUS.OK, note) };
+  };
+
+  if (first.rows.length <= cap) return finish(shaped(first.rows), first.rows.length, '');
+
+  let total = null;
+  try {
+    const n = await deps.countRecords?.(source, `problem_id=${sysId}`);
+    if (Number.isFinite(n) && n > cap) total = n;
+  } catch (err) {
+    if (isSessionExpired(err) || err?.name === 'AbortError') throw err;
+  }
+  const outOf = total ?? `more than ${cap}`;
+  const oldest = shaped(first.rows.slice(0, half));
+  const newest = await read('ORDERBYDESCopened_at', cap - half);
+  if (newest.failure || wrongRows(newest.rows)) {
+    const kept = shaped(first.rows.slice(0, cap));
+    return finish(kept, total, `Showing the oldest ${kept.length} of ${outOf}.`);
+  }
+  const seen = new Set(oldest.map((e) => e.id));
+  const tail = shaped(newest.rows).filter((e) => !seen.has(e.id));
+  return finish([...oldest, ...tail], total, `Showing the oldest ${oldest.length} and the newest ${tail.length} of ${outOf}.`);
+}
+
+// ---- Other changes in a change's window (conflicts) and recent changes on a case's CI
+
+const CHANGE_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'type', 'risk', 'start_date', 'end_date', 'cmdb_ci', 'business_service'];
+const CONFLICT_ROWS = 10;
+const CONFLICT_READ = 50;
+const RECENT_ROWS = 5;
+const RECENT_READ = 25;
+const RECENT_BEFORE = 14 * DAY;
+const RECENT_AFTER = 7 * DAY;
+
+function shapeChange(row) {
+  return {
+    number: text(row.number, 40),
+    short_description: text(row.short_description),
+    state: text(row.state, 40),
+    type: text(row.type, 40),
+    risk: text(row.risk, 40),
+    start: text(row.start_date, 40),
+    end: text(row.end_date, 40),
+    ci: text(row.cmdb_ci, 100),
+    service: text(row.business_service, 100),
+  };
+}
+
+const filterIgnored = (table, field) => ({ status: STATUS.ERROR, note: `Could not check ${table} by ${field}: the instance did not apply the filter, so its rows were not used.` });
+
+/**
+ * Other active changes on the same CI or business service whose planned window overlaps this change's. The instance is asked
+ * with a window padded by a day on each side (so a time-zone difference cannot hide a change) and the exact overlap is decided
+ * here on the stored UTC times. At most 10 are returned; the number found is kept in the summary.
+ */
+async function readConflicts(record, deps, memo) {
+  const own = await recordColumns(record, ['cmdb_ci', 'business_service', 'start_date', 'end_date'], deps, memo);
+  if (own.failure) return { access: accessEntry(CHANGE_TABLE, own.failure.status, own.failure.note) };
+  const start = parseSnTime(raw(own.row.start_date));
+  const end = parseSnTime(raw(own.row.end_date));
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return skipped(CHANGE_TABLE, 'The change has no planned start and end, so schedule conflicts were not checked.');
+  }
+  const keys = [['cmdb_ci', raw(own.row.cmdb_ci)], ['business_service', raw(own.row.business_service)]].filter(([, id]) => SYS_ID_RE.test(id));
+  if (!keys.length) return skipped(CHANGE_TABLE, 'The change has no configuration item or business service, so schedule conflicts were not checked.');
+
+  const found = new Map();
+  const failures = [];
+  let crowded = false;
+  for (const [field, id] of keys) {
+    const query = `${field}=${id}^sys_id!=${record.sysId}^active=true^start_date<=${formatSnTime(end + DAY)}^end_date>=${formatSnTime(start - DAY)}^ORDERBYstart_date`;
+    // eslint-disable-next-line no-await-in-loop -- two small reads at most, kept sequential.
+    const { rows, failure } = await softRead(deps, CHANGE_TABLE, query, CHANGE_FIELDS, { limit: CONFLICT_READ, displayValue: true });
+    if (failure) {
+      failures.push(failure);
+      continue;
+    }
+    // A condition the instance ignored returns other CIs' changes: none of them is a conflict of this change.
+    if (rows.some((row) => !sameId(raw(row[field]), id))) {
+      failures.push(filterIgnored(CHANGE_TABLE, field));
+      continue;
+    }
+    if (rows.length >= CONFLICT_READ) crowded = true;
+    for (const row of rows) {
+      const rowId = raw(row.sys_id).toLowerCase();
+      const s = parseSnTime(raw(row.start_date));
+      const e = parseSnTime(raw(row.end_date));
+      if (!SYS_ID_RE.test(rowId) || rowId === record.sysId || !Number.isFinite(s) || !Number.isFinite(e) || s > end || e < start) continue;
+      const hit = found.get(rowId) || { t: s, ...shapeChange(row), same: [] };
+      hit.same.push(field);
+      found.set(rowId, hit);
+    }
+  }
+
+  // "None found" is only a fact when every check could be read.
+  if (failures.length && !found.size) return { access: accessEntry(CHANGE_TABLE, failures[0].status, failures[0].note) };
+  const all = [...found.values()].sort((a, b) => a.t - b.t);
+  const items = all.slice(0, CONFLICT_ROWS).map(({ t, ...rest }) => rest);
+  const notes = [];
+  if (failures.length) notes.push('One of the two checks (configuration item or business service) could not be read.');
+  if (all.length > items.length) notes.push(`Showing the first ${items.length} of ${all.length}.`);
+  if (crowded) notes.push('The instance returned a very long list for this window, so some changes may not be listed.');
+  return { items, summary: { total: all.length, shown: items.length }, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY, notes.join(' ')) };
+}
+
+/** Changes on the case's configuration item made in the last 14 days or planned for the next 7: "did something change?". */
+async function readRecentChanges(record, deps, memo) {
+  const own = await recordColumns(record, ['cmdb_ci'], deps, memo);
+  if (own.failure) return { access: accessEntry(CHANGE_TABLE, own.failure.status, own.failure.note) };
+  const ci = raw(own.row.cmdb_ci);
+  if (!SYS_ID_RE.test(ci)) return skipped(CHANGE_TABLE, 'The case has no configuration item, so recent changes were not looked up.');
+
+  const now = nowOf(deps);
+  const from = now - RECENT_BEFORE;
+  const until = now + RECENT_AFTER;
+  const query = `cmdb_ci=${ci}^end_date>=${formatSnTime(from - DAY)}^start_date<=${formatSnTime(until + DAY)}^ORDERBYDESCstart_date`;
+  const { rows, failure } = await softRead(deps, CHANGE_TABLE, query, CHANGE_FIELDS, { limit: RECENT_READ, displayValue: true });
+  if (failure) return { access: accessEntry(CHANGE_TABLE, failure.status, failure.note) };
+  if (rows.some((row) => !sameId(raw(row.cmdb_ci), ci))) {
+    const bad = filterIgnored(CHANGE_TABLE, 'cmdb_ci');
+    return { access: accessEntry(CHANGE_TABLE, bad.status, bad.note) };
+  }
+  if (!rows.length) return emptyResult(CHANGE_TABLE, record.table, deps, memo, []);
+
+  const items = rows
+    .filter((row) => {
+      const s = parseSnTime(raw(row.start_date));
+      const e = parseSnTime(raw(row.end_date));
+      return Number.isFinite(s) && Number.isFinite(e) && e >= from && s <= until;
+    })
+    .slice(0, RECENT_ROWS)
+    .map(shapeChange);
+  return { items, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY) };
+}
+
+// Extras that are not a plain list of rows linked to the record.
+const READERS = Object.freeze({ __proto__: null, variables: readVariables, linkedIncidents: readLinkedIncidents, conflicts: readConflicts, recentChanges: readRecentChanges });
+
 // ---- Putting it together -------------------------------------------------------------------------------
 
 /**
@@ -269,12 +488,14 @@ async function readVariables({ sysId }, deps, memo) {
  * @returns {Promise<{ related: object, refs: object[], access: object[] }>}
  *   `related[key]` is a list when the read worked (an empty list is a confirmed "none"); a key is absent when it could
  *   not be read or the answer was ambiguous, and `access` says why. `refs` are people met on the way (approvers, assignees).
+ *   A list that was cut short also gets `related[key + 'Summary'] = { total, shown }` (linked incidents, conflicts).
  */
 export async function readRelated(keys, record, deps, memo) {
-  const results = await mapLimit(keys, CONCURRENCY, (key) => (key === 'variables' ? readVariables(record, deps, memo) : readListSource(key, record, deps, memo)));
+  const results = await mapLimit(keys, CONCURRENCY, (key) => (READERS[key] ? READERS[key](record, deps, memo) : readListSource(key, record, deps, memo)));
   const related = {};
   keys.forEach((key, i) => {
     if (results[i].items) related[key] = results[i].items;
+    if (results[i].items && results[i].summary) related[`${key}Summary`] = results[i].summary;
   });
   const refs = new Map();
   results.flatMap((r) => r.refs || []).forEach((ref) => {

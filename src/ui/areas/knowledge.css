@@ -1,1 +1,32 @@
-/* Styles for the knowledge area. Use the --ab-* tokens from theme.css only. */
+/* Styles for the knowledge area (article checks, Knowledge tools, chat tab). Use the --ab-* tokens from theme.css only. */
+
+.ab-kb-head { align-items: baseline; }
+.ab-kb-notes { margin: 6px 0 0; }
+
+/* ---- findings on an article ---- */
+.ab-kb-findings { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ab-kb-finding { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
+.ab-kb-finding.ab-kb-problem { background: var(--ab-danger-soft); border-color: var(--ab-danger-line); }
+.ab-kb-finding.ab-kb-warn { background: var(--ab-warn-soft); border-color: var(--ab-warn-line); }
+.ab-kb-level { flex: none; min-width: 58px; font-size: var(--ab-text-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ab-fg-soft); }
+.ab-kb-problem .ab-kb-level { color: var(--ab-danger); }
+.ab-kb-warn .ab-kb-level { color: var(--ab-warn); }
+.ab-kb-finding-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.ab-kb-detail { color: var(--ab-fg-soft); font-size: var(--ab-text-sm); }
+.ab-kb-problem .ab-kb-detail { color: var(--ab-fg); }
+.ab-kb-warn .ab-kb-detail { color: var(--ab-fg); }
+
+/* ---- groups of duplicate articles and of ticket topics ---- */
+.ab-kb-cluster { display: flex; flex-direction: column; gap: 6px; padding: 8px; margin-top: 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg); }
+.ab-kb-cluster.ab-kb-picked { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
+.ab-kb-articles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ab-kb-articles li { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.ab-kb-open { justify-content: flex-start; text-align: left; height: auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.ab-kb-pairs { margin: 8px 0 0; padding-left: 18px; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); }
+
+/* ---- the chat tab ---- */
+.ab-kb-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: var(--ab-text-sm); }
+.ab-kb-facts dt { color: var(--ab-fg-muted); }
+.ab-kb-facts dd { margin: 0; overflow-wrap: anywhere; }
+.ab-kb-quote { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--ab-border-strong); background: var(--ab-bg-subtle); color: var(--ab-fg); overflow-wrap: anywhere; white-space: pre-wrap; }
+.ab-kb-quote-head { display: block; margin-bottom: 2px; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-fg-muted); }

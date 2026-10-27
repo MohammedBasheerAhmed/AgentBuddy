@@ -184,6 +184,33 @@ export async function countByColumn(table, query, column) {
   return data?.result || [];
 }
 
+const AGGREGATE_COLUMN_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){0,2}$/;
+
+/**
+ * One Aggregate API read, GET only: counts (always), optionally per value of up to two columns and with the average of
+ * numeric columns. Returns the raw `result`: an object `{ stats: { count, avg? } }` without a grouping, an array
+ * `[{ stats, groupby_fields: [{ field, value, display_value }] }]` with one. Used by the reports engine (src/reports/engine).
+ */
+export async function aggregate(table, { query = '', groupBy = [], avgFields = [], signal } = {}) {
+  [...groupBy, ...avgFields].forEach((name) => {
+    if (!AGGREGATE_COLUMN_RE.test(String(name))) throw new Error('That is not a valid column name.');
+  });
+  const params = new URLSearchParams({ sysparm_count: 'true' });
+  if (query) params.set('sysparm_query', query);
+  if (groupBy.length) {
+    params.set('sysparm_group_by', groupBy.join(','));
+    params.set('sysparm_display_value', 'all');
+  }
+  if (avgFields.length) params.set('sysparm_avg_fields', avgFields.join(','));
+  const response = await instanceFetch(`/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`, {
+    credentials: 'same-origin',
+    headers: await sessionHeaders(),
+    ...(signal ? { signal } : {}),
+  });
+  const data = await readJson(response, `Report on "${table}"`);
+  return data?.result ?? null;
+}
+
 /** Page through a query until `max` rows (or the end). Pages run one at a time. */
 export async function queryAll(table, query, fields = [], { max = 2000, pageSize = 500, displayValue = false } = {}) {
   const rows = [];

@@ -4,6 +4,7 @@ import { usePage } from './usePage.js';
 import SetupView from './SetupView.jsx';
 import RecordView from './RecordView.jsx';
 import MyDayView from './MyDayView.jsx';
+import PendingDraft from './PendingDraft.jsx';
 import ReportsView from './tabs/ReportsView.jsx';
 import ComposeView from './tabs/ComposeView.jsx';
 import KnowledgeToolsView from './tabs/KnowledgeToolsView.jsx';
@@ -86,6 +87,7 @@ export default function App() {
         </nav>
       )}
       <main className="ab-main">
+        {enabled && <PendingDraft page={page} />}
         {Other ? (
           <Other page={page} eff={eff} />
         ) : page.status === 'record' ? (

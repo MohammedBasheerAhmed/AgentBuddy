@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 import { prepareRun, executeRun, previewRequired, assertRunnable, connectionProblem, RunBlocked, errorReason } from '../src/lib/pipeline.js';
-import { featureById, featuresFor, partsFor } from '../src/features/registry.js';
+import { featureById, featuresFor, partsFor, insertsFor } from '../src/features/registry.js';
 import { packToParts, peopleFor } from '../src/features/parts.js';
 import { normalizePolicy, effectiveSettings } from '../src/policy/policy.js';
 import { resolveProviderConfig } from '../src/providers/config.js';
@@ -61,7 +61,8 @@ test('every feature applies to the right record kinds and respects the policy sw
   assert.ok(!featuresFor('change', policy()).some((f) => f.id === 'resolution-notes'));
   assert.ok(!featuresFor('incident', policy({ disabledFeatures: ['record-summary'] })).some((f) => f.id === 'record-summary'));
   featuresFor('incident', policy()).forEach((f) => {
-    assert.ok(f.system && f.instruction && f.insert.field, f.id);
+    // A feature may offer one insert, several, or none (Copy only); every insert it does offer names a field.
+    assert.ok(f.system && f.instruction && insertsFor(f).every((i) => i.field && i.label), f.id);
     assert.ok(!/\{\{|\$\{/.test(f.system), 'prompts contain no template holes: ticket data only arrives as parts');
   });
 });

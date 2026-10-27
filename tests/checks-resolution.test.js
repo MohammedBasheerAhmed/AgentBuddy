@@ -1,0 +1,270 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { DEFAULT_WAIT_DAYS, buildCheckView, isFillerNote, orderChecks, resolutionCheck, summarizeChecks, withCurrentNotes } from '../src/checks/resolutionCheck.js';
+import { readContextPack } from '../src/context/pack.js';
+import { fakeDeps } from './fixtures/sn-fakeDeps.js';
+import { buildInstance } from './fixtures/sn-instance.js';
+import { INCIDENT_ID, NOW } from './fixtures/sn-incident.js';
+
+const DAY = 86400000;
+const GOOD_NOTES = 'Replaced the expired VPN gateway certificate on EU-2 and restarted the service. The user reconnected and stayed connected for an hour.';
+
+const incident = (over = {}) => ({
+  version: 1,
+  table: 'incident',
+  sysId: 'a'.repeat(32),
+  number: 'INC1',
+  kind: 'incident',
+  fields: { number: 'INC1', state: 'In Progress', close_code: 'Solution provided', close_notes: GOOD_NOTES },
+  people: [{ role: 'caller', name: 'Abel Tuter', email: 'abel.tuter@example.com' }],
+  journal: [],
+  related: { childTasks: [] },
+  access: [],
+  ...over,
+});
+const find = (checks, id) => checks.find((c) => c.id === id);
+const comment = (by, when, text = 'ok') => ({ when, by, type: 'comment', text });
+
+// ---- the notes ---------------------------------------------------------------------------------------------------------------
+
+test('filler notes are recognised; real ones are not', () => {
+  for (const n of ['Resolved', 'resolved.', 'Fixed', 'Done!', 'Issue resolved', 'Issue fixed, thanks', 'ticket closed as requested', 'N/A', 'ok']) assert.ok(isFillerNote(n), n);
+  for (const n of ['Reset the password', 'Rebooted the router and the issue is resolved', 'Cleared the cache', '', '   ']) assert.ok(!isFillerNote(n), n);
+});
+
+test('notes: missing, filler, short and good', () => {
+  const run = (close_notes) => find(resolutionCheck(incident({ fields: { state: 'In Progress', close_code: 'x', close_notes } })), 'notes');
+  assert.equal(run('').status, 'warn');
+  assert.match(run('').title, /No resolution notes/);
+  assert.equal(run('Resolved.').status, 'warn');
+  assert.match(run('Resolved.').title, /only say "resolved"/);
+  assert.equal(run('Restarted the service').status, 'warn');
+  assert.match(run('Restarted the service').title, /very short/);
+  assert.equal(run(GOOD_NOTES).status, 'ok');
+});
+
+test('what is typed on the form wins over what is saved; a field the form does not have falls back to the saved value', () => {
+  const pack = incident({ fields: { state: 'In Progress', close_code: 'Solution provided', close_notes: '' } });
+  assert.equal(find(resolutionCheck(pack, { form: { close_notes: GOOD_NOTES } }), 'notes').status, 'ok');
+  assert.equal(find(resolutionCheck(incident(), { form: { close_notes: '' } }), 'notes').status, 'warn', 'cleared on the form after being saved');
+  assert.equal(find(resolutionCheck(incident(), { form: { comments: 'x' } }), 'notes').status, 'ok', 'no close_notes on the form: use the saved ones');
+  assert.equal(find(resolutionCheck(pack, { form: null }), 'notes').status, 'warn');
+});
+
+// ---- the close code ---------------------------------------------------------------------------------------------------------
+
+test('close code: incident uses close_code, problem and case use resolution_code, other kinds have none', () => {
+  assert.equal(find(resolutionCheck(incident({ fields: { state: 'x', close_notes: GOOD_NOTES } })), 'code').status, 'warn');
+  assert.equal(find(resolutionCheck(incident({ fields: { state: 'x', close_notes: GOOD_NOTES } }), { form: { close_code: 'Solution provided' } }), 'code').status, 'ok');
+  const problem = incident({ kind: 'problem', fields: { state: 'x', close_notes: GOOD_NOTES, resolution_code: 'Fix applied' }, related: { childTasks: [] } });
+  assert.equal(find(resolutionCheck(problem), 'code').status, 'ok');
+  assert.equal(find(resolutionCheck({ ...problem, fields: { state: 'x', close_notes: GOOD_NOTES } }), 'code').status, 'warn');
+  for (const kind of ['request', 'requested_item', 'catalog_task', 'task']) assert.equal(find(resolutionCheck(incident({ kind, related: {} })), 'code'), undefined, kind);
+});
+
+// ---- did the customer answer? --------------------------------------------------------------------------------------------------
+
+test('customer: no messages at all is a note, not a warning', () => {
+  const c = find(resolutionCheck(incident(), {}, { now: NOW }), 'customer');
+  assert.equal(c.status, 'info');
+  assert.match(c.hint, /by phone or in person/);
+});
+
+test('customer: the customer wrote last is fine', () => {
+  const j = [comment('Beth Anglin', '2026-10-26 08:00:00'), comment('Abel Tuter', '2026-10-26 09:00:00', 'Works now, thanks')];
+  assert.equal(find(resolutionCheck(incident({ journal: j }), {}, { now: NOW }), 'customer').status, 'ok');
+});
+
+test('customer: an agent wrote last, recently: warn; long ago: fine; time unreadable: warn', () => {
+  const recent = [comment('Abel Tuter', '2026-10-25 08:00:00'), comment('Beth Anglin', '2026-10-26 08:00:00')];
+  const warn = find(resolutionCheck(incident({ journal: recent }), {}, { now: NOW }), 'customer');
+  assert.equal(warn.status, 'warn');
+  assert.match(warn.title, /not replied to your last message \(today\)/);
+
+  const twoDays = [comment('Beth Anglin', '2026-10-24 12:00:00')];
+  assert.match(find(resolutionCheck(incident({ journal: twoDays }), {}, { now: NOW }), 'customer').title, /2 days ago/);
+
+  const old = [comment('Abel Tuter', '2026-10-10 08:00:00'), comment('Beth Anglin', '2026-10-20 08:00:00')];
+  const wait = find(resolutionCheck(incident({ journal: old }), {}, { now: NOW }), 'customer');
+  assert.equal(wait.status, 'ok');
+  assert.match(wait.title, /No reply for 6 days/);
+
+  const noTime = [comment('Beth Anglin', '26/10/2026 08:00')];
+  const unknown = find(resolutionCheck(incident({ journal: noTime }), {}, { now: NOW }), 'customer');
+  assert.equal(unknown.status, 'warn');
+  assert.match(unknown.title, /no reply yet/);
+});
+
+test('customer: the wait is a parameter, work notes do not count, and an unknown customer is said plainly', () => {
+  const j = [comment('Beth Anglin', '2026-10-24 12:00:00')];
+  assert.equal(find(resolutionCheck(incident({ journal: j }), {}, { now: NOW, waitDays: 2 }), 'customer').status, 'ok');
+  assert.equal(DEFAULT_WAIT_DAYS, 3);
+  const onlyNotes = [{ when: '2026-10-26 08:00:00', by: 'Beth Anglin', type: 'work_note', text: 'internal' }];
+  assert.match(find(resolutionCheck(incident({ journal: onlyNotes }), {}, { now: NOW }), 'customer').title, /No messages/);
+  const nobody = find(resolutionCheck(incident({ people: [], journal: j }), {}, { now: NOW }), 'customer');
+  assert.equal(nobody.status, 'info');
+  assert.match(nobody.title, /Could not tell/);
+});
+
+// ---- open work -------------------------------------------------------------------------------------------------------------------
+
+test('children: open tasks warn and are named; closed ones are fine; unreadable ones say why', () => {
+  const t = (number, state, active) => ({ number, state, active });
+  const open = find(resolutionCheck(incident({ related: { childTasks: [t('TASK1', 'Open', 'true'), t('TASK2', 'Closed Complete', 'false'), t('TASK3', 'Work in Progress', 'true')] } })), 'children');
+  assert.equal(open.status, 'warn');
+  assert.equal(open.title, '2 tasks still open');
+  assert.match(open.hint, /TASK1 \(Open\), TASK3 \(Work in Progress\)/);
+  assert.equal(find(resolutionCheck(incident({ related: { childTasks: [t('TASK2', 'Closed Complete', 'false')] } })), 'children').title, 'All 1 task closed');
+  assert.equal(find(resolutionCheck(incident({ related: { childTasks: [] } })), 'children').status, 'ok');
+  const hidden = find(resolutionCheck(incident({ related: {}, access: [{ source: 'task', status: 'denied', note: '' }] })), 'children');
+  assert.equal(hidden.status, 'info');
+  assert.match(hidden.hint, /cannot read tasks/);
+});
+
+test('children: requested items hold catalog tasks, requests hold items, catalog tasks have none', () => {
+  const open = [{ number: 'SCTASK1', state: 'Open', active: 'true' }];
+  assert.match(find(resolutionCheck(incident({ kind: 'requested_item', related: { catalogTasks: open } })), 'children').title, /1 catalog task still open/);
+  assert.match(find(resolutionCheck(incident({ kind: 'request', related: { items: [{ number: 'RITM1', state: 'Open' }] } })), 'children').title, /1 requested item still open/);
+  assert.equal(find(resolutionCheck(incident({ kind: 'catalog_task', related: {} })), 'children'), undefined);
+  const many = Array.from({ length: 7 }, (_, i) => ({ number: `TASK${i}`, state: 'Open', active: 'true' }));
+  assert.match(find(resolutionCheck(incident({ related: { childTasks: many } })), 'children').hint, /and 3 more/);
+});
+
+// ---- linked problem or article -----------------------------------------------------------------------------------------------------
+
+test('links: found, none, unknown, and an article named in the notes', () => {
+  const yes = { problem: { status: 'yes' }, knowledge: { status: 'no' } };
+  assert.equal(find(resolutionCheck(incident(), { links: yes }), 'links').title, 'Linked to a problem');
+  assert.equal(find(resolutionCheck(incident(), { links: { problem: { status: 'yes' }, knowledge: { status: 'yes' } } }), 'links').title, 'Linked to a problem and an article');
+  const none = find(resolutionCheck(incident(), { links: { problem: { status: 'no' }, knowledge: { status: 'no' } } }), 'links');
+  assert.equal(none.status, 'info');
+  assert.equal(none.title, 'No problem or article is linked');
+  const unsure = find(resolutionCheck(incident(), { links: { problem: { status: 'no' }, knowledge: { status: 'unknown', note: 'You cannot read m2m_kb_task.' } } }), 'links');
+  assert.match(unsure.title, /Could not fully check/);
+  assert.match(unsure.hint, /cannot read m2m_kb_task/);
+  assert.match(find(resolutionCheck(incident(), {}), 'links').title, /Could not check/);
+  const mentioned = incident({ fields: { state: 'x', close_code: 'x', close_notes: `${GOOD_NOTES} See KB0010023.` } });
+  assert.equal(find(resolutionCheck(mentioned, { links: { problem: { status: 'no' }, knowledge: { status: 'no' } } }), 'links').title, 'Linked to an article (named in the notes)');
+  // Not asked of fulfilment tickets; a problem has no "linked problem".
+  assert.equal(find(resolutionCheck(incident({ kind: 'catalog_task', related: {} })), 'links'), undefined);
+  const problem = find(resolutionCheck(incident({ kind: 'problem' }), { links: { problem: { status: 'na' }, knowledge: { status: 'no' } } }), 'links');
+  assert.equal(problem.title, 'No article is linked');
+});
+
+// ---- personal data and secrets ----------------------------------------------------------------------------------------------------------
+
+const SECRETS = ['jane.roe@corp.example.org', '+1 (555) 123-4567', '4111 1111 1111 1111', 'Hunter2-Secret!'];
+
+test('pii: reports the KIND and COUNT, never the value, for the notes and the unsent comment', () => {
+  const notes = `${GOOD_NOTES} Contact jane.roe@corp.example.org or +1 (555) 123-4567. password: Hunter2-Secret!`;
+  const pack = incident({ fields: { state: 'x', close_code: 'x', close_notes: notes } });
+  const checks = resolutionCheck(pack, { form: { comments: 'Your card 4111 1111 1111 1111 was used.' } });
+  const pii = find(checks, 'pii');
+  assert.equal(pii.status, 'warn');
+  assert.match(pii.hint, /1 email address/);
+  assert.match(pii.hint, /1 phone number/);
+  assert.match(pii.hint, /1 password or key/);
+  assert.match(pii.hint, /1 card number in the comment you have not sent yet/);
+  assert.match(pii.hint, /in the resolution notes/);
+  const everything = JSON.stringify(checks);
+  for (const s of SECRETS) assert.ok(!everything.includes(s), `${s} must not appear in any result`);
+  assert.ok(!everything.includes('Hunter2'));
+});
+
+test('pii: the record\'s own people are not flagged, nothing found is a plain "fine", nothing written says so', () => {
+  const own = incident({ fields: { state: 'x', close_code: 'x', close_notes: `${GOOD_NOTES} Told abel.tuter@example.com it works.` } });
+  assert.equal(find(resolutionCheck(own), 'pii').status, 'ok');
+  assert.match(find(resolutionCheck(own), 'pii').title, /No personal data or secrets spotted/);
+  const empty = incident({ fields: { state: 'x' } });
+  assert.match(find(resolutionCheck(empty), 'pii').title, /Nothing written yet/);
+});
+
+test('pii: a serious value already in a comment on the ticket (even the customer\'s) is reported; their phone number is not', () => {
+  const j = [
+    comment('Abel Tuter', '2026-10-26 08:00:00', 'My card is 4111 1111 1111 1111 please charge it. Call me on +1 (555) 123-4567.'),
+    comment('Beth Anglin', '2026-10-26 08:30:00', 'Thanks'),
+  ];
+  const pii = find(resolutionCheck(incident({ journal: j })), 'pii');
+  assert.equal(pii.status, 'warn');
+  assert.match(pii.hint, /1 card number in comments already on the ticket/);
+  assert.ok(!/phone/.test(pii.hint), 'only the serious kinds are listed for earlier comments');
+  assert.ok(!JSON.stringify(pii).includes('4111'));
+});
+
+test('pii: low-severity findings (an IP address) are left out', () => {
+  const pack = incident({ fields: { state: 'x', close_code: 'x', close_notes: `${GOOD_NOTES} The gateway at 203.0.113.45 was restarted.` } });
+  assert.equal(find(resolutionCheck(pack), 'pii').status, 'ok');
+});
+
+// ---- hold reason, already finished ----------------------------------------------------------------------------------------------------------
+
+test('hold reason: still set is a warning; cleared on the form is fine; none saved is no check at all', () => {
+  const held = incident({ fields: { state: 'In Progress', close_code: 'x', close_notes: GOOD_NOTES, hold_reason: 'Awaiting Caller' } });
+  assert.equal(find(resolutionCheck(held), 'hold').status, 'warn');
+  assert.equal(find(resolutionCheck(held, { form: { hold_reason: '' } }), 'hold'), undefined, 'cleared on the form');
+  assert.equal(find(resolutionCheck(incident({ fields: { state: 'x', hold_reason: '' } }), { form: { hold_reason: 'Awaiting Evidence' } }), 'hold').status, 'warn', 'set on the form, not saved yet');
+  assert.equal(find(resolutionCheck(incident()), 'hold'), undefined);
+});
+
+test('an already resolved ticket gets one note at the top of the list', () => {
+  const done = resolutionCheck(incident({ fields: { state: 'Closed', close_code: 'x', close_notes: GOOD_NOTES } }));
+  assert.equal(done[0].id, 'state');
+  assert.equal(done[0].status, 'info');
+  assert.equal(find(resolutionCheck(incident()), 'state'), undefined);
+});
+
+// ---- the list as a whole -------------------------------------------------------------------------------------------------------------------
+
+test('every check is { id, status, title, hint } with a known status, and the function never blocks: it only returns advice', () => {
+  const checks = resolutionCheck(incident({ fields: { state: 'On Hold', hold_reason: 'x' }, journal: [comment('Beth Anglin', '2026-10-26 08:00:00')], related: { childTasks: [{ number: 'T', state: 'Open', active: 'true' }] } }), { form: { close_notes: 'Resolved' } }, { now: NOW });
+  assert.ok(checks.length >= 6);
+  for (const c of checks) {
+    assert.deepEqual(Object.keys(c).sort(), ['hint', 'id', 'status', 'title']);
+    assert.ok(['ok', 'warn', 'info'].includes(c.status), c.status);
+    assert.ok(c.title);
+  }
+  assert.equal(new Set(checks.map((c) => c.id)).size, checks.length, 'ids are unique');
+});
+
+test('warnings sort first, then notes, then what is fine; the summary counts them', () => {
+  const checks = [{ id: 'a', status: 'ok', title: '', hint: '' }, { id: 'b', status: 'warn', title: '', hint: '' }, { id: 'c', status: 'info', title: '', hint: '' }, { id: 'd', status: 'warn', title: '', hint: '' }];
+  assert.deepEqual(orderChecks(checks).map((c) => c.id), ['b', 'd', 'c', 'a']);
+  assert.deepEqual(summarizeChecks(checks), { warn: 2, info: 1, ok: 1, tone: 'warn', headline: '2 things to look at before you resolve this' });
+  assert.equal(summarizeChecks([checks[1]]).headline, '1 thing to look at before you resolve this');
+  assert.equal(summarizeChecks([checks[0], checks[2]]).tone, 'info');
+  assert.equal(summarizeChecks([checks[0]]).tone, 'ok');
+});
+
+test('buildCheckView says whether the form was used; withCurrentNotes swaps in the typed notes only', () => {
+  assert.equal(buildCheckView(incident(), { form: { close_notes: 'x' } }, { now: NOW }).usedForm, true);
+  assert.equal(buildCheckView(incident(), { form: null }, { now: NOW }).usedForm, false);
+  assert.equal(buildCheckView(incident(), undefined, { now: NOW }).usedForm, false);
+
+  const pack = incident();
+  const swapped = withCurrentNotes(pack, { close_notes: '  My draft notes  ', comments: 'not this' });
+  assert.equal(swapped.fields.close_notes, 'My draft notes');
+  assert.equal(pack.fields.close_notes, GOOD_NOTES, 'the original pack is untouched');
+  assert.equal(swapped.fields.comments, undefined);
+  assert.equal(withCurrentNotes(pack, null), pack);
+  assert.equal(withCurrentNotes(pack, { close_notes: '   ' }), pack, 'an empty form field keeps the saved notes');
+  assert.ok(withCurrentNotes(pack, { close_notes: 'x'.repeat(5000) }).fields.close_notes.length <= 2000);
+});
+
+// ---- from a real pack (the fixture incident) --------------------------------------------------------------------------------------------------
+
+test('the fixture incident: customer has not answered, one open task, no close notes yet', async () => {
+  const deps = fakeDeps(buildInstance());
+  const pack = await readContextPack({ table: 'incident', sysId: INCIDENT_ID }, deps, { feature: 'resolution-check' });
+  const checks = resolutionCheck(pack, { form: { close_notes: 'Resolved' }, links: { problem: { status: 'no' }, knowledge: { status: 'no' } } }, { now: NOW });
+  assert.equal(find(checks, 'notes').status, 'warn');
+  assert.equal(find(checks, 'code').status, 'warn', 'no close code saved');
+  assert.match(find(checks, 'customer').title, /not replied to your last message \(today\)/);
+  assert.match(find(checks, 'children').title, /1 task still open/);
+  assert.equal(find(checks, 'links').status, 'info');
+  // The check reads little: no description, no priority, no CI.
+  assert.equal(pack.fields.description, undefined);
+  assert.equal(pack.fields.cmdb_ci, undefined);
+  assert.ok(pack.journal.length > 0, 'the conversation is read');
+  assert.ok(Object.keys(pack.related).every((k) => ['childTasks', 'catalogTasks', 'items'].includes(k)));
+  assert.equal(Math.round((NOW - Date.UTC(2026, 9, 26, 8, 20, 41)) / DAY * 24), 4);
+});

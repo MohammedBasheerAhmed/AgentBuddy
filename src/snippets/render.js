@@ -181,14 +181,16 @@ function findPerson(people, roles) {
 }
 
 // The next SLA due time: the record's own sla_due field, else the earliest open one in related SLAs (if present).
+// The context engine's SLA rows (src/context/related.js) are { name, stage, breached, percentage, plannedEnd }; the older
+// column-style names (due, has_breached, planned_end_time) are understood too.
 function slaDue(pack) {
   const fromField = text(pack.fields && pack.fields.sla_due);
   if (fromField) return fromField;
   const rel = pack.related && typeof pack.related === 'object' ? pack.related : {};
   const list = [rel.slas, rel.sla, rel.task_sla].find(Array.isArray) || [];
   const dues = list
-    .filter((s) => s && typeof s === 'object' && !/^true$/i.test(text(s.has_breached)) && !/^(completed|cancelled)$/i.test(text(s.stage)))
-    .map((s) => text(s.due) || text(s.planned_end_time) || text(s.breach_time))
+    .filter((s) => s && typeof s === 'object' && !/^true$/i.test(text(s.has_breached)) && !/^true$/i.test(text(s.breached)) && !/^(completed|cancelled)$/i.test(text(s.stage)))
+    .map((s) => text(s.due) || text(s.plannedEnd) || text(s.planned_end_time) || text(s.breach_time))
     .filter(Boolean)
     .sort();
   return dues[0] || '';

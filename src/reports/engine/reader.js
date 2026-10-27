@@ -1,0 +1,218 @@
+// The only way report sections read from the instance. It adds, around the injected `deps` (queryTable, aggregate):
+//   - a limit on parallel requests, shared by everything the page is asked for
+//   - a time limit for the whole section (reads started after it are refused at once, waiting ones are given up on)
+//   - a short-lived cache (identical reads in the same minute are one request) that "Refresh" empties
+//   - the managed policy's blocked tables
+//   - honest failure results: a table you cannot read is { ok: false, status: 'denied' }, never a zero
+// A lost session is not a read problem: it is thrown so the whole report can say "log in again".
+import { classifyReadError, confirmEmptyIsReallyEmpty, STATUS } from '../../context/access.js';
+import { raw, disp } from '../../context/util.js';
+import { LIMITS } from './constants.js';
+
+export class ReportError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'ReportError';
+    this.code = code;
+  }
+}
+
+export const isSessionExpired = (err) => err?.code === 'SESSION_EXPIRED';
+
+/** { ok: true, value } or { ok: false, status, note } for one number: 'denied' | 'hidden' | 'blocked' | 'timeout' | 'error'. */
+export async function attempt(fn, what = 'this') {
+  try {
+    return { ok: true, value: await fn() };
+  } catch (err) {
+    if (isSessionExpired(err)) throw err;
+    if (err?.code === 'TIMEOUT' || err?.name === 'AbortError') return { ok: false, status: 'timeout', note: 'It took too long to read.' };
+    if (err?.code === 'BLOCKED') return { ok: false, status: 'blocked', note: err.message };
+    if (err?.code === 'NO_COLUMN') return { ok: false, status: 'error', note: err.message };
+    const { status, note } = classifyReadError(err, what);
+    return { ok: false, status, note };
+  }
+}
+
+/** The counts from an Aggregate API answer: [{ keys: [{ field, value, display }], count, avg: { column: number } }]. */
+export function normalizeGroups(result) {
+  if (!Array.isArray(result)) return null;
+  return result.map((g) => {
+    const avg = {};
+    Object.entries(g?.stats?.avg || {}).forEach(([k, v]) => {
+      const n = Number(v);
+      if (Number.isFinite(n)) avg[k] = n;
+    });
+    return {
+      count: Math.max(0, Number(g?.stats?.count) || 0),
+      avg,
+      keys: (Array.isArray(g?.groupby_fields) ? g.groupby_fields : []).map((f) => ({
+        field: String(f?.field || ''),
+        value: f?.value == null ? '' : String(f.value),
+        display: String(f?.display_value || f?.value || ''),
+      })),
+    };
+  });
+}
+
+/**
+ * @param {object} options
+ * @param {{ queryTable: Function, aggregate: Function }} options.deps
+ * @param {ReturnType<import('./cache.js').createCache>} options.cache shared across sections
+ * @param {ReturnType<import('./cache.js').createLimiter>} options.limiter shared across sections
+ * @param {string} [options.prefix] cache namespace (the signed-in user)
+ * @param {string[]} [options.blocked] tables the organisation's policy does not allow
+ * @param {AbortSignal} [options.signal]
+ */
+export function createReader({ deps, cache, limiter, prefix = '', blocked = [], signal }) {
+  let oldest = Infinity;
+  const blockedSet = new Set(blocked.map((t) => String(t).toLowerCase()));
+
+  const aborted = () => Boolean(signal?.aborted);
+  const timeoutError = () => new ReportError('TIMEOUT', 'It took too long to read this.');
+
+  // Rejects when the signal fires, so a request whose deps ignore the signal still stops waiting.
+  const abortion = signal
+    ? new Promise((_, reject) => {
+        if (signal.aborted) reject(timeoutError());
+        signal.addEventListener('abort', () => reject(timeoutError()), { once: true });
+      })
+    : null;
+  abortion?.catch(() => {}); // never an unhandled rejection when nobody is waiting
+
+  function check(table) {
+    if (aborted()) throw timeoutError();
+    if (blockedSet.has(String(table).toLowerCase())) throw new ReportError('BLOCKED', `Your organisation does not allow reports to read ${table}.`);
+  }
+
+  const limited = (fn) => limiter.run(() => (abortion ? Promise.race([Promise.resolve().then(fn), abortion]) : fn()));
+
+  async function cached(key, fn) {
+    const entry = await cache.load(`${prefix}|${key}`, fn);
+    if (entry.at < oldest) oldest = entry.at;
+    return entry.value;
+  }
+
+  const api = {
+    /** When the oldest number used so far was actually read (ms), or null when nothing was read. */
+    get readAt() {
+      return Number.isFinite(oldest) ? oldest : null;
+    },
+
+    isBlocked: (table) => blockedSet.has(String(table).toLowerCase()),
+
+    async count(table, query = '') {
+      check(table);
+      return cached(`count|${table}|${query}`, () =>
+        limited(async () => {
+          const result = await deps.aggregate(table, { query, signal });
+          const n = Number(result?.stats?.count);
+          if (!Number.isFinite(n)) throw new ReportError('BAD_ANSWER', `The instance returned no count for ${table}.`);
+          return n;
+        })
+      );
+    },
+
+    /** Counts per value of one or two columns. `avg` names numeric columns to average per group. */
+    async groups(table, query, columns, { avg = [] } = {}) {
+      check(table);
+      return cached(`groups|${table}|${query}|${columns.join(',')}|${avg.join(',')}`, () =>
+        limited(async () => {
+          const result = await deps.aggregate(table, { query, groupBy: columns, avgFields: avg, signal });
+          const groups = normalizeGroups(result);
+          // A column the table does not have may be ignored by the instance: the answer is then not grouped at all.
+          if (!groups) throw new ReportError('NO_COLUMN', `${columns.join(' and ')} is not available on ${table}.`);
+          return groups;
+        })
+      );
+    },
+
+    /** Average of numeric columns over a query (one number each), or null for a column with no values. */
+    async averages(table, query, columns) {
+      check(table);
+      return cached(`avg|${table}|${query}|${columns.join(',')}`, () =>
+        limited(async () => {
+          const result = await deps.aggregate(table, { query, avgFields: columns, signal });
+          const stats = result?.stats;
+          if (!stats) throw new ReportError('BAD_ANSWER', `The instance returned no average for ${table}.`);
+          const out = { count: Number(stats.count) || 0 };
+          columns.forEach((c) => {
+            const n = Number(stats.avg?.[c]);
+            out[c] = Number.isFinite(n) && stats.avg?.[c] !== '' ? n : null;
+          });
+          return out;
+        })
+      );
+    },
+
+    async rows(table, query, fields, { limit = 50, offset = 0, displayValue = false } = {}) {
+      check(table);
+      return cached(`rows|${table}|${query}|${fields.join(',')}|${limit}|${offset}|${displayValue ? 1 : 0}`, () =>
+        limited(async () => {
+          const rows = await deps.queryTable(table, query, fields, { limit, offset, displayValue, signal });
+          return Array.isArray(rows) ? rows : [];
+        })
+      );
+    },
+
+    /**
+     * Read up to `max` rows, one page at a time. { rows, fetched, capped, total }: `capped` is true when more rows exist than
+     * were read (so the caller can say "first 3000 of 4210").
+     */
+    async pages(table, query, fields, { max = LIMITS.dateRowsMax, pageSize = LIMITS.pageSize, displayValue = false } = {}) {
+      const rows = [];
+      let lastFull = false;
+      while (rows.length < max) {
+        const want = Math.min(pageSize, max - rows.length);
+        // eslint-disable-next-line no-await-in-loop -- pages stay sequential so the instance is not hit with a burst.
+        const page = await api.rows(table, query, fields, { limit: want, offset: rows.length, displayValue });
+        rows.push(...page);
+        lastFull = page.length >= want;
+        if (!lastFull) break;
+      }
+      let total = rows.length;
+      let capped = false;
+      if (lastFull && rows.length >= max) {
+        // The last page was full, so there may be more: ask for the real number.
+        const counted = await attempt(() => api.count(table, query), table);
+        if (counted.ok) {
+          total = counted.value;
+          capped = counted.value > rows.length;
+        } else {
+          capped = true;
+          total = null;
+        }
+      }
+      return { rows, fetched: rows.length, capped, total };
+    },
+
+    /**
+     * Can this person see rows of the table at all? { status: 'ok' | 'hidden' | 'denied' | 'error' | 'blocked', note }.
+     * 'hidden' means an unfiltered read returned nothing: the table may be empty or an access rule hides every row, so a
+     * zero from this table proves nothing (confirmEmptyIsReallyEmpty, as everywhere else in Agent Buddy).
+     */
+    async visibility(table) {
+      if (blockedSet.has(String(table).toLowerCase())) return { status: 'blocked', note: `Your organisation does not allow reports to read ${table}.` };
+      if (aborted()) return { status: 'error', note: 'It took too long to read this.' };
+      return cached(`visible|${table}`, async () => {
+        const reads = { queryTable: (t, q, f, o) => api.rows(t, q, f, o) };
+        const answer = await confirmEmptyIsReallyEmpty(table, reads, new Map());
+        if (answer.status === STATUS.EMPTY) return { status: 'ok', note: '' };
+        if (answer.status === STATUS.EMPTY_OR_HIDDEN) return { status: 'hidden', note: answer.note };
+        return { status: answer.status === STATUS.DENIED ? 'denied' : 'error', note: answer.note };
+      });
+    },
+
+    /** Which of `names` exist as columns of the table, judged from one row. { known, has(name) }. */
+    async columns(table, names) {
+      const rows = await api.rows(table, '', ['sys_id', ...names], { limit: 1 });
+      const row = rows[0];
+      const present = new Set(row ? Object.keys(row) : []);
+      return { known: Boolean(row), has: (name) => present.has(name), names: [...present] };
+    },
+  };
+
+  return api;
+}
+
+/** Row cell helpers re-exported so sections do not import two places. */
+export { raw, disp };

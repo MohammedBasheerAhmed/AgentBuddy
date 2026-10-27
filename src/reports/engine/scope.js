@@ -1,0 +1,100 @@
+// Whose tickets a report covers: just mine, the groups I belong to, or groups I pick. Pure given a reader.
+import { SYS_ID_RE, oneLine } from '../../context/util.js';
+import { LIMITS, SCOPE_KINDS } from './constants.js';
+import { attempt, raw, disp } from './reader.js';
+
+/** Clean a scope that arrived from the panel: a known kind, valid group ids, short display names. Throws on nonsense. */
+export function normalizeScope(input) {
+  const kind = SCOPE_KINDS.includes(input?.kind) ? input.kind : 'mine';
+  const names = input?.groupNames && typeof input.groupNames === 'object' ? input.groupNames : {};
+  const groupIds = [];
+  for (const id of Array.isArray(input?.groupIds) ? input.groupIds : []) {
+    const text = String(id || '').trim().toLowerCase();
+    if (SYS_ID_RE.test(text) && !groupIds.includes(text)) groupIds.push(text);
+    if (groupIds.length >= LIMITS.maxGroups) break;
+  }
+  const groupNames = {};
+  groupIds.forEach((id) => {
+    const n = oneLine(names[id] || '', 80);
+    if (n) groupNames[id] = n;
+  });
+  if (kind === 'chosen' && !groupIds.length) throw new Error('Pick at least one group.');
+  return { kind, groupIds: kind === 'chosen' ? groupIds : [], groupNames: kind === 'chosen' ? groupNames : {} };
+}
+
+/** The groups the signed-in user belongs to: [{ id, name }]. Throws a read failure; the caller decides what to say. */
+export async function readMyGroups(reader, userId) {
+  if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
+  const rows = await reader.rows('sys_user_grmember', `user=${userId}`, ['group'], { limit: 200, displayValue: true });
+  const seen = new Set();
+  const groups = [];
+  rows.forEach((r) => {
+    const id = raw(r.group);
+    if (SYS_ID_RE.test(id) && !seen.has(id)) {
+      seen.add(id);
+      groups.push({ id, name: disp(r.group) || id });
+    }
+  });
+  return groups.slice(0, LIMITS.maxGroups);
+}
+
+/**
+ * When group membership cannot be read, the groups of the tickets assigned to me say which team I work in.
+ * @returns {Promise<{id:string,name:string}[]>}
+ */
+async function inferGroups(reader, userId, tables) {
+  const found = new Map();
+  for (const table of tables) {
+    // eslint-disable-next-line no-await-in-loop -- a few small reads, one at a time.
+    const r = await attempt(() => reader.groups(table, `assigned_to=${userId}^active=true`, ['assignment_group']), table);
+    if (r.ok) r.value.forEach((g) => g.keys[0]?.value && SYS_ID_RE.test(g.keys[0].value) && found.set(g.keys[0].value, g.keys[0].display || g.keys[0].value));
+  }
+  return [...found].map(([id, name]) => ({ id, name })).slice(0, LIMITS.maxGroups);
+}
+
+/**
+ * Turn a scope request into what sections need.
+ * @returns {Promise<{ kind, label, userId, groups: {id,name}[], inferred: boolean, empty: boolean, note: string,
+ *   query: string, taskQuery: string, unassignedMeaningful: boolean }>}
+ *   `query` filters a ticket table; `taskQuery` filters task_sla rows by their ticket (dot-walk).
+ */
+export async function resolveScope(input, { reader, userId, tables = [] }) {
+  const scope = normalizeScope(input);
+  if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
+  if (scope.kind === 'mine') {
+    return { kind: 'mine', label: 'Mine', userId, groups: [], inferred: false, empty: false, note: '', query: `assigned_to=${userId}`, taskQuery: `task.assigned_to=${userId}`, unassignedMeaningful: false };
+  }
+
+  let groups = [];
+  let inferred = false;
+  let note = '';
+  if (scope.kind === 'chosen') {
+    groups = scope.groupIds.map((id) => ({ id, name: scope.groupNames[id] || 'Group' }));
+  } else {
+    const mine = await attempt(() => readMyGroups(reader, userId), 'sys_user_grmember');
+    if (mine.ok) groups = mine.value;
+    else {
+      groups = await inferGroups(reader, userId, tables);
+      inferred = groups.length > 0;
+      note = inferred
+        ? 'Your group memberships are not visible to you, so "my groups" are the groups of the tickets assigned to you.'
+        : 'Your group memberships are not visible to you, and none of your open tickets names a group.';
+    }
+    if (!groups.length && !note) note = 'You are not a member of any group that you can see. Pick groups instead.';
+  }
+
+  const ids = groups.map((g) => g.id);
+  const list = ids.join(',');
+  return {
+    kind: scope.kind,
+    label: scope.kind === 'chosen' ? `Chosen groups (${groups.length})` : `My groups (${groups.length})`,
+    userId,
+    groups,
+    inferred,
+    empty: !ids.length,
+    note,
+    query: ids.length ? `assignment_groupIN${list}` : '',
+    taskQuery: ids.length ? `task.assignment_groupIN${list}` : '',
+    unassignedMeaningful: true,
+  };
+}

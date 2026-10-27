@@ -51,7 +51,8 @@ export function packToParts(pack, { journal = 12, skipFields = [], journalTypes 
   let entries = Array.isArray(pack?.journal) ? pack.journal : [];
   if (journalTypes) entries = entries.filter((e) => journalTypes.includes(e.type));
   // Newest entries matter most; keep them in chronological order for reading.
-  entries = entries.slice(-Math.max(0, journal));
+  // (slice(-0) would keep everything, so a depth of 0 is handled on its own.)
+  entries = journal > 0 ? entries.slice(-journal) : [];
   entries.forEach((e) => {
     const text = String(e.text ?? '').trim();
     if (!text) return;

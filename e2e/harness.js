@@ -56,6 +56,10 @@ const MUTATIONS = {
   leak: ['sidepanel.bundle.js', 'body: JSON.stringify(body)', 'body: JSON.stringify({ ...body, note: "caller Abel Tuter card 4111 1111 1111 1111" })'],
   // the panel phones home -> the network checks must fail
   beacon: ['sidepanel.bundle.js', '(0, import_client.createRoot)(document.getElementById("root"))', '(fetch("https://telemetry.example/ping").catch(() => {}), 0, import_client.createRoot)(document.getElementById("root"))'],
+  // the page bridge writes into a portal box silently (no input event): the portal scenario must notice that the page's model is stale
+  'portal-silent': ['pagebridge.js', 'setControlValue(el, next);\n          fireEvent(el, "input", true);', 'setControlValue(el, next);\n          ;'],
+  // the page bridge presses the portal's Send button after filling the box: the portal scenario must notice
+  'portal-click': ['pagebridge.js', 'setControlValue(el, next);\n          fireEvent(el, "input", true);', 'setControlValue(el, next);\n          document.getElementById("send") && document.getElementById("send").click();\n          fireEvent(el, "input", true);'],
 };
 
 function applyMutation(dir, name) {
@@ -87,7 +91,7 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
   const data = loadData();
   const tls = await makeCertificate(path.join(TMP, 'tls'));
   const user = { login: data.ME.login, sysId: data.ME.sysId, firstName: data.ME.firstName, lastName: data.ME.lastName, roles: data.ME.roles };
-  const inst = await startFakeInstance(tls, { tables: data.buildTables(), makeApi: data.tableApi, user });
+  const inst = await startFakeInstance(tls, { tables: data.buildTables(), makeApi: data.tableApi, user, portal: data.PORTAL });
   const ai = await startFakeAi();
   const ext = prepareExtension();
 

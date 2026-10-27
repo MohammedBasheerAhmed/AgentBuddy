@@ -12,9 +12,25 @@ import { buildInstance } from '../tests/fixtures/sn-instance.js';
 import { fakeDeps, v } from '../tests/fixtures/sn-fakeDeps.js';
 import { INCIDENT_ID, INCIDENT_NUMBER, incidentRow, COMMENTS_STRING } from '../tests/fixtures/sn-incident.js';
 import { HR_CASE_ID, HR_CASE_NUMBER } from '../tests/fixtures/sn-hr-case.js';
+import { REQUEST_ID, REQUEST_NUMBER } from '../tests/fixtures/sn-requested-item.js';
 import { ABEL, BETH } from '../tests/fixtures/sn-users.js';
 
-export { fakeDeps, INCIDENT_ID, INCIDENT_NUMBER, HR_CASE_ID, HR_CASE_NUMBER, ABEL, BETH };
+export { fakeDeps, INCIDENT_ID, INCIDENT_NUMBER, HR_CASE_ID, HR_CASE_NUMBER, REQUEST_ID, REQUEST_NUMBER, ABEL, BETH };
+
+/**
+ * The tickets the fake portals (/sp, /esc, /csm) show, by the ids the fixtures already hold. Titles are plain on purpose: the
+ * portal page is not what the AI sees (the extension reads the record through the API), so no personal data is written here.
+ *   a  the incident the other scenarios use; the agent has already started a reply in its comment box
+ *   b  a ticket that no longer takes comments (no comment box)
+ *   r  a catalog request, opened with ?id=sc_request&sys_id= (no table parameter)
+ */
+export const PORTAL = {
+  tickets: [
+    { table: 'incident', sysId: INCIDENT_ID, number: INCIDENT_NUMBER, title: 'VPN keeps disconnecting', canComment: true, draft: 'Hi, thanks for waiting.' },
+    { table: 'incident', sysId: 'aa100000000000000000000000000100', number: 'INC0010100', title: 'Printer offline in Finance', canComment: false },
+    { table: 'sc_request', sysId: REQUEST_ID, number: REQUEST_NUMBER, title: 'Request for a laptop', canComment: true },
+  ],
+};
 
 /** The raw personal data seeded into the incident. Everything in `mustNotLeak` must never appear in a request to the AI. */
 export const SEED = {

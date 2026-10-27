@@ -1,0 +1,57 @@
+import React from 'react';
+import { describeTile, formatNumber, toneClass } from './geometry.js';
+
+const ARROW = { up: '▲', down: '▼', flat: '▬' };
+const WORD = { up: 'Up', down: 'Down', flat: 'No change' };
+
+/**
+ * One headline number. HTML, not SVG.
+ *
+ *   value        number or text
+ *   unavailable  the person cannot read this data: shows "Not available to you", never a 0
+ *   loading      a calm placeholder while the read is running
+ *   delta        { text, direction: 'up'|'down'|'flat', good: true|false|null }: an arrow and a word as well as a colour
+ *   onOpen       makes the whole tile a button (drill down); its name is "label: value, hint"
+ */
+export default function Tile({ label, value, hint, delta, tone = 'neutral', onOpen, unavailable = false, loading = false }) {
+  const busy = Boolean(loading) && !unavailable;
+  const missing = Boolean(unavailable);
+  const shown = typeof value === 'number' ? formatNumber(value) : String(value ?? '');
+  const dir = ARROW[delta?.direction] ? delta.direction : 'flat';
+
+  const body = (
+    <>
+      <span className="ab-tile-label">{label}</span>
+      {missing ? (
+        <span className="ab-tile-unavailable">Not available to you</span>
+      ) : busy ? (
+        <span className="ab-tile-value ab-tile-loading">
+          <span aria-hidden="true">…</span>
+          <span className="ab-chart-sr">Loading</span>
+        </span>
+      ) : (
+        <span className="ab-tile-value">{shown}</span>
+      )}
+      {hint && !missing ? <span className="ab-tile-hint">{hint}</span> : null}
+      {delta?.text && !missing && !busy ? (
+        <span className={`ab-tile-delta${delta.good === true ? ' ab-tile-delta-good' : delta.good === false ? ' ab-tile-delta-bad' : ''}`}>
+          <span aria-hidden="true">{ARROW[dir]}</span>
+          <span className="ab-chart-sr">{WORD[dir]} </span>
+          {delta.text}
+          {delta.good === true ? ' (better)' : delta.good === false ? ' (worse)' : ''}
+        </span>
+      ) : null}
+    </>
+  );
+
+  const className = `ab-tile ${toneClass(missing ? 'neutral' : tone)}${missing ? ' ab-tile-missing' : ''}`;
+  if (onOpen && !missing && !busy) {
+    return (
+      <button type="button" className={`${className} ab-tile-button`} aria-label={describeTile({ label, value: shown, hint, delta })} onClick={onOpen}>
+        {body}
+      </button>
+    );
+  }
+  // Not a button: the text is read in order (label, value, hint, change), which is its accessible name.
+  return <div className={className}>{body}</div>;
+}

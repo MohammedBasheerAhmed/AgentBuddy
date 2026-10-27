@@ -550,7 +550,12 @@ const PHONE_IN_LANDLINE = /(?<![\w.+/-])0\d{2,4}[ -]\d{6,8}(?!\d|[.-]\d)/g;
 const PHONE_LABELLED = /(?<![A-Za-z])(?:phone|tel|telephone|mobile|mob|cell|fax|whatsapp|contact(?:[ \t]+(?:no|number|num))?|ph|msisdn)\b\.?[ \t]{0,3}(?:no\.?|number|num|#)?[ \t]{0,3}[:=-]?[ \t]{0,3}(\+?\(?\d[\d ().\xa0-]{5,22}\d)/gid;
 const PHONE_LABEL_BEFORE = /(?:phone|tel|telephone|mobile|mob|cell|fax|whatsapp|contact|call|dial|ph|msisdn)\b[^\n]{0,14}$/i;
 // "call me on 555-0199": a 7-digit local number with no area code, safe to report only because a calling verb leads into it.
-const PHONE_LOCAL_AFTER_VERB = /(?<![A-Za-z])(?:call|dial|ring|phone|text|reach)\b(?:[ \t]+(?:me|us|him|her|them|back|on|at|number|is|him))*[ \t:]{0,3}(\d{3}[ .-]\d{4})(?!\d|[ .-]\d)/gid;
+// Also past and continuous forms, and a first name in between ("Called Dana on 555-0177", "rang Priya back on ...").
+// The words between the verb and the number must be filler or a capitalised word (a name); the case check is in code because the
+// pattern is case-insensitive (the verbs are).
+const PHONE_LOCAL_AFTER_VERB = /(?<![A-Za-z])(?:call(?:ed|ing|s)?|dial(?:l?ed|ing)?|rang|ring(?:ing|s)?|phon(?:e|ed|ing|es)|text(?:ed|ing|s)?|reach(?:ed|ing|es)?)\b(?<between>(?:[ \t]+[\p{L}'-]{1,20}){0,4})[ \t:]{0,3}(?<num>\d{3}[ .-]\d{4})(?!\d|[ .-]\d)/giud;
+const PHONE_FILLER = new Set(['me', 'us', 'him', 'her', 'them', 'back', 'on', 'at', 'number', 'is']);
+const phoneBetweenOk = (between) => between.split(/[ \t]+/).filter(Boolean).every((w) => PHONE_FILLER.has(w.toLowerCase()) || w[0] !== w[0].toLowerCase());
 
 const DATE_LIKE = /^(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/;
 
@@ -595,8 +600,8 @@ function detectPhones(text, out, regions) {
     push(s, s + body.length, 0.9);
   });
   each(PHONE_LOCAL_AFTER_VERB, text, (m) => {
-    const [s, e] = m.indices[1];
-    if (!DATE_LIKE.test(m[1])) push(s, e, 0.85);
+    const [s, e] = m.indices.groups.num;
+    if (!DATE_LIKE.test(m.groups.num) && phoneBetweenOk(m.groups.between)) push(s, e, 0.85);
   });
   if (regions.has('US')) {
     each(PHONE_US, text, (m) => push(m.index, m.index + m[0].length, 0.8));

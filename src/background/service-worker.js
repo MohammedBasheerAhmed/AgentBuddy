@@ -30,6 +30,11 @@ export async function syncContentScripts() {
     /* nothing registered yet */
   }
   if (!origins.length) return [];
+  // `https://<instance>/*` already covers the portals of the instance: Service Portal (/sp), Employee Center (/esc), the customer
+  // service and HR portals (/csm, /csp, /hrsp) and any portal suffix a customer chose are pages of the SAME origin. They are
+  // single-page apps in the top frame, so both scripts stay top-frame only (allFrames false): the bridge reaches same-origin
+  // frames such as a rich-text editor from there. The scripts stay loaded while the app changes pages, and the content script
+  // reads the address afresh on every request. A portal on its own web address is another origin and must be turned on itself.
   const matches = origins.map(instancePattern);
   await chrome.scripting.registerContentScripts([
     // The page-world bridge: reads g_form / g_user / g_ck and can fill one field. Runs first, in the page's own world.

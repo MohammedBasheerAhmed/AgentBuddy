@@ -1,0 +1,327 @@
+// Which email fits this ticket right now? Pure and deterministic: no AI, no clock unless the caller passes `now`.
+//
+// Input is the context pack read with the 'email-compose' spec (record fields, notes and comments, SLAs, approvals). The
+// output is up to three suggested kinds of email, each with a one-line reason the agent can read, plus a few plain "facts"
+// that show what the suggestion is based on. The AI only comes in afterwards, to write the draft the agent picks.
+//
+// Everything here reads the pack defensively: a column that is not on the pack (the spec is intersected with what the
+// kind allows) just means that signal is not available, never an error.
+
+import { SYS_ID_RE, TABLE_RE, parseSnTime } from '../context/util.js';
+
+export const EMAIL_TYPES = Object.freeze([
+  Object.freeze({ id: 'ask-info', featureId: 'email-ask-info', label: 'Ask for information', blurb: 'Ask the person for what is still needed, or remind them.' }),
+  Object.freeze({ id: 'status-update', featureId: 'email-status-update', label: 'Status update', blurb: 'Tell the person where things stand and what happens next.' }),
+  Object.freeze({ id: 'resolution', featureId: 'email-resolution', label: 'Resolution', blurb: 'Tell the person it is resolved and ask them to confirm.' }),
+  Object.freeze({ id: 'approval-nudge', featureId: 'email-approval-nudge', label: 'Approval reminder', blurb: 'Remind someone that an approval is still waiting.' }),
+  Object.freeze({ id: 'apology', featureId: 'email-apology', label: 'Apology for the wait', blurb: 'Say sorry for the delay and what is being done.' }),
+  Object.freeze({ id: 'closure', featureId: 'email-closure', label: 'Closure', blurb: 'Let the person know the ticket is closed.' }),
+]);
+
+export const emailTypeById = (id) => EMAIL_TYPES.find((t) => t.id === id) || null;
+
+const HOUR = 3600000;
+const DAY = 24 * HOUR;
+const MIN_SCORE = 30; // below this a suggestion is noise
+const MAX_PICKS = 3;
+
+// People who are the customer, by the role the pack gives them. opened_by is left out on purpose: an agent often opens a
+// ticket on behalf of someone else, so that person is not necessarily the one writing the comments.
+const CUSTOMER_ROLES = new Set(['caller', 'requested_for', 'contact', 'consumer', 'subject_person', 'opened_for', 'affected_user', 'requester']);
+
+const text = (v) => (typeof v === 'string' || typeof v === 'number' ? String(v).trim() : '');
+
+// Combining accents (U+0300 to U+036F), written as codes so this file stays plain ASCII.
+const COMBINING = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
+
+// Names compare without case, accents or order: "Tuter, Abel" and "Abel Tuter" are the same person.
+function nameKey(name) {
+  const plain = text(name).normalize('NFD').replace(COMBINING, '').toLowerCase();
+  if (!plain) return '';
+  return plain.replace(/,/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+}
+
+function ms(when) {
+  const t = parseSnTime(text(when));
+  return Number.isFinite(t) ? t : null;
+}
+
+/** "3 hours", "2 days" - rough on purpose. */
+export function ago(milliseconds) {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '';
+  const hours = milliseconds / HOUR;
+  if (hours < 1) return 'less than an hour ago';
+  if (hours < 48) {
+    const n = Math.round(hours);
+    return `${n} hour${n === 1 ? '' : 's'} ago`;
+  }
+  const n = Math.floor(hours / 24);
+  return `${n} days ago`;
+}
+
+// ---- Reading the pack ----------------------------------------------------------------------------------------------
+
+function lastMessage(pack, now) {
+  const journal = Array.isArray(pack.journal) ? pack.journal : [];
+  const comments = journal.filter((e) => e && typeof e === 'object' && e.type === 'comment' && text(e.text));
+  const access = Array.isArray(pack.access) ? pack.access : [];
+  // "No messages" is only a fact when the notes could be read (or were confirmed empty).
+  const known = journal.length > 0 || access.some((a) => a && a.source === 'journal' && (a.status === 'ok' || a.status === 'empty'));
+  if (!comments.length) return { known, direction: known ? 'none' : 'unknown', ageMs: null, atMs: null, count: 0 };
+
+  const customers = (Array.isArray(pack.people) ? pack.people : []).filter((p) => p && CUSTOMER_ROLES.has(p.role));
+  const customerNames = new Set(customers.map((p) => nameKey(p.name)).filter(Boolean));
+  const customerEmails = new Set(customers.map((p) => text(p.email).toLowerCase()).filter(Boolean));
+  // A note author who could not be turned into a display name is a login, often the start of the email address.
+  const customerLogins = new Set([...customerEmails].map((e) => e.split('@')[0]).filter(Boolean));
+
+  const last = comments[comments.length - 1];
+  let direction = 'unknown';
+  if (customers.length && text(last.by)) {
+    const by = text(last.by);
+    const lowered = by.toLowerCase();
+    if (customerNames.has(nameKey(by)) || customerEmails.has(lowered) || customerLogins.has(lowered)) direction = 'customer';
+    // A display name that is not the customer's is someone else, so the service desk. A bare login that matches no one is not
+    // a reason to guess either way.
+    else if (/\s/.test(by) || by.includes('@')) direction = 'agent';
+  }
+  const atMs = ms(last.when);
+  return { known: true, direction, ageMs: atMs === null ? null : Math.max(0, now - atMs), atMs, count: comments.length };
+}
+
+function approvalState(pack, now) {
+  const list = Array.isArray(pack.related?.approvals) ? pack.related.approvals : [];
+  const pending = list.filter((a) => a && /^(requested|waiting|pending)/i.test(text(a.state)));
+  const rejected = list.some((a) => a && /reject/i.test(text(a.state)));
+  const fieldValue = text(pack.fields?.approval);
+  const ages = pending.map((a) => ms(a.updated)).filter((t) => t !== null).map((t) => Math.max(0, now - t));
+  return {
+    pending: pending.length || (list.length === 0 && /^(requested|waiting)/i.test(fieldValue) ? 1 : 0),
+    rejected: rejected || (list.length === 0 && /reject/i.test(fieldValue)),
+    oldestMs: ages.length ? Math.max(...ages) : null,
+  };
+}
+
+function slaState(pack) {
+  const list = Array.isArray(pack.related?.slas) ? pack.related.slas : [];
+  const live = list.filter((s) => s && typeof s === 'object' && !/cancel/i.test(text(s.stage)));
+  const breached = live.some((s) => text(s.breached) === 'true');
+  const open = live.filter((s) => !/complet/i.test(text(s.stage)) && text(s.breached) !== 'true');
+  const pcts = open.map((s) => Number.parseFloat(text(s.percentage))).filter(Number.isFinite);
+  const worst = pcts.length ? Math.max(...pcts) : null;
+  return { known: live.length > 0, breached, atRisk: !breached && worst !== null && worst >= 75, worstPercent: worst };
+}
+
+/** Everything the rules look at, as plain data (also what the draft prompt is told, in words). */
+export function readSignals(pack, now = Date.now()) {
+  const p = pack && typeof pack === 'object' ? pack : {};
+  const f = p.fields && typeof p.fields === 'object' ? p.fields : {};
+  const state = text(f.state) || text(f.request_state) || text(f.stage);
+  const hold = text(f.hold_reason);
+
+  // With no readable state, the dates decide.
+  const closedByDate = !state && Boolean(text(f.closed_at));
+  const closed = /\b(closed|cancel+ed)\b/i.test(state) || closedByDate;
+  const resolved = !closed && (/\b(resolved|fulfil+ed|complete[d]?)\b/i.test(state) || (!state && Boolean(text(f.resolved_at))));
+  const onHold = !closed && !resolved && (/\bhold\b|pending|awaiting|waiting/i.test(state) || Boolean(hold));
+  const waitingOnCustomer = onHold && /(caller|customer|\buser\b|requester|requestor|requested for|\binfo(rmation)?\b)/i.test(`${state} ${hold}`);
+
+  const resolvedAt = ms(f.resolved_at) ?? ms(f.closed_at);
+  const openedAt = ms(f.opened_at);
+  const message = lastMessage(p, now);
+  return {
+    kind: text(p.kind),
+    state,
+    hold,
+    closed,
+    cancelled: closed && /cancel/i.test(state),
+    resolved,
+    onHold,
+    waitingOnCustomer,
+    resolvedMs: resolvedAt === null ? null : Math.max(0, now - resolvedAt),
+    resolvedAtMs: resolvedAt,
+    openMs: openedAt === null ? null : Math.max(0, now - openedAt),
+    descriptionLength: text(f.description).length,
+    message,
+    approval: approvalState(p, now),
+    sla: slaState(p),
+  };
+}
+
+// ---- Facts shown next to the suggestions ---------------------------------------------------------------------------
+
+function factsFor(s) {
+  const facts = [];
+  if (s.state) facts.push(s.hold ? `${s.state}: ${s.hold}` : s.state);
+  if (s.resolved && s.resolvedMs !== null) facts.push(`Resolved ${ago(s.resolvedMs)}`);
+  const m = s.message;
+  if (m.direction === 'none') facts.push('No message to the person yet');
+  else if (m.direction === 'customer') facts.push(m.ageMs !== null ? `They wrote ${ago(m.ageMs)}` : 'They wrote last');
+  else if (m.direction === 'agent') facts.push(m.ageMs !== null ? `You wrote ${ago(m.ageMs)}` : 'You wrote last');
+  if (s.approval.pending) facts.push(`${s.approval.pending} approval${s.approval.pending === 1 ? '' : 's'} waiting${s.approval.oldestMs !== null ? ` (${ago(s.approval.oldestMs).replace(' ago', '')})` : ''}`);
+  if (s.approval.rejected) facts.push('An approval was rejected');
+  if (s.sla.breached) facts.push('Service level missed');
+  else if (s.sla.atRisk) facts.push(`Service level ${Math.round(s.sla.worstPercent)}% used`);
+  return facts;
+}
+
+/**
+ * Plain sentences about the record's status, worked out locally. They go to the draft as one more (masked) part, so the
+ * model knows the same things the suggestion was based on. No names are ever in them.
+ */
+export function statusLines(pack, now = Date.now()) {
+  const s = readSignals(pack, now);
+  const lines = [];
+  if (s.closed) lines.push(s.cancelled ? 'The ticket has been cancelled.' : 'The ticket is closed.');
+  else if (s.resolved) lines.push(s.resolvedMs !== null ? `The ticket was marked resolved ${ago(s.resolvedMs)}.` : 'The ticket is marked resolved.');
+  if (s.waitingOnCustomer) lines.push('The ticket is waiting for a reply from the person.');
+  else if (s.onHold) lines.push(`The ticket is on hold${s.hold ? ` (${s.hold})` : ''}.`);
+  const m = s.message;
+  if (m.direction === 'none') lines.push('No message has been sent to the person yet.');
+  else if (m.direction === 'customer') lines.push(`The last message came from the person${m.ageMs !== null ? `, ${ago(m.ageMs)}` : ''}.`);
+  else if (m.direction === 'agent') lines.push(`The last message was sent by the service desk${m.ageMs !== null ? `, ${ago(m.ageMs)}` : ''}.`);
+  if (s.approval.pending) lines.push(`${s.approval.pending} approval${s.approval.pending === 1 ? ' is' : 's are'} still waiting${s.approval.oldestMs !== null ? ` (for about ${ago(s.approval.oldestMs).replace(' ago', '')})` : ''}.`);
+  if (s.approval.rejected) lines.push('An approval was rejected.');
+  if (s.sla.breached) lines.push('A service level target for this ticket has been missed.');
+  else if (s.sla.atRisk) lines.push('A service level target for this ticket is close to being missed.');
+  return lines;
+}
+
+// ---- The suggestions -----------------------------------------------------------------------------------------------
+
+/**
+ * @param {object} pack ContextPack read with the 'email-compose' spec
+ * @param {{ now?: number, max?: number, minScore?: number }} [options]
+ * @returns {{ picks: {id: string, featureId: string, label: string, blurb: string, why: string, score: number}[], others: object[], facts: string[], note: string }}
+ */
+export function recommendEmails(pack, { now = Date.now(), max = MAX_PICKS, minScore = MIN_SCORE } = {}) {
+  const s = readSignals(pack, now);
+  const candidates = [];
+  const add = (id, score, why) => candidates.push({ id, score, why });
+  let note = '';
+  const m = s.message;
+  const hours = m.ageMs === null ? null : m.ageMs / HOUR;
+  const openDays = s.openMs === null ? null : s.openMs / DAY;
+
+  if (s.closed) {
+    add('closure', s.cancelled ? 45 : 50, s.cancelled ? 'The ticket was cancelled. Tell the person so they are not left waiting.' : 'The ticket is closed. A short note confirms the outcome.');
+  } else if (s.resolved) {
+    // Has the person been told? Only an agent message written after the resolution counts.
+    const told = m.direction === 'agent' && m.atMs !== null && s.resolvedAtMs !== null && m.atMs >= s.resolvedAtMs - HOUR;
+    const maybeTold = m.direction === 'agent' && !told && (m.atMs === null || s.resolvedAtMs === null);
+    if (m.direction === 'customer' && m.atMs !== null && s.resolvedAtMs !== null && m.atMs > s.resolvedAtMs) {
+      note = 'The person wrote after it was resolved. A reply (the Draft a reply action on This page) may fit better than a new email.';
+    }
+    if (told) add('resolution', 35, 'The person was already told after it was resolved. Send another only if needed.');
+    else if (maybeTold) add('resolution', 60, 'It is marked resolved. Check that the person knows.');
+    else add('resolution', 90, 'It is marked resolved and the person has not been told yet.');
+
+    if (s.resolvedMs !== null && s.resolvedMs >= 3 * DAY && m.direction !== 'customer') {
+      add('closure', 80, `Resolved ${ago(s.resolvedMs)} with no reply from the person. A closing note is due.`);
+    } else if (m.direction !== 'customer') {
+      add('closure', 45, 'When it is time to close, a closing note helps.');
+    }
+  } else {
+    // ---- waiting on the person ----
+    if (s.waitingOnCustomer) {
+      if (m.direction === 'agent') {
+        if (hours !== null && hours >= 48) add('ask-info', 85, `You are waiting for the person's reply. Your last message was ${ago(m.ageMs)}. A friendly reminder may help.`);
+        else if (hours !== null) add('ask-info', 55, `You are waiting for the person's reply (you wrote ${ago(m.ageMs)}). A reminder may be early.`);
+        else add('ask-info', 60, "You are waiting for the person's reply.");
+      } else if (m.direction === 'none') {
+        add('ask-info', 70, 'The ticket is waiting for the person, but no message has gone to them yet.');
+      } else if (m.direction === 'customer') {
+        add('status-update', 45, 'The person replied. Tell them what happens next.');
+      } else {
+        add('ask-info', 55, "The ticket is waiting for the person's reply.");
+      }
+    } else if (s.onHold) {
+      add('status-update', 75, `The ticket is on hold${s.hold ? ` (${s.hold})` : ''}. Let the person know why it is waiting.`);
+    }
+
+    // A thin description on a fresh ticket: ask before work starts.
+    const thinKinds = ['incident', 'case', 'task'];
+    if (!s.waitingOnCustomer && !s.onHold && thinKinds.includes(s.kind) && s.descriptionLength < 40 && m.direction === 'none') {
+      add('ask-info', 60, 'The description is short. Ask for what is needed to start.');
+    }
+
+    // ---- approvals ----
+    if (s.approval.pending) {
+      const n = s.approval.pending;
+      const what = `${n} approval${n === 1 ? ' is' : 's are'}`;
+      if (s.approval.oldestMs !== null && s.approval.oldestMs >= 2 * DAY) add('approval-nudge', 85, `${what} still waiting after ${ago(s.approval.oldestMs).replace(' ago', '')}.`);
+      else if (s.approval.oldestMs !== null) add('approval-nudge', 45, `${what} waiting since ${ago(s.approval.oldestMs)}. A reminder may be early.`);
+      else add('approval-nudge', 65, `${what} still waiting.`);
+    }
+    if (s.approval.rejected) add('status-update', 80, 'An approval was rejected. Tell the person what happens next.');
+
+    // ---- service levels ----
+    if (s.sla.breached) add('apology', 85, 'A service level target was missed. A short apology and a clear next step help.');
+    else if (s.sla.atRisk) add('status-update', 65, `A service level target is close (${Math.round(s.sla.worstPercent)}% used). A progress update helps.`);
+
+    // ---- how long since the last message ----
+    if (m.direction === 'customer' && hours !== null) {
+      if (hours >= 48) add('apology', 75, `The person wrote ${ago(m.ageMs)} and has had no reply.`);
+      else if (hours >= 24) add('status-update', 60, `The person wrote ${ago(m.ageMs)} and is waiting for an answer.`);
+    }
+    if (m.direction === 'agent' && !s.waitingOnCustomer && hours !== null && hours >= 72) {
+      add('status-update', 70, `Your last message was ${ago(m.ageMs)}. A short update keeps the person informed.`);
+    }
+    if (m.direction === 'none' && !s.waitingOnCustomer && openDays !== null && openDays >= 1) {
+      add('status-update', 60, 'No message has gone to the person yet.');
+    }
+    if (openDays !== null && openDays >= 14) {
+      const days = Math.floor(openDays);
+      add('apology', 50, `The ticket has been open for ${days} days. Acknowledge the wait.`);
+      add('status-update', 65, `The ticket has been open for ${days} days. The person will want an update.`);
+    }
+    add('status-update', 40, 'A short update keeps the person informed.');
+  }
+
+  // The best reason per kind of email, strongest first; ties keep the order of EMAIL_TYPES.
+  const best = new Map();
+  for (const c of candidates) if (!best.has(c.id) || c.score > best.get(c.id).score) best.set(c.id, c);
+  const order = EMAIL_TYPES.map((t) => t.id);
+  const picks = [...best.values()]
+    .filter((c) => c.score >= minScore)
+    .sort((a, b) => b.score - a.score || order.indexOf(a.id) - order.indexOf(b.id))
+    .slice(0, Math.max(0, max))
+    .map((c) => ({ ...emailTypeById(c.id), why: c.why, score: c.score }));
+  const picked = new Set(picks.map((c) => c.id));
+  return { picks, others: EMAIL_TYPES.filter((t) => !picked.has(t.id)), facts: factsFor(s), note };
+}
+
+// ---- The draft ---------------------------------------------------------------------------------------------------
+
+// "Subject: ..." possibly dressed up as markdown ("**Subject:** ...", "## Subject: ...").
+const SUBJECT_LINE = /^[\s#>*_-]*subject[\s*_]*:[\s*_]*(.+?)[\s*_]*$/i;
+
+/**
+ * Splits a drafted email into its subject and body. The model is asked for a `Subject:` line first; when the line is not
+ * in the first few lines the whole text is the body.
+ * @returns {{ subject: string, body: string }}
+ */
+export function parseEmailDraft(input) {
+  const lines = String(input ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const at = lines.slice(0, 6).findIndex((l) => SUBJECT_LINE.test(l));
+  if (at < 0) return { subject: '', body: lines.join('\n').trim() };
+  const subject = SUBJECT_LINE.exec(lines[at])[1].replace(/\s+/g, ' ').replace(/^["'`]+|["'`]+$/g, '').trim().slice(0, 200);
+  const rest = [...lines.slice(0, at), ...lines.slice(at + 1)];
+  const body = rest.join('\n').replace(/^\s*(?:-{3,}|\*{3,})\s*\n/, '').trim();
+  return { subject, body };
+}
+
+/**
+ * The classic email client for a record, on the instance the page is on ('' when the table or id is not valid).
+ * The panel opens it with openUrl(), which refuses any other origin.
+ */
+export function emailFormUrl(pageHref, { table, sysId } = {}) {
+  if (!TABLE_RE.test(table || '') || !SYS_ID_RE.test(sysId || '')) return '';
+  try {
+    const origin = new URL(pageHref).origin;
+    if (!/^https:/i.test(origin)) return '';
+    return `${origin}/email_client.do?sysparm_table=${table}&sysparm_sys_id=${sysId}&sysparm_target=${table}&sysparm_uniqueValue=${sysId}`;
+  } catch {
+    return '';
+  }
+}

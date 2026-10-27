@@ -117,6 +117,91 @@ function refFrom(table, params) {
   return number ? { table, number } : null;
 }
 
+// ---- Portals ------------------------------------------------------------------------------------
+//
+// A portal address names a PAGE (`id=ticket`), not a table: /sp?id=ticket&table=incident&sys_id=<id>. Pages that carry a
+// `table` parameter need nothing here. Pages that show one record WITHOUT a `table` parameter are listed below, so the table
+// can be inferred. It is the one place to teach Agent Buddy a customer's own record page: add `<page id>: '<table>'`.
+// (Unverified against a real instance: docs/live-questions/portal.md, question 1.)
+export const PORTAL_PAGE_TABLES = {
+  sc_request: 'sc_request', // ?id=sc_request&sys_id=<request>
+  sc_req_item: 'sc_req_item', // ?id=sc_req_item&sys_id=<requested item>
+  sc_task: 'sc_task', // ?id=sc_task&sys_id=<catalog task>
+  kb_article: 'kb_knowledge', // ?id=kb_article&sys_id=<article>
+  kb_article_view: 'kb_knowledge', // ?id=kb_article_view&sysparm_article=KB0010001
+};
+
+// Pages that list, search or welcome. A sys_id on one of them is a filter or a category, never "the record being worked", so
+// they never parse as a record even when they carry a table name.
+const PORTAL_LIST_PAGES = new Set([
+  'index', 'home', 'landing', 'welcome', 'my_requests', 'my_tickets', 'tickets', 'requests', 'my_approvals', 'approvals',
+  'list', 'search', 'catalog', 'sc_home', 'sc_category', 'kb', 'kb_search', 'topic', 'my_items',
+]);
+
+// The first path segment of a portal is its URL suffix (sp, esc, csm, csp, hrsp, or any name the customer chose). These are
+// never portals, so a page id inferred from `id=` is not trusted under them.
+const NOT_PORTAL_SEGMENTS = new Set(['api', 'now', 'angular', 'images', 'scripts', 'styles', 'assets']);
+const PORTAL_SEGMENT_RE = /^[a-z][a-z0-9_-]{0,30}$/i;
+
+/** Every parameter of a portal address, names in lower case: the query string first, then a hash route (#/?id=..., #!/ticket?id=...). */
+export function portalParams(url) {
+  const out = new Map();
+  const add = (list) => {
+    for (const [name, value] of list) {
+      const key = name.trim().toLowerCase();
+      if (key && !out.has(key)) out.set(key, value);
+    }
+  };
+  add(url.searchParams);
+  const hash = String(url.hash || '').replace(/^#!?/, '');
+  const q = hash.indexOf('?');
+  const hashQuery = q >= 0 ? hash.slice(q + 1) : hash.includes('=') && !hash.startsWith('/') ? hash : '';
+  if (hashQuery) add(new URLSearchParams(hashQuery));
+  return out;
+}
+
+// KB0010001 is the one number prefix that tableForNumber (ticket tables) does not know.
+const portalTableForNumber = (number) => tableForNumber(number) || (/^KB\d/.test(number) ? 'kb_knowledge' : '');
+
+// A page named after a task table (?id=incident&sys_id=...) shows that table's record.
+const pageNamedAfterTable = (page) => (['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case'].includes(kindForTable(page)) ? page : '');
+
+/**
+ * The record a portal address points at, or null. `params` come from portalParams, `segments` are the path segments.
+ * A sys_id that is present but not valid (a new record is -1) is never replaced by a number: it is "no record".
+ */
+function portalRef(params, segments) {
+  const get = (...names) => {
+    for (const name of names) {
+      const value = String(params.get(name) || '').trim();
+      if (value) return value;
+    }
+    return '';
+  };
+  const page = get('id').toLowerCase();
+  if (PORTAL_LIST_PAGES.has(page)) return null;
+
+  const article = parseRecordNumber(get('sysparm_article'));
+  let table = get('table', 'sysparm_table').toLowerCase();
+  // Inferring the table is only done on a portal-shaped address: one short path segment (/sp, /esc, /csm, ...).
+  const portalShaped = segments.length <= 1 && (!segments[0] || (PORTAL_SEGMENT_RE.test(segments[0]) && !NOT_PORTAL_SEGMENTS.has(segments[0].toLowerCase())));
+  if (!table && portalShaped) table = (article ? 'kb_knowledge' : '') || PORTAL_PAGE_TABLES[page] || pageNamedAfterTable(page);
+
+  const query = get('sysparm_query');
+  const idText = get('sys_id', 'sysparm_sys_id', 'sysparm_sysid');
+  if (idText) {
+    const sysId = sysIdOf(idText);
+    return sysId && TABLE_RE.test(table) ? { table, sysId } : null;
+  }
+  const queryId = sysIdFromQuery(query);
+  if (queryId) return TABLE_RE.test(table) ? { table, sysId: queryId } : null;
+
+  const number = parseRecordNumber(get('number', 'sysparm_number')) || article || numberFromQuery(query);
+  if (!number) return null;
+  if (!table && portalShaped) table = portalTableForNumber(number);
+  return TABLE_RE.test(table) ? { table, number } : null;
+}
+
 function parseRelative(input, depth) {
   if (depth > 3) return null;
   let url;
@@ -152,11 +237,8 @@ function parseRelative(input, depth) {
     return table.endsWith('_list') ? null : refFrom(table, params);
   }
 
-  // Portals: /sp?id=ticket&table=incident&sys_id=...
-  const portalTable = (params.get('table') || '').toLowerCase();
-  if (portalTable) return refFrom(portalTable, params);
-
-  return null;
+  // Portals (Service Portal, Employee Center, customer service portal, HR portal): /sp?id=ticket&table=incident&sys_id=...
+  return portalRef(portalParams(url), path.split('/').filter(Boolean));
 }
 
 /**

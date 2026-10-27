@@ -36,7 +36,11 @@ export default function SetupView({ page, eff, onChanged }) {
           <MyDayView page={page} />
           <section className="ab-card">
             <h2 className="ab-h">Open a ticket</h2>
-            <p className="ab-sub">Open an incident, request, catalog task or case and Agent Buddy will offer help for it here.</p>
+            <p className="ab-sub">
+              {page.surface === 'portal'
+                ? 'Open a ticket, request or case on this portal and Agent Buddy will offer help for it here.'
+                : 'Open an incident, request, catalog task or case, in the platform, in a workspace or on a portal ticket page (Service Portal, Employee Center, customer service portal), and Agent Buddy will offer help for it here.'}
+            </p>
           </section>
         </>
       )}
@@ -48,7 +52,7 @@ export default function SetupView({ page, eff, onChanged }) {
             allowed ? (
               <>
                 <p className="ab-sub">
-                  Agent Buddy only works on sites you turn it on for. Turning it on lets it read tickets you can already see on <span className="ab-mono">{page.origin.replace('https://', '')}</span>.
+                  Agent Buddy only works on sites you turn it on for. Turning it on lets it read tickets you can already see on <span className="ab-mono">{page.origin.replace('https://', '')}</span>, including its portal pages. A portal that has its own web address is turned on separately.
                 </p>
                 <div className="ab-row">
                   <button type="button" className="ab-btn ab-btn-primary" disabled={busy} onClick={enable}>

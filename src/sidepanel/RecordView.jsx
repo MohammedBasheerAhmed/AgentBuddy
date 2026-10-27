@@ -6,6 +6,9 @@ import RunPanel from './RunPanel.jsx';
 import RelatedView from './RelatedView.jsx';
 import { RECORD_TABS } from './recordTabs.js';
 
+const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
+const needsStricter = (feature, mode) => Boolean(feature.requires?.minMode) && (MODE_RANK[mode] ?? 0) < (MODE_RANK[feature.requires.minMode] ?? 0);
+
 export default function RecordView({ page, eff }) {
   const { record } = page;
   const [header, setHeader] = useState(null);
@@ -73,6 +76,7 @@ export default function RecordView({ page, eff }) {
             <button key={f.id} type="button" className="ab-feature" disabled={!aiReady} onClick={() => run.run(f)}>
               <span className="ab-feature-title">{f.title}</span>
               <span className="ab-feature-desc">{f.description}</span>
+              {needsStricter(f, eff.values.piiMode) && <span className="ab-feature-desc">Needs Strict privacy mode. Change it in Settings.</span>}
             </button>
           ))}
         </section>

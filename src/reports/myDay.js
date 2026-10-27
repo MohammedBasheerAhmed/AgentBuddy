@@ -7,7 +7,7 @@ import { SYS_ID_RE, disp, raw, parseSnTime } from '../context/util.js';
 
 export const MY_DAY_TABLES = ['incident', 'sc_task', 'sc_req_item', 'sn_customerservice_case', 'problem', 'change_task'];
 const FIELDS = ['sys_id', 'number', 'short_description', 'priority', 'state', 'sys_updated_on', 'opened_at', 'sys_class_name'];
-const AT_RISK_PERCENT = 75;
+export const AT_RISK_PERCENT = 75;
 
 const num = (v) => {
   const n = Number(raw(v));

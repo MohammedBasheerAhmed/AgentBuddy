@@ -5,6 +5,7 @@ import { checkOutgoing, maskExcerpt } from '../safeSend/index.js';
 import { MSG } from '../lib/messages.js';
 import { insertsFor } from '../features/registry.js';
 import { openNewRecord } from './openRecord.js';
+import { setPending } from './pendingDraft.js';
 
 const REASONS = {
   'no-form': 'Agent Buddy could not reach a form field on this page.',
@@ -70,6 +71,13 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   async function insert(spec, force = false) {
     setNote(null);
     const field = spec.field;
+    // An insert that belongs on another kind of form (an article's title and body) is refused anywhere else: "short_description"
+    // exists on the incident too, and filling that by mistake would be easy to miss.
+    const here = page.record?.table || page.newRecord?.table || '';
+    if (spec.table && here !== spec.table) {
+      setNote({ kind: 'warn', text: `This goes into a ${spec.table} form. Open that form first${feature.open?.table === spec.table ? ' (use the button below)' : ''}, then insert. Copy works now.` });
+      return;
+    }
     const value = textFor(spec);
     if (!value) {
       setNote({ kind: 'danger', text: 'That part is not in the text, so there is nothing to insert. Use Copy instead.' });
@@ -123,11 +131,21 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
         {inserts.map((spec, i) => (
           <button key={spec.field + i} type="button" className={`ab-btn ab-btn-sm${i === 0 ? ' ab-btn-primary' : ''}`} onClick={() => insert(spec, false)}>{spec.label}</button>
         ))}
-        {feature.open?.table && (
-          <button type="button" className="ab-btn ab-btn-sm" onClick={() => openNewRecord(page, feature.open.table)}>{feature.open.label || 'Open a new form'}</button>
+        {feature.open?.table && page.newRecord?.table !== feature.open.table && (
+          <button
+            type="button"
+            className="ab-btn ab-btn-sm"
+            onClick={() => {
+              // The tab is about to leave this record, which resets the panel: keep the draft (in memory) for the blank form.
+              setPending({ feature, text, people, scan });
+              openNewRecord(page, feature.open.table);
+            }}
+          >
+            {feature.open.label || 'Open a new form'}
+          </button>
         )}
         <button type="button" className="ab-btn ab-btn-sm" onClick={() => copy()}>Copy</button>
-        <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>Try again</button>
+        {onAgain && <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>Try again</button>}
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>Close</button>
       </div>
       <p className="ab-hint" style={{ marginTop: 8 }}>AI can be wrong. Check the text before you use it.</p>

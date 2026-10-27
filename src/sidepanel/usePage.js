@@ -17,13 +17,27 @@ const originOf = (url) => {
 //   { status: 'not-enabled', tabId, origin }  no content script answered (site not enabled, or not a web page)
 //   { status: 'no-record', tabId, href, user }  enabled, but the page is not a record
 //   { status: 'record', tabId, href, record: {table, sysId, number}, user, form }
+// Every state of an enabled page also carries surface ('classic' | 'workspace' | 'portal' | 'other') and, on a portal page,
+// portal: { base: '/esc', pageId: 'ticket' } (null elsewhere). The address is read again on every poll, so a portal that
+// moves between tickets without a reload (history.pushState) is followed within one poll.
+const PORTAL_BASE_RE = /^\/[a-z][a-z0-9_-]{0,30}$/;
+const PORTAL_PAGE_RE = /^[a-z0-9_.-]{0,80}$/;
+
+// The content script's answer is data from a page we do not control: only a well-formed portal description gets through.
+export function cleanPortal(portal, surface) {
+  if (surface !== 'portal' || !portal || typeof portal !== 'object') return null;
+  const base = typeof portal.base === 'string' ? portal.base.toLowerCase() : '';
+  const pageId = typeof portal.pageId === 'string' ? portal.pageId.toLowerCase() : '';
+  return PORTAL_BASE_RE.test(base) && PORTAL_PAGE_RE.test(pageId) ? { base, pageId } : null;
+}
+
 async function readActivePage() {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab?.id) return { status: 'not-enabled', tabId: 0, origin: '' };
   try {
     const state = await chrome.tabs.sendMessage(tab.id, { type: MSG.PAGE_STATE });
     if (!state || state.error) throw new Error(state?.error?.message || 'No answer.');
-    return { ...state, status: state.record ? 'record' : 'no-record', tabId: tab.id };
+    return { ...state, portal: cleanPortal(state.portal, state.surface), status: state.record ? 'record' : 'no-record', tabId: tab.id };
   } catch {
     // The URL is only visible when the browser granted access to the site (or the toolbar button was just used on it).
     return { status: 'not-enabled', tabId: tab.id, origin: originOf(tab.url) };

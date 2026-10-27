@@ -3,6 +3,10 @@
 //   GET /incident.do?sys_id=<id>              classic form; external script defines g_ck, g_user and a fake g_form
 //   GET /nav_to.do?uri=incident.do?sys_id=..  the classic frame: top window + <iframe id="gsft_main"> that holds the form
 //   GET /now/sow/record/<table>/<sys_id>      Workspace-style page: shadow-DOM components, NO g_form
+//   GET /sp /esc /csm                         portals: an Angular-style single-page app (NO g_form), moving between tickets and a
+//                                             list with history.pushState (e2e/site/portal.js). How each one tells who is signed in:
+//                                             /sp the NOW object, /esc an Angular root scope, /csm nothing at all (the extension
+//                                             then asks the instance who "Me" is: one GET of the person's own sys_user row)
 //   GET /home                                 a page that is not a record (My Day)
 //   GET /api/now/table/<table>                Table API, answered from the sn-* fixtures
 //   GET /api/now/stats/<table>                Aggregate API (count, group by)
@@ -44,12 +48,18 @@ const CLASSIC_FIELDS = [
 ];
 const TYPED_WORK_NOTES = 'Checking the gateway certificate now.';
 
+// How each fake portal lets a page script find out who is signed in (the extension must cope with all three).
+const PORTAL_FLAVOUR = { sp: 'now', esc: 'scope', csm: 'none' };
+// The dynamic filter "Me" that ships with every instance. A query on it is answered with the signed-in person's own row.
+const ME_QUERY = /^sys_idDYNAMIC90d1921e5f510100a9ad2572f2b477fe$/;
+
 /**
  * @param {{ key: string, cert: string }} tls
- * @param {{ tables: object, makeApi: Function, user: object }} options
+ * @param {{ tables: object, makeApi: Function, user: object, portal?: object }} options
  *   makeApi(tables, behaviour) -> the fake Table API (tests/fixtures/sn-fakeDeps.js)
+ *   portal: the tickets the fake portals show (data.PORTAL in e2e/data.entry.js)
  */
-function startFakeInstance(tls, { tables, makeApi, user }) {
+function startFakeInstance(tls, { tables, makeApi, user, portal }) {
   const gck = crypto.randomBytes(24).toString('hex'); // the session token; also what g_ck holds
   const state = {
     tables,
@@ -99,6 +109,28 @@ function startFakeInstance(tls, { tables, makeApi, user }) {
 window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.stringify(user.sysId)}, firstName: ${JSON.stringify(user.firstName)}, lastName: ${JSON.stringify(user.lastName)}, roles: ${JSON.stringify(user.roles)}, hasRole: function (r) { return this.roles.indexOf(r) !== -1; } };
 `;
 
+  // Portals have no g_form. g_ck is always there; the user is exposed the way the flavour says (and not as g_user).
+  const portalSessionScript = (flavour) => {
+    const lines = [`window.g_ck = ${JSON.stringify(gck)};`];
+    const display = `${user.firstName} ${user.lastName}`;
+    if (flavour === 'now') lines.push(`window.NOW = { user_id: ${JSON.stringify(user.sysId)}, user_name: ${JSON.stringify(user.login)}, user_display_name: ${JSON.stringify(display)}, sys_id: 'ffffffffffffffffffffffffffffffff' };`);
+    if (flavour === 'scope') {
+      lines.push(`var rootScope = { user: { sys_id: ${JSON.stringify(user.sysId)}, user_name: ${JSON.stringify(user.login)}, name: ${JSON.stringify(display)} } };`);
+      lines.push("window.angular = { element: function () { return { injector: function () { return { has: function (n) { return n === '$rootScope'; }, get: function () { return rootScope; } }; } }; } };");
+    }
+    return `${lines.join('\n')}\n`;
+  };
+
+  function portalHtml(suffix) {
+    const data = { suffix, tickets: portal?.tickets || [] };
+    return page(`Portal ${suffix} | ServiceNow (fake)`, `
+<div class="banner">Fake ServiceNow - portal /${suffix} (single-page app, no g_form)</div>
+<div id="portal-app" ng-app="fakePortal" data-suffix="${suffix}"></div>
+<script type="application/json" id="e2e-portal-data">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>
+<script src="/scripts/portal-session.js?flavour=${PORTAL_FLAVOUR[suffix]}"></script>
+<script src="/scripts/portal.js"></script>`);
+  }
+
   function sendJson(res, status, body, extra = {}) {
     const text = JSON.stringify(body);
     res.writeHead(status, { 'Content-Type': 'application/json;charset=UTF-8', 'Cache-Control': 'no-store', 'x-is-logged-in': 'true', ...extra });
@@ -120,6 +152,13 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
     const q = url.searchParams;
     const query = q.get('sysparm_query') || '';
     const fields = (q.get('sysparm_fields') || '').split(',').filter(Boolean);
+    // "Who am I" without any page global: the dynamic filter Me answers with the signed-in person's own sys_user row.
+    if (api === 'table' && tableName === 'sys_user' && ME_QUERY.test(query)) {
+      entry.note = 'dynamic filter Me';
+      const row = (state.tables.sys_user || []).find((r) => rawOf(r.sys_id) === user.sysId);
+      const out = row ? [Object.fromEntries((fields.length ? fields : Object.keys(row)).map((f) => [f, rawOf(row[f])]))] : [];
+      return sendJson(res, 200, { result: out });
+    }
     const limit = Math.max(0, Number(q.get('sysparm_limit') || 10000));
     const offset = Math.max(0, Number(q.get('sysparm_offset') || 0));
     const dv = q.get('sysparm_display_value') || 'false';
@@ -162,6 +201,10 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
       res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' });
       return res.end(sessionScript());
     }
+    if (p === '/scripts/portal-session.js') {
+      res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' });
+      return res.end(portalSessionScript(url.searchParams.get('flavour') || 'none'));
+    }
     const staticFile = /^\/(scripts|assets)\/([a-z0-9-]+\.(?:js|css))$/.exec(p);
     if (staticFile) {
       const file = path.join(SITE, staticFile[2]);
@@ -190,6 +233,9 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
       const row = record(workspace[1], workspace[2].toLowerCase()) || {};
       return html(page(`${dispOf(row.number) || workspace[1]} | Workspace (fake)`, `<div class="banner">Fake ServiceNow - workspace record (no g_form)</div><now-record-form heading="${escapeHtml(dispOf(row.number) || workspace[1])}"></now-record-form><script src="/scripts/session.js"></script><script src="/scripts/workspace.js"></script>`));
     }
+
+    const portalSuffix = /^\/(sp|esc|csm)$/.exec(p);
+    if (portalSuffix) return html(portalHtml(portalSuffix[1]));
 
     if (p === '/home' || p === '/') {
       return html(page('Home | ServiceNow (fake)', '<div class="banner">Fake ServiceNow - home</div><h1>Home</h1><p class="ws-note">Not a record page.</p><script src="/scripts/session.js"></script>'));

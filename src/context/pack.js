@@ -6,7 +6,9 @@
 
 import { FEATURES, FEATURE_JOURNAL, allowedFields, fieldLimit, withheldFields } from './allowlists.js';
 import { STATUS, entry as accessEntry } from './access.js';
+import { assignSides, readChatMessages } from './chat.js';
 import { JOURNAL_RECORD_FIELDS, applyAuthorNames, readJournal } from './journal.js';
+import { articleHtmlStats, statsToStrings } from './knowledge.js';
 import { isSensitiveTable, kindForTable, tableForNumber } from './kinds.js';
 import { personRefs, resolvePeople } from './people.js';
 import { readRelated, relatedPlan } from './related.js';
@@ -17,6 +19,36 @@ export { stripHtml } from './util.js';
 export { confirmEmptyIsReallyEmpty } from './access.js';
 
 export const PACK_VERSION = 1;
+
+// Two kinds are not tickets. A knowledge article has no notes, but its structure and its stored dates matter (the pack's text
+// is plain, and its dates are shown in the reader's format); a chat has messages instead of a journal.
+const TIME_COLUMNS = new Set(['valid_to', 'published', 'sys_updated_on', 'opened_at', 'closed_at']);
+
+// Per-kind plain data for pack.related, all strings (docs/contracts.md):
+//   knowledge: { article: counts from the HTML (headings, lists, full text length...), times: stored dates (UTC) }
+//   chat:      { times: stored dates (UTC) }
+function kindExtras(kind, row, names) {
+  if (kind !== 'knowledge' && kind !== 'chat') return {};
+  const extras = {};
+  if (kind === 'knowledge' && names.includes('text')) extras.article = statsToStrings(articleHtmlStats(disp(row.text)));
+  const times = {};
+  for (const name of names) {
+    const stored = TIME_COLUMNS.has(name) ? raw(row[name]) : '';
+    if (stored) times[name] = stored;
+  }
+  if (Object.keys(times).length) extras.times = times;
+  return extras;
+}
+
+// Chat participants get the role they played, once the messages say who spoke on which side.
+function chatPeople(people, entries) {
+  const sideOf = new Map();
+  for (const e of entries) if (e.by && e.side && !sideOf.has(e.by.toLowerCase())) sideOf.set(e.by.toLowerCase(), e.side);
+  return people.map((p) => {
+    const side = sideOf.get(String(p.name).toLowerCase());
+    return p.role === 'journal_author' && (side === 'customer' || side === 'agent') ? { ...p, role: side } : p;
+  });
+}
 
 function notFound(table, what) {
   const err = new Error(`${what} was not found in ${table}, or your user cannot see it.`);
@@ -60,14 +92,15 @@ export async function readContextPack(ref, deps, options = {}) {
 
   const { table, sysId } = await resolveRecordRef(ref, deps);
   const kind = kindForTable(table);
+  const isChat = kind === 'chat';
   const minimised = isSensitiveTable(table) && !allowSensitive;
   const names = allowedFields(table, feature, { allowSensitive });
   const wantJournal = (options.includeJournal ?? FEATURE_JOURNAL[feature]) === true;
   const readJournalNow = wantJournal && !minimised;
   const memo = new Map(); // one "can this user see the table at all" read per table
 
-  // 1. The record: allowlisted columns only, plus the two note columns when notes are wanted.
-  const row = await deps.fetchRecord(table, sysId, readJournalNow ? [...names, ...JOURNAL_RECORD_FIELDS] : names, { displayValue: true });
+  // 1. The record: allowlisted columns only, plus the two note columns when notes are wanted (a chat's messages are elsewhere).
+  const row = await deps.fetchRecord(table, sysId, readJournalNow && !isChat ? [...names, ...JOURNAL_RECORD_FIELDS] : names, { displayValue: true });
   if (!row) throw notFound(table, 'The record');
 
   const fields = {};
@@ -76,19 +109,29 @@ export async function readContextPack(ref, deps, options = {}) {
     if (value) fields[name] = value;
   }
 
-  // 2. Notes and the per-kind extras (they do not depend on each other).
-  const recordText = readJournalNow ? { comments: disp(row.comments), work_notes: disp(row.work_notes) } : null;
+  // 2. Notes (or the messages of a chat) and the per-kind extras (they do not depend on each other).
+  const recordText = readJournalNow && !isChat ? { comments: disp(row.comments), work_notes: disp(row.work_notes) } : null;
+  const noJournal = { entries: [], loginNames: [], access: [] };
   const [journalResult, relatedResult] = await Promise.all([
-    readJournalNow ? readJournal({ table, sysId, recordText }, deps, { memo }) : Promise.resolve({ entries: [], loginNames: [], access: [] }),
+    !readJournalNow ? Promise.resolve(noJournal) : isChat ? readChatMessages({ table, sysId }, deps, { memo }) : readJournal({ table, sysId, recordText }, deps, { memo }),
     readRelated(relatedPlan({ kind, feature, minimised }), { table, sysId }, deps, memo),
   ]);
 
   // 3. People: from the record, the extras and the note authors, with emails where sys_user allows.
-  const displayNames = uniq(journalResult.entries.map((e) => e.by).filter((by) => /\s/.test(by)));
+  const displayNames = isChat ? journalResult.names || [] : uniq(journalResult.entries.map((e) => e.by).filter((by) => /\s/.test(by)));
   const { people, access: peopleAccess, namesByLogin } = await resolvePeople(
     { refs: [...personRefs(row, names), ...relatedResult.refs], logins: journalResult.loginNames, names: displayNames },
     deps
   );
+
+  let journal = applyAuthorNames(journalResult.entries, namesByLogin);
+  let finalPeople = people;
+  if (isChat) {
+    // Who is the customer and who the agent: the record says (opened_for, assigned_to); the messages' own columns said the rest.
+    const named = (role) => people.filter((p) => p.role === role).map((p) => p.name);
+    journal = assignSides(journal, { customers: named('opened_for'), agents: named('assigned_to') });
+    finalPeople = chatPeople(people, journal);
+  }
 
   const access = [...policyAccess(table, feature, { minimised, wantJournal, allowSensitive }), ...journalResult.access, ...relatedResult.access, ...peopleAccess];
   return {
@@ -98,9 +141,9 @@ export async function readContextPack(ref, deps, options = {}) {
     number: fields.number || '',
     kind,
     fields,
-    people,
-    journal: applyAuthorNames(journalResult.entries, namesByLogin),
-    related: relatedResult.related,
+    people: finalPeople,
+    journal,
+    related: { ...relatedResult.related, ...kindExtras(kind, row, names) },
     access,
   };
 }

@@ -1,1 +1,52 @@
-/* Styles for the checks area. Use the --ab-* tokens from theme.css only. */
+/* Styles for the checks area (Request, Check and Checklist tabs). Use the --ab-* tokens from theme.css only.
+   Panel width can be 320px: nothing here is a wide table, long text wraps and never scrolls sideways. */
+
+.ab-chk-between { justify-content: space-between; }
+.ab-chk-h { margin: 0; }
+
+/* ---- collapsible sections ---- */
+.ab-chk-summary { cursor: pointer; font-weight: 600; }
+.ab-chk-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+
+/* ---- the status line of the Request tab ---- */
+.ab-chk-status { display: flex; flex-direction: column; gap: 6px; }
+.ab-chk-line { margin: 0; font-size: var(--ab-text-lg); font-weight: 600; overflow-wrap: anywhere; }
+
+/* ---- label / value pairs: label on top, value below, so a long answer never squeezes the label ---- */
+.ab-chk-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.ab-chk-fact { display: flex; flex-direction: column; gap: 1px; }
+.ab-chk-fact dt { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); font-weight: 600; }
+.ab-chk-fact dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+/* short labels (State, Stage, Due...) sit beside their value; long ones (questions) stay on top */
+.ab-chk-facts-tight .ab-chk-fact { flex-direction: row; gap: 8px; }
+.ab-chk-facts-tight .ab-chk-fact dt { flex: 0 0 34%; }
+.ab-chk-facts-tight .ab-chk-fact dd { flex: 1; min-width: 0; }
+.ab-chk-hidden { color: var(--ab-fg-muted); font-style: italic; }
+.ab-chk-hints { display: flex; flex-direction: column; gap: 2px; }
+.ab-chk-hints .ab-hint { margin: 0; }
+
+/* ---- lists of approvals, tasks and checks ---- */
+.ab-chk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ab-chk-item { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
+.ab-chk-head { display: block; }
+.ab-chk-item-main { font-weight: 600; overflow-wrap: anywhere; }
+.ab-chk-current { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
+.ab-chk-item[data-status='warn'] { border-color: var(--ab-warn-line); background: var(--ab-warn-soft); }
+.ab-chk-item[data-status='ok'] { border-color: var(--ab-ok-line); }
+
+/* ---- state words (always written out; colour backs them up) ---- */
+.ab-chk-tag-ok { background: var(--ab-ok-soft); color: var(--ab-ok); border-color: var(--ab-ok-line); }
+.ab-chk-tag-warn { background: var(--ab-warn-soft); color: var(--ab-warn); border-color: var(--ab-warn-line); }
+.ab-chk-tag-danger { background: var(--ab-danger-soft); color: var(--ab-danger); border-color: var(--ab-danger-line); }
+
+/* ---- the checklist ---- */
+.ab-chk-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ab-chk-bar { flex: 1; height: 8px; border-radius: var(--ab-radius-xs); background: var(--ab-bg-sunken); border: 1px solid var(--ab-border); overflow: hidden; }
+.ab-chk-bar-fill { height: 100%; background: var(--ab-accent); }
+.ab-chk-progress-text { font-size: var(--ab-text-sm); font-weight: 600; white-space: nowrap; }
+.ab-chk-steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ab-chk-step { padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-raised); }
+.ab-chk-step .ab-check { cursor: pointer; align-items: flex-start; }
+.ab-chk-step .ab-check span { overflow-wrap: anywhere; }
+.ab-chk-step-done { background: var(--ab-bg-subtle); }
+.ab-chk-step-done .ab-check span { color: var(--ab-fg-muted); text-decoration: line-through; }
