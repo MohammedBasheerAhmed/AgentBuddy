@@ -7,7 +7,8 @@ const SERIES = [
   { key: 'breached', label: 'Breached', tone: 'bad' },
   { key: 'atRisk', label: 'At risk', tone: 'warn' },
 ];
-const rows = (list) => list.map((r) => ({ key: r.id || r.name, label: r.name, parts: [{ key: 'breached', value: r.breached }, { key: 'atRisk', value: r.atRisk }] }));
+// Only owners and groups that hold something breached or at risk (a ticket that is merely due soon has no bar).
+const rows = (list) => list.filter((r) => r.breached + r.atRisk > 0).map((r) => ({ key: r.id || r.name, label: r.name, parts: [{ key: 'breached', value: r.breached }, { key: 'atRisk', value: r.atRisk }] }));
 
 /** The radar for one SLA result (`d` is result.data, with d.available true). */
 export function SlaBody({ d, env }) {
@@ -36,8 +37,8 @@ export function SlaBody({ d, env }) {
         <p className="ab-note ab-note-ok">{d.ticketsAtIssue ? 'The tickets at issue are listed by number only when ticket details can be read.' : 'No SLA is at risk right now.'}</p>
       )}
 
-      {env.scopeKind !== 'mine' && d.byOwner.length > 0 && <StackedBar title="SLA risk by owner" rows={rows(d.byOwner)} series={SERIES} labelHeader="Owner" />}
-      {env.scopeKind !== 'mine' && d.byGroup.length > 1 && <StackedBar title="SLA risk by group" rows={rows(d.byGroup)} series={SERIES} labelHeader="Group" />}
+      {env.scopeKind !== 'mine' && rows(d.byOwner).length > 0 && <StackedBar title="SLA risk by owner" rows={rows(d.byOwner)} series={SERIES} labelHeader="Owner" />}
+      {env.scopeKind !== 'mine' && rows(d.byGroup).length > 1 && <StackedBar title="SLA risk by group" rows={rows(d.byGroup)} series={SERIES} labelHeader="Group" />}
     </>
   );
 }

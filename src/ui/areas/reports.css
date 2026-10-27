@@ -298,6 +298,7 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
     --ab-bg-subtle: Canvas;
     --ab-bg-sunken: Canvas;
     --ab-bg-raised: Canvas;
+    --ab-accent: LinkText;
     --ab-fg: CanvasText;
     --ab-fg-soft: CanvasText;
     --ab-fg-muted: CanvasText;
@@ -333,3 +334,4 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
   .ab-chart-table td::before { content: attr(data-label); flex: 0 0 40%; color: var(--ab-fg-muted); font-weight: 600; }
   .ab-chart-table td.ab-chart-align-right { text-align: left !important; }
 }
+.ab-chart-table tbody th { overflow-wrap: break-word; } /* a ticket number keeps its digits together; long titles still wrap in the other cells */

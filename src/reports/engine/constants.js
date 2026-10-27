@@ -73,7 +73,7 @@ export const LIMITS = Object.freeze({
   // Parallel requests to the instance, shared by everything the page is asked for.
   concurrency: 4,
   // How long one section may take before the rest of its numbers are given up on.
-  sectionTimeoutMs: 25000,
+  sectionTimeoutMs: 45000,
   cacheTtlMs: 60000,
   cacheEntries: 400,
   // Rows per page and the most rows one date read may take.

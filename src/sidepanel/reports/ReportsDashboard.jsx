@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isFeatureEnabled } from '../../policy/policy.js';
 import { read } from '../ask.js';
 import { PRESETS, CAPS, addDashboard, addPresetDashboard, addWidget, moveWidget, removeDashboard, removeWidget, renameDashboard, setActive, setDashboardSetup, updateWidget } from '../../reports/dashboards.js';
+import { createLimiter } from '../../reports/engine/cache.js';
 import { REPORT_SECTIONS, sectionById } from './sections.js';
 import { useDashboards, useReportContext } from './hooks.js';
 import { openList, openTicket } from './drill.js';
@@ -99,6 +100,8 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
     }
   };
 
+  // At most two widgets read at a time, top to bottom: each gets its own time limit and the first ones appear first.
+  const limiter = useMemo(() => createLimiter(2), []);
   const noteRead = useCallback((id, ms) => setReadAts((prev) => (prev[id] === ms ? prev : { ...prev, [id]: ms })), []);
 
   const scopeJson = dash ? JSON.stringify(dash.scope) : '';
@@ -112,6 +115,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
       tables: JSON.parse(selectedJson),
       blocked,
       refreshKey,
+      limiter,
       mask,
       setMask,
       canEdit,
@@ -122,7 +126,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
     }),
     // The scope is compared by value so a re-render of the dashboard does not restart every widget's read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page.tabId, page.href, layout, scopeJson, selectedJson, blocked, refreshKey, mask, canEdit, dash?.id, focus, update, noteRead]
+    [page.tabId, page.href, layout, scopeJson, selectedJson, blocked, refreshKey, limiter, mask, canEdit, dash?.id, focus, update, noteRead]
   );
 
   if (disabled) {

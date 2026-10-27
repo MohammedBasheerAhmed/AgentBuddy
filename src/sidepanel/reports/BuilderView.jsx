@@ -44,7 +44,7 @@ export function BuilderChart({ data, env }) {
 // A custom report on a dashboard: whatever the report builder put together, drawn the way the person chose.
 export default function BuilderView({ widget, env, actions }) {
   const request = { kind: 'builder', config: widget.builder, blocked: env.blocked };
-  const state = useReport({ tabId: env.page.tabId, request, refreshKey: env.refreshKey });
+  const state = useReport({ tabId: env.page.tabId, request, refreshKey: env.refreshKey, limiter: env.limiter });
   const d = state.result?.data;
   const ok = d && d.available !== false;
   return (

@@ -17,6 +17,7 @@ import { parseRecordRef, kindForTable } from '../context/kinds.js';
 import { SYS_ID_RE, TABLE_RE, disp } from '../context/util.js';
 import { handleRead } from './reads.js';
 import { portalInfo, surfaceOf } from '../context/surface.js';
+import { isFromExtensionPage } from '../lib/senderCheck.js';
 
 const FIELD_RE = /^[a-z][a-z0-9_]{0,79}$/;
 const MAX_INSERT_CHARS = 20000;
@@ -109,8 +110,9 @@ if (!window.__abContentInstalled) {
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    // Only this extension's own pages (the side panel) can ask. chrome.runtime.onMessage never delivers web-page messages.
-    if (sender.id !== chrome.runtime.id || sender.tab) return false;
+    // Only this extension's own pages (the side panel, the full-page dashboard) can ask. chrome.runtime.onMessage never delivers
+    // web-page messages; the sender's origin (not "is it in a tab") tells an extension page from a content script.
+    if (!isFromExtensionPage(sender, chrome.runtime.id)) return false;
     (async () => {
       switch (message?.type) {
         case MSG.PING:
