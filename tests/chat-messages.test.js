@@ -147,7 +147,7 @@ test('parts: record details, then the newest messages oldest first, labelled by 
     msg('2026-10-26 09:03:00', '', 'Someone', 'fourth'),
   ];
   const parts = chatParts({ fields: { short_description: 'VPN', type: 'Chat', state: 'Open' }, journal }, { journal: 3 });
-  assert.deepEqual(parts.map((p) => p.label), ['Topic', 'Channel', 'Chat state', 'Agent message', 'Bot message', 'Message (sender unknown)']);
+  assert.deepEqual(parts.map((p) => p.label), ['Topic', 'Channel', 'Chat state', 'Agent message', 'Bot message', 'Message from an unknown sender']);
   const messages = parts.filter((p) => p.field === 'comments');
   assert.equal(messages[0].text, '[2026-10-26 09:01:00] Beth Anglin: second');
   assert.equal(messages[1].text, '[2026-10-26 09:02:00] third', 'a bot has no name');
@@ -158,7 +158,7 @@ test('parts: the reply feature also gets the customer\'s latest message on its o
   const journal = [msg('2026-10-26 09:00:00', 'customer', 'Abel', 'first'), msg('2026-10-26 09:01:00', 'agent', 'Beth', 'second'), msg('2026-10-26 09:02:00', 'customer', 'Abel', 'last one')];
   const related = { knowledge: [{ number: 'KB1', title: 'VPN fix', excerpt: 'Reset the profile' }] };
   const parts = chatParts({ fields: {}, journal, related }, { journal: 10, lastMessage: true });
-  const last = parts.find((p) => p.label.startsWith('Reply to this message'));
+  const last = parts.find((p) => p.label.startsWith('Reply to this customer message'));
   assert.equal(last.text, '[2026-10-26 09:02:00] Abel: last one');
   const kb = parts.find((p) => p.label === 'Knowledge article that may help');
   assert.equal(kb.text, 'KB1: VPN fix\nReset the profile');

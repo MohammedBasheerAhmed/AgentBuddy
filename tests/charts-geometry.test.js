@@ -385,7 +385,7 @@ test('summarizeStacked, summarizeSeries, summarizeGauge, describeTile', () => {
   assert.equal(summarizeStacked([{ label: 'Nobody', parts: [] }], series), 'Nobody: none, total 0.');
 
   assert.equal(summarizeSeries([OPENED]), 'Opened: starts at 3 (Mon), ends at 6 (Wed), highest 9 (Tue).');
-  assert.equal(summarizeSeries([OPENED, RESOLVED], { unit: 'tickets' }), 'Opened: starts at 3 tickets (Mon), ends at 6 tickets (Wed), highest 9 tickets (Tue). Resolved: starts at 1 tickets (Mon), ends at 4 tickets (Wed), highest 4 tickets (Wed).');
+  assert.equal(summarizeSeries([OPENED, RESOLVED], { unit: 'tickets' }), 'Opened: starts at 3 tickets (Mon), ends at 6 tickets (Wed), highest 9 tickets (Tue). Resolved: starts at 1 ticket (Mon), ends at 4 tickets (Wed), highest 4 tickets (Wed).');
   assert.equal(summarizeSeries([]), 'No data.');
   assert.equal(summarizeSeries([{ label: 'A', points: [] }]), 'No data.');
   assert.equal(summarizeSeries([OPENED, { label: 'Resolved', points: [] }]), 'Opened: starts at 3 (Mon), ends at 6 (Wed), highest 9 (Tue). Resolved: no data.');

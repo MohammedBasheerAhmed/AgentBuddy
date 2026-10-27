@@ -67,7 +67,10 @@ export function formatNumber(value, { compact = false, decimals } = {}) {
 export function withUnit(text, unit) {
   const u = String(unit ?? '').trim();
   if (!u) return String(text);
-  return u === '%' || /^[a-z]$/i.test(u) ? `${text}${u}` : `${text} ${u}`;
+  if (u === '%' || /^[a-z]$/i.test(u)) return `${text}${u}`;
+  // "1 tickets" reads wrongly: a plural unit loses its s next to exactly one.
+  const unit1 = String(text) === '1' && /[a-z]s$/i.test(u) && !/ss$/i.test(u) ? u.slice(0, -1) : u;
+  return `${text} ${unit1}`;
 }
 
 /** One line of text, capped at `max` characters (counted as characters, not UTF-16 units), with an ellipsis. */

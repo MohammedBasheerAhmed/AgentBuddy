@@ -319,3 +319,17 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
   .ab-tile, .ab-heat-cell, .ab-seg-shape { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .ab-chart-table-wrap { overflow: visible; }
 }
+
+/* ---- narrow widgets (the side panel at 320 px): two tiles per row, and tables become one card per row ---- */
+.ab-widget .ab-tiles { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
+.ab-chart-table-wrap { container-type: inline-size; }
+@container (max-width: 460px) {
+  .ab-chart-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ab-chart-table, .ab-chart-table tbody, .ab-chart-table tr, .ab-chart-table th, .ab-chart-table td { display: block; }
+  .ab-chart-table caption { display: block; width: 100%; }
+  .ab-chart-table tr { padding: 6px 0; border-bottom: 1px solid var(--ab-border); }
+  .ab-chart-table tbody th { padding: 0 0 2px; border: 0; font-weight: 650; }
+  .ab-chart-table td { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; border: 0; text-align: left; }
+  .ab-chart-table td::before { content: attr(data-label); flex: 0 0 40%; color: var(--ab-fg-muted); font-weight: 600; }
+  .ab-chart-table td.ab-chart-align-right { text-align: left !important; }
+}

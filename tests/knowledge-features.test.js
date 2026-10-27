@@ -165,7 +165,7 @@ test('gap parts: the topic words, volume, category and CI; never ticket titles o
   assert.equal(pack.sysId, 'a'.repeat(32));
   assert.equal(pack.kind, 'other');
   const parts = gapParts(pack);
-  assert.deepEqual(parts.map((p) => p.label), ['Topic (words the tickets share)', 'Volume', 'Category', 'Configuration item']);
+  assert.deepEqual(parts.map((p) => p.label), ['Topic words', 'Volume', 'Category', 'Configuration item']);
   assert.equal(parts[1].text, '3 resolved tickets in the last 60 days, 2 with written resolution notes');
   const sent = JSON.stringify(parts);
   assert.ok(!sent.includes('Abel') && !sent.includes('INC0000001') && !sent.includes('keeps'), 'no ticket text');

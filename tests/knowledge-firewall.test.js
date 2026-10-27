@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { executeRun, prepareRun, RunBlocked } from '../src/lib/pipeline.js';
 import { featureById, partsFor } from '../src/features/registry.js';
+import { allowedFields } from '../src/context/allowlists.js';
 import { readContextPack } from '../src/context/pack.js';
 import { searchKnowledge } from '../src/context/similar.js';
 import { createFirewall, FirewallError } from '../src/pii/index.js';
@@ -94,6 +95,35 @@ test('a closing tag that survives into a message is escaped by the firewall, nev
   assert.ok(!user.includes('<ticket_data field="x">'));
 });
 
+test('names that appear ONLY inside the message text are masked, because the record\'s customer and agent are read as people', async () => {
+  const tables = chatTables();
+  // No sender columns, no creator: the messages carry direction and text only. And sys_user cannot be read at all.
+  tables.sys_cs_message = tables.sys_cs_message.map(({ sender, sys_created_by, ...rest }) => rest);
+  tables.sys_cs_message[0].message = { value: 'Hi, I am Abel Tuter and my login is abel.tuter', display_value: 'Hi, I am Abel Tuter and my login is abel.tuter' };
+  tables.sys_cs_message[3].message = { value: 'This is Beth Anglin from the service desk. Hello Abel.', display_value: 'This is Beth Anglin from the service desk. Hello Abel.' };
+  const pack = await readContextPack({ table: 'interaction', sysId: INTERACTION_ID }, fakeDeps(tables, { denied: ['sys_user'] }), { feature: 'chat-summary' });
+  assert.deepEqual(pack.people.map((p) => [p.role, p.name, p.email]).sort(), [['assigned_to', 'Beth Anglin', ''], ['opened_for', 'Abel Tuter', '']], 'names from the record, no emails without sys_user');
+  const sent = everythingSent(prepareRun({ feature: f('chat-summary'), pack, values: values(), policy: policy(), config: config(), createFirewall }));
+  for (const leak of ['Abel Tuter', 'Beth Anglin', 'Tuter', 'Anglin', 'abel.tuter']) assert.ok(!mentions(sent, leak), `${leak} was sent`);
+  assert.ok(!mentions(sent, 'Abel') && !mentions(sent, 'Beth'), 'first names too');
+  assert.match(sent, /This is \[PERSON_\d+\] from the service desk/);
+
+  // The control: had the record's person columns not been read, the same text would go out. That is the reason they are on the spec.
+  const unknown = { ...pack, people: [] };
+  const leaked = everythingSent(prepareRun({ feature: f('chat-summary'), pack: unknown, values: values(), policy: policy(), config: config(), createFirewall }));
+  assert.ok(mentions(leaked, 'Beth Anglin'), 'a name nobody told the firewall about is not found in prose');
+});
+
+test('the spec of every chat feature reads the person columns of the record, whatever its parts send', () => {
+  for (const name of ['chat-summary', 'chat-reply']) {
+    const columns = allowedFields('interaction', name);
+    assert.ok(columns.includes('opened_for') && columns.includes('assigned_to'), name);
+  }
+  for (const name of ['article-check', 'article-optimise', 'kb-merge-draft']) assert.ok(allowedFields('kb_knowledge', name).includes('author'), name);
+  assert.ok(allowedFields('incident', 'kb-gap-outline').includes('caller_id'));
+  assert.ok(allowedFields('sn_customerservice_case', 'kb-gap-outline').includes('contact'));
+});
+
 test('chat-summary builds in strict mode and in local-only mode with a local model; a policy that blocks "comments" blocks chats too', async () => {
   const pack = await chatPack();
   assert.doesNotThrow(() => prepareRun({ feature: f('chat-summary'), pack, values: values({ piiMode: 'strict' }), policy: policy(), config: config(), createFirewall }));
@@ -142,14 +172,17 @@ test('chat-reply: knowledge hits are found for the last customer message, only a
   const [op, args] = log[0];
   assert.equal(op, 'knowledge');
   assert.deepEqual(Object.keys(args.pack).sort(), ['fields', 'number', 'people', 'sysId', 'table']);
-  assert.deepEqual(args.pack.fields, { short_description: 'Thanks, still not working. Can you fix it today?' }, 'only the customer\'s last message, not the whole chat');
+  // The topic and the customer's own words (the last message first); nothing from the agent, the bot or the system.
+  assert.equal(args.pack.fields.short_description, 'VPN will not connect Thanks, still not working. Can you fix it today?');
+  assert.match(args.pack.fields.description, /Hi, my VPN will not connect/);
+  assert.ok(!/Which error do you see|virtual assistant|reset your VPN profile/.test(JSON.stringify(args.pack)), 'no agent or bot messages');
   assert.deepEqual(enriched.related.knowledge.map((a) => a.number), ['KB0000040']);
   assert.ok(enriched.access.some((a) => a.source === 'kb_knowledge'));
 
   const prepared = prepareRun({ feature: f('chat-reply'), pack: enriched, values: values(), policy: policy(), config: config(), createFirewall });
   const sent = everythingSent(prepared);
   assertNothingLeaks(sent);
-  assert.match(sent, /label="Reply to this message \(the most recent from the customer\)"/);
+  assert.match(sent, /label="Reply to this customer message"/);
   assert.match(sent, /Thanks, still not working/);
   assert.match(sent, /label="Knowledge article that may help"/);
   assert.match(sent, /VPN error 809: profile reset/);
@@ -274,7 +307,11 @@ test('kb-gap-outline: only topic words, counts, category and CI go; no ticket te
   const deps = fakeDeps({ incident: rows, ...linkTables() });
   const out = await knowledgeOps.kbGaps({ days: 60, tables: ['incident'] }, { deps, checkRecord, checkPack });
   const cluster = out.clusters.find((c) => /vpn/i.test(c.label));
+  // The callers' names are taken out of the topic words, and the caller is handed to the firewall as a person anyway.
+  assert.ok(!/abel|tuter/i.test(cluster.label), `the label is ${cluster.label}`);
+  assert.deepEqual(cluster.people, ['Abel Tuter']);
   const pack = gapPack(cluster, { days: out.days });
+  assert.deepEqual(pack.people.map((p) => p.name), ['Abel Tuter']);
   const prepared = prepareRun({ feature: f('kb-gap-outline'), pack, values: values(), policy: policy(), config: config(), createFirewall });
   const sent = everythingSent(prepared);
   for (const leak of ['Abel', 'Tuter', 'abel.tuter', 'example.com', 'INC0000002', 'INC0000003', 'sleep', 'wifi']) assert.ok(!sent.includes(leak), `${leak} was sent`);

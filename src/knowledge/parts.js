@@ -21,7 +21,7 @@ export function articleParts(pack) {
   const f = pack?.fields || {};
   const parts = [];
   add(parts, 'Article title', 'short_description', f.short_description, 300);
-  add(parts, 'Article text (plain text made from the HTML, so headings and formatting are gone)', 'text', f.text);
+  add(parts, 'Article text', 'text', f.text);
   add(parts, 'Search keywords', 'meta', f.meta, 500);
   add(parts, 'Category', 'kb_category', f.kb_category, 200);
   add(parts, 'Article format', 'article_type', f.article_type, 40);
@@ -78,7 +78,7 @@ export function mergePack(articles, access = [], people = []) {
 export function gapParts(pack) {
   const g = pack?.related?.gap || {};
   const parts = [];
-  add(parts, 'Topic (words the tickets share)', 'short_description', g.label, 200);
+  add(parts, 'Topic words', 'short_description', g.label, 200);
   add(parts, 'Volume', 'volume', g.volume, 200);
   add(parts, 'Category', 'category', g.category, 100);
   add(parts, 'Configuration item', 'cmdb_ci', g.ci, 100);

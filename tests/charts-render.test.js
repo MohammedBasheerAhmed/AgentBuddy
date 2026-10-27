@@ -143,18 +143,18 @@ test('without a drill-down callback nothing is a button but the toggle (Tile too
 
 test('"Show as table" gives the same numbers as an accessible table', () => {
   const bars = html(HorizontalBar, { title: 'Open by state', items: STATES, defaultTable: true });
-  assert.match(bars, /<table class="ab-table ab-chart-table"><caption>Open by state<\/caption>/);
+  assert.match(bars, /<table class="ab-table ab-chart-table"[^>]*><caption>Open by state<\/caption>/);
   assert.match(bars, /aria-pressed="true"/);
   assert.equal(count(bars, /<th scope="col"/g), 3);
-  assert.match(bars, /<th scope="row">New<\/th><td class="ab-chart-align-right">8<\/td><td class="ab-chart-align-right">40%<\/td>/);
+  assert.match(bars, /<th scope="row"[^>]*>New<\/th><td[^>]*class="ab-chart-align-right">8<\/td><td[^>]*class="ab-chart-align-right">40%<\/td>/);
   assert.ok(!/role="img"/.test(bars), 'the table replaces the picture');
 
   const stack = html(StackedBar, { title: 'Workload', rows: ROWS, series: SERIES, defaultTable: true });
   assert.match(stack, /<th scope="col"[^>]*>In progress<\/th>/);
-  assert.match(stack, /<th scope="row">Alice<\/th><td[^>]*>3<\/td><td[^>]*>5<\/td><td[^>]*>8<\/td>/);
+  assert.match(stack, /<th scope="row"[^>]*>Alice<\/th><td[^>]*>3<\/td><td[^>]*>5<\/td><td[^>]*>8<\/td>/);
 
   const trend = html(TrendChart, { title: 'T', series: TREND, defaultTable: true });
-  assert.match(trend, /<th scope="row">Tue<\/th><td[^>]*>9<\/td><td[^>]*>2<\/td>/);
+  assert.match(trend, /<th scope="row"[^>]*>Tue<\/th><td[^>]*>9<\/td><td[^>]*>2<\/td>/);
 
   const gauge = html(Gauge, { title: 'SLA', value: 82, max: 100, unit: '%', thresholds: { warn: 90, bad: 80 }, higherIsWorse: false, defaultTable: true });
   assert.match(gauge, /82%/);
@@ -266,21 +266,21 @@ test('DataTable: header scopes, formatted cells, row buttons, row cap, empty', (
   const markup = html(DataTable, { caption: 'Workload', columns, rows });
   assert.match(markup, /<caption>Workload<\/caption>/);
   assert.equal(count(markup, /<th scope="col"/g), 3);
-  assert.match(markup, /<th scope="row">Alice<\/th><td class="ab-chart-align-right">4 open<\/td><td>-<\/td>/);
+  assert.match(markup, /<th scope="row"[^>]*>Alice<\/th><td[^>]*class="ab-chart-align-right">4 open<\/td><td[^>]*>-<\/td>/);
   assert.ok(!/<button/.test(markup));
 
   const open = html(DataTable, { columns, rows, onRowOpen: noop });
   assert.equal(count(open, /<button type="button" class="ab-chart-link"/g), 2);
 
   const many = html(DataTable, { columns, rows: Array.from({ length: 30 }, (_, i) => ({ name: `P${i}`, open: i })), maxRows: 10 });
-  assert.equal(count(many, /<tr>/g), 11);
+  assert.equal(count(many, /<tr[ >]/g), 11);
   assert.match(many, /Showing the first 10 of 30 rows\./);
 
   assert.match(html(DataTable, { columns, rows: [], emptyText: 'No rows.' }), /No rows\./);
   assert.match(html(DataTable, { columns: [], rows }), /Nothing to show\./);
   const odd = html(DataTable, { columns: columns.map(({ format, ...c }) => c), rows: [{ name: undefined, open: NaN }, null, 'x'] });
   assert.ok(!/NaN|undefined/.test(odd));
-  assert.match(odd, /<th scope="row">-<\/th><td class="ab-chart-align-right">-<\/td>/);
+  assert.match(odd, /<th scope="row"[^>]*>-<\/th><td[^>]*class="ab-chart-align-right">-<\/td>/);
 });
 
 test('ChartFrame: image by default, group when interactive, table on request, empty text', () => {

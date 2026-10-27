@@ -27,23 +27,23 @@ export default function DataTable({ caption, columns, rows, onRowOpen, maxRows =
 
   return (
     <div className="ab-chart-table-wrap">
-      <table className="ab-table ab-chart-table">
+      <table className="ab-table ab-chart-table" role="table">
         {caption ? <caption>{caption}</caption> : null}
-        <thead>
-          <tr>
+        <thead role="rowgroup">
+          <tr role="row">
             {cols.map((c) => (
-              <th key={c.key} scope="col" className={alignClass(c)}>
+              <th key={c.key} scope="col" role="columnheader" className={alignClass(c)}>
                 {c.label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           {shown.map((row, ri) => (
-            <tr key={typeof row.key === 'string' || typeof row.key === 'number' ? row.key : ri}>
+            <tr role="row" key={typeof row.key === 'string' || typeof row.key === 'number' ? row.key : ri}>
               {cols.map((c, ci) =>
                 ci === 0 ? (
-                  <th key={c.key} scope="row" className={alignClass(c)}>
+                  <th key={c.key} scope="row" role="rowheader" data-label={c.label} className={alignClass(c)}>
                     {onRowOpen ? (
                       <button type="button" className="ab-chart-link" onClick={() => onRowOpen(row)}>
                         {text(c, row)}
@@ -53,7 +53,7 @@ export default function DataTable({ caption, columns, rows, onRowOpen, maxRows =
                     )}
                   </th>
                 ) : (
-                  <td key={c.key} className={alignClass(c)}>
+                  <td key={c.key} role="cell" data-label={c.label} className={alignClass(c)}>
                     {text(c, row)}
                   </td>
                 )

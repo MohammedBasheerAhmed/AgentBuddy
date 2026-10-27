@@ -15,17 +15,23 @@ const clip = (text, max) => {
   return value.length > max ? `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…` : value;
 };
 
-// Knowledge articles that match the customer's last message, found with the same read the Related tab uses. Whatever this
-// adds is untrusted text; it reaches the AI only through chatParts(). A failed search never stops the reply.
+// Knowledge articles that match the conversation, found with the same read the Related tab uses. The search words come from the
+// topic of the chat and the customer's own messages (the last one counts most): a last message such as "still not working"
+// says little on its own. This slim pack only goes to the content script of the same browser; whatever the search adds is
+// untrusted text and reaches the AI only through chatParts(). A failed search never stops the reply.
 async function addKnowledge(pack, { read }) {
   const messages = Array.isArray(pack.journal) ? pack.journal : [];
-  const last = [...messages].reverse().find((m) => m.side === 'customer') || messages[messages.length - 1];
+  const customer = messages.filter((m) => m.side === 'customer');
+  const last = customer[customer.length - 1] || messages[messages.length - 1];
   if (!last?.text) return pack;
   const slim = {
     table: pack.table,
     sysId: pack.sysId,
     number: pack.number,
-    fields: { short_description: clip(last.text, 300) },
+    fields: {
+      short_description: clip(`${pack.fields?.short_description || ''} ${last.text}`, 300),
+      description: clip(customer.slice(-4, -1).map((m) => m.text).join(' '), 300),
+    },
     people: pack.people || [],
   };
   try {

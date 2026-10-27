@@ -13,7 +13,7 @@ const SIDE_LABEL = {
   customer: 'Customer message',
   agent: 'Agent message',
   bot: 'Bot message',
-  '': 'Message (sender unknown)',
+  '': 'Message from an unknown sender',
 };
 
 /** One chat line as it goes into a part: "[time] Name: text" (a bot has no name). */
@@ -47,7 +47,7 @@ export function chatParts(pack, { journal = 40, lastMessage = false } = {}) {
 
   if (lastMessage) {
     const mine = [...messages].reverse().find((m) => m.side === 'customer') || messages[messages.length - 1];
-    if (mine) parts.push({ label: 'Reply to this message (the most recent from the customer)', field: 'comments', text: messageLine(mine) });
+    if (mine) parts.push({ label: 'Reply to this customer message', field: 'comments', text: messageLine(mine) });
   }
 
   for (const a of (pack?.related?.knowledge || []).slice(0, 3)) {

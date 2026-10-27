@@ -105,6 +105,24 @@ test('email addresses, links, phone numbers and record numbers never become a gr
   assert.ok(clusters.some((c) => /vpn/i.test(c.label)));
 });
 
+test('who raised a ticket is taken out of the topic words, and the callers are listed as people for the privacy filter', () => {
+  const [c] = clusterTickets([
+    ticket('VPN fails for Priya Raman', { who: ['Priya Raman'] }),
+    ticket('VPN fails again for Priya Raman', { who: ['Priya Raman'] }),
+    ticket('VPN fails for Sam Lee', { who: ['Sam Lee'] }),
+  ]);
+  assert.match(c.label, /vpn/i);
+  const shown = `${c.label} ${c.keywords.join(' ')}`.toLowerCase();
+  for (const name of ['priya', 'raman', 'sam', 'lee']) assert.ok(!shown.split(/[^a-z]+/).includes(name), `${name} is in the label: ${shown}`);
+  assert.deepEqual([...c.people].sort(), ['Priya Raman', 'Sam Lee']);
+  assert.deepEqual(clusterTickets([ticket('Plain thing'), ticket('Plain thing again')])[0].people, []);
+});
+
+test('a tie between equally common pairs goes to the one with the acronym', () => {
+  const [c] = clusterTickets([ticket('VPN drops daily'), ticket('VPN drops daily')]);
+  assert.match(c.label, /vpn/i);
+});
+
 test('bad input is harmless', () => {
   assert.deepEqual(clusterTickets(undefined), []);
   assert.deepEqual(clusterTickets([]), []);
