@@ -159,3 +159,37 @@ GET-only through the context engine or src/content/tableApi.js; validate every a
 Fulfillers work on the classic UI, Workspaces and portals (Service Portal, Employee Center, customer service portal). A record is
 found from the form (classic), the URL (Workspace, portal) and Insert falls back to the DOM when there is no `g_form`. Nothing
 may assume `g_form` or `g_user` exists.
+
+## Additions from the review fixes
+
+**Feature definition**
+- `previewGroup: 'email'` (optional): features with the same group share ONE "check what will be sent" the first time (the six email
+  drafts, the rewrite presets). Without it the feature id is the key.
+- `insert.mode: 'replace'` (optional) replaces the field instead of adding below; a one-line field (a title) is always replaced.
+  `insert.field` must be in `FILLABLE_FIELDS` (`src/lib/fillable.js`): a test walks the registry and fails when it is not.
+  `insert.table` also decides where Insert is allowed (see above).
+- `wave` is informational only (nothing reads it).
+
+**ContextPack**
+- `sensitive: true` marks a pack whose real class could not be resolved or is sensitive; it is minimised and HR-gated.
+- `requirePreview: true` makes the preview show every time, even in "first time" mode. Set it on any pack that carries text about
+  other people's tickets (reference material, linked incidents, an account's other cases, reports with ticket titles).
+- `people[].role: 'reference_person'` names the people on the rows of reference material, so their names are masked precisely.
+- `access[].status: 'blocked'` means the organisation's policy does not allow reading that table. It is never shown as "empty" or "denied".
+
+**Policy at the read boundary** (`src/content/policyGuard.js`)
+- A READ of a blocked table throws an error with `code: 'BLOCKED_TABLE'`; the readers turn it into an `access` entry with status `blocked`.
+- The panel sends its normalised policy with every READ (`src/sidepanel/ask.js`); the content script merges it with the managed policy it
+  reads itself. Lists are joined and HR content must be allowed by both: the panel can only make a read stricter.
+- Optional `deps.isBlocked(table)` and `deps.sensitivePrefixes` exist on guarded deps for readers that need them.
+- Policy keys added: `sensitiveTablePrefixes` (always includes `sn_hr_`), the HR endpoint rule (HR content needs `aiProvider` or `aiBaseUrl`
+  pinned, or a local model), `tokenBudgetPerDay` is enforced, and `disabledFeatures` matches case-insensitively.
+
+**FILL_FIELD** (`src/lib/messages.js`)
+- `{ field, value, label, mode, expect } -> { ok, method?, label?, reason? }`. `expect` is `{ table, sysId }`, `{ table, newRecord: true }`
+  or `{ email: true, table, sysId }`; a mismatch answers `reason: 'wrong-record'` and nothing is written. `label` in the answer is the
+  box that was used (Workspace and portal).
+
+**Part columns** (`src/features/partColumns.js`)
+- Every derived part `field` (linked_incidents, child_tasks, account_cases, ...) is mapped to the ServiceNow columns it carries, so
+  `blockedFields` refuses a part that carries a blocked column. A test fails when a part field exists that is not in the map.
