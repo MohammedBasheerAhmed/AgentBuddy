@@ -42,6 +42,7 @@ export function FulfilmentBody({ d, env }) {
           ]}
           rows={d.oldest}
           onRowOpen={(row) => env.openTicket({ table: row.table, sysId: row.sysId })}
+          rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
         />
       )}
     </>

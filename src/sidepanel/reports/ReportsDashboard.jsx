@@ -8,6 +8,7 @@ import { createLoadedStore } from '../../reports/ai/loaded.js';
 import { addableSections, sectionById } from './sections.js';
 import { useDashboards, useReportContext } from './hooks.js';
 import { openList, openTicket } from './drill.js';
+import { recordUrl } from '../openRecord.js';
 import { clock } from './format.js';
 import ScopeBar from './ScopeBar.jsx';
 import BuilderView from './BuilderView.jsx';
@@ -130,6 +131,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
       canEdit,
       openList: (table, query) => openList(page, table, query, { focus }),
       openTicket: (ref) => openTicket(page, ref, { focus }),
+      ticketHref: (ref) => recordUrl(page, ref), // the same address as a real link, so Ctrl+click and the right-click menu work
       setWidgetParams: (widget, params) => update((s) => updateWidget(s, dash.id, widget.id, { params: { ...(widget.params || {}), ...params } })),
       noteRead,
       loaded,

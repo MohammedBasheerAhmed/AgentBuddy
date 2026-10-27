@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { read } from '../ask.js';
-import { openRecord } from '../openRecord.js';
+import RecordLink from '../RecordLink.jsx';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { MERGE_MAX_ARTICLES, mergePack } from '../../knowledge/parts.js';
 import Notes from './Notes.jsx';
@@ -180,9 +180,9 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
               <ul className="ab-kb-articles">
                 {c.articles.map((a) => (
                   <li key={a.sysId}>
-                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open" onClick={() => openRecord(page, { table: 'kb_knowledge', sysId: a.sysId })} title="Opens in this tab">
+                    <RecordLink page={page} item={{ table: 'kb_knowledge', sysId: a.sysId }} className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open">
                       <span className="ab-record-number">{a.number}</span> {a.title}
-                    </button>
+                    </RecordLink>
                     <span className="ab-hint">{a.views} view{a.views === 1 ? '' : 's'}{a.updated ? ` · changed ${a.updated.slice(0, 10)}` : ''}</span>
                   </li>
                 ))}

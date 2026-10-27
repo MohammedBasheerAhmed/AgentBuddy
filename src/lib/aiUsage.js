@@ -47,6 +47,9 @@ export function validateBaseUrl(input) {
 /** `<base>/chat/completions` for OpenAI-compatible servers. */
 export const chatCompletionsUrl = (base) => `${base}/chat/completions`;
 
+/** `<base>/models`: the list of models an OpenAI-compatible server offers. */
+export const modelsUrl = (base) => `${base}/models`;
+
 /** `<base>/messages` for an Anthropic-compatible proxy (the base already ends in /v1 for the real API). */
 export const anthropicMessagesUrl = (base) => `${base}/messages`;
 

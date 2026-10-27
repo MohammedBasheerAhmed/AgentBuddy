@@ -101,7 +101,8 @@ module.exports = {
     await clickButton(p, /^Close/);
 
     // Opening an article moves the tab (same instance) and the panel keeps what it found
-    await clickButton(p, /KB0020002/);
+    // (an article in the list is a real link: a click opens it in this tab, Ctrl+click or the right-click menu in a new one)
+    await p.evaluate(() => window.__vis(document.querySelectorAll('a.ab-kb-open')).find((a) => /KB0020002/.test(a.innerText)).click());
     await ctx.waitUntil('the tab to open the article', async () => decodeURIComponent(ticket.url()).includes(`kb_knowledge.do?sys_id=${data.kbArticleId(2)}`), { timeout: 10000 });
     t.check('clicking an article opens it in the SAME tab, on the same instance', ticket.url().startsWith(inst.origin), ticket.url());
     await ctx.sleep(800);

@@ -14,6 +14,8 @@ import { SectionVisibleProvider } from './SectionVisible.js';
 import { planPanel, withVisited } from './sections.js';
 import { panelId, tabId } from './tabKeys.js';
 import { PROVIDERS } from '../providers/config.js';
+import { modelChoices } from '../lib/modelChoices.js';
+import { saveSettings } from '../lib/storage.js';
 
 // The panel's sections. "This page" is the record that is open (or the setup / open-a-ticket help); the others work from any
 // page of an enabled ServiceNow site.
@@ -31,6 +33,29 @@ const SECTIONS = [
 const SECTION_IDS = SECTIONS.map((s) => s.id);
 const NAV = 'ab-sec';
 
+// The model in use, and a way to switch it without opening Settings: the ones loaded from the server (Settings, "Load models"), the
+// provider's own list, and the one in use; only the ones the organisation allows when its policy lists them. Switching saves the
+// choice like Settings does; a run that is already going is not affected.
+function ModelSwitch({ eff }) {
+  const def = PROVIDERS[eff.values?.provider];
+  if (!def) return null;
+  const current = eff.values.models?.[eff.values.provider] || def.defaultModel;
+  const choices = modelChoices({ def, current, loaded: eff.values.modelLists?.[eff.values.provider], allowed: eff.policy?.allowedModels });
+  if (!current && !choices.length) return null;
+  if (eff.locked?.model || choices.length < 2) return <span className="ab-tag ab-mono" title="The AI model in use. Change it in Settings.">{current}</span>;
+  return (
+    <select
+      className="ab-select ab-select-sm"
+      aria-label="AI model"
+      title="The AI model in use. Pick another to switch."
+      value={current}
+      onChange={(e) => saveSettings({ models: { ...eff.values.models, [eff.values.provider]: e.target.value } })}
+    >
+      {choices.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+    </select>
+  );
+}
+
 function Header({ eff }) {
   const provider = PROVIDERS[eff.values?.provider];
   return (
@@ -42,6 +67,7 @@ function Header({ eff }) {
           {provider.label.split(' (')[0].split(' /')[0]}
         </span>
       )}
+      <ModelSwitch eff={eff} />
       <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => chrome.runtime.openOptionsPage()}>
         Settings
       </button>

@@ -83,6 +83,9 @@ the real gate is the per-host browser permission above. An enterprise build can 
    party's name typed in prose may pass. Mitigations: the preview, strict mode, a local model.
 2. **Default key storage is browser storage.** Anyone or any malware that can read the browser profile can read the key.
    Recommended for an approved rollout: policy `keyStorage = session`, or a gateway that issues short-lived keys.
+   Settings shows what is saved as the first and last four characters and the length; the whole key is shown only when the person
+   presses "Show saved key" (hidden again after 20 seconds, never offered for a key the organisation supplies, never in the side panel).
+   A key being typed can be shown with "Show". A pasted key is cleaned (quotes, "Bearer ", whitespace) before it is saved.
 3. **The page can see the bridge events.** A script on the ServiceNow page can observe or forge the bridge's answers; they
    are treated as data to check, never as authority. A hostile page script could already read the same form.
 4. **Workspace forms** use shadow DOM, so "Insert" may fall back to Copy there. **Unverified** on a real Workspace.

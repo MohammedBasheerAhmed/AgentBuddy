@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { read as ask } from './ask.js';
-import { openRecord } from './openRecord.js';
+import RecordLink from './RecordLink.jsx';
 import Notes from './knowledge/Notes.jsx';
 
 // A2, A3, C4 and the outage check (E2): what happened before for this person, tickets solved like this one, open tickets on
 // the same service, and knowledge that may help. All of it is read with the person's own session and ranked locally: no AI
-// call, no key needed, nothing leaves the browser. Items open in the same tab.
+// call, no key needed, nothing leaves the browser. Items are real links: a click opens in the same tab, Ctrl+click or the
+// right-click menu opens a new one.
 
 const CALLER_ROLES = ['caller', 'requested_for', 'contact', 'opened_by', 'requester'];
 
@@ -24,12 +25,12 @@ function Section({ title, count, children, defaultOpen = true }) {
 
 function Item({ page, item, line, extra }) {
   return (
-    <button type="button" className="ab-feature" onClick={() => openRecord(page, item)} title="Opens in this tab">
+    <RecordLink page={page} item={item} className="ab-feature">
       <span className="ab-record-number">{item.number}</span>
       <span className="ab-feature-title">{item.short_description}</span>
       {line && <span className="ab-feature-desc">{line}</span>}
       {extra && <span className="ab-feature-desc">{extra}</span>}
-    </button>
+    </RecordLink>
   );
 }
 
@@ -79,7 +80,7 @@ export default function RelatedView({ page, eff }) {
   return (
     <>
       <div className="ab-row" style={{ justifyContent: 'space-between' }}>
-        <span className="ab-sub">Found with your own session. Nothing here is sent to an AI. Each ticket opens in this tab.</span>
+        <span className="ab-sub">Found with your own session. Nothing here is sent to an AI. A click opens a ticket in this tab; Ctrl+click or right-click opens a new tab.</span>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
       </div>
       {state.phase === 'loading' && !state.pack && <p className="ab-note" role="status">Looking…</p>}

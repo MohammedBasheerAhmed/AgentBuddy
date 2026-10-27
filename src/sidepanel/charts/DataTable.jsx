@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatNumber } from './geometry.js';
+import { isPlainClick, NEW_TAB_HINT } from '../linkClick.js';
 
 const cellText = (value) => {
   if (value === null || value === undefined || value === '') return '-';
@@ -11,9 +12,10 @@ const cellText = (value) => {
 /**
  * A small accessible table: caption, column headers with scope, the first column as the row header.
  * columns: [{ key, label, align: 'left'|'right'|'center', format(value, row) }]. Text is always rendered as text (React escapes it).
- * With onRowOpen the first cell of each row is a button that opens that row.
+ * With onRowOpen the first cell of each row is a button that opens that row. With rowHref(row) as well (the address of the row, or '')
+ * it is a real link instead: a click calls onRowOpen, Ctrl+click and the right-click menu open the address in a new tab.
  */
-export default function DataTable({ caption, columns, rows, onRowOpen, maxRows = 100, emptyText = 'Nothing to show.' }) {
+export default function DataTable({ caption, columns, rows, onRowOpen, rowHref, maxRows = 100, emptyText = 'Nothing to show.' }) {
   const cols = (Array.isArray(columns) ? columns : []).filter((c) => c && c.key !== undefined);
   const list = Array.isArray(rows) ? rows.filter((r) => r && typeof r === 'object') : [];
   if (!cols.length || !list.length) return <p className="ab-chart-empty">{emptyText}</p>;
@@ -44,7 +46,24 @@ export default function DataTable({ caption, columns, rows, onRowOpen, maxRows =
               {cols.map((c, ci) =>
                 ci === 0 ? (
                   <th key={c.key} scope="row" role="rowheader" data-label={c.label} className={alignClass(c)}>
-                    {onRowOpen ? (
+                    {onRowOpen && rowHref?.(row) ? (
+                      // A real link: a click opens the row in the page's tab (onRowOpen), Ctrl+click and the right-click menu use a new tab.
+                      <a
+                        className="ab-chart-link"
+                        href={rowHref(row)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-ab-link="record"
+                        title={NEW_TAB_HINT}
+                        onClick={(event) => {
+                          if (!isPlainClick(event)) return;
+                          event.preventDefault();
+                          onRowOpen(row);
+                        }}
+                      >
+                        {text(c, row)}
+                      </a>
+                    ) : onRowOpen ? (
                       <button type="button" className="ab-chart-link" onClick={() => onRowOpen(row)}>
                         {text(c, row)}
                       </button>

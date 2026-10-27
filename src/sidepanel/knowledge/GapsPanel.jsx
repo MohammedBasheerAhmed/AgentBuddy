@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { read } from '../ask.js';
-import { openRecord } from '../openRecord.js';
+import RecordLink from '../RecordLink.jsx';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { gapPack } from '../../knowledge/parts.js';
 import Notes from './Notes.jsx';
@@ -86,9 +86,9 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
               <ul className="ab-kb-articles">
                 {c.examples.map((e) => (
                   <li key={e.sysId}>
-                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open" onClick={() => openRecord(page, { table: e.table, sysId: e.sysId })} title="Opens in this tab">
+                    <RecordLink page={page} item={{ table: e.table, sysId: e.sysId }} className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open">
                       <span className="ab-record-number">{e.number}</span> {e.title}
-                    </button>
+                    </RecordLink>
                   </li>
                 ))}
               </ul>

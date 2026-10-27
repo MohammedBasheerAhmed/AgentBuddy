@@ -75,6 +75,7 @@ export function WorkloadBody({ d, env }) {
           ]}
           rows={d.pingPong.items}
           onRowOpen={(row) => env.openTicket({ table: row.table, sysId: row.sysId })}
+          rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
         />
       )}
     </>

@@ -42,13 +42,16 @@ function echoAnswer(userText) {
 }
 
 function startFakeAi() {
-  const state = { mode: 'echo', replier: null };
+  const state = { mode: 'echo', replier: null, models: ['gpt-5-mini-preprod', 'gpt-5-mini', 'gpt-5', 'text-embedding-3-small'] };
   /** Every chat request received: { path, method, auth, body (parsed), raw, at } */
   const requests = [];
   /** Every chat request of the whole run (reset() does not clear it): the final leak sweep reads this. */
   const all = [];
   /** Anything that was not a chat completion (should stay empty). */
   const other = [];
+  /** Every "list the models" request of the whole run: GET /v1/models, which carries only the key. */
+  const listings = [];
+  const DEFAULT_MODELS = ['gpt-5-mini-preprod', 'gpt-5-mini', 'gpt-5', 'text-embedding-3-small'];
 
   const server = http.createServer((req, res) => {
     const chunks = [];
@@ -60,6 +63,12 @@ function startFakeAi() {
         res.end(JSON.stringify(body));
       };
       if (req.method === 'OPTIONS') return send(204, {});
+      if (req.method === 'GET' && req.url === '/v1/models') {
+        const listAuth = req.headers.authorization || '';
+        listings.push({ method: req.method, path: req.url, auth: listAuth, origin: req.headers.origin || '', bodyLength: raw.length });
+        if (listAuth !== `Bearer ${EXPECTED_KEY}`) return send(401, { error: { message: 'Incorrect API key provided' } });
+        return send(200, { object: 'list', data: state.models.map((id) => ({ id, object: 'model' })) });
+      }
       if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
         other.push({ method: req.method, path: req.url });
         return send(404, { error: { message: 'unknown route' } });
@@ -116,6 +125,10 @@ function startFakeAi() {
         requests,
         all,
         other,
+        listings,
+        setModels: (ids) => {
+          state.models = Array.isArray(ids) ? ids : [];
+        },
         setMode: (mode) => {
           state.mode = mode;
         },
@@ -128,6 +141,7 @@ function startFakeAi() {
           other.length = 0;
           state.mode = 'echo';
           state.replier = null;
+          state.models = [...DEFAULT_MODELS];
         },
         close: () => new Promise((r) => { server.close(() => r()); server.closeAllConnections?.(); }),
       });

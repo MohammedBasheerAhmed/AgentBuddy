@@ -13,9 +13,9 @@ Verified by me on 2026-10-27 (all committed locally, never pushed):
 
 | Check | Result |
 |---|---|
-| `node tests/run.js` (unit) | **1845 pass, 0 fail** |
+| `node tests/run.js` (unit) | **1860 pass, 0 fail** |
 | `node scripts/check-compile.js` (every build entry compiles) | all ok |
-| `npm run e2e` (real Chrome, fake ServiceNow, stub AI; scenarios a-u) | **794 pass, 0 fail, 2 warnings** (about 115 s) |
+| `npm run e2e` (real Chrome, fake ServiceNow, stub AI; scenarios a-w) | **834 pass, 0 fail, 2 warnings** (about 125 s) |
 | `node build.js` | `dist/` builds |
 
 The two e2e warnings are documented limits: a person named only inside a sentence ("manager is María-José O'Neil") reaches the AI
@@ -39,6 +39,18 @@ The two e2e warnings are documented limits: a person named only inside a sentenc
 - Reviews done: independent security audit (`docs/review/security-audit.md`) and integration review
   (`docs/review/integration-review.md`); their findings were fixed (fix notes in `docs/review/security-fixes-insert.md`).
 
+### Added after user feedback (2026-10-27)
+
+- **DeepSeek** is a provider preset (fixed address `https://api.deepseek.com/v1`, `deepseek-chat` by default, any model name allowed).
+- **Settings key box:** Show/Hide for what is typed; a line for what is saved (first and last four characters, length, where it is
+  kept) with "Show saved key" (20 seconds); "Test connection" tests the typed key even when it is not saved yet; a pasted key is cleaned
+  (quotes, "Bearer ", whitespace); clearer AI errors (no balance, rate limit, unreachable).
+- **Company gateway and models:** "OpenAI / Azure OpenAI / company gateway" takes the company address and any model name
+  (for example `gpt-5-mini-preprod`). "Load models from the server" (`GET <address>/models`, only the key) fills a list; Settings and a
+  selector in the panel header switch the model; policy `allowedModels` limits the list. Azure-style addresses (`?api-version`,
+  `api-key` header) are NOT supported yet. Questions: `docs/live-questions/ai-provider.md`.
+- **Links:** tickets and articles in lists are real links (see "Small things left").
+
 ### Decisions taken without the user (change if you disagree)
 
 - AI key default storage is plain local (the user's choice, like NowBuddy); `session` and passphrase-encrypted modes exist and
@@ -55,7 +67,9 @@ reports 20, reports-ai 21). Each says what was assumed, how to check it as a non
 2. Insert on Workspaces and portals (control labels, rich-text boxes, the email client form) and on the classic email client.
 3. Portal URL and DOM assumptions (widget boxes, route names, session user fallbacks).
 4. Whether the content script can read `chrome.storage.managed` (read-time `blockedTables`); the AI-run check works either way.
-5. Real Chrome side-panel behaviour and permission prompts, `chrome.storage.session` in the panel, printing, real downloads.
+5. Real Chrome side-panel behaviour and permission prompts, `chrome.storage.session` in the panel, printing, real downloads. Also: that a
+   right-click on a ticket link in the real side panel offers "Open link in new tab" (Ctrl+click and middle-click are tested; a context
+   menu cannot be driven headless), and the DeepSeek key against the real DeepSeek API (tested only against the stub).
 6. Real model output quality for every prompt, and how well the output check catches per-person wording in the coaching snapshot.
 7. Aggregate API behaviour for dot-walked group-by and time zones on a real instance.
 
@@ -73,6 +87,8 @@ control); the portal box is not confined to the ticket widget; HR families are d
 - The `dashboards` preset does not include hand-over or insights.
 - The e2e coverage check (scenario e) once saw one browser request the instance never recorded (a read cancelled in flight). It now
   tolerates and reports such extras, and still fails if the instance saw a read the browser log missed.
+- Tickets and articles in Related, My day, Knowledge (duplicates, gaps) and the Team ticket tables are real links (click = this tab,
+  Ctrl/middle-click = new tab). Chart segments, legend rows and tiles that open a LIST are still buttons that open in the same tab.
 - Backlog ideas: select text in the preview and "Mask this too"; an enterprise build with baked-in instance hosts.
 
 ## How to test it yourself

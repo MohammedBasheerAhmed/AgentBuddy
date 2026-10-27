@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { read } from './ask.js';
-import { openRecord } from './openRecord.js';
+import RecordLink from './RecordLink.jsx';
 import { plainNote, plainSource } from './plainAccess.js';
 
 const RISK_LABEL = { breached: 'SLA breached', 'at-risk': 'SLA at risk' };
@@ -29,7 +29,7 @@ export default function MyDayView({ page }) {
         <h2 className="ab-h" style={{ margin: 0 }}>My day</h2>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
       </div>
-      <p className="ab-sub">Your open tickets, most urgent first. Each one opens in this tab.</p>
+      <p className="ab-sub">Your open tickets, most urgent first. A click opens one in this tab; Ctrl+click or right-click opens a new tab.</p>
 
       {state.phase === 'loading' && <p className="ab-note" role="status">Reading your queue…</p>}
       {state.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{state.error}</p>}
@@ -39,7 +39,7 @@ export default function MyDayView({ page }) {
         <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {state.items.map((item) => (
             <li key={item.sysId}>
-              <button type="button" className="ab-feature" onClick={() => openRecord(page, item)} title="Opens in this tab">
+              <RecordLink page={page} item={item} className="ab-feature">
                 <span className="ab-row">
                   <span className="ab-record-number">{item.number}</span>
                   {RISK_LABEL[item.risk] && <span className={`ab-tag ab-risk-${item.risk}`}>{RISK_LABEL[item.risk]}{item.sla ? ` ${item.sla.percentage}%` : ''}</span>}
@@ -48,7 +48,7 @@ export default function MyDayView({ page }) {
                 <span className="ab-feature-desc">
                   {item.priority} · {item.state} · updated {item.idleHours < 1 ? 'just now' : item.idleHours < 48 ? `${item.idleHours}h ago` : `${Math.round(item.idleHours / 24)}d ago`}
                 </span>
-              </button>
+              </RecordLink>
             </li>
           ))}
         </ul>

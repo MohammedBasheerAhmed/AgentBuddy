@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-import { createKeyStore, encryptSecret, decryptSecret } from '../src/lib/keyStore.js';
+import { createKeyStore, encryptSecret, decryptSecret, cleanKey, keyPreview } from '../src/lib/keyStore.js';
 
 // A tiny stand-in for chrome.storage.local / .session.
 function fakeArea() {
@@ -91,4 +91,31 @@ test('changeMode moves an existing key; keys of other providers are untouched', 
   assert.equal(areas.local.data.agentbuddy_key_openai, undefined);
   await store.remove('anthropic');
   assert.equal(await store.load('anthropic'), '');
+});
+
+test('cleanKey: a pasted key loses its quotes, "Bearer " and stray whitespace, and nothing else', () => {
+  assert.equal(cleanKey('sk-abc123'), 'sk-abc123');
+  assert.equal(cleanKey('  sk-abc123\n'), 'sk-abc123');
+  assert.equal(cleanKey('"sk-abc123"'), 'sk-abc123');
+  assert.equal(cleanKey("'sk-abc123'"), 'sk-abc123');
+  assert.equal(cleanKey('Bearer sk-abc123'), 'sk-abc123');
+  assert.equal(cleanKey('bearer   sk-abc123'), 'sk-abc123');
+  assert.equal(cleanKey('sk-abc\n123'), 'sk-abc123', 'a line break inside a pasted key is dropped');
+  assert.equal(cleanKey(''), '');
+  assert.equal(cleanKey(null), '');
+  assert.equal(cleanKey('sk-ab_cd-12.34'), 'sk-ab_cd-12.34', 'characters a key may contain stay');
+});
+
+test('keyPreview shows the ends and the length of a long key, only the length of a short one', () => {
+  assert.deepEqual(keyPreview('sk-0123456789abcdef0123'), { preview: 'sk-0…0123', length: 23 });
+  assert.deepEqual(keyPreview('short-key'), { preview: '', length: 9 });
+  assert.deepEqual(keyPreview(''), { preview: '', length: 0 });
+  assert.ok(!keyPreview('sk-0123456789abcdef0123').preview.includes('456789abcdef'), 'the middle is never part of the preview');
+});
+
+test('save() stores the cleaned key', async () => {
+  const areas = { local: fakeArea(), session: fakeArea() };
+  const store = createKeyStore(areas);
+  await store.save({ provider: 'deepseek', key: '  "Bearer sk-deepseek-1234567890"\n', mode: 'local' });
+  assert.equal(await store.load('deepseek'), 'sk-deepseek-1234567890');
 });

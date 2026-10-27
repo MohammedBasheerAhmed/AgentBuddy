@@ -37,6 +37,33 @@ module.exports = {
     t.check('the other sections still show', (await panel.text()).includes('Earlier tickets from Abel Tuter') && (await panel.text()).includes('Solved before'));
     inst.setBehaviour();
 
+    // Every ticket in the list is a real link on the instance: Ctrl+click and the middle button open a new tab (and the right-click
+    // menu offers "Open link in new tab", which only a real link gets; a context menu cannot be driven headless), and the ticket tab
+    // the panel is attached to stays where it is.
+    await clickButton(p, /^Refresh/);
+    await waitForText(p, 'INC0009640', { timeout: 15000 });
+    const earlier = async () => (await p.evaluateHandle(() => window.__vis(document.querySelectorAll('a.ab-feature')).find((x) => /INC0009640/.test(x.innerText)))).asElement();
+    const link = await earlier();
+    const attrs = link ? await link.evaluate((a) => ({ href: a.href, target: a.target, rel: a.rel })) : null;
+    t.check('a ticket in Related is a real link to that ticket on the instance, set to open a new tab', Boolean(attrs) && attrs.href.startsWith(`${inst.origin}/nav_to.do?uri=`) && attrs.target === '_blank' && /noopener/.test(attrs.rel), JSON.stringify(attrs));
+    const ticketUrl = ticket.url();
+    for (const how of ['Ctrl+click', 'middle click']) {
+      const before = new Set(ctx.browser.targets());
+      const el = await earlier();
+      if (how === 'Ctrl+click') {
+        await p.keyboard.down('Control');
+        await el.click();
+        await p.keyboard.up('Control');
+      } else {
+        await el.click({ button: 'middle' });
+      }
+      const opened = await ctx.browser.waitForTarget((x) => !before.has(x) && x.url().startsWith(`${inst.origin}/nav_to.do`), { timeout: 8000 }).catch(() => null);
+      t.check(`${how} on a ticket opens it in a new tab`, Boolean(opened), opened?.url() || 'no new tab');
+      await ctx.sleep(300);
+      t.check(`${how}: the ticket tab the panel is attached to did not move`, ticket.url() === ticketUrl, ticket.url());
+      await (await opened?.page?.().catch(() => null))?.close().catch(() => {});
+    }
+
     await panel.close();
     await ticket.close();
   },

@@ -49,8 +49,18 @@ const tabsOf = (page, ariaLabel) =>
     return { labels: tabs.map((b) => b.innerText.trim()), selected: tabs.filter((b) => b.getAttribute('aria-selected') === 'true').map((b) => b.innerText.trim()) };
   }, ariaLabel);
 
-/** Any element in the page that would load something or run something. */
-const loadingElements = (page) => page.evaluate(() => document.querySelectorAll('img, picture, svg image, a[href], iframe, object, embed, video, audio, script:not([src])').length);
+/**
+ * Any element in the page that would load something or run something. The panel's OWN record links (a ticket in a list: they carry
+ * data-ab-link="record", src/sidepanel/RecordLink.jsx) are real links on purpose, so they are not counted, but only outside a model
+ * answer and the preview: a link inside either is always counted, marked or not.
+ */
+const loadingElements = (page) =>
+  page.evaluate(
+    () =>
+      [...document.querySelectorAll('img, picture, svg image, a[href], iframe, object, embed, video, audio, script:not([src])')].filter(
+        (el) => !(el.matches('a[data-ab-link="record"]') && !el.closest('.ab-output, .ab-dialog'))
+      ).length
+  );
 
 /**
  * What an AI run must satisfy, whatever the feature (the point of the harness: wiring, not wording):

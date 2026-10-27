@@ -64,3 +64,45 @@ test('DeepSeek is a preset: its own address, a default model, any model id, the 
     globalThis.fetch = real;
   }
 });
+
+test('AI errors say what to do: no balance (402), rate limit (429), unreachable, bad key (401); other errors keep the status and a short body', async () => {
+  const config = resolveProviderConfig({ provider: 'deepseek' }, 'sk-deepseek-test');
+  const real = globalThis.fetch;
+  const answer = (status, body) => async () => new Response(body, { status });
+  try {
+    globalThis.fetch = answer(402, JSON.stringify({ error: { message: 'Insufficient Balance', type: 'unknown_error' } }));
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /DeepSeek says the account has no balance left \(Insufficient Balance\)\. Add credit/);
+
+    globalThis.fetch = answer(429, JSON.stringify({ error: { message: 'Rate limit reached' } }));
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /DeepSeek is limiting requests \(Rate limit reached\)\. Wait a minute/);
+
+    globalThis.fetch = answer(401, '{"error":{"message":"Authentication Fails"}}');
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /DeepSeek rejected the API key\. Check it in Agent Buddy settings\./);
+
+    globalThis.fetch = answer(500, 'x'.repeat(1000));
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), (err) => /DeepSeek request failed \(500\): x+/.test(err.message) && err.message.length < 400);
+
+    globalThis.fetch = async () => {
+      throw new TypeError('Failed to fetch');
+    };
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /Could not reach api\.deepseek\.com\. Check your internet connection, VPN or proxy/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('a request with no key says so by name, and never reaches the network', async () => {
+  const config = resolveProviderConfig({ provider: 'deepseek' }, '');
+  const real = globalThis.fetch;
+  let called = 0;
+  globalThis.fetch = async () => {
+    called += 1;
+    return new Response('{}');
+  };
+  try {
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /Missing API key for DeepSeek/);
+    assert.equal(called, 0);
+  } finally {
+    globalThis.fetch = real;
+  }
+});

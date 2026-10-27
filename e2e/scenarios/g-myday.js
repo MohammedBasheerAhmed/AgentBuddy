@@ -71,7 +71,13 @@ module.exports = {
     inst.setBehaviour();
     await clickButton(p, /^Refresh/);
     await waitForText(p, 'INC0010100', { timeout: 8000 });
-    await p.evaluate(() => [...document.querySelectorAll('section[aria-label="My day"] li button')].find((b) => b.innerText.includes('INC0010100')).click());
+    // A ticket in the list is a real link (Ctrl+click and the right-click menu open a new tab); a plain click opens it in this tab.
+    const link = await p.evaluate(() => {
+      const a = [...document.querySelectorAll('section[aria-label="My day"] li a')].find((x) => x.innerText.includes('INC0010100'));
+      return a ? { href: a.href, target: a.target, rel: a.rel } : null;
+    });
+    t.check('a ticket in My day is a real link on the instance, set to open a new tab for Ctrl+click and the right-click menu', Boolean(link) && link.href.startsWith(`${ctx.inst.origin}/nav_to.do?uri=`) && link.target === '_blank' && /noopener/.test(link.rel), JSON.stringify(link));
+    await p.evaluate(() => [...document.querySelectorAll('section[aria-label="My day"] li a')].find((b) => b.innerText.includes('INC0010100')).click());
     await p.waitForFunction(() => document.body.innerText.includes('Summarise this ticket') && !document.body.innerText.includes('Loading'), { timeout: 15000 });
     const opened = await panel.text();
     t.check('clicking a ticket opens it and the panel switches to its actions', opened.includes('INC0010100') && opened.includes('Printer offline in Finance'), opened.replace(/\s+/g, ' ').slice(0, 140));

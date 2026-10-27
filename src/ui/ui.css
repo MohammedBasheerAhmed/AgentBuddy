@@ -42,6 +42,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ab-feature:disabled { opacity: 0.55; cursor: not-allowed; }
 .ab-feature-title { font-weight: 600; }
 .ab-feature-desc { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+/* A record in a list is a real link (so Ctrl+click and the right-click menu open a new tab) that looks like the button it replaced. */
+a.ab-feature { box-sizing: border-box; color: inherit; text-decoration: none; }
+a.ab-btn { text-decoration: none; }
+/* the model switch in the panel header: as wide as its text, not the whole row */
+.ab-select-sm { width: auto; max-width: 11rem; padding: 2px 6px; font-size: var(--ab-text-sm); text-overflow: ellipsis; }
 
 .ab-risk-breached { background: var(--ab-danger-soft); color: var(--ab-danger); border-color: var(--ab-danger-line); }
 .ab-risk-at-risk { background: var(--ab-warn-soft); color: var(--ab-warn); border-color: var(--ab-warn-line); }

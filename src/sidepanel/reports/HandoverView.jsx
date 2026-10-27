@@ -30,7 +30,15 @@ function Block({ title, children }) {
 
 /** A short list of tickets that opens the ticket on click. */
 function Tickets({ caption, items, extra = [], env }) {
-  return <DataTable caption={caption} columns={[...TICKET_COLUMNS, ...extra]} rows={items} onRowOpen={(row) => row.table && env.openTicket({ table: row.table, sysId: row.sysId })} />;
+  return (
+    <DataTable
+      caption={caption}
+      columns={[...TICKET_COLUMNS, ...extra]}
+      rows={items}
+      onRowOpen={(row) => row.table && env.openTicket({ table: row.table, sysId: row.sysId })}
+      rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
+    />
+  );
 }
 
 // One kind of event in the period: how many, the first few, and an honest line when it could not be counted.

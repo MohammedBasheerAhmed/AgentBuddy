@@ -129,6 +129,7 @@ export function checkProviderAllowed({ provider, model, baseUrl }, policy) {
 export const DEFAULT_SETTINGS = Object.freeze({
   provider: 'anthropic',
   models: {},
+  modelLists: {}, // per provider: the model ids loaded from the server (Settings, "Load models"); only names, never content
   baseUrls: {},
   keyStorage: 'local',
   piiMode: 'standard',

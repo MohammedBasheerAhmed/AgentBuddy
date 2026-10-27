@@ -5,6 +5,9 @@ import { createFirewall } from '../pii/index.js';
 import { validateBaseUrl } from '../lib/aiUsage.js';
 import { ensureAiPermission } from '../lib/aiPermission.js';
 import { loadEffective, saveSettings, keyStore, readAudit, clearAudit } from '../lib/storage.js';
+import { cleanKey, keyPreview } from '../lib/keyStore.js';
+import { listModels } from '../providers/models.js';
+import { modelChoices } from '../lib/modelChoices.js';
 import { auditToCsv } from '../audit/auditLog.js';
 import { connectionProblem } from '../lib/pipeline.js';
 import { MSG } from '../lib/messages.js';
@@ -16,6 +19,8 @@ const KEY_MODE_TEXT = {
   session: 'Kept in memory only and forgotten when the browser closes. Nothing is written to disk. You enter it again next time.',
   encrypted: 'Stored encrypted with a passphrase. You enter the passphrase once per browser session.',
 };
+const KEY_WHERE = { local: 'this browser', session: 'memory only', encrypted: 'this browser, encrypted' };
+const SHOW_SAVED_MS = 20000; // a saved key that was shown in full hides itself again after this long
 const PII_TEXT = {
   standard: 'Masks detected personal data (names on the ticket, emails, phone and card numbers, IDs, secrets).',
   strict: 'Also refuses sensitive fields and keeps HR free text out entirely.',
@@ -67,6 +72,21 @@ function DraftInput({ value, onSave, delay = 300, ...rest }) {
   );
 }
 
+// What is saved for this provider, so a person can see that the key was really taken: a short preview and its length, and on request
+// the whole key (hidden again after a few seconds). Never offered for a key the organisation supplies (that branch has no key box).
+function SavedKeyLine({ def, keyMode, apiKey, shown, onToggle }) {
+  if (keyMode === 'none') return <span className="ab-hint" id="key-saved">No key is saved for {def.label}.</span>;
+  if (!apiKey) return <span className="ab-hint" id="key-saved">A key is saved but locked. Unlock it above with your passphrase.</span>;
+  const { preview, length } = keyPreview(apiKey);
+  return (
+    <span className="ab-hint" id="key-saved">
+      Saved: {preview ? <code className="ab-mono">{preview}</code> : null} ({length} characters), kept in {KEY_WHERE[keyMode] || 'this browser'}.{' '}
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onToggle} aria-pressed={shown} aria-controls="key-full">{shown ? 'Hide saved key' : 'Show saved key'}</button>
+      {shown && <code className="ab-mono" id="key-full" style={{ display: 'block', marginTop: 4, wordBreak: 'break-all' }}>{apiKey}</code>}
+    </span>
+  );
+}
+
 function ProviderSection({ eff, reload }) {
   const v = eff.values;
   const def = PROVIDERS[v.provider];
@@ -76,11 +96,23 @@ function ProviderSection({ eff, reload }) {
   const [status, setStatus] = useState(null);
   const [keyMode, setKeyMode] = useState('none');
   const [busy, setBusy] = useState(false);
+  const [showTyped, setShowTyped] = useState(false); // the box shows what was typed instead of dots
+  const [showSaved, setShowSaved] = useState(false); // the saved key is shown in full (hides itself again)
   const store = keyStore();
 
   useEffect(() => {
     store.mode(v.provider).then(setKeyMode);
   }, [v.provider, eff.apiKey]);
+
+  // The saved key is shown only on request, only for a moment, and never for another provider's key.
+  useEffect(() => {
+    setShowSaved(false);
+  }, [v.provider, eff.apiKey]);
+  useEffect(() => {
+    if (!showSaved) return undefined;
+    const timer = setTimeout(() => setShowSaved(false), SHOW_SAVED_MS);
+    return () => clearTimeout(timer);
+  }, [showSaved]);
 
   const baseUrlTyped = v.baseUrls?.[v.provider] || '';
   const model = v.models?.[v.provider] || def.defaultModel;
@@ -98,7 +130,8 @@ function ProviderSection({ eff, reload }) {
       await store.save({ provider: v.provider, key, mode: v.keyStorage, passphrase });
       setKey('');
       setPassphrase('');
-      setStatus({ kind: 'ok', text: key ? 'Key saved.' : 'Key removed.' });
+      setStatus({ kind: 'ok', text: cleanKey(key) ? `Key saved. (${cleanKey(key).length} characters)` : 'Key removed.' });
+      setShowTyped(false);
       reload();
     } catch (err) {
       setStatus({ kind: 'danger', text: err.message });
@@ -120,17 +153,22 @@ function ProviderSection({ eff, reload }) {
     setStatus(null);
     setBusy(true);
     try {
-      const cfg = resolveProviderConfig(v, eff.apiKey);
+      // A key typed in the box and not saved yet is the one the person wants tested; otherwise the saved key.
+      const typed = cleanKey(key);
+      const useKey = typed || eff.apiKey;
+      const cfg = resolveProviderConfig(v, useKey);
       // The same refusal as every real send: no address for "my own server" must never fall back to a public API with this key.
       const problem = connectionProblem(cfg);
       if (problem) throw new Error(problem);
+      if (!useKey && !cfg.keyOptional) throw new Error(`There is no ${def.label} key yet. Paste it in the key box, press Save key, then test again.`);
       // A hosted provider needs the browser's permission for its address first (requested from this click).
       await ensureAiPermission(cfg);
       // The test goes through the same firewall as everything else: there is no side door to the provider.
       const fw = createFirewall({ mode: 'standard', people: [], blockedFields: [], endpointIsLocal: cfg.local });
       const request = fw.buildRequest({ feature: 'connection-test', table: '', system: 'Reply with the single word OK.', userInstruction: 'ping', parts: [] });
       const reply = await sendChat(cfg, request, { kind: 'validate', skipBudget: true });
-      setStatus({ kind: 'ok', text: `Connected. The model answered: ${String(reply.content).slice(0, 40)}` });
+      const unsaved = typed && typed !== eff.apiKey ? ' This key is not saved yet: press Save key to keep it.' : '';
+      setStatus({ kind: 'ok', text: `Connected. The model answered: ${String(reply.content).slice(0, 40)}${unsaved}` });
     } catch (err) {
       setStatus({ kind: 'danger', text: err.message });
     } finally {
@@ -138,6 +176,31 @@ function ProviderSection({ eff, reload }) {
     }
   }
 
+  // The models the server offers, so one can be picked instead of typed. Only the key goes out (to the address chats go to).
+  async function loadModels() {
+    setStatus(null);
+    setBusy(true);
+    try {
+      const cfg = resolveProviderConfig(v, cleanKey(key) || eff.apiKey);
+      const problem = connectionProblem(cfg);
+      if (problem) throw new Error(problem);
+      if (!cfg.apiKey && !cfg.keyOptional) throw new Error(`There is no ${def.label} key yet. Paste it in the key box, press Save key, then load the models.`);
+      await ensureAiPermission(cfg);
+      let ids = await listModels(cfg);
+      const allowed = eff.policy?.allowedModels;
+      if (allowed?.length) ids = ids.filter((id) => allowed.includes(id));
+      await saveSettings({ modelLists: { ...v.modelLists, [v.provider]: ids } });
+      reload();
+      setStatus({ kind: 'ok', text: `Found ${ids.length} model${ids.length === 1 ? '' : 's'}. Pick one from the list, or type a name.` });
+    } catch (err) {
+      setStatus({ kind: 'danger', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const loadedModels = Array.isArray(v.modelLists?.[v.provider]) ? v.modelLists[v.provider] : [];
+  const choices = modelChoices({ def, current: model, loaded: loadedModels, allowed: eff.policy?.allowedModels });
   const baseCheck = validateBaseUrl(baseUrlTyped);
 
   return (
@@ -181,7 +244,19 @@ function ProviderSection({ eff, reload }) {
             {def.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
         )}
-        <datalist id="models">{def.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</datalist>
+        <datalist id="models">{choices.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</datalist>
+        {def.api === 'openai' && !eff.locked.model && (
+          <div className="ab-row" style={{ marginTop: 6 }}>
+            {loadedModels.length > 0 && (
+              <select id="model-pick" className="ab-select" aria-label="Pick a model from the list" value={choices.some((c) => c.id === model) ? model : ''} onChange={(e) => e.target.value && change({ models: { ...v.models, [v.provider]: e.target.value } })}>
+                {!choices.some((c) => c.id === model) && <option value="">Pick a model…</option>}
+                {choices.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            )}
+            <button type="button" id="load-models" className="ab-btn" onClick={loadModels} disabled={busy}>{busy ? 'Loading…' : loadedModels.length ? 'Reload the list' : 'Load models from the server'}</button>
+          </div>
+        )}
+        <span className="ab-hint">Your server may offer several models. Load the list to pick one, or type the exact name your administrator gave you.</span>
         <Locked why={eff.locked.model} />
       </div>
 
@@ -210,8 +285,13 @@ function ProviderSection({ eff, reload }) {
 
           <div className="ab-field">
             <label className="ab-label" htmlFor="key">{def.keyLabel}</label>
-            <input id="key" type="password" className="ab-input ab-mono" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} placeholder={keyMode === 'none' ? def.keyPlaceholder || '' : 'A key is saved. Type a new one to replace it.'} />
+            <div className="ab-row">
+              <input id="key" type={showTyped ? 'text' : 'password'} className="ab-input ab-mono" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} placeholder={keyMode === 'none' ? def.keyPlaceholder || '' : 'A key is saved. Type a new one to replace it.'} />
+              <button type="button" className="ab-btn" onClick={() => setShowTyped((on) => !on)} aria-pressed={showTyped} aria-controls="key">{showTyped ? 'Hide' : 'Show'}</button>
+            </div>
             <span className="ab-hint">{def.keyHint}</span>
+            {cleanKey(key) && <span className="ab-hint" id="key-unsaved" role="status">Typed, not saved yet ({cleanKey(key).length} characters). Press Save key to keep it.</span>}
+            <SavedKeyLine def={def} keyMode={keyMode} apiKey={eff.apiKey} shown={showSaved} onToggle={() => setShowSaved((on) => !on)} />
           </div>
           {v.keyStorage === 'encrypted' && (
             <div className="ab-field">

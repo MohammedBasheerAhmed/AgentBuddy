@@ -70,6 +70,8 @@ module.exports = {
     // ---- The AI server ------------------------------------------------------------------------------------------------
     t.check('the AI server saw requests (the scenarios used it)', ai.all.length >= 4, String(ai.all.length));
     t.check('the AI server saw only POST /v1/chat/completions', ai.all.every((r) => r.method === 'POST' && r.path === '/v1/chat/completions') && ai.other.length === 0, JSON.stringify(ai.other));
+    // "Load models" asks the same server for its list: a GET with only the key, from the extension's own page, no body, nothing from a ticket.
+    t.check('every "list the models" request was a body-less GET /v1/models with the key, and never from the web page (no instance Origin on it)',ai.listings.every((r) => r.method === 'GET' && r.path === '/v1/models' && r.bodyLength === 0 && r.auth === `Bearer ${ai.key}` && (r.origin === '' || r.origin === `chrome-extension://${ctx.extId}`)), JSON.stringify(ai.listings.map((r) => [r.method, r.path, r.bodyLength, r.origin])));
     t.check('every AI request came from the extension\'s own page, not from the web page or a content script', ai.all.every((r) => r.origin === `chrome-extension://${ctx.extId}`), [...new Set(ai.all.map((r) => r.origin))].join(','));
     t.check('no AI request contained a tool or function definition', ai.all.every((r) => !r.body?.tools && !r.body?.functions));
     const sweep = ai.all.map((r) => findLeaks(r.raw, data));

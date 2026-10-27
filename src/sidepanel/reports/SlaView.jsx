@@ -32,6 +32,7 @@ export function SlaBody({ d, env }) {
           ]}
           rows={d.top}
           onRowOpen={(row) => row.table && env.openTicket({ table: row.table, sysId: row.sysId })}
+          rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
         />
       ) : (
         <p className="ab-note ab-note-ok">{d.ticketsAtIssue ? 'The tickets at issue are listed by number only when ticket details can be read.' : 'No SLA is at risk right now.'}</p>

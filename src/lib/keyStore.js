@@ -10,6 +10,24 @@
 //
 // `areas` is { local, session } with get/set/remove (the chrome.storage areas, or fakes in tests).
 
+/**
+ * A key as pasted -> the key itself. People paste it with quotes around it, with "Bearer " in front, or with a line break at the
+ * end; none of that is part of a key, and all of it makes the provider answer "invalid key". Whitespace inside a key is never valid.
+ */
+export function cleanKey(raw) {
+  let text = String(raw ?? '').trim();
+  text = text.replace(/^(['"`])(.*)\1$/s, '$2').trim();
+  text = text.replace(/^bearer\s+/i, '');
+  return text.replace(/\s+/g, '');
+}
+
+/** What may be shown about a key without showing it: the first and last four characters and the length (a short key shows only its length). */
+export function keyPreview(key) {
+  const text = String(key ?? '');
+  if (!text) return { preview: '', length: 0 };
+  return { preview: text.length >= 16 ? `${text.slice(0, 4)}…${text.slice(-4)}` : '', length: text.length };
+}
+
 const PBKDF2_ITERATIONS = 310000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -53,7 +71,7 @@ export function createKeyStore(areas) {
   return {
     /** Save a key in the given mode. Other modes' copies of the same provider key are removed. */
     async save({ provider, key, mode = 'local', passphrase = '' }) {
-      const trimmed = String(key || '').trim();
+      const trimmed = cleanKey(key);
       await this.remove(provider);
       if (!trimmed) return;
       if (mode === 'session') {
