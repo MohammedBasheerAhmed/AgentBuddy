@@ -49,7 +49,7 @@ const TEXT_LIMIT = {
 
 /** Maximum characters kept for a column. */
 export function fieldLimit(name) {
-  return TEXT_LIMIT[name] ?? LIMITS.field;
+  return TEXT_LIMIT[name] ?? EXTRA.limits[name] ?? LIMITS.field;
 }
 
 // ---- What may be read, per kind -------------------------------------------------------------------

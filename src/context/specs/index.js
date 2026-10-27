@@ -1,6 +1,6 @@
 // Context specs added after the first eight features. Each area has its own file so several people can work at once:
 //   itsm.js, domain.js, knowledge.js, compose.js, reports.js, checks.js
-// A file exports { spec, journal, related, fieldsByKind, extendFields }; see docs/contracts.md, 'Context specs'.
+// A file exports { spec, journal, related, fieldsByKind, extendFields, limits }; see docs/contracts.md, 'Context specs'.
 import itsm from './itsm.js';
 import domain from './domain.js';
 import knowledge from './knowledge.js';
@@ -25,4 +25,5 @@ export const EXTRA = Object.freeze({
   related: merge('related'),
   fieldsByKind: merge('fieldsByKind'),
   extendFields: mergeExtend(),
+  limits: merge('limits'), // { columnName: maxCharacters } for a text column longer than the default
 });

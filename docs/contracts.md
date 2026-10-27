@@ -126,6 +126,7 @@ export default {
   related: { 'sentiment-risk': ['slas', 'approvals'] },                                      // which extras (related.js)
   fieldsByKind: { knowledge: [columns...] },                                                 // display ceiling for a NEW kind
   extendFields: { incident: ['reopen_count'] },                                              // extra columns for an EXISTING kind (additive)
+  limits: { text: 6000 },                                                                    // max characters kept for a long text column
 };
 ```
 
