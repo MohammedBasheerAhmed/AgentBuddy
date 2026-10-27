@@ -3,6 +3,7 @@ import { read } from '../ask.js';
 import { describeMinutes } from '../../chat/stats.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import Notes from '../knowledge/Notes.jsx';
+import { aiNeedsText } from '../aiReady.js';
 
 // D1, D2: the facts about this chat (who, how many messages, how long the customer has waited, what they said last) with no
 // AI, and one-click buttons for the two AI features. The messages are read with the person's own session; when the chat tables
@@ -116,6 +117,9 @@ export default function ChatRecordView({ page, eff, record, run, aiReady }) {
       <section className="ab-card">
         <h2 className="ab-h">With AI</h2>
         <p className="ab-sub">The chat goes through the privacy filter first. Replies are never sent for you: copy the one you want into the chat.</p>
+        {/* A disabled button says why, next to it (greyed text alone does not). */}
+        {!aiReady && <p className="ab-hint">{aiNeedsText(eff, 'these buttons') || 'Add an AI key in Settings to use these buttons.'}</p>}
+        {aiReady && noMessages && <p className="ab-hint">There are no messages to work with.</p>}
         <div className="ab-row">
           {button(summary, true)}
           {button(reply, false)}

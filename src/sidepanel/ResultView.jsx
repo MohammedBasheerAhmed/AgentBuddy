@@ -1,49 +1,37 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { SafeText } from '../render/SafeText.jsx';
 import { parseSafeText, toPlainText } from '../render/safeText.js';
-import { checkOutgoing, maskExcerpt } from '../safeSend/index.js';
-import { MSG } from '../lib/messages.js';
+import { reviewForCustomer } from '../safeSend/review.js';
 import { insertsFor } from '../features/registry.js';
+import { currentFromPage, expectForInsert, fillModeFor, isCustomerVisible, matchesExpect, wrongRecordText } from '../lib/fillable.js';
 import { openNewRecord } from './openRecord.js';
-import { setPending } from './pendingDraft.js';
+import { originOf, setPending } from './pendingDraft.js';
+import { createGuard, performInsert } from './insertFlow.js';
+import ReviewHints from './ReviewHints.jsx';
 
-const REASONS = {
-  'no-form': 'Agent Buddy could not reach a form field on this page.',
-  'no-such-field': 'That field is not on this form.',
-  'read-only': 'That field is read-only on this form.',
-  'too-long': 'The text is too long to insert.',
-  'set-failed': 'The form did not accept the text.',
-  'bad-field': 'That field cannot be filled.',
-};
-
-// Fields whose content the customer can read: checked for personal data and secrets before insert.
-const CUSTOMER_VISIBLE = new Set(['comments', 'close_notes', 'text']);
-
-// Kinds the firewall masks on the way out and that must never come back into a message the customer reads.
-const NEVER_BACK = new Set(['SECRET', 'URL_CREDENTIALS', 'CARD', 'IBAN', 'NATIONAL_ID']);
-const NEVER_BACK_ADVICE = 'This is a password, key, card number or ID that was hidden from the AI, and it is back in the draft. Remove it before it reaches the customer.';
+const NO_TEXTS = []; // (one array, so the memoised review below is not redone on every render)
 
 /**
- * checkOutgoing() plus the firewall's own memory. The firewall learns every secret it masks, so a password the model repeats
- * bare ("your sign-in value is Winter2026...", no "password:" in front) is still recognised. Findings come back masked.
+ * A finished answer with its Insert and Copy buttons.
+ *
+ * props:
+ *   feature, text            the feature and the answer (real names back in, locally)
+ *   page                     the page state (tabId, record, newRecord, href)
+ *   people, scan             the run's people and the firewall's scan(), for the review of what is inserted
+ *   internalTexts            the record's work notes: words copied from them into a customer-visible field are flagged
+ *   source                   { expect, number }: the record the answer was written for (see RunPanel). When another record is
+ *                            open, the Insert buttons are off and the card says so; Copy still works
+ *   target                   an expectation that replaces `source` for every insert (a draft waiting on a blank form: { table, newRecord: true })
+ *   onAgain, onClose, audit  Try again, Close, and audit(outcome) for 'inserted' / 'copied'
+ *   onInserted               called after a successful insert (a draft carried to a blank form is dropped then)
  */
-function seriousFindings(plain, people, scan) {
-  const found = checkOutgoing(plain, { people }).findings.filter((f) => f.severity !== 'low');
-  let remembered = [];
-  try {
-    remembered = (scan ? scan(plain) : []).filter((f) => NEVER_BACK.has(f.kind));
-  } catch {
-    /* the text check above still applies */
-  }
-  const extra = remembered
-    .filter((f) => !found.some((g) => g.start < f.end && f.start < g.end))
-    .map((f) => ({ kind: f.kind, severity: 'high', start: f.start, end: f.end, excerpt: maskExcerpt(f.value), advice: NEVER_BACK_ADVICE }));
-  return [...found, ...extra];
-}
-
-export default function ResultView({ feature, text, page, people, scan, onAgain, onClose, audit }) {
+export default function ResultView({ feature, text, page, people, scan, onAgain, onClose, audit, source = null, internalTexts = NO_TEXTS, target, onInserted }) {
   const [note, setNote] = useState(null);
   const [findings, setFindings] = useState(null);
+  const [busy, setBusy] = useState(false); // a FILL_FIELD call is in flight: every insert button is off
+  const [done, setDone] = useState({}); // buttons that inserted: they say "Inserted" until Try again or Close
+  const guard = useRef(null); // one insert at a time, decided at once: a second click before the next render does nothing
+  if (!guard.current) guard.current = createGuard();
   const plain = toPlainText(parseSafeText(text));
 
   const inserts = insertsFor(feature);
@@ -58,6 +46,17 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     }
   };
 
+  // Low-severity findings (another person's name, an IP address...) are shown, never hidden: they do not block anything.
+  const hints = useMemo(
+    () => (insertsFor(feature).some((s) => isCustomerVisible(s.field)) ? reviewForCustomer(plain, { people, scan, internalTexts }).hints : []),
+    [feature, plain, people, scan, internalTexts]
+  );
+
+  // The record this answer was written for must be the one that is open. (An insert that names its own form, such as an
+  // article's title, goes to whatever form of that kind is open instead.)
+  const bound = target === undefined ? source?.expect || null : null;
+  const wrongRecord = Boolean(bound) && !matchesExpect(bound, currentFromPage(page));
+
   async function copy(why = '', value = plain) {
     try {
       await navigator.clipboard.writeText(value);
@@ -68,14 +67,14 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     }
   }
 
-  async function insert(spec, force = false) {
+  async function insert(spec, key, force = false) {
+    if (guard.current.busy) return;
     setNote(null);
-    const field = spec.field;
     // An insert that belongs on another kind of form (an article's title and body) is refused anywhere else: "short_description"
     // exists on the incident too, and filling that by mistake would be easy to miss.
     const here = page.record?.table || page.newRecord?.table || '';
     if (spec.table && here !== spec.table) {
-      setNote({ kind: 'warn', text: `This goes into a ${spec.table} form. Open that form first${feature.open?.table === spec.table ? ' (use the button below)' : ''}, then insert. Copy works now.` });
+      setNote({ kind: 'warn', text: `This goes into a ${spec.table === 'kb_knowledge' ? 'knowledge article' : spec.table} form. Open that form first${feature.open?.table === spec.table ? ' (use the button below)' : ''}, then insert. Copy works now.` });
       return;
     }
     const value = textFor(spec);
@@ -83,28 +82,43 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       setNote({ kind: 'danger', text: 'That part is not in the text, so there is nothing to insert. Use Copy instead.' });
       return;
     }
-    if (!force && CUSTOMER_VISIBLE.has(field)) {
-      const serious = seriousFindings(value, people, scan);
-      if (serious.length) {
-        setFindings({ items: serious, spec });
-        return;
+    // Where the text goes: a draft on a blank form says so; an insert for another kind of form goes to the form that is open;
+    // everything else goes to the record the answer was written for.
+    const expect = expectForInsert({ spec, source, target, page });
+    const outcome = await guard.current.run(key, async () => {
+      setBusy(true);
+      try {
+        return await performInsert({
+          page,
+          spec,
+          value,
+          force,
+          expect,
+          number: source?.number,
+          review: { people, scan, internalTexts },
+          send: (tabId, message) => chrome.tabs.sendMessage(tabId, message),
+        });
+      } finally {
+        setBusy(false);
       }
+    });
+    if (!outcome) return;
+    if (outcome.status === 'findings') {
+      setFindings({ items: outcome.items, spec, key, value });
+      return;
     }
     setFindings(null);
-    let answer;
-    try {
-      // `label` is how the control is named on a Workspace page (its aria-label), not the button text.
-      answer = await chrome.tabs.sendMessage(page.tabId, { type: MSG.FILL_FIELD, field, value, label: spec.fieldLabel || spec.label, mode: 'append' });
-    } catch {
-      answer = { ok: false, reason: 'no-form' };
-    }
-    if (answer?.ok) {
-      setNote({ kind: 'ok', text: 'Inserted into the form. Review it, then save the record yourself.' });
+    if (outcome.status === 'inserted') {
+      setNote({ kind: 'ok', text: outcome.note });
+      setDone((prev) => ({ ...prev, [key]: true }));
       audit('inserted');
+      if (onInserted) onInserted(spec);
     } else {
-      await copy(REASONS[answer?.reason] || 'Could not insert it.', value);
+      await copy(outcome.why, value);
     }
   }
+
+  const replacing = inserts.some((spec) => fillModeFor(spec.field, spec.mode) === 'replace');
 
   return (
     <section className="ab-card" aria-live="polite">
@@ -114,31 +128,52 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       </div>
       {findings && (
         <div className="ab-note ab-note-warn" role="alert" style={{ marginTop: 8 }}>
-          <strong>Check before sending to the customer:</strong>
+          <strong>{isCustomerVisible(findings.spec.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
           <ul style={{ margin: '4px 0 6px', paddingLeft: 18 }}>
             {findings.items.map((f, i) => (
               <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
             ))}
           </ul>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => insert(findings.spec, true)}>Insert anyway</button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => { setFindings(null); copy('Not inserted.'); }}>Edit first (copy instead)</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.spec, findings.key, true)}>Insert anyway</button>
+            {/* The part that was about to be inserted, not the whole answer. */}
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { const value = findings.value; setFindings(null); copy('Not inserted.', value); }}>Edit first (copy instead)</button>
           </div>
         </div>
       )}
+      {!findings && <ReviewHints hints={hints} />}
+      {wrongRecord && <p className="ab-note ab-note-warn" role="status" style={{ marginTop: 8 }}>{wrongRecordText(source)}</p>}
       {note && <p className={`ab-note ab-note-${note.kind}`} style={{ marginTop: 8 }}>{note.text}</p>}
       <div className="ab-row" style={{ marginTop: 8 }}>
-        {inserts.map((spec, i) => (
-          <button key={spec.field + i} type="button" className={`ab-btn ab-btn-sm${i === 0 ? ' ab-btn-primary' : ''}`} onClick={() => insert(spec, false)}>{spec.label}</button>
-        ))}
+        {inserts.map((spec, i) => {
+          const key = `${spec.field}:${i}`;
+          const inserted = Boolean(done[key]);
+          return (
+            <button
+              key={key}
+              type="button"
+              className={`ab-btn ab-btn-sm${i === 0 ? ' ab-btn-primary' : ''}`}
+              disabled={busy || inserted || (wrongRecord && !spec.table)}
+              onClick={() => insert(spec, key, false)}
+            >
+              {inserted ? 'Inserted' : spec.label}
+            </button>
+          );
+        })}
         {feature.open?.table && page.newRecord?.table !== feature.open.table && (
           <button
             type="button"
             className="ab-btn ab-btn-sm"
             onClick={() => {
-              // The tab is about to leave this record, which resets the panel: keep the draft (in memory) for the blank form.
-              setPending({ feature, text, people, scan });
-              openNewRecord(page, feature.open.table);
+              // The tab is about to leave this record, which resets the panel: keep the draft (in memory, for this site only,
+              // for 15 minutes) for the blank form.
+              if (!setPending({ feature, text, people, scan, internalTexts, origin: originOf(page.href) })) {
+                setNote({ kind: 'warn', text: 'Agent Buddy could not keep the draft for the new form. Copy it first.' });
+                return;
+              }
+              if (!openNewRecord(page, feature.open.table)) {
+                setNote({ kind: 'warn', text: 'Agent Buddy could not open that form. Copy the text instead.' });
+              }
             }}
           >
             {feature.open.label || 'Open a new form'}
@@ -148,6 +183,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
         {onAgain && <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>Try again</button>}
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>Close</button>
       </div>
+      {replacing && <p className="ab-hint" style={{ marginTop: 8 }}>A one-line field such as a title is replaced, not added to.</p>}
       <p className="ab-hint" style={{ marginTop: 8 }}>AI can be wrong. Check the text before you use it.</p>
     </section>
   );

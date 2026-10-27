@@ -135,12 +135,14 @@ export function referenceParts(pack, { routing = false } = {}) {
       line('Configuration item', h.cmdb_ci),
       routing ? line('Assignment group', h.assignment_group) : '',
       routing ? line('Priority', h.priority) : '',
-      line('Close code', h.close_code),
-      h.close_notes ? `How it was solved: ${h.close_notes}` : 'How it was solved: Not stated',
+      // The routing hint needs group, priority and category: another ticket's resolution text is not sent for it.
+      routing ? '' : line('Close code', h.close_code),
+      routing ? '' : h.close_notes ? `How it was solved: ${h.close_notes}` : 'How it was solved: Not stated',
       line('Why it matched', h.why),
     ].filter(Boolean);
-    // 'close_notes' is the handle for a policy that blocks close notes: this text is another ticket's resolution.
-    parts.push({ label: `Reference solved ticket ${i + 1}`, field: 'close_notes', text: cap(lines.join('\n')) });
+    // The part's `field` is a handle that stands for the columns inside it (src/features/partColumns.js): a policy that blocks
+    // short_description, category, the group, close notes... of tickets stops it.
+    parts.push({ label: `Reference solved ticket ${i + 1}`, field: routing ? 'reference_ticket_routing' : 'reference_ticket', text: cap(lines.join('\n')) });
   });
 
   (ref.knowledge?.hits || []).forEach((h, i) => {

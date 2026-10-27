@@ -1,6 +1,6 @@
 // The reports engine. `runReport(request, env)` reads one section (or one builder report) and returns plain JSON:
 //   { id, title, generatedAt, readAt, scope, tables, access, notes, caps, data }
-// Each section is a function of that kind, listed in SECTIONS, so a later add-on (a hand-over summary, coaching hints...) can
+// Each section is a function of that kind, listed in SECTIONS, so an add-on (the hand-over note, the dashboard explainer) can
 // take the same JSON as its input. Pure given `env.deps` (queryTable, aggregate), so the tests drive it with a fake instance.
 import { LIMITS, SECTION_IDS } from './constants.js';
 import { createCache, createLimiter } from './cache.js';
@@ -12,6 +12,7 @@ import { workloadSection, workloadTables } from './workload.js';
 import { slaSection, slaTables } from './sla.js';
 import { qualitySection, qualityTables } from './quality.js';
 import { fulfilmentSection, fulfilmentTables } from './fulfilment.js';
+import { handoverSection, handoverTables } from './handover.js';
 import { runBuilder, builderTables } from './builder.js';
 import { localOffset, quantize } from './time.js';
 
@@ -21,6 +22,7 @@ export const SECTIONS = Object.freeze({
   sla: { title: 'SLA risk radar', run: slaSection, tables: slaTables },
   quality: { title: 'Quality and trend', run: qualitySection, tables: qualityTables },
   fulfilment: { title: 'Request fulfilment', run: fulfilmentSection, tables: fulfilmentTables },
+  handover: { title: 'Shift handover', run: handoverSection, tables: handoverTables },
 });
 
 /** The rows of a result as plain tables: [{ title, columns: [{key,label,person?}], rows }]. For CSV, print and copy. */

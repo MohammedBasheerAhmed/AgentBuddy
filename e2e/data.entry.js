@@ -12,10 +12,15 @@ import { buildInstance } from '../tests/fixtures/sn-instance.js';
 import { fakeDeps, v } from '../tests/fixtures/sn-fakeDeps.js';
 import { INCIDENT_ID, INCIDENT_NUMBER, incidentRow, COMMENTS_STRING } from '../tests/fixtures/sn-incident.js';
 import { HR_CASE_ID, HR_CASE_NUMBER } from '../tests/fixtures/sn-hr-case.js';
-import { REQUEST_ID, REQUEST_NUMBER } from '../tests/fixtures/sn-requested-item.js';
-import { ABEL, BETH } from '../tests/fixtures/sn-users.js';
+import { REQUEST_ID, REQUEST_NUMBER, RITM_ID, RITM_NUMBER } from '../tests/fixtures/sn-requested-item.js';
+import { CASE_ID, CASE_NUMBER } from '../tests/fixtures/sn-case.js';
+import { ABEL, BETH, CHARLIE, DAVE, ERIN, HANA, JANE, MARIA } from '../tests/fixtures/sn-users.js';
+import { addMoreTables } from './data.more.js';
+import { dotwalkDeps } from './dotwalk.js';
 
-export { fakeDeps, INCIDENT_ID, INCIDENT_NUMBER, HR_CASE_ID, HR_CASE_NUMBER, REQUEST_ID, REQUEST_NUMBER, ABEL, BETH };
+export * from './data.more.js';
+
+export { fakeDeps, INCIDENT_ID, INCIDENT_NUMBER, HR_CASE_ID, HR_CASE_NUMBER, REQUEST_ID, REQUEST_NUMBER, RITM_ID, RITM_NUMBER, CASE_ID, CASE_NUMBER, ABEL, BETH, CHARLIE, DAVE, ERIN, HANA, JANE, MARIA };
 
 /**
  * The tickets the fake portals (/sp, /esc, /csm) show, by the ids the fixtures already hold. Titles are plain on purpose: the
@@ -108,10 +113,10 @@ export function buildTables() {
     planned_end_time: v('2026-10-25 08:00:00', '2026-10-25 10:00:00'),
     sys_created_on: v('2026-10-20 08:00:00', '2026-10-20 10:00:00'),
   });
-  return tables;
+  return addMoreTables(tables);
 }
 
 /** The fake Table API. Same query interpreter the unit tests use, so both agree on what a sysparm_query means. */
 export function tableApi(tables, behaviour) {
-  return fakeDeps(tables, behaviour);
+  return dotwalkDeps(tables, behaviour);
 }

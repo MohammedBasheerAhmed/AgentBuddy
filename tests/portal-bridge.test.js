@@ -293,7 +293,7 @@ test('the comment box is found by name, ng-model, aria-label and placeholder, an
   const box = dom.add('textarea', COMMENT, { value: '' });
   const other = dom.add('textarea', { name: 'u_private_stuff', placeholder: 'Describe' }, { value: 'keep' });
   const result = dom.call('fillField', ['comments', 'Hello there', 'Additional comments', true]);
-  assert.deepEqual(result, { ok: true, method: 'dom' });
+  assert.deepEqual(result, { ok: true, method: 'dom', label: 'Additional comments' }); // the box that was used is named
   assert.equal(box.value, 'Hello there');
   assert.deepEqual(box.events, ['input', 'change']); // what Angular's ngModel listens to
   assert.equal(other.value, 'keep');
@@ -429,7 +429,7 @@ test('a rich-text area (contenteditable) is typed into, below the existing text'
     editor.appendChild(new FakeText(text));
     return cmd === 'insertText';
   };
-  assert.deepEqual(dom.call('fillField', ['comments', 'Reply', 'Additional comments', true]), { ok: true, method: 'dom' });
+  assert.deepEqual(dom.call('fillField', ['comments', 'Reply', 'Additional comments', true]), { ok: true, method: 'dom', label: 'Comments' });
   assert.equal(editor.innerText, 'Hello\n\nReply');
   assert.ok(editor.events.includes('input') && editor.events.includes('change'));
 });
@@ -437,7 +437,7 @@ test('a rich-text area (contenteditable) is typed into, below the existing text'
 test('a rich-text area falls back to plain nodes (never markup) when text insertion is refused', () => {
   const dom = makeDom();
   const editor = dom.add('div', { contenteditable: '', 'aria-label': 'Comments' }, { text: 'Hello' });
-  assert.deepEqual(dom.call('fillField', ['comments', 'line one\nline two', '', true]), { ok: true, method: 'dom' });
+  assert.deepEqual(dom.call('fillField', ['comments', 'line one\nline two', '', true]), { ok: true, method: 'dom', label: 'Comments' });
   assert.equal(editor.innerText, 'Hello\n\nline one\nline two');
   assert.equal(editor.childNodes.filter((n) => n.tagName === 'BR').length, 3);
 });
@@ -445,7 +445,7 @@ test('a rich-text area falls back to plain nodes (never markup) when text insert
 test('a rich-text editor inside a same-origin frame is found through its frame', () => {
   const dom = makeDom();
   const { inner } = dom.frame({ title: 'Additional comments editor', id: 'ed' }, { contenteditable: 'true' });
-  assert.deepEqual(dom.call('fillField', ['comments', 'in a frame', 'Additional comments', false]), { ok: true, method: 'dom' });
+  assert.deepEqual(dom.call('fillField', ['comments', 'in a frame', 'Additional comments', false]), { ok: true, method: 'dom', label: 'Additional comments editor' });
   assert.equal(inner.body.innerText, 'in a frame');
 });
 
@@ -483,14 +483,16 @@ test('a classic form (g_form) still wins over the portal path', () => {
   assert.deepEqual(calls, [['comments', 'x']]);
 });
 
-test('off a portal page (a workspace, no g_form) the older exact-match fallback is unchanged', () => {
+test('off a portal page (a workspace, no g_form) an exact label still finds the box, and the box is named in the answer', () => {
   const dom = makeDom({ url: 'https://x.service-now.com/now/sow/record/incident/' + 'a'.repeat(32) });
   const box = dom.add('textarea', { 'aria-label': 'Work notes' }, { value: 'typed' });
-  assert.deepEqual(dom.call('fillField', ['work_notes', 'more', 'Work notes', true]), { ok: true, method: 'dom' });
+  assert.deepEqual(dom.call('fillField', ['work_notes', 'more', 'Work notes', true]), { ok: true, method: 'dom', label: 'Work notes' });
   assert.equal(box.value, 'typed\n\nmore');
-  // two exact matches: the workspace fallback takes the first, as it always did
-  dom.add('textarea', { 'aria-label': 'Work notes' }, { value: '' });
-  assert.equal(dom.call('fillField', ['work_notes', 'again', 'Work notes', true]).ok, true);
+  // CHANGED on purpose (AB-SEC-06): two equally good boxes used to mean "take the first". Now nothing is written.
+  const other = dom.add('textarea', { 'aria-label': 'Work notes' }, { value: '' });
+  assert.deepEqual(dom.call('fillField', ['work_notes', 'again', 'Work notes', true]), { ok: false, reason: 'no-form' });
+  assert.equal(box.value, 'typed\n\nmore');
+  assert.equal(other.value, '');
 });
 
 test('bad field names are refused before the page is touched', () => {
@@ -504,4 +506,131 @@ test('only the known actions answer', () => {
   const dom = makeDom();
   assert.equal(dom.raw('constructor').ok, false);
   assert.equal(dom.raw('eval', ['1+1']).ok, false);
+});
+
+// ---- Insert on a Workspace page (no g_form, not a portal): the stricter fallback (AB-SEC-06) -------------------------
+
+const WORKSPACE = 'https://x.service-now.com/now/sow/record/incident/' + 'a'.repeat(32);
+
+test('workspace: a hidden box is never written (another record tab, a collapsed panel, an off-screen box)', () => {
+  const dom = makeDom({ url: WORKSPACE });
+  const visible = dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '' });
+  dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', display: 'none' });
+  dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', hidden: true });
+  dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', visibility: 'hidden' });
+  dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', rect: { width: 300, height: 60, right: -9000 } });
+  assert.deepEqual(dom.call('fillField', ['comments', 'for the open record', 'Additional comments', true]), { ok: true, method: 'dom', label: 'Additional comments' });
+  assert.equal(visible.value, 'for the open record');
+  const onlyHidden = makeDom({ url: WORKSPACE });
+  const ghost = onlyHidden.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', display: 'none' });
+  assert.deepEqual(onlyHidden.call('fillField', ['comments', 'x', 'Additional comments', true]), { ok: false, reason: 'no-form' });
+  assert.deepEqual(ghost.events, []);
+});
+
+test('workspace: "Description" is not "Short description"', () => {
+  const dom = makeDom({ url: WORKSPACE });
+  const short = dom.add('input', { type: 'text', 'aria-label': 'Short description' }, { value: 'title' });
+  // only the look-alike is on the page: nothing is written to it
+  assert.deepEqual(dom.call('fillField', ['description', 'long text', 'Description', false]), { ok: false, reason: 'no-form' });
+  assert.equal(short.value, 'title');
+  assert.deepEqual(short.events, []);
+  // with the real one present, the real one is used
+  const real = dom.add('textarea', { 'aria-label': 'Description' }, { value: '' });
+  assert.deepEqual(dom.call('fillField', ['description', 'long text', 'Description', false]), { ok: true, method: 'dom', label: 'Description' });
+  assert.equal(real.value, 'long text');
+  assert.equal(short.value, 'title');
+});
+
+test('workspace: an exact label wins over a label with a marker, and a marker still matches when it is alone', () => {
+  const dom = makeDom({ url: WORKSPACE });
+  const marked = dom.add('textarea', { 'aria-label': 'Work notes (internal)' }, { value: '' });
+  assert.equal(dom.call('fillField', ['work_notes', 'a', 'Work notes', false]).ok, true, 'the marker alone matches');
+  assert.equal(marked.value, 'a');
+  const exact = dom.add('textarea', { 'aria-label': 'Work notes' }, { value: '' });
+  assert.equal(dom.call('fillField', ['work_notes', 'b', 'Work notes', false]).label, 'Work notes');
+  assert.equal(exact.value, 'b');
+  assert.equal(marked.value, 'a', 'the weaker box is left alone');
+  // a label that merely starts with the words is another field
+  const other = makeDom({ url: WORKSPACE });
+  other.add('textarea', { 'aria-label': 'Description of the change' }, { value: '' });
+  assert.deepEqual(other.call('fillField', ['description', 'x', 'Description', false]), { ok: false, reason: 'no-form' });
+});
+
+test('workspace: the column name counts as exact, and two equally good boxes mean no write', () => {
+  const dom = makeDom({ url: WORKSPACE });
+  const box = dom.add('textarea', { name: 'incident.work_notes' }, { value: '' });
+  assert.equal(dom.call('fillField', ['work_notes', 'by name', '', false]).ok, true);
+  assert.equal(box.value, 'by name');
+  const host = dom.shadow(dom.add('now-record'));
+  const twin = dom.inShadow(host, dom.add('textarea', { name: 'work_notes' }, { value: '' }));
+  assert.deepEqual(dom.call('fillField', ['work_notes', 'two', '', false]), { ok: false, reason: 'no-form' });
+  assert.equal(box.value, 'by name');
+  assert.equal(twin.value, '');
+});
+
+test('workspace: a locked box is read-only, a password or secret-named box is never used, and the value is read back', () => {
+  const locked = makeDom({ url: WORKSPACE });
+  const closed = locked.add('textarea', { 'aria-label': 'Work notes' }, { value: 'closed', disabled: true });
+  assert.deepEqual(locked.call('fillField', ['work_notes', 'x', 'Work notes', true]), { ok: false, reason: 'read-only' });
+  assert.equal(closed.value, 'closed');
+  const secret = makeDom({ url: WORKSPACE });
+  secret.add('input', { type: 'password', name: 'work_notes', 'aria-label': 'Work notes' }, { value: '' });
+  secret.add('input', { type: 'text', name: 'work_notes_token', 'aria-label': 'Work notes' }, { value: '' });
+  assert.deepEqual(secret.call('fillField', ['work_notes', 'x', 'Work notes', true]), { ok: false, reason: 'no-form' });
+  const stubborn = makeDom({ url: WORKSPACE });
+  stubborn.add('textarea', { 'aria-label': 'Work notes' }, { value: 'old', refuse: true });
+  assert.deepEqual(stubborn.call('fillField', ['work_notes', 'new', 'Work notes', false]), { ok: false, reason: 'set-failed' }, 'a box that did not take the text is not inserted');
+});
+
+// ---- Insert into an HTML field with g_form (AB-SEC-01) --------------------------------------------------------------------
+
+function gformWindow(type, initial = '') {
+  const calls = [];
+  const g_form = {
+    hasField: () => true,
+    getValue: () => initial,
+    getEditableFields: () => ['text', 'short_description', 'comments'],
+    isReadOnly: () => true,
+    setValue: (n, v) => calls.push([n, v]),
+  };
+  if (type !== undefined) g_form.getGlideUIElement = () => ({ type });
+  return { calls, window: { g_form } };
+}
+
+test('an HTML field gets the escaped HTML made by the content script, never the raw characters', () => {
+  const { calls, window } = gformWindow('html');
+  const dom = makeDom({ window });
+  const raw = '<img src=x onerror=1>';
+  assert.deepEqual(dom.call('fillField', ['text', raw, 'Article body', false, '<p>&lt;img src=x onerror=1&gt;</p>']), { ok: true, method: 'gform' });
+  assert.deepEqual(calls, [['text', '<p>&lt;img src=x onerror=1&gt;</p>']]);
+  assert.ok(!calls[0][1].includes('<img'), 'no live tag reaches the form');
+});
+
+test('an HTML field with no escaped text supplied is refused, not filled with raw text', () => {
+  for (const type of ['html', 'translated_html']) {
+    const { calls, window } = gformWindow(type);
+    const dom = makeDom({ window });
+    assert.deepEqual(dom.call('fillField', ['text', '<img src=x>', '', false]), { ok: false, reason: 'bad-field' }, type);
+    assert.deepEqual(calls, [], type);
+  }
+});
+
+test('append adds the escaped HTML below what the HTML field holds', () => {
+  const { calls, window } = gformWindow('html', '<p>First</p>');
+  const dom = makeDom({ window });
+  assert.equal(dom.call('fillField', ['text', 'Second', '', true, '<p>Second</p>']).ok, true);
+  assert.deepEqual(calls, [['text', '<p>First</p>\n\n<p>Second</p>']]);
+});
+
+test('a field the form says is plain text gets the plain text; a form that does not say gets the HTML', () => {
+  const plain = gformWindow('string');
+  assert.equal(makeDom({ window: plain.window }).call('fillField', ['text', 'a < b', '', false, '<p>a &lt; b</p>']).ok, true);
+  assert.deepEqual(plain.calls, [['text', 'a < b']]);
+  const unknown = gformWindow(undefined);
+  assert.equal(makeDom({ window: unknown.window }).call('fillField', ['text', 'a < b', '', false, '<p>a &lt; b</p>']).ok, true);
+  assert.deepEqual(unknown.calls, [['text', '<p>a &lt; b</p>']]);
+  // an ordinary field with no HTML text is unchanged
+  const comments = gformWindow('journal_input');
+  assert.equal(makeDom({ window: comments.window }).call('fillField', ['comments', 'hello', '', false]).ok, true);
+  assert.deepEqual(comments.calls, [['comments', 'hello']]);
 });

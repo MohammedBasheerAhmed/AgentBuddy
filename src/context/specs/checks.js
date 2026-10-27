@@ -38,6 +38,8 @@ export default {
     'resolution-check': {
       common: ['number', 'state', 'hold_reason', 'close_code', 'close_notes', ...WHO],
       by: {
+        // problem_id: "is this incident linked to a problem?" (src/content/ops/checks.js reads it as a yes/no and never shows the problem).
+        incident: ['problem_id'],
         problem: ['resolution_code'],
         case: ['resolution_code'],
       },
@@ -87,7 +89,9 @@ export default {
   // returned by the Table API, so asking for it is harmless.
   //   special_instructions  the written steps of a catalog task / requested item (the checklist reads them)
   //   hold_reason           "on hold: <reason>" in the request status line, and "hold reason still set" in the check
+  //   problem_id            incident only: the link to a problem, for the Check tab's "linked to a problem" line
   extendFields: {
+    incident: ['problem_id'],
     requested_item: ['special_instructions', 'hold_reason'],
     catalog_task: ['special_instructions', 'hold_reason'],
     request: ['hold_reason'],

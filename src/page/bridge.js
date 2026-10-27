@@ -165,55 +165,17 @@
     }
   }
 
-  // ---- DOM fallback for Workspaces, where g_form is not a page global ------------------------------------------------
-  // Walks the document and every open shadow root looking for the editable control of a field. Best effort: Workspace
-  // components keep their own state, so a successful DOM write is reported as method 'dom' and the panel still offers Copy.
-  function deepFind(root, test, out, depth) {
-    if (!root || depth > 12 || out.length) return out;
-    var nodes;
-    try {
-      nodes = root.querySelectorAll('*');
-    } catch (e) {
-      return out;
-    }
-    for (var i = 0; i < nodes.length && !out.length; i++) {
-      var el = nodes[i];
-      if (test(el)) {
-        out.push(el);
-        break;
-      }
-      if (el.shadowRoot) deepFind(el.shadowRoot, test, out, depth + 1);
-    }
-    return out;
-  }
-
-  function findControlInDom(name, label) {
-    var wanted = (label || '').toLowerCase();
-    var found = deepFind(document, function (el) {
-      var tag = el.tagName;
-      if (tag !== 'TEXTAREA' && tag !== 'INPUT') return false;
-      var attrs = [el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('data-field-name')];
-      if (attrs.some(function (a) { return a && (a === name || a.slice(-(name.length + 1)) === '.' + name); })) return true;
-      // Workspace controls carry only an aria-label ("Work notes", sometimes "Work notes (internal)"): match the whole phrase.
-      var aria = (el.getAttribute('aria-label') || '').toLowerCase();
-      return Boolean(wanted) && Boolean(aria) && (aria === wanted || aria.indexOf(wanted) !== -1);
-    }, [], 0);
-    return found[0] || null;
-  }
-
   // `text` below what a field holds already (nothing is added above or in place of it).
   function appendBelow(existing, text) {
     var current = existing == null ? '' : String(existing);
     return current.trim() ? current.replace(/\s+$/, '') + '\n\n' + text : text;
   }
 
-  function setNativeValue(el, value) {
-    var proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-    var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-    setter.call(el, value);
-    el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-  }
+  // ---- Workspaces, where g_form is not a page global --------------------------------------------------------------
+  // The control of a field is found by what it is called, with the same care as on a portal page (see below): only visible,
+  // enabled text controls; only an exact name or label ("Description" is not "Short description"); two equally good controls
+  // mean no write; and the value is read back after it was set. Best effort: Workspace components keep their own state, so a
+  // successful DOM write is reported as method 'dom' (with the label of the box that was used) and the panel still offers Copy.
 
   // ---- Portal pages: Service Portal, Employee Center, customer service portal ---------------------------------------
   // No g_form here. The comment box and the work-notes box are ordinary controls of an Angular page, found by what they are
@@ -431,13 +393,13 @@
       if (SECRET_NAME_RE.test(String(c.el.getAttribute('name') || '') + ' ' + String(c.el.getAttribute('id') || '') + ' ' + String(c.el.getAttribute('ng-model') || ''))) return;
       var score = scoreControl(c, words, extra);
       if (!score || !isVisible(c.el)) return;
-      (isReadOnlyControl(c.el) ? locked : editable).push({ el: c.el, score: score });
+      (isReadOnlyControl(c.el) ? locked : editable).push({ c: c, el: c.el, score: score });
     });
     editable.sort(function (a, b) { return b.score - a.score; });
     if (editable.length) {
       // Several boxes that look the same: do not guess which one the person means.
       if (editable.length > 1 && editable[0].score - editable[1].score < 15) return { reason: 'no-form' };
-      return { el: editable[0].el };
+      return { c: editable[0].c };
     }
     return { reason: locked.length ? 'read-only' : 'no-form' };
   }
@@ -492,10 +454,43 @@
     return squash(el.innerText != null ? el.innerText : el.textContent).indexOf(probe) !== -1;
   }
 
-  function fillPortalField(name, text, label, append) {
-    var chosen = chooseControl(name, label);
-    if (!chosen.el) return { ok: false, reason: chosen.reason };
-    var el = chosen.el;
+  // What the box is called, for the panel to show ("Inserted into the box labelled ..."): its label, as plain short text.
+  function controlLabel(c) {
+    var el = c.el;
+    var candidates = [];
+    try {
+      candidates.push(el.getAttribute('aria-label'));
+    } catch (e) {
+      /* no attribute */
+    }
+    candidates.push(textOfIds(el, el.getAttribute && el.getAttribute('aria-labelledby')));
+    labelTexts(el).forEach(function (t) { candidates.push(t); });
+    if (c.frame) {
+      ['title', 'aria-label'].forEach(function (n) { candidates.push(c.frame.getAttribute(n)); });
+      labelTexts(c.frame).forEach(function (t) { candidates.push(t); });
+    }
+    ['placeholder', 'title', 'name'].forEach(function (n) {
+      try {
+        candidates.push(el.getAttribute(n));
+      } catch (e) {
+        /* no attribute */
+      }
+    });
+    for (var i = 0; i < candidates.length; i++) {
+      var t = squash(candidates[i]);
+      if (t) return t.slice(0, 80);
+    }
+    return '';
+  }
+
+  // Put the text into the chosen box the way typing would, then read it back: a box that put its own value back is a failure,
+  // never a success.
+  function writeInto(c, text, append) {
+    var el = c.el;
+    var label = controlLabel(c);
+    function done() {
+      return label ? { ok: true, method: 'dom', label: label } : { ok: true, method: 'dom' };
+    }
     try {
       if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
         var next = append === true ? appendBelow(el.value, text) : text;
@@ -509,14 +504,86 @@
           fireEvent(el, 'focusout', true);
         }
         // The page may have refused the value (a controlled input that put its own back).
-        return squash(el.value) === squash(next) ? { ok: true, method: 'dom' } : { ok: false, reason: 'set-failed' };
+        return squash(el.value) === squash(next) ? done() : { ok: false, reason: 'set-failed' };
       }
       var existing = el.innerText != null ? el.innerText : el.textContent;
       if ((append === true ? appendBelow(existing, text) : text).length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
-      return writeEditable(el, text, append === true) ? { ok: true, method: 'dom' } : { ok: false, reason: 'set-failed' };
+      return writeEditable(el, text, append === true) ? done() : { ok: false, reason: 'set-failed' };
     } catch (e) {
       return { ok: false, reason: 'set-failed' };
     }
+  }
+
+  function fillPortalField(name, text, label, append) {
+    var chosen = chooseControl(name, label);
+    if (!chosen.c) return { ok: false, reason: chosen.reason };
+    return writeInto(chosen.c, text, append);
+  }
+
+  // ---- Workspace: the box of a field, by its exact name or label --------------------------------------------------
+  // "Work notes (internal)" is the box called "Work notes"; "Short description" is NOT the box called "Description". A name
+  // that is the column (or ends in ".column") counts the same as an exact label.
+  var NAME_ATTRS = ['name', 'id', 'data-field-name', 'formcontrolname'];
+
+  function labelScore(text, wanted) {
+    var t = squash(text).toLowerCase().replace(/\s*\*+$/, '');
+    if (!t || !wanted) return 0;
+    if (t === wanted) return 100;
+    // the label followed by a marker: "Work notes (internal)", "Description [required]", "Comments: visible to the customer"
+    if (t.indexOf(wanted) === 0 && /^\s*(\(|\[|:|-)/.test(t.slice(wanted.length))) return 50;
+    return 0;
+  }
+
+  function workspaceScore(c, name, wanted) {
+    var el = c.el;
+    var best = 0;
+    NAME_ATTRS.forEach(function (n) {
+      var a = null;
+      try {
+        a = el.getAttribute(n);
+      } catch (e) {
+        a = null;
+      }
+      if (a && (a === name || a.slice(-(name.length + 1)) === '.' + name)) best = 100;
+    });
+    var texts = [];
+    try {
+      texts.push(el.getAttribute('aria-label'));
+    } catch (e) {
+      /* no attribute */
+    }
+    texts.push(textOfIds(el, el.getAttribute && el.getAttribute('aria-labelledby')));
+    labelTexts(el).forEach(function (t) { texts.push(t); });
+    texts.forEach(function (t) { best = Math.max(best, labelScore(t, wanted)); });
+    return best;
+  }
+
+  function chooseWorkspaceControl(name, label) {
+    var controls = [];
+    collectControls(document, controls, { nodes: 0 }, 0, null);
+    var wanted = squash(label).toLowerCase();
+    var scored = [];
+    var seen = [];
+    controls.forEach(function (c) {
+      if (seen.indexOf(c.el) !== -1) return;
+      seen.push(c.el);
+      if (SECRET_NAME_RE.test(String(c.el.getAttribute('name') || '') + ' ' + String(c.el.getAttribute('id') || ''))) return;
+      var score = workspaceScore(c, name, wanted);
+      if (!score || !isVisible(c.el)) return; // a hidden box (another record's tab, a collapsed panel) is never the one
+      scored.push({ c: c, score: score, locked: isReadOnlyControl(c.el) });
+    });
+    if (!scored.length) return { reason: 'no-form' };
+    scored.sort(function (a, b) { return b.score - a.score; });
+    // Two equally good boxes: do not guess (the person copies the text instead).
+    if (scored.length > 1 && scored[0].score === scored[1].score) return { reason: 'no-form' };
+    if (scored[0].locked) return { reason: 'read-only' };
+    return { c: scored[0].c };
+  }
+
+  function fillWorkspaceField(name, text, label, append) {
+    var chosen = chooseWorkspaceControl(name, label);
+    if (!chosen.c) return { ok: false, reason: chosen.reason };
+    return writeInto(chosen.c, text, append);
   }
 
   var actions = {
@@ -602,11 +669,16 @@
 
     // THE ONLY WRITE: put a value into one existing field on the open form. Nothing is saved.
     // With append === true the text goes BELOW whatever the field already holds, so what the agent typed is never lost.
-    // Returns { ok, method: 'gform' | 'dom', reason }.
-    fillField: function (name, value, label, append) {
+    // `html` is the same text as escaped HTML, made by the content script for a field the form keeps HTML in (the knowledge
+    // article body). A form with g_form gets that, so the characters of a model answer are shown as text and never parsed as
+    // markup; a field the form says holds HTML, with no such text supplied, is refused rather than filled with raw text.
+    // Returns { ok, method: 'gform' | 'dom', label?, reason }. `label` is the box that was used (Workspace and portal pages).
+    fillField: function (name, value, label, append, html) {
       if (typeof name !== 'string' || !FIELD_RE.test(name) || SECRET_NAME_RE.test(name)) return { ok: false, reason: 'bad-field' };
       var text = String(value == null ? '' : value);
       if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
+      var htmlText = typeof html === 'string' ? html : '';
+      if (htmlText.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
 
       var w = resolveFormWindow();
       if (w) {
@@ -624,6 +696,11 @@
             // getEditableFields() is trustworthy; isReadOnly() answers true for everything on current releases.
             if (editable && editable.length && editable.indexOf(name) === -1) return { ok: false, reason: 'read-only' };
           }
+          var type = fieldType(f, name);
+          var isHtmlType = /html/i.test(type);
+          if (isHtmlType && !htmlText) return { ok: false, reason: 'bad-field' };
+          // Use the HTML text when the form says the field holds HTML, or when it does not say what the field holds at all.
+          if (htmlText && (isHtmlType || !type)) text = htmlText;
           if (append === true) text = appendBelow(f.getValue(name), text);
           if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
           f.setValue(name, text);
@@ -634,19 +711,9 @@
       }
 
       // No g_form: a portal page (an Angular page of boxes found by their names) or a Workspace (components found by aria-label).
+      // Both type plain text into the page's own editor, which does its own escaping.
       if (onPortalPage()) return fillPortalField(name, text, String(label || '').slice(0, 100), append);
-
-      var el = findControlInDom(name, label);
-      if (!el) return { ok: false, reason: 'no-form' };
-      if (el.disabled || el.readOnly) return { ok: false, reason: 'read-only' };
-      try {
-        if (append === true) text = appendBelow(el.value, text);
-        if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
-        setNativeValue(el, text);
-        return { ok: true, method: 'dom' };
-      } catch (e) {
-        return { ok: false, reason: 'set-failed' };
-      }
+      return fillWorkspaceField(name, text, String(label || '').slice(0, 100), append);
     },
   };
 

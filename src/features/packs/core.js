@@ -52,7 +52,7 @@ const CORE = [
     title: 'Write resolution notes',
     description: 'Cause, fix and verification from the work notes and comments.',
     wave: 1,
-    kinds: ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'task'],
+    kinds: ['incident', 'problem', 'requested_item', 'catalog_task', 'case', 'task'], // not 'request': its ceiling has no close_notes
     journal: 25,
     parts: withRelated('resolution-notes', 25),
     insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes' },

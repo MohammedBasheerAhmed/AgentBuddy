@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { MSG } from '../lib/messages.js';
 import { instancePattern, isInstanceAllowed } from '../policy/policy.js';
 import MyDayView from './MyDayView.jsx';
+import { isAiReady } from './aiReady.js';
+import { plainError } from './ask.js';
 
 // Shown when the active tab is not a ticket: the site is not enabled yet, or it is enabled but no record is open.
 export default function SetupView({ page, eff, onChanged }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const aiReady = Boolean(eff.apiKey) || Boolean(eff.values.providedApiKey);
+  // A local model (Ollama, or a server on this computer) needs no key.
+  const aiReady = isAiReady(eff);
 
   async function enable() {
     setError('');
@@ -21,7 +24,7 @@ export default function SetupView({ page, eff, onChanged }) {
       if (answer?.error) throw new Error(answer.error.message);
       onChanged();
     } catch (err) {
-      setError(err.message);
+      setError(plainError(err));
     } finally {
       setBusy(false);
     }

@@ -50,7 +50,8 @@ export const keyStore = () => createKeyStore({ local: chrome.storage.local, sess
 
 const withLock = (fn) => (typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request('agentbuddy-audit', fn) : fn());
 
-async function auditSalt() {
+/** The salt the audit log hashes record ids with (made on first use). The checklist ticks use it too (src/sidepanel/checks/panelStore.js). */
+export async function auditSalt() {
   const stored = (await chrome.storage.local.get(AUDIT_SALT_KEY))[AUDIT_SALT_KEY];
   if (stored) return stored;
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -73,6 +74,26 @@ export async function logAudit(event) {
     /* fail soft */
   }
 }
+
+/**
+ * The audit event for "text was inserted into a form" or "text was copied". Only these fields are ever taken (the audit log
+ * holds no content): the feature, the table and sys_id of the record, the outcome, and the provider fields when the text came from
+ * an AI run. A snippet, or a draft carried to a blank form, has no provider.
+ */
+export function insertAuditEvent({ feature, table, sysId, outcome, provider, model, mode } = {}) {
+  return {
+    feature: String(feature || ''),
+    table: String(table || ''),
+    sysId: String(sysId || ''),
+    provider: String(provider || ''),
+    model: String(model || ''),
+    mode,
+    outcome: outcome === 'copied' ? 'copied' : 'inserted',
+  };
+}
+
+/** Every successful insert or copy lands in the audit log, whichever panel did it. Never throws. */
+export const auditInsert = (event) => logAudit(insertAuditEvent(event));
 
 export async function readAudit() {
   if (!hasChrome()) return [];

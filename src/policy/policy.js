@@ -11,7 +11,19 @@ export const KEY_STORAGE_MODES = ['local', 'session', 'encrypted'];
 const strictness = (mode) => Math.max(0, PII_MODES.indexOf(mode));
 
 const list = (value) => (Array.isArray(value) ? value.map((v) => String(v).trim()).filter(Boolean) : []);
+const lowerList = (value) => list(value).map((v) => v.toLowerCase());
 const oneOf = (value, allowed) => (allowed.includes(value) ? value : null);
+
+// Tables whose names start with one of these are sensitive (HR-family): free text and identities are only read when the
+// organisation allows HR content, and the AI endpoint must be an approved one. 'sn_hr_' is always on the list; the policy key
+// `sensitiveTablePrefixes` ADDS to it (a custom HR, legal or employee-relations table family), it can never remove it.
+export const DEFAULT_SENSITIVE_PREFIXES = Object.freeze(['sn_hr_']);
+const PREFIX_RE = /^[a-z][a-z0-9_]{1,63}$/;
+
+function sensitivePrefixes(value) {
+  const extra = lowerList(value).filter((p) => PREFIX_RE.test(p));
+  return [...new Set([...DEFAULT_SENSITIVE_PREFIXES, ...extra])];
+}
 
 /**
  * Clean whatever chrome.storage.managed returned. Unknown keys are dropped; a bad value becomes "not set" (null / []),
@@ -29,9 +41,11 @@ export function normalizePolicy(raw) {
     previewMode: oneOf(p.previewMode, PREVIEW_MODES),
     keyStorage: oneOf(p.keyStorage, KEY_STORAGE_MODES),
     providedApiKey: typeof p.providedApiKey === 'string' ? p.providedApiKey.trim() : '',
-    disabledFeatures: list(p.disabledFeatures),
-    blockedTables: list(p.blockedTables).map((t) => t.toLowerCase()),
-    blockedFields: list(p.blockedFields).map((f) => f.toLowerCase()),
+    // Feature ids, table names and field names are compared in lower case on both sides, so "Reply-Draft" switches off reply-draft.
+    disabledFeatures: lowerList(p.disabledFeatures),
+    blockedTables: lowerList(p.blockedTables),
+    blockedFields: lowerList(p.blockedFields),
+    sensitiveTablePrefixes: sensitivePrefixes(p.sensitiveTablePrefixes),
     allowHrContent: p.allowHrContent === true,
     tokenBudgetPerDay: Number.isFinite(budget) && budget > 0 ? Math.floor(budget) : 0,
     auditExport: p.auditExport !== false,
@@ -79,10 +93,24 @@ export function isInstanceAllowed(origin, policy) {
   });
 }
 
-export const isFeatureEnabled = (featureId, policy) => !list(policy?.disabledFeatures).includes(featureId);
+const norm = (value) => String(value ?? '').trim().toLowerCase();
+
+/** Is the feature switched on? Ids are compared in lower case on both sides (a policy set by hand may use capitals). */
+export const isFeatureEnabled = (featureId, policy) => !lowerList(policy?.disabledFeatures).includes(norm(featureId));
 
 /** True when the table may be read/sent at all under this policy. */
-export const isTableAllowed = (table, policy) => !list(policy?.blockedTables).includes(String(table || '').toLowerCase());
+export const isTableAllowed = (table, policy) => !lowerList(policy?.blockedTables).includes(norm(table));
+
+/**
+ * Is this table in a sensitive (HR-family) family under this policy? `sn_hr_` always counts; the policy's
+ * `sensitiveTablePrefixes` add to it. Without a policy only the default prefix applies.
+ */
+export function isSensitiveByPolicy(table, policy) {
+  const name = norm(table);
+  if (!name) return false;
+  const prefixes = Array.isArray(policy?.sensitiveTablePrefixes) ? sensitivePrefixes(policy.sensitiveTablePrefixes) : DEFAULT_SENSITIVE_PREFIXES;
+  return prefixes.some((prefix) => name.startsWith(prefix));
+}
 
 /** Does the policy let this provider/model/base URL through? Returns { ok, reason }. */
 export function checkProviderAllowed({ provider, model, baseUrl }, policy) {

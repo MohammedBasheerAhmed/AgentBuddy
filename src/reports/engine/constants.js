@@ -97,5 +97,9 @@ export const LIMITS = Object.freeze({
 /** The scopes a person can pick. */
 export const SCOPE_KINDS = Object.freeze(['mine', 'groups', 'chosen']);
 
-/** Section ids the engine can run (the panel's registry in src/sidepanel/reports/sections.js uses the same ids). */
-export const SECTION_IDS = Object.freeze(['overview', 'workload', 'sla', 'quality', 'fulfilment']);
+/**
+ * Section ids the panel's registry (src/sidepanel/reports/sections.js) and a saved dashboard can hold. The engine runs the first
+ * six (SECTIONS in ./index.js). 'coaching' and 'insights' have no engine section: they are panel sections that build their own
+ * input (a separate read operation for coaching, the widgets' loaded results for insights), so runReport refuses those two ids.
+ */
+export const SECTION_IDS = Object.freeze(['overview', 'workload', 'sla', 'quality', 'fulfilment', 'handover', 'coaching', 'insights']);

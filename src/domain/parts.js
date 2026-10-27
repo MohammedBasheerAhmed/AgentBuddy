@@ -96,6 +96,7 @@ const SOURCE_LABEL = {
 const QUIET_SOURCES = new Set(['sys_user', 'csm_consumer', 'customer_contact']);
 
 const PHRASE = {
+  blocked: 'not allowed by your organisation (do not describe it as empty)',
   denied: 'not readable by your user',
   'empty-or-hidden': 'nothing visible to your user; it may exist but be hidden from them',
   error: 'could not be read',

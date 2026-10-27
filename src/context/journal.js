@@ -158,6 +158,9 @@ export async function readJournal({ table, sysId, recordText = null }, deps, { m
   const fields = ['element', 'value', 'sys_created_on', 'sys_created_by', 'element_id'];
   const { rows: found, failure } = await softRead(deps, 'sys_journal_field', query, fields, { limit: max + 1, displayValue: false });
 
+  // The organisation does not allow the journal to be read: the record's own comments and work notes columns are not a way round it.
+  if (failure?.status === STATUS.BLOCKED) return { entries: [], loginNames: [], access: [accessEntry(JOURNAL_SOURCE, STATUS.BLOCKED, failure.note, { strategy: 'none' })] };
+
   // The instance ignoring a condition shows up as rows that belong to other records: none of them may be used.
   const mismatched = found.some((row) => raw(row.element_id) && raw(row.element_id) !== sysId);
   const viaTable = failure || mismatched ? { comment: [], work_note: [] } : entriesFromRows(found);

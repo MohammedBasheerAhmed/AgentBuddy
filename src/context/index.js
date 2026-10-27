@@ -1,7 +1,7 @@
 // Record-context engine: what a feature may know about a ServiceNow record. Pure and dependency-injected; the one file
 // that wires the real client is ./live.js and is deliberately not exported from here.
 
-export { FEATURES, FEATURE_FIELDS, FEATURE_JOURNAL, FEATURE_RELATED, FIELDS_BY_KIND, LIMITS, allowedFields, fieldLimit, withheldFields } from './allowlists.js';
+export { FEATURES, FEATURE_FIELDS, FEATURE_JOURNAL, FEATURE_MASK_ONLY, FEATURE_RELATED, FIELDS_BY_KIND, LIMITS, PERSON_COLUMNS, allowedFields, fieldLimit, maskOnlyFields, withheldFields } from './allowlists.js';
 export { STATUS, classifyReadError, confirmEmptyIsReallyEmpty } from './access.js';
 export { applyAuthorNames, orderChronological, parseJournalString, readJournal } from './journal.js';
 export { KINDS, isSensitiveTable, kindForTable, parseRecordRef, tableForNumber } from './kinds.js';

@@ -53,7 +53,10 @@ const link = (status, note = '') => ({ status, note });
 async function problemLink({ table, sysId }, deps) {
   if (table !== 'incident') return link('na');
   const { rows, failure } = await softRead(deps, 'incident', `sys_id=${sysId}`, ['sys_id', 'problem_id'], { limit: 1, displayValue: false });
-  if (failure) return link('unknown', failure.status === STATUS.DENIED ? 'You cannot read the problem link on this incident.' : 'The problem link could not be read.');
+  if (failure) {
+    const why = failure.status === STATUS.DENIED ? 'You cannot read the problem link on this incident.' : failure.status === STATUS.BLOCKED ? failure.note : 'The problem link could not be read.';
+    return link('unknown', why);
+  }
   const row = rows.find((r) => sameId(raw(r.sys_id), sysId));
   if (!row) return link('unknown', 'The incident could not be read again to check its problem link.');
   return SYS_ID_RE.test(raw(row.problem_id)) ? link('yes') : link('no');

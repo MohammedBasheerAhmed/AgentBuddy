@@ -1,13 +1,24 @@
 import { useCallback, useRef, useState } from 'react';
 import { contextFor } from '../features/registry.js';
 import { peopleFor } from '../features/parts.js';
-import { prepareRun, executeRun, previewRequired, auditBlocked, auditCancelled, RunBlocked } from '../lib/pipeline.js';
+import { prepareRun, executeRun, previewRequired, auditBlocked, auditCancelled } from '../lib/pipeline.js';
 import { resolveProviderConfig } from '../providers/config.js';
 import { ensureAiPermission } from '../lib/aiPermission.js';
 import { sendChat } from '../providers/index.js';
 import { createFirewall } from '../pii/index.js';
 import { logAudit, saveSettings } from '../lib/storage.js';
-import { read } from './ask.js';
+import { tokensTodayReader } from '../lib/aiUsage.js';
+import { readBudgetState } from '../providers/budget.js';
+import { read, plainError } from './ask.js';
+import { internalTextsOf } from '../safeSend/review.js';
+import { lastPackOf, makeTokens, seenAfterConfirm } from './runLogic.js';
+import { prepareFlow, sendFlow } from './runFlow.js';
+
+// What the flows need from the outside world (src/sidepanel/runFlow.js takes them as arguments so tests can replace them).
+// Tokens used today across providers, for the organisation's daily budget (policy.tokenBudgetPerDay).
+const tokensUsedToday = tokensTodayReader(async () => (await readBudgetState()).log);
+
+const DEPS = { ensureAiPermission, prepareRun, previewRequired, auditBlocked, createFirewall, logAudit, executeRun, sendChat };
 
 /**
  * The one way a view runs an AI feature. It owns the whole flow and nothing can skip a step:
@@ -22,6 +33,9 @@ import { read } from './ask.js';
  * or custom `feature.parts(pack)` goes through the firewall like everything else.
  *
  * Render the returned `run` object with <RunPanel run={run} ... />.
+ *
+ * A run the person abandons (Cancel, Close, another record) cannot be called back from the AI provider, so the request may still
+ * complete and be audited as sent; its answer is dropped and never shown (the steps and decisions are in runFlow.js / runLogic.js).
  */
 export function useRun({ page, eff, record }) {
   const [phase, setPhase] = useState('idle'); // idle | reading | preview | sending | done | error
@@ -32,7 +46,8 @@ export function useRun({ page, eff, record }) {
   const [scan, setScan] = useState(null); // the firewall's scan(): also recognises values it masked on the way out
   const [error, setError] = useState('');
   const [lastPack, setLastPack] = useState(null);
-  const token = useRef(0); // a newer run (or reset) invalidates an older one still in flight
+  const tokens = useRef(null); // a newer run (or reset) invalidates an older one still in flight
+  if (!tokens.current) tokens.current = makeTokens();
   const lastGetPack = useRef(undefined); // so "Try again" re-reads the same thing
 
   const host = (() => {
@@ -44,7 +59,7 @@ export function useRun({ page, eff, record }) {
   })();
 
   const reset = useCallback(() => {
-    token.current += 1;
+    tokens.current.drop();
     setPhase('idle');
     setPrepared(null);
     setResult(null);
@@ -52,74 +67,67 @@ export function useRun({ page, eff, record }) {
   }, []);
 
   const fail = useCallback((err) => {
-    setError(err?.message || 'Something went wrong.');
+    setError(plainError(err));
     setPhase('error');
   }, []);
 
   async function send(p, cfg, previewShown, mine) {
     setPhase('sending');
-    try {
-      const out = await executeRun({ prepared: p, config: cfg, values: eff.values, host, previewShown, sendChat, logAudit });
-      if (mine !== token.current) return;
-      setPeople(peopleFor(p.pack));
-      setScan(() => (text) => p.firewall.scan(text)); // (a function stored in state: wrapped so React does not call it)
-      setLastPack({ table: p.pack.table, sysId: p.pack.sysId });
-      setResult(out.text);
-      setPhase('done');
-    } catch (err) {
-      if (mine === token.current) fail(err);
+    const out = await sendFlow({ prepared: p, config: cfg, values: eff.values, host, previewShown, policy: eff.policy, tokensUsedToday, isCurrent: () => tokens.current.isCurrent(mine), deps: DEPS });
+    if (out.status === 'abandoned') return;
+    if (out.status === 'failed') {
+      fail(out.error);
+      return;
     }
+    setPeople(peopleFor(p.pack));
+    setScan(() => (text) => p.firewall.scan(text)); // (a function stored in state: wrapped so React does not call it)
+    setLastPack(lastPackOf(p.pack, internalTextsOf));
+    setResult(out.text);
+    setPhase('done');
   }
 
   async function run(feature, { getPack } = {}) {
-    token.current += 1;
-    const mine = token.current;
+    const mine = tokens.current.next();
     lastGetPack.current = getPack;
     setActive(feature);
     setResult(null);
     setError('');
     setPhase('reading');
-    let pack;
-    let p;
+    const allowSensitive = Boolean(eff.policy?.allowHrContent);
     const cfg = resolveProviderConfig(eff.values, eff.apiKey);
-    try {
-      // First, while the click is fresh: the browser's permission for the AI address (a prompt only the first time).
-      await ensureAiPermission(cfg);
-      pack = await (getPack
-        ? getPack()
-        : read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: contextFor(feature), allowSensitive: Boolean(eff.policy?.allowHrContent) }));
-      if (mine !== token.current) return;
-      // A feature may add more to its pack first (similar solved tickets, an account's other cases...). Whatever it adds is
-      // untrusted text like the rest and reaches the AI only through feature.parts() and the firewall.
-      if (typeof feature.enrich === 'function') {
-        pack = await feature.enrich(pack, { read: (op, args) => read(page.tabId, op, args), allowSensitive: Boolean(eff.policy?.allowHrContent) });
-        if (mine !== token.current) return;
-      }
-      p = prepareRun({ feature, pack, values: eff.values, policy: eff.policy, config: cfg, createFirewall });
-    } catch (err) {
-      // Refused by policy or by the firewall (fail closed): nothing was sent. Record that.
-      if (err instanceof RunBlocked || err?.name === 'FirewallError') {
-        await auditBlocked({ feature, pack, config: cfg, values: eff.values, err, logAudit });
-      }
-      if (mine === token.current) fail(err);
+    const out = await prepareFlow({
+      feature,
+      getPack,
+      readPack: () => read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: contextFor(feature), allowSensitive }),
+      readOp: (op, args) => read(page.tabId, op, args),
+      allowSensitive,
+      config: cfg,
+      values: eff.values,
+      policy: eff.policy,
+      pageTable: page.record?.table || page.newRecord?.table || '',
+      isCurrent: () => tokens.current.isCurrent(mine),
+      deps: DEPS,
+    });
+    if (out.status === 'abandoned') return;
+    if (out.status === 'failed') {
+      fail(out.error);
       return;
     }
-    if (previewRequired(eff.values.previewMode, feature.id, eff.values.previewSeen || [])) {
-      setPrepared({ p, cfg });
+    if (out.preview) {
+      setPrepared({ p: out.prepared, cfg });
       setPhase('preview');
     } else {
-      await send(p, cfg, false, mine);
+      await send(out.prepared, cfg, false, mine);
     }
   }
 
   async function confirmPreview() {
     const { p, cfg } = prepared;
-    const mine = token.current;
-    // "first time per feature": remember that this one has been checked.
-    if (eff.values.previewMode === 'first') {
-      const seen = [...new Set([...(eff.values.previewSeen || []), p.feature.id])];
-      saveSettings({ previewSeen: seen }).catch(() => {});
-    }
+    const mine = tokens.current.current();
+    // "first time per feature" (or per group of features): remember that this one has been checked.
+    const before = eff.values.previewSeen || [];
+    const seen = seenAfterConfirm({ previewMode: eff.values.previewMode, feature: p.feature, seen: before });
+    if (seen !== before) saveSettings({ previewSeen: seen }).catch(() => {});
     setPrepared(null);
     await send(p, cfg, true, mine);
   }

@@ -62,6 +62,22 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const check = (id, status, title, hint = '') => ({ id, status, title, hint });
 const fold = (s) => text(s).toLowerCase().replace(/\s+/g, ' ');
 
+// ---- what could not be read -----------------------------------------------------------------------------------------------
+// An empty list of notes only means "no notes" when the notes could be read. The context engine says so in the pack's `access`
+// list (source 'journal'); a check that is about the notes must not answer "nothing there" when it was not allowed to look.
+
+// ('blocked': the organisation's policy does not let Agent Buddy read that table; 'skipped': not read on purpose.)
+const NOT_READ = new Set(['denied', 'empty-or-hidden', 'error', 'skipped', 'blocked']);
+export const NOTES_UNREADABLE = 'Could not read the notes and comments';
+const NO_FORM = 'This page has no form Agent Buddy can read, so anything you have typed and not saved is not counted.';
+
+/** The access entry for the notes when they could not be read (or may be hidden from this user); null when they were read. */
+function unreadableNotes(pack) {
+  return (Array.isArray(pack?.access) ? pack.access : []).find((e) => e?.source === 'journal' && NOT_READ.has(e.status)) || null;
+}
+
+const sentence = (s) => text(s).replace(/([^.!?])$/, '$1.');
+
 // ---- the effective value of a field: the form if it has it, else the saved record -----------------------------------
 
 function effective(pack, form, name) {
@@ -90,7 +106,9 @@ function notesCheck(pack, form) {
   if (!body) {
     // A work note typed on the form is not a substitute: it stays internal and is not what the next person searches.
     const workNote = form && text(form.work_notes) ? ' The work note you have typed is separate from these notes.' : '';
-    return check('notes', 'warn', 'No resolution notes yet', `Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.${workNote}`);
+    // With no readable form the notes being empty is only what is SAVED: say that the typed ones could not be seen.
+    const noForm = form ? '' : ` ${NO_FORM}`;
+    return check('notes', 'warn', 'No resolution notes yet', `Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.${workNote}${noForm}`);
   }
   if (isFillerNote(body)) return check('notes', 'warn', 'The notes only say "resolved"', 'Add what was wrong and what you did, in a sentence or two. "Resolved" does not help anyone later.');
   const words = body.split(/\s+/).filter(Boolean).length;
@@ -106,7 +124,7 @@ function codeCheck(pack, form) {
   const field = CODE_FIELD[pack?.kind];
   if (!field) return null;
   const { value } = effective(pack, form, field);
-  if (!text(value)) return check('code', 'warn', 'No close code chosen', 'Pick the code that best describes the fix. Reports and trends use it.');
+  if (!text(value)) return check('code', 'warn', 'No close code chosen', `Pick the code that best describes the fix. Reports and trends use it.${form ? '' : ` ${NO_FORM}`}`);
   return check('code', 'ok', 'A close code is chosen');
 }
 
@@ -117,6 +135,11 @@ function customerNames(pack) {
 }
 
 function customerCheck(pack, now, waitDays) {
+  const unreadable = unreadableNotes(pack);
+  if (unreadable) {
+    const why = sentence(unreadable.note) || 'Your user may not be able to read them.';
+    return check('customer', 'info', NOTES_UNREADABLE, `${why} Check by eye whether the customer confirmed the fix or has had a chance to answer.`);
+  }
   const visible = (Array.isArray(pack?.journal) ? pack.journal : []).filter((e) => e?.type === 'comment' && text(e.text));
   if (!visible.length) {
     return check('customer', 'info', 'No messages to or from the customer on this ticket', 'If you confirmed the fix by phone or in person, say so in the resolution notes.');
@@ -149,7 +172,14 @@ function childCheck(pack) {
   const list = pack?.related?.[key];
   if (!Array.isArray(list)) {
     const entry = (pack?.access || []).find((e) => e?.source === { childTasks: 'task', catalogTasks: 'sc_task', items: 'sc_req_item' }[key]);
-    const why = entry?.status === 'denied' ? `You cannot read ${noun}s on this instance.` : entry?.status ? `The ${noun}s could not be read.` : '';
+    const why =
+      entry?.status === 'blocked'
+        ? `Your organisation does not allow Agent Buddy to read ${noun}s.`
+        : entry?.status === 'denied'
+          ? `You cannot read ${noun}s on this instance.`
+          : entry?.status
+            ? `The ${noun}s could not be read.`
+            : '';
     return check('children', 'info', `Could not check for open ${noun}s`, why || 'Look at the related list on the form.');
   }
   const open = list.filter(isOpenItem);
@@ -193,6 +223,7 @@ function describeCounts(counts) {
 
 function piiCheck(pack, form) {
   const people = pack?.people || [];
+  const unreadable = unreadableNotes(pack);
   const where = [];
   let scanned = false;
 
@@ -233,7 +264,15 @@ function piiCheck(pack, form) {
     const detail = where.map((w) => `${describeCounts(w.counts)} in ${w.label}`).join('; ');
     return check('pii', 'warn', 'Possible personal data or secrets in the text', `Found: ${detail}. Remove or rephrase before you save; resolution notes are reused and may be seen by the customer.`);
   }
-  return check('pii', 'ok', scanned ? 'No personal data or secrets spotted in the text' : 'Nothing written yet to scan for personal data');
+  // "Nothing found" is only a fact about text that could be read.
+  if (unreadable) {
+    const checked = scanned
+      ? 'No personal data or secrets were spotted in the text you can see, but the comments already on the ticket were not checked.'
+      : 'The comments already on the ticket were not checked for personal data.';
+    return check('pii', 'info', NOTES_UNREADABLE, `${sentence(unreadable.note) || 'Your user may not be able to read them.'} ${checked}`);
+  }
+  const unsaved = form ? '' : 'Text you have typed and not saved on this page was not checked.';
+  return check('pii', 'ok', scanned ? 'No personal data or secrets spotted in the text' : 'Nothing written yet to scan for personal data', unsaved);
 }
 
 // ---- hold reason ---------------------------------------------------------------------------------------------------

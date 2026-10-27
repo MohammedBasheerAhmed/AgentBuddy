@@ -156,7 +156,8 @@ test('incidents are asked for with exactly the columns of the timeline and a con
   const { deps } = await packFor(problem, 'problem-rca');
   for (const call of deps.callsTo('incident').filter((c) => c.fields.length > 1)) {
     assert.ok(call.query.startsWith(`problem_id=${IDS.problem}^`));
-    assert.deepEqual(call.fields, ['sys_id', 'number', 'short_description', 'state', 'opened_at', 'resolved_at', 'cmdb_ci', 'close_notes', 'problem_id']);
+    // caller_id, opened_by and assigned_to are read for their display names, so the people another incident names are masked.
+    assert.deepEqual(call.fields, ['sys_id', 'number', 'short_description', 'state', 'opened_at', 'resolved_at', 'cmdb_ci', 'close_notes', 'problem_id', 'caller_id', 'opened_by', 'assigned_to']);
     assert.ok(call.options.limit <= 21);
   }
 });

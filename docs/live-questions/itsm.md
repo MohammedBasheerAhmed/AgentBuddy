@@ -80,6 +80,18 @@ CSM/catalog roles where the kind needs them). For each: what was assumed, how to
 15. **Priority wording.** Routing suggests a priority exactly as a look-alike shows it (for example `2 - High`). Check the format matches what the
     priority choice list shows on the form; if the instance shows only `High`, the text is still understandable.
 
+## Where a feature is offered
+
+16. **Which kinds a feature is listed for (integration review M6).** `routing-hint` is offered on incident and case only: the request,
+    requested item and task ceilings have no `category` (and the request has no `assignment_group`), so the category and group lines
+    would always be "Not enough information". `resolution-notes` is no longer offered on a request (`sc_request`): its ceiling has no
+    `close_notes`. Check as a fulfiller: does the `sc_request` form have a resolution-notes (`close_notes`) field you can fill, and do
+    requested items and tasks have a `category` you can read? If yes, add the column to the ceiling (`src/context/allowlists.js`) with a
+    reason and put the kind back in the feature's `kinds` list (`src/features/packs/core.js`, `itsm.js`); `tests/panel-features.test.js`
+    then checks the insert field against the ceiling for you. Related: `request-explain` on a catalog task inserts into the TASK's
+    comments, and the requester usually reads the requested item; the Request tab says where the message goes. Check which comments a
+    requester of a catalog task sees.
+
 ## Not checked at all
 
 - A real model's behaviour with these prompts: the output structure (four lines, `- [ ]` steps, labelled sections, the first line about a similar

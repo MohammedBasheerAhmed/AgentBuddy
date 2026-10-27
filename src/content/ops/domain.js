@@ -15,7 +15,10 @@ import { kindForTable } from '../../context/kinds.js';
 import { SYS_ID_RE, cleanText, disp, oneLine, raw } from '../../context/util.js';
 
 export const ACCOUNT_CASES_MAX = 10;
-const FIELDS = ['sys_id', 'number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at', 'account'];
+// contact, consumer and assigned_to are read for the names only (they are masked wherever another case's wording mentions them);
+// they are returned as `people` and are not shown. They are on the 'account-briefing' spec for the case kind.
+const PEOPLE_FIELDS = ['contact', 'consumer', 'assigned_to'];
+const FIELDS = ['sys_id', 'number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at', 'account', ...PEOPLE_FIELDS];
 
 const reply = (cases, more, access) => ({ cases, more, access });
 
@@ -27,6 +30,7 @@ function shapeCase(row) {
     priority: oneLine(disp(row.priority), 40),
     opened_at: oneLine(disp(row.opened_at), 40),
     resolved_at: oneLine(disp(row.resolved_at), 40),
+    people: [...new Set(PEOPLE_FIELDS.map((c) => oneLine(disp(row[c]), 100)).filter((name) => name && !SYS_ID_RE.test(name)))],
   };
 }
 

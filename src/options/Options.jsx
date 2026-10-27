@@ -8,6 +8,7 @@ import { loadEffective, saveSettings, keyStore, readAudit, clearAudit } from '..
 import { auditToCsv } from '../audit/auditLog.js';
 import { connectionProblem } from '../lib/pipeline.js';
 import { MSG } from '../lib/messages.js';
+import { clearAllStored, summarizeStored } from '../lib/storedData.js';
 import { instancePattern, normalizeInstance, isInstanceAllowed, PII_MODES, PREVIEW_MODES, KEY_STORAGE_MODES } from '../policy/policy.js';
 
 const KEY_MODE_TEXT = {
@@ -354,8 +355,87 @@ function AuditSection({ eff }) {
   );
 }
 
+function StoredDataSection({ eff, onCleared }) {
+  const [items, setItems] = useState(null);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const local = Object.keys((await chrome.storage.local.get(null)) || {});
+      const session = chrome.storage.session ? Object.keys((await chrome.storage.session.get(null)) || {}) : [];
+      setItems(summarizeStored(local, session));
+    } catch {
+      setItems(summarizeStored([], []));
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function clearEverything() {
+    setBusy(true);
+    setResult(null);
+    try {
+      // The sites you turned on are turned off first, so the browser permission and the page scripts go with the setting.
+      for (const origin of eff.values.instances || []) {
+        try {
+          // eslint-disable-next-line no-await-in-loop -- a handful of sites at most
+          await chrome.runtime.sendMessage({ type: MSG.DISABLE_INSTANCE, origin });
+        } catch {
+          /* the settings below are removed anyway */
+        }
+      }
+      const done = await clearAllStored({ local: chrome.storage.local, session: chrome.storage.session });
+      setResult(done.remaining.length ? { kind: 'danger', text: 'Some things could not be removed. Try again, or remove the extension.' } : { kind: 'ok', text: 'Everything stored by Agent Buddy was removed.' });
+    } catch {
+      setResult({ kind: 'danger', text: 'The browser did not let Agent Buddy remove everything. Try again.' });
+    } finally {
+      setConfirming(false);
+      setBusy(false);
+      load();
+      onCleared();
+    }
+  }
+
+  return (
+    <section className="ab-section">
+      <h2 className="ab-h">Stored data</h2>
+      <p className="ab-sub">
+        This is everything Agent Buddy keeps in this browser. It never keeps ticket text, names or the AI&apos;s answers.
+      </p>
+      {items === null ? <p className="ab-sub">Loading…</p> : (
+        <ul style={{ paddingLeft: 18 }}>
+          {items.map((item) => (
+            <li key={item.id}>
+              <strong>{item.title}</strong>{' '}
+              <span className="ab-sub">({item.present ? 'saved now' : 'nothing saved'}{item.area === 'session' ? ', memory only' : ''})</span>
+              <div className="ab-hint">{item.detail}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!confirming ? (
+        <div className="ab-row">
+          <button type="button" className="ab-btn" onClick={() => { setResult(null); setConfirming(true); }}>Clear everything stored by Agent Buddy</button>
+        </div>
+      ) : (
+        <div className="ab-note ab-note-warn" role="alertdialog" aria-label="Clear everything">
+          <strong>Remove everything?</strong> Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards and checklist ticks are deleted,
+          and the ServiceNow sites you turned on are turned off. This cannot be undone.
+          <div className="ab-row" style={{ marginTop: 8 }}>
+            <button type="button" className="ab-btn ab-btn-danger ab-btn-sm" onClick={clearEverything} disabled={busy}>{busy ? 'Removing…' : 'Yes, remove everything'}</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {result && <p className={`ab-note ab-note-${result.kind}`} role="status" style={{ marginTop: 8 }}>{result.text}</p>}
+    </section>
+  );
+}
+
 export default function Options() {
   const [eff, setEff] = useState(null);
+  const [epoch, setEpoch] = useState(0); // bumped after "clear everything" so every section shows what is left
   const reload = useCallback(async () => {
     const e = await loadEffective();
     const store = keyStore();
@@ -373,7 +453,8 @@ export default function Options() {
       <ProviderSection eff={eff} reload={reload} />
       <PrivacySection eff={eff} reload={reload} />
       <InstancesSection eff={eff} reload={reload} />
-      <AuditSection eff={eff} />
+      <AuditSection key={`audit-${epoch}`} eff={eff} />
+      <StoredDataSection key={`stored-${epoch}`} eff={eff} onCleared={() => { setEpoch((n) => n + 1); reload(); }} />
       <section className="ab-section">
         <h2 className="ab-h">What leaves your computer</h2>
         <p className="ab-sub">

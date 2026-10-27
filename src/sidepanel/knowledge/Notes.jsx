@@ -1,12 +1,9 @@
-// What could not be read, in plain words. Shown under results so a missing list is never mistaken for "nothing there".
-const SHOWN = new Set(['denied', 'error', 'empty-or-hidden']);
+import { describeAccess } from '../plainAccess.js';
 
+// What could not be read, in plain words ("Article links: You cannot read article links."), never a table name. Shown under results
+// so a missing list is never mistaken for "nothing there". The wording lives in src/sidepanel/plainAccess.js.
 export default function Notes({ access }) {
-  const notes = (access || []).filter((a) => SHOWN.has(a.status));
-  if (!notes.length) return null;
-  return (
-    <p className="ab-hint ab-kb-notes">
-      {notes.map((a) => (a.note ? `${a.source}: ${a.note}` : `${a.source}: not available to you.`)).join(' ')}
-    </p>
-  );
+  const lines = describeAccess(access);
+  if (!lines.length) return null;
+  return <p className="ab-hint ab-kb-notes">{lines.join(' ')}</p>;
 }

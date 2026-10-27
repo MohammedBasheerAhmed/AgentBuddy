@@ -55,9 +55,9 @@ test('none inserts through the generic Insert buttons: the Write view has its ow
   for (const f of ours()) assert.deepEqual(insertsFor(f), [], f.id);
 });
 
-test('notes to ticket can open a blank incident form; nothing else opens anything', () => {
-  assert.deepEqual(featureById('notes-to-ticket').open, { table: 'incident', label: 'Open a new incident form' });
-  for (const f of ours().filter((x) => x.id !== 'notes-to-ticket')) assert.equal(f.open, undefined, f.id);
+test('no Write feature opens a form from the result card (the Notes panel fills the form itself)', () => {
+  // CHANGED on purpose (integration review L1): `open` on notes-to-ticket made a draft card with Copy only on every blank incident form.
+  for (const f of ours()) assert.equal(f.open, undefined, f.id);
 });
 
 test('email prompts: format, no invented dates, no signature, internal notes stay internal', () => {

@@ -7,9 +7,13 @@
 //                                             list with history.pushState (e2e/site/portal.js). How each one tells who is signed in:
 //                                             /sp the NOW object, /esc an Angular root scope, /csm nothing at all (the extension
 //                                             then asks the instance who "Me" is: one GET of the person's own sys_user row)
+//   GET /<table>_list.do?sysparm_query=...    a classic list: the table and the filter are printed on the page (what a report's drill-down opens)
+//   GET /<table>.do?sys_id=-1                 a BLANK classic form (g_form.isNewRecord() is true, empty fields, selects with choice values)
+//   GET /email_client.do?...                  the classic email form: a blank sys_email form with recipients, subject and body fields
+//   GET /dashboard-source (none)              (the full-page dashboard is an extension page, opened by the extension itself)
 //   GET /home                                 a page that is not a record (My Day)
 //   GET /api/now/table/<table>                Table API, answered from the sn-* fixtures
-//   GET /api/now/stats/<table>                Aggregate API (count, group by)
+//   GET /api/now/stats/<table>                Aggregate API: count, group by one or two columns (also dot-walked ones), average fields
 //
 // API rules (they imitate what matters about the real thing):
 //   - X-UserToken must equal the page's g_ck, else 401 with the Basic challenge a real instance sends (a browser would pop
@@ -36,16 +40,50 @@ const rawOf = (c) => (c && typeof c === 'object' ? String(c.value ?? '') : Strin
 const dispOf = (c) => (c && typeof c === 'object' ? String(c.display_value ?? c.value ?? '') : String(c ?? ''));
 
 // What the classic form fills its inputs with. work_notes holds text the agent has already typed but not saved.
+// `select` fields hold choice VALUES ("2"), like a real choice list; `raw` fields show the stored value instead of the display text.
+const LEVELS = [['1', '1 - High'], ['2', '2 - Medium'], ['3', '3 - Low']];
 const CLASSIC_FIELDS = [
   { name: 'number', label: 'Number', readonly: true },
   { name: 'short_description', label: 'Short description' },
   { name: 'description', label: 'Description', area: true },
   { name: 'state', label: 'State', readonly: true },
   { name: 'caller_id', label: 'Caller', readonly: true },
+  { name: 'impact', label: 'Impact', select: LEVELS },
+  { name: 'urgency', label: 'Urgency', select: LEVELS },
+  { name: 'contact_type', label: 'Contact type', select: [['phone', 'Phone'], ['self-service', 'Self-service'], ['email', 'Email'], ['walk-in', 'Walk-in']] },
+  { name: 'hold_reason', label: 'Hold reason', readonly: true },
+  { name: 'close_code', label: 'Close code' },
   { name: 'work_notes', label: 'Work notes', area: true },
   { name: 'comments', label: 'Additional comments (Customer visible)', area: true },
   { name: 'close_notes', label: 'Resolution notes', area: true },
 ];
+// Other forms. A knowledge article has a body; the email client composes a sys_email record (the Write tab's Insert needs "body").
+const TABLE_FIELDS = {
+  // A problem form has the three text fields the RCA draft fills.
+  problem: [
+    { name: 'number', label: 'Number', readonly: true },
+    { name: 'short_description', label: 'Short description' },
+    { name: 'description', label: 'Description', area: true },
+    { name: 'state', label: 'State', readonly: true },
+    { name: 'cause_notes', label: 'Cause notes', area: true },
+    { name: 'workaround', label: 'Workaround', area: true },
+    { name: 'work_notes', label: 'Work notes', area: true },
+    { name: 'comments', label: 'Additional comments (Customer visible)', area: true },
+    { name: 'close_notes', label: 'Resolution notes', area: true },
+  ],
+  kb_knowledge: [
+    { name: 'number', label: 'Number', readonly: true },
+    { name: 'short_description', label: 'Short description' },
+    { name: 'text', label: 'Article body', area: true },
+    { name: 'kb_knowledge_base', label: 'Knowledge base', readonly: true },
+    { name: 'workflow_state', label: 'Workflow state', readonly: true },
+  ],
+  sys_email: [
+    { name: 'recipients', label: 'To' },
+    { name: 'subject', label: 'Subject' },
+    { name: 'body', label: 'Body', area: true },
+  ],
+};
 const TYPED_WORK_NOTES = 'Checking the gateway certificate now.';
 
 // How each fake portal lets a page script find out who is signed in (the extension must cope with all three).
@@ -73,28 +111,41 @@ function startFakeInstance(tls, { tables, makeApi, user, portal }) {
     return row || null;
   };
 
-  function classicHtml(tableName, sysId) {
-    const row = record(tableName, sysId) || {};
+  // A classic form. sys_id=-1 is a BLANK form of that table (g_form.isNewRecord() is true, every field empty). `formTable` is what
+  // g_form.getTableName() answers (the email client composes a sys_email record).
+  function classicHtml(tableName, sysId, { formTable = tableName, fields } = {}) {
+    const isNew = sysId === '-1' || !sysId;
+    const row = (!isNew && record(tableName, sysId)) || {};
+    const layout = fields || TABLE_FIELDS[tableName] || CLASSIC_FIELDS;
     const values = {};
-    for (const f of CLASSIC_FIELDS) values[f.name] = f.name === 'work_notes' ? TYPED_WORK_NOTES : f.name === 'comments' ? '' : dispOf(row[f.name]);
+    for (const f of layout) {
+      if (isNew) values[f.name] = '';
+      else if (f.name === 'work_notes') values[f.name] = TYPED_WORK_NOTES;
+      else if (f.name === 'comments') values[f.name] = '';
+      else values[f.name] = f.select ? rawOf(row[f.name]) : dispOf(row[f.name]);
+    }
     const data = {
-      table: tableName,
-      sysId,
+      table: formTable,
+      sysId: isNew ? crypto.randomBytes(16).toString('hex') : sysId,
+      isNew,
       values,
-      editable: CLASSIC_FIELDS.filter((f) => !f.readonly).map((f) => f.name),
+      editable: layout.filter((f) => !f.readonly).map((f) => f.name),
       types: { work_notes: 'journal_input', comments: 'journal_input', description: 'string' },
     };
-    const inputs = CLASSIC_FIELDS.map((f) => {
-      const id = `${tableName}.${f.name}`;
-      const control = f.area
-        ? `<textarea id="${id}" name="${id}"${f.readonly ? ' readonly' : ''}></textarea>`
-        : `<input id="${id}" name="${id}" type="text"${f.readonly ? ' readonly' : ''}>`;
+    const inputs = layout.map((f) => {
+      const id = `${formTable}.${f.name}`;
+      const ro = f.readonly ? ' readonly' : '';
+      let control;
+      if (f.area) control = `<textarea id="${id}" name="${id}"${ro}></textarea>`;
+      else if (f.select) control = `<select id="${id}" name="${id}"><option value="">-- None --</option>${f.select.map(([v, l]) => `<option value="${v}">${escapeHtml(l)}</option>`).join('')}</select>`;
+      else control = `<input id="${id}" name="${id}" type="text"${ro}>`;
       return `<div class="field"><label for="${id}">${escapeHtml(f.label)}</label>${control}</div>`;
     }).join('\n');
-    return page(`${dispOf(row.number) || tableName} | ServiceNow (fake)`, `
-<div class="banner">Fake ServiceNow - classic form</div>
-<h1>${escapeHtml(tableName)} ${escapeHtml(dispOf(row.number))}</h1>
-<form id="${tableName}.form" action="#">${inputs}</form>
+    const heading = isNew ? 'New record' : dispOf(row.number);
+    return page(`${heading || formTable} | ServiceNow (fake)`, `
+<div class="banner">Fake ServiceNow - classic form${isNew ? ' (new record)' : ''}</div>
+<h1>${escapeHtml(formTable)} ${escapeHtml(heading)}</h1>
+<form id="${formTable}.form" action="#">${inputs}</form>
 <script type="application/json" id="e2e-record">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>
 <script src="/scripts/session.js"></script>
 <script src="/scripts/classic-form.js"></script>`);
@@ -170,17 +221,28 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
         const out = dv === 'true' ? rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, c]) => [k, dispOf(c)]))) : rows;
         return sendJson(res, 200, { result: out });
       }
-      const groupBy = q.get('sysparm_group_by');
-      if (!groupBy) return sendJson(res, 200, { result: { stats: { count: String(await deps.countRecords(tableName, query)) } } });
-      const rows = await deps.queryTable(tableName, query, [groupBy], { limit: 100000, displayValue: true });
+      // The Aggregate API: a count, optionally per value of one or two columns (dot-walked ones too), with the average of numeric columns.
+      const groupBy = (q.get('sysparm_group_by') || '').split(',').filter(Boolean);
+      const avgFields = (q.get('sysparm_avg_fields') || '').split(',').filter(Boolean);
+      const avgOf = (rows) =>
+        Object.fromEntries(
+          avgFields.map((f) => {
+            const nums = rows.map((r) => rawOf(r[f])).filter((t) => t !== '').map(Number).filter((n) => Number.isFinite(n));
+            return [f, nums.length ? String(Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100) : ''];
+          })
+        );
+      const stats = (rows) => ({ count: String(rows.length), ...(avgFields.length ? { avg: avgOf(rows) } : {}) });
+      if (!groupBy.length && !avgFields.length) return sendJson(res, 200, { result: { stats: { count: String(await deps.countRecords(tableName, query)) } } });
+      const rows = await deps.queryTable(tableName, query, [...groupBy, ...avgFields], { limit: 100000, displayValue: true });
+      if (!groupBy.length) return sendJson(res, 200, { result: { stats: stats(rows) } });
       const groups = new Map();
       for (const r of rows) {
-        const key = rawOf(r[groupBy]);
-        const g = groups.get(key) || { stats: { count: '0' }, groupby_fields: [{ field: groupBy, value: key, display_value: dispOf(r[groupBy]) }] };
-        g.stats.count = String(Number(g.stats.count) + 1);
+        const key = groupBy.map((f) => rawOf(r[f])).join('');
+        const g = groups.get(key) || { rows: [], keys: groupBy.map((f) => ({ field: f, value: rawOf(r[f]), display_value: dispOf(r[f]) })) };
+        g.rows.push(r);
         groups.set(key, g);
       }
-      return sendJson(res, 200, { result: [...groups.values()] });
+      return sendJson(res, 200, { result: [...groups.values()].map((g) => ({ stats: stats(g.rows), groupby_fields: g.keys })) });
     } catch (err) {
       if (err.code === 'ACCESS_DENIED') {
         entry.note = `denied: ${tableName}`;
@@ -217,6 +279,13 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
       res.writeHead(204);
       return res.end();
     }
+
+    // A classic LIST (what a report opens when a number is clicked): the table and the filter are written on the page, so a test can read them.
+    const listPage = /^\/([a-z][a-z0-9_]*)_list\.do$/.exec(p);
+    if (listPage) return html(page(`${listPage[1]} list | ServiceNow (fake)`, `<div class="banner">Fake ServiceNow - list</div><h1 id="list-table">${escapeHtml(listPage[1])}</h1><p id="list-query">${escapeHtml(url.searchParams.get('sysparm_query') || '')}</p><script src="/scripts/session.js"></script>`));
+
+    // The classic email form of a record: a blank sys_email form (the Write tab fills its body).
+    if (p === '/email_client.do') return html(classicHtml('email_client', '-1', { formTable: 'sys_email', fields: TABLE_FIELDS.sys_email }));
 
     const classic = /^\/([a-z][a-z0-9_]*)\.do$/.exec(p);
     if (classic && classic[1] !== 'nav_to') return html(classicHtml(classic[1], url.searchParams.get('sys_id') || ''));

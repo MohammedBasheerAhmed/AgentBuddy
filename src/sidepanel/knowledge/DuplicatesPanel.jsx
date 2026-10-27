@@ -4,6 +4,8 @@ import { openRecord } from '../openRecord.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { MERGE_MAX_ARTICLES, mergePack } from '../../knowledge/parts.js';
 import Notes from './Notes.jsx';
+import { plainNote } from '../plainAccess.js';
+import { compareLocked, compareStillCurrent, selectionKey } from './duplicatesState.js';
 
 // C6: pick a knowledge base (and, if you like, a category), see groups of published articles whose titles read alike, pick one
 // group, compare the text of its articles, and have the AI draft one merged article. Titles and counts are all that is read
@@ -19,6 +21,8 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
   const [found, setFound] = useState(null); // { phase, data, error }
   const [picked, setPicked] = useState(null); // { cluster, selected: Set(sysId), phase, texts, error }
   const token = useRef(0);
+  const compareToken = useRef(0); // a newer Compare (or a changed selection) makes an older answer count for nothing
+  const mergeHeading = useRef(null);
   const feature = featureById('kb-merge-draft');
   const available = isFeatureAvailable(feature, eff.policy);
 
@@ -32,9 +36,16 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
     };
   }, [page.tabId]);
 
+  // Opening the compare card moves focus to it, so a keyboard or screen reader user lands where the new controls are.
+  const pickedId = picked?.cluster.id;
+  useEffect(() => {
+    if (pickedId) mergeHeading.current?.focus();
+  }, [pickedId]);
+
   const chooseKb = useCallback(
     (id) => {
       token.current += 1;
+      compareToken.current += 1;
       setKb(id);
       setCategory('');
       setCategories([]);
@@ -51,6 +62,7 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
 
   async function find() {
     token.current += 1;
+    compareToken.current += 1;
     const mine = token.current;
     run.reset();
     setPicked(null);
@@ -64,6 +76,8 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
   }
 
   function pick(cluster) {
+    if (compareLocked(picked)) return;
+    compareToken.current += 1;
     run.reset();
     setPicked({
       cluster,
@@ -75,7 +89,9 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
   }
 
   function toggle(sysId) {
+    compareToken.current += 1;
     setPicked((p) => {
+      if (!p || compareLocked(p)) return p;
       const selected = new Set(p.selected);
       if (selected.has(sysId)) selected.delete(sysId);
       else if (selected.size < MERGE_MAX_ARTICLES) selected.add(sysId);
@@ -83,19 +99,25 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
     });
   }
 
+  // The answer is applied only if it is still for this group with these articles ticked (see duplicatesState.js).
   async function compare() {
+    if (!picked || compareLocked(picked)) return;
     const ids = [...picked.selected];
+    compareToken.current += 1;
+    const request = { token: compareToken.current, key: selectionKey(picked.cluster.id, ids) };
+    const stillMine = (p) => compareStillCurrent(request, { token: compareToken.current, picked: p });
     setPicked((p) => ({ ...p, phase: 'loading', error: '' }));
     try {
       const texts = await read(page.tabId, 'kbArticleTexts', { sysIds: ids });
-      setPicked((p) => (p ? { ...p, phase: 'compared', texts } : p));
+      setPicked((p) => (stillMine(p) ? { ...p, phase: 'compared', texts } : p));
     } catch (err) {
-      setPicked((p) => (p ? { ...p, phase: 'choosing', error: err?.message || 'The articles could not be read.' } : p));
+      setPicked((p) => (stillMine(p) ? { ...p, phase: 'choosing', error: err?.message || 'The articles could not be read.' } : p));
     }
   }
 
   const data = found?.data;
   const sel = picked?.selected.size || 0;
+  const locked = compareLocked(picked); // a read is on its way: nothing it depends on may change
 
   return (
     <>
@@ -145,19 +167,20 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
             {data.clusters.length ? `${data.clusters.length} group${data.clusters.length === 1 ? '' : 's'} read alike.` : 'No near-duplicates found.'}
           </p>
           <Notes access={data.access} />
-          {data.access.some((a) => a.status === 'ok' && a.note) && <p className="ab-hint">{data.access.find((a) => a.status === 'ok' && a.note).note}</p>}
+          {data.clusters.length > 0 && <p className="ab-hint">Each article opens in this tab.</p>}
+          {data.access.some((a) => a.status === 'ok' && a.note) && <p className="ab-hint">{plainNote(data.access.find((a) => a.status === 'ok' && a.note).note)}</p>}
           {data.clusters.map((c) => (
             <div key={c.id} className={`ab-kb-cluster${picked?.cluster.id === c.id ? ' ab-kb-picked' : ''}`}>
               <div className="ab-row">
                 <strong>{c.articles.length} articles{c.exactTitle ? ' with the same title' : ' that read alike'}</strong>
                 <span className="ab-spacer" />
-                <button type="button" className="ab-btn ab-btn-sm" onClick={() => pick(c)}>Compare</button>
+                <button type="button" className="ab-btn ab-btn-sm" disabled={locked} onClick={() => pick(c)}>Compare</button>
               </div>
               {c.sharedWords.length > 0 && <div className="ab-tags">{c.sharedWords.map((w) => <span key={w} className="ab-tag">{w}</span>)}</div>}
               <ul className="ab-kb-articles">
                 {c.articles.map((a) => (
                   <li key={a.sysId}>
-                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open" onClick={() => openRecord(page, { table: 'kb_knowledge', sysId: a.sysId })} title="Open this article">
+                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open" onClick={() => openRecord(page, { table: 'kb_knowledge', sysId: a.sysId })} title="Opens in this tab">
                       <span className="ab-record-number">{a.number}</span> {a.title}
                     </button>
                     <span className="ab-hint">{a.views} view{a.views === 1 ? '' : 's'}{a.updated ? ` · changed ${a.updated.slice(0, 10)}` : ''}</span>
@@ -172,13 +195,13 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
 
       {picked && (
         <section className="ab-card" aria-label="Compare and merge">
-          <h2 className="ab-h">Compare and draft a merge</h2>
+          <h2 className="ab-h" ref={mergeHeading} tabIndex={-1}>Compare and draft a merge</h2>
           <p className="ab-sub">Choose two to {MERGE_MAX_ARTICLES} articles to merge.</p>
           <ul className="ab-kb-articles">
             {picked.cluster.articles.map((a) => (
               <li key={a.sysId}>
                 <label className="ab-check">
-                  <input type="checkbox" checked={picked.selected.has(a.sysId)} onChange={() => toggle(a.sysId)} disabled={!picked.selected.has(a.sysId) && sel >= MERGE_MAX_ARTICLES} />
+                  <input type="checkbox" checked={picked.selected.has(a.sysId)} onChange={() => toggle(a.sysId)} disabled={locked || (!picked.selected.has(a.sysId) && sel >= MERGE_MAX_ARTICLES)} />
                   <span><span className="ab-record-number">{a.number}</span> {a.title}</span>
                 </label>
               </li>

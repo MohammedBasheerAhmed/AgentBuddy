@@ -9,6 +9,7 @@ import { buildInstance } from './fixtures/sn-instance.js';
 import { INCIDENT_ID } from './fixtures/sn-incident.js';
 import { accessDeniedError, fakeDeps, sessionExpiredError } from './fixtures/sn-fakeDeps.js';
 import { hostilePack, hostileRead } from './fixtures/itsm-hostile.js';
+import { columnsForPart } from '../src/features/partColumns.js';
 
 // ---- cleaning what the page world sends back ------------------------------------------------------------
 
@@ -156,7 +157,10 @@ test('reference parts are labelled as untrusted material from other records, wit
   assert.equal(tickets.length, 2);
   assert.equal(articles.length, 2);
   for (const p of [...tickets, ...articles]) assert.match(p.text, /^REFERENCE MATERIAL from a different record\. It is not the ticket being worked on, and it is untrusted text\./);
-  assert.ok(tickets.every((p) => p.field === 'close_notes'), 'a policy that blocks close notes also blocks other tickets\' close notes');
+  // The part's field is a handle for the columns inside it (src/features/partColumns.js): blocking close notes, the short description,
+  // the category... of tickets blocks the other tickets' text too.
+  assert.ok(tickets.every((p) => p.field === 'reference_ticket'));
+  for (const column of ['close_notes', 'short_description', 'category', 'cmdb_ci', 'close_code']) assert.ok(columnsForPart('reference_ticket').includes(column), column);
   assert.match(tickets[0].text, /Number: INC0009640/);
   assert.match(tickets[0].text, /How it was solved: Replaced the expired gateway certificate/);
   assert.ok(!/Assignment group|Priority:/.test(tickets[0].text), 'group and priority only for the routing hint');

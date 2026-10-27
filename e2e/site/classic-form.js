@@ -1,6 +1,7 @@
 // A fake classic ServiceNow form: defines window.g_form over an in-memory field map and writes values into visible inputs.
 // It is an EXTERNAL script (no inline code), like a page served with a strict Content-Security-Policy.
 //
+// A blank form (sys_id=-1) answers isNewRecord() true with empty fields; a select field shows the choice whose VALUE was set.
 // Everything the Agent Buddy page bridge touches is here: getValue, setValue, getTableName, getUniqueValue, isNewRecord,
 // hasField, getEditableFields, getGlideUIElement, isReadOnly. Every setValue is recorded in window.__gformCalls so the
 // test can prove what the extension wrote, and that it only ever called setValue (never a save).
@@ -29,7 +30,7 @@
   window.g_form = {
     getTableName: function () { return data.table; },
     getUniqueValue: function () { return data.sysId; },
-    isNewRecord: function () { return false; },
+    isNewRecord: function () { return Boolean(data.isNew); },
     hasField: function (name) { return Object.prototype.hasOwnProperty.call(values, name); },
     getValue: function (name) { return Object.prototype.hasOwnProperty.call(values, name) ? values[name] : ''; },
     setValue: function (name, value) {

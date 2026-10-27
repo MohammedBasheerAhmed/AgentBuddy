@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FEATURES as ALL_FEATURES, contextFor, featureById, featuresFor, insertsFor, partsFor } from '../src/features/registry.js';
 import domainPack, { PROBLEM_HEADINGS } from '../src/features/packs/domain.js';
 import domainSpec from '../src/context/specs/domain.js';
-import { FEATURES as CONTEXT_FEATURES, FEATURE_FIELDS, FEATURE_JOURNAL, FEATURE_RELATED, FIELDS_BY_KIND, allowedFields, fieldLimit } from '../src/context/allowlists.js';
+import { FEATURES as CONTEXT_FEATURES, FEATURE_FIELDS, FEATURE_JOURNAL, FEATURE_RELATED, FIELDS_BY_KIND, PERSON_COLUMNS, allowedFields, fieldLimit } from '../src/context/allowlists.js';
 import { KINDS } from '../src/context/kinds.js';
 import { readContextPack } from '../src/context/pack.js';
 import { OPS } from '../src/content/ops/index.js';
@@ -161,7 +161,7 @@ test('the prompt does not change with the ticket: two different records give the
       const tables = domainTables();
       mutate(tables);
       const pack = await buildPack(id, { tables });
-      return prepareRun({ feature: featureById(id), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true }), config: config(), createFirewall }).request.messages[0].content;
+      return prepareRun({ feature: featureById(id), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic' }), config: config(), createFirewall }).request.messages[0].content;
     };
     const a = await make(() => {});
     const b = await make((t) => {
@@ -194,14 +194,17 @@ test('every feature has a context spec, a journal switch and a list of extras', 
 });
 
 test('columns stay inside the kind\'s ceiling: nothing in a spec is silently dropped, and a feature reads only its own kind', () => {
+  // Every feature that sends text to an AI also reads every PERSON column of the kind's ceiling (src/context/allowlists.js), so the
+  // people are masked by name wherever the text mentions them; those columns are read for masking and are not fields of the pack.
+  const peopleOf = (kind) => FIELDS_BY_KIND[kind].filter((name) => PERSON_COLUMNS.includes(name));
   for (const id of DOMAIN_IDS) {
     for (const [kind, names] of Object.entries(domainSpec.spec[id].by)) {
       assert.equal(kind, KIND_OF[id], `${id} lists columns for ${kind}`);
       const ceiling = new Set(FIELDS_BY_KIND[kind]);
       for (const name of names) assert.ok(ceiling.has(name), `${id}: ${name} is not in the ${kind} ceiling`);
-      assert.deepEqual([...FEATURE_FIELDS[id][kind]].sort(), [...new Set(['number', ...names])].sort(), `${id}/${kind}`);
+      assert.deepEqual([...FEATURE_FIELDS[id][kind]].sort(), [...new Set(['number', ...names, ...peopleOf(kind)])].sort(), `${id}/${kind}`);
     }
-    for (const kind of KINDS.filter((k) => k !== KIND_OF[id])) assert.deepEqual([...FEATURE_FIELDS[id][kind]], ['number'], `${id} on ${kind}`);
+    for (const kind of KINDS.filter((k) => k !== KIND_OF[id])) assert.deepEqual([...FEATURE_FIELDS[id][kind]].sort(), [...new Set(['number', ...peopleOf(kind)])].sort(), `${id} on ${kind}`);
   }
 });
 
@@ -325,7 +328,7 @@ test('every feature, on a hostile record, sends none of the seeded personal data
   for (const id of DOMAIN_IDS) {
     const feature = featureById(id);
     const pack = await buildPack(id);
-    const prepared = prepareRun({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true }), config: config(), createFirewall });
+    const prepared = prepareRun({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic' }), config: config(), createFirewall });
     const text = outgoing(prepared);
     for (const secret of FORBIDDEN) assert.ok(!text.toLowerCase().includes(secret.toLowerCase()), `${id} sent "${secret}"`);
     assert.ok(prepared.stats.total > 0, `${id}: something was masked`);
@@ -389,7 +392,7 @@ test('HR brief: the HR gate refuses without the organisation\'s switch, in every
 test('HR brief: it needs Strict privacy mode (the contract: MODE_TOO_LOW and the exact message)', async () => {
   const pack = await buildPack('hr-case-brief');
   const feature = featureById('hr-case-brief');
-  const allowed = policy({ allowHrContent: true });
+  const allowed = policy({ allowHrContent: true, aiProvider: 'anthropic' });
   try {
     assertRunnable({ feature, pack, values: values({ piiMode: 'standard' }), policy: allowed, config: config(), hasKey: true });
     assert.fail('Standard mode must be refused');
@@ -403,15 +406,16 @@ test('HR brief: it needs Strict privacy mode (the contract: MODE_TOO_LOW and the
   }
   // Local-only is stricter than Strict, and a local model satisfies it
   const local = resolveProviderConfig({ provider: 'ollama' }, '');
-  assert.doesNotThrow(() => assertRunnable({ feature, pack, values: values({ piiMode: 'local-only' }), policy: allowed, config: local, hasKey: false }));
+  // (a model on this computer needs no pinned endpoint: nothing leaves the machine)
+  assert.doesNotThrow(() => assertRunnable({ feature, pack, values: values({ piiMode: 'local-only' }), policy: policy({ allowHrContent: true }), config: local, hasKey: false }));
   // the mode check does not hide the table check or the feature switch
-  assert.throws(() => assertRunnable({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, blockedTables: ['sn_hr_core_case'] }), config: config() }), (e) => e.code === 'TABLE_BLOCKED');
-  assert.throws(() => assertRunnable({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, disabledFeatures: ['hr-case-brief'] }), config: config() }), (e) => e.code === 'FEATURE_OFF');
+  assert.throws(() => assertRunnable({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', blockedTables: ['sn_hr_core_case'] }), config: config() }), (e) => e.code === 'TABLE_BLOCKED');
+  assert.throws(() => assertRunnable({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', disabledFeatures: ['hr-case-brief'] }), config: config() }), (e) => e.code === 'FEATURE_OFF');
 });
 
 test('HR brief in Strict mode with HR content allowed: what is sent, and what is not', async () => {
   const pack = await buildPack('hr-case-brief');
-  const prepared = prepareRun({ feature: featureById('hr-case-brief'), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true }), config: config(), createFirewall });
+  const prepared = prepareRun({ feature: featureById('hr-case-brief'), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic' }), config: config(), createFirewall });
   const { request } = prepared;
   const user = request.messages[1].content;
   assert.equal(request.mode, 'strict');
@@ -430,7 +434,7 @@ test('HR brief in Strict mode with HR content allowed: what is sent, and what is
 test('HR brief: policy still wins inside Strict mode (a blocked field stops the whole request)', async () => {
   const pack = await buildPack('hr-case-brief');
   assert.throws(
-    () => prepareRun({ feature: featureById('hr-case-brief'), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, blockedFields: ['work_notes'] }), config: config(), createFirewall }),
+    () => prepareRun({ feature: featureById('hr-case-brief'), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', blockedFields: ['work_notes'] }), config: config(), createFirewall }),
     (e) => e instanceof FirewallError && e.code === 'BLOCKED_FIELD'
   );
 });
@@ -455,7 +459,7 @@ test('the other domain features are not gated by the HR rules', async () => {
 test('policy switches work for every domain feature', async () => {
   for (const id of DOMAIN_IDS) {
     const pack = await buildPack(id);
-    assert.throws(() => assertRunnable({ feature: featureById(id), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, disabledFeatures: [id] }), config: config() }), (e) => e.code === 'FEATURE_OFF', id);
-    assert.throws(() => assertRunnable({ feature: featureById(id), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, blockedTables: [pack.table] }), config: config() }), (e) => e.code === 'TABLE_BLOCKED', id);
+    assert.throws(() => assertRunnable({ feature: featureById(id), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', disabledFeatures: [id] }), config: config() }), (e) => e.code === 'FEATURE_OFF', id);
+    assert.throws(() => assertRunnable({ feature: featureById(id), pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', blockedTables: [pack.table] }), config: config() }), (e) => e.code === 'TABLE_BLOCKED', id);
   }
 });

@@ -31,7 +31,9 @@ export function accessNotes(access, only = Object.keys(SOURCE_LABEL)) {
   for (const entry of Array.isArray(access) ? access : []) {
     if (!only.includes(entry?.source)) continue;
     const label = SOURCE_LABEL[entry.source];
-    if (entry.status === 'denied') notes.push(`You cannot see ${label} on this instance, so they are left out.`);
+    // 'blocked' is the organisation's rule (managed policy blockedTables), not the person's access: say whose it is.
+    if (entry.status === 'blocked') notes.push(`Your organisation does not allow Agent Buddy to read ${label}, so they are left out.`);
+    else if (entry.status === 'denied') notes.push(`You cannot see ${label} on this instance, so they are left out.`);
     else if (entry.status === 'error') notes.push(`${label[0].toUpperCase()}${label.slice(1)} could not be read just now, so they are left out.`);
     else if (entry.status === 'empty-or-hidden') notes.push(`Your user sees no ${label} at all, so there may be some that an access rule hides.`);
   }
@@ -40,7 +42,7 @@ export function accessNotes(access, only = Object.keys(SOURCE_LABEL)) {
 
 /** True when this source could not be read (so "none" would be a guess). */
 function unreadable(access, source) {
-  return (Array.isArray(access) ? access : []).some((e) => e?.source === source && ['denied', 'error', 'empty-or-hidden'].includes(e.status));
+  return (Array.isArray(access) ? access : []).some((e) => e?.source === source && ['denied', 'error', 'empty-or-hidden', 'blocked'].includes(e.status));
 }
 
 const listNames = (names, max = 3) => {

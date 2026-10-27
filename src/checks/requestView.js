@@ -30,7 +30,12 @@ export function answersModel(pack) {
   const entry = accessEntryFor(pack, 'sc_item_option_mtom');
   const list = pack?.related?.variables;
   if (!Array.isArray(list)) {
-    const why = entry?.status === 'denied' ? 'You cannot read the answers to the request questions.' : entry?.note || 'The answers could not be read.';
+    const why =
+      entry?.status === 'blocked'
+        ? 'Your organisation does not allow Agent Buddy to read the answers to the request questions.'
+        : entry?.status === 'denied'
+          ? 'You cannot read the answers to the request questions.'
+          : entry?.note || 'The answers could not be read.';
     return { applicable: true, available: false, rows: [], note: why };
   }
   const rows = list.map((v) => {
@@ -128,3 +133,9 @@ export function requestExplainParts(pack) {
   }
   return parts;
 }
+
+/**
+ * Where "Insert as customer comment" puts the message, when that is not where the requester looks. The message is for the
+ * requester, who normally reads the requested item; on a catalog task the comment lands on the task itself.
+ */
+export const destinationNote = (record) => (record?.kind === 'catalog_task' ? "This goes into the task's comments." : '');

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
-import { buildRequestView } from '../../checks/requestView.js';
+import { buildRequestView, destinationNote } from '../../checks/requestView.js';
 import { read } from '../ask.js';
 import { LoadNotes } from '../checks/Bits.jsx';
 import { RequestBody } from '../checks/RequestBody.jsx';
@@ -68,6 +68,8 @@ export default function RequestExplainerView({ page, eff, record, header, run, a
               {feature.title}
             </button>
           </div>
+          {/* The requester usually reads the requested item, not the task: say where Insert will put the message. */}
+          {destinationNote(record) && <p className="ab-hint">{destinationNote(record)}</p>}
           {!aiReady && <p className="ab-hint">Add an AI key in Settings to use this button. Everything above works without one.</p>}
         </section>
       )}

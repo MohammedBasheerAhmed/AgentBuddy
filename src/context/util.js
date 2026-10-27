@@ -124,10 +124,23 @@ export function formatSnTime(ms) {
 
 // ---- Queries ------------------------------------------------------------------------------------
 
-/** A value that is safe inside an encoded query, or '' when it is not (a caret would end the condition). */
+// Control characters (including NUL, tab and the ones that end a line), the DEL character, and the Unicode line/paragraph separators.
+const QUERY_UNSAFE = new RegExp(`[\\u0000-\\u001f\\u007f\\u0085${String.fromCharCode(0x2028, 0x2029)}\\^\\\\]`);
+// Invisible and format characters (zero width space, joiners, bidi marks) are removed before looking for "javascript:", so
+// "java<ZWSP>script:" does not slip through.
+const QUERY_INVISIBLE = /[\s\p{Cf}]/gu;
+
+/**
+ * A value that is safe inside an encoded query, or '' when it is not. Refused: a caret (it ends the condition), a backslash,
+ * any control character or line break, and anything containing "javascript:" in any case (an encoded query may evaluate a value
+ * that starts with it on the server). Values come from record data (a CI's name), never from a person typing, but they are
+ * still data from the instance. Prefer a sys_id condition wherever the id is at hand; this is for the display names that remain.
+ */
 export function queryValue(value) {
   const text = String(value ?? '').trim();
-  return text && !/[\^\r\n]/.test(text) ? text : '';
+  if (!text || QUERY_UNSAFE.test(text)) return '';
+  if (/javascript:/i.test(text.replace(QUERY_INVISIBLE, ''))) return '';
+  return text;
 }
 
 // ---- Concurrency --------------------------------------------------------------------------------

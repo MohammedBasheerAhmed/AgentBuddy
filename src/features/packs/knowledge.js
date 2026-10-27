@@ -36,8 +36,22 @@ async function addKnowledge(pack, { read }) {
   };
   try {
     const found = await read('knowledge', { pack: slim });
-    const hits = (found?.hits || []).slice(0, 3).map((h) => ({ number: String(h.number || ''), title: String(h.short_description || ''), excerpt: clip(h.excerpt, 600) }));
-    return { ...pack, related: { ...pack.related, knowledge: hits }, access: [...(pack.access || []), ...(found?.access || [])] };
+    const raw = (found?.hits || []).slice(0, 3);
+    const hits = raw.map((h) => ({ number: String(h.number || ''), title: String(h.short_description || ''), excerpt: clip(h.excerpt, 600) }));
+    // The article's author is read with the hit: the name is masked exactly wherever the excerpt mentions it, and because the excerpts
+    // are text written by others the person sees the outgoing text every time (pack.requirePreview).
+    const known = new Set((pack.people || []).map((p) => String(p?.name || '').toLowerCase()));
+    const authors = [...new Set(raw.flatMap((h) => (Array.isArray(h.people) ? h.people : [])).map((n) => clip(n, 100)).filter(Boolean))]
+      .filter((name) => !known.has(name.toLowerCase()))
+      .slice(0, 10)
+      .map((name) => ({ role: 'reference_person', name, email: '', sysId: '' }));
+    return {
+      ...pack,
+      people: [...(pack.people || []), ...authors],
+      related: { ...pack.related, knowledge: hits },
+      access: [...(pack.access || []), ...(found?.access || [])],
+      ...(hits.length ? { requirePreview: true } : {}),
+    };
   } catch {
     return { ...pack, access: [...(pack.access || []), { source: 'kb_knowledge', status: 'error', note: 'The knowledge base could not be searched, so the replies use the chat only.' }] };
   }

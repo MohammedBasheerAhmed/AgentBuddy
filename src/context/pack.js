@@ -4,13 +4,13 @@
 // instance returns anyway never reaches the pack. Reads run with the signed-in user's own session; whatever is refused or
 // ambiguous is reported in `access` and the pack carries the rest.
 
-import { FEATURES, FEATURE_JOURNAL, allowedFields, fieldLimit, withheldFields } from './allowlists.js';
-import { STATUS, entry as accessEntry } from './access.js';
+import { FEATURES, FEATURE_JOURNAL, HR_HIDDEN, LIMITS, allowedFields, fieldLimit, maskOnlyFields, withheldFields } from './allowlists.js';
+import { STATUS, entry as accessEntry, isBlockedTable } from './access.js';
 import { assignSides, readChatMessages } from './chat.js';
 import { JOURNAL_RECORD_FIELDS, applyAuthorNames, readJournal } from './journal.js';
 import { articleHtmlStats, statsToStrings } from './knowledge.js';
 import { isSensitiveTable, kindForTable, tableForNumber } from './kinds.js';
-import { personRefs, resolvePeople } from './people.js';
+import { personRefs, resolvePeople, splitName } from './people.js';
 import { readRelated, relatedPlan } from './related.js';
 import { SYS_ID_RE, TABLE_RE, cleanText, disp, oneLine, raw, uniq } from './util.js';
 import { parseRecordNumber } from '../lib/recordNumber.js';
@@ -90,40 +90,92 @@ export async function resolveRecordRef(ref, deps) {
 }
 
 /**
+ * A record addressed by the base class `task` (/task.do?sys_id=..., a Workspace /record/task/<id>) is really an incident, a
+ * customer case, an HR case... Its real class decides the kind, the columns, the HR rules and the policy, so it is looked up first
+ * with one small read. Any other table is returned as it is.
+ *   resolved: { table }                 the real class (it may be 'task' itself)
+ *   unresolved: { table, unresolved }   the class could not be looked up: the record is treated as SENSITIVE (minimised, HR-gated)
+ * A lost session, a cancelled read and a class the organisation blocks are thrown, not turned into "unresolved".
+ */
+async function resolveRealClass({ table, sysId }, deps) {
+  if (table !== 'task') return { table, unresolved: false };
+  try {
+    const rows = await deps.queryTable('task', `sys_id=${sysId}`, ['sys_id', 'sys_class_name'], { limit: 1, displayValue: false });
+    const found = Array.isArray(rows) ? rows[0] : null;
+    const actual = found ? raw(found.sys_class_name).trim().toLowerCase() : '';
+    if (TABLE_RE.test(actual)) return { table: actual, unresolved: false };
+  } catch (err) {
+    if (err?.code === 'SESSION_EXPIRED' || err?.name === 'AbortError' || isBlockedTable(err)) throw err;
+  }
+  return { table, unresolved: true };
+}
+
+// Names (display values) of the people in rows of OTHER tickets, added to the pack as people so the firewall masks them exactly.
+function referencePeople(names, known) {
+  const seen = new Set(known.map((p) => String(p.name || '').toLowerCase()).filter(Boolean));
+  const out = [];
+  for (const shown of names || []) {
+    const name = oneLine(shown, 100);
+    const key = name.toLowerCase();
+    if (!name || SYS_ID_RE.test(name) || seen.has(key) || out.length >= LIMITS.referencePeople) continue;
+    seen.add(key);
+    const guess = splitName(name);
+    out.push({ role: 'reference_person', name, email: '', sysId: '', firstName: oneLine(guess.firstName, 60), lastName: oneLine(guess.lastName, 60) });
+  }
+  return out;
+}
+
+/**
  * Read a ContextPack.
  * @param {{ table: string, sysId?: string, number?: string }} ref
- * @param {{ queryTable: Function, fetchRecord: Function }} deps same signatures as src/content/tableApi.js
+ * @param {{ queryTable: Function, fetchRecord: Function, sensitivePrefixes?: string[], isBlocked?: Function }} deps same signatures as
+ *   src/content/tableApi.js. The content script passes the deps wrapped by src/content/policyGuard.js: a blocked table throws an error
+ *   with code 'BLOCKED_TABLE', and `sensitivePrefixes` carries the policy's extra HR-family prefixes.
  * @param {{ feature?: string, includeJournal?: boolean, allowSensitive?: boolean }} [options]
  *   feature: one of FEATURES (default 'record-summary'); includeJournal: overrides the feature's default;
  *   allowSensitive: read free text and identities of HR-family tables too.
- * @throws an Error with code 'NOT_FOUND' (no such record or not visible), 'ACCESS_DENIED' or 'SESSION_EXPIRED' from the
- *   record read itself; every other read fails soft into `access`.
+ * @throws an Error with code 'NOT_FOUND' (no such record or not visible), 'ACCESS_DENIED', 'BLOCKED_TABLE' (the organisation does not
+ *   allow this table) or 'SESSION_EXPIRED' from the record read itself; every other read fails soft into `access`.
+ *   The pack has `sensitive: true` when the record was opened through the base class `task` and its real class could not be looked up.
+ *   It has `requirePreview: true` when it carries text about other tickets (linked incidents, overlapping changes...).
  */
 export async function readContextPack(ref, deps, options = {}) {
   const { feature = 'record-summary', allowSensitive = false } = options;
   if (!FEATURES.includes(feature)) throw new Error(`Unknown feature "${feature}". Known: ${FEATURES.join(', ')}.`);
+  const prefixes = deps.sensitivePrefixes;
 
-  const { table, sysId } = await resolveRecordRef(ref, deps);
+  const asked = await resolveRecordRef(ref, deps);
+  const { table, unresolved } = await resolveRealClass(asked, deps);
+  const sysId = asked.sysId;
   const kind = kindForTable(table);
   const isChat = kind === 'chat';
-  const minimised = isSensitiveTable(table) && !allowSensitive;
-  const names = allowedFields(table, feature, { allowSensitive });
+  // An HR-family table, or a record whose class could not be told, keeps its free text and identities unread unless allowed.
+  const sensitive = isSensitiveTable(table, prefixes) || unresolved;
+  const minimised = sensitive && !allowSensitive;
+  const readNames = allowedFields(table, feature, { allowSensitive, sensitivePrefixes: prefixes });
+  const names = unresolved && !allowSensitive ? readNames.filter((name) => !HR_HIDDEN.has(name)) : readNames;
+  // Person columns that are not part of the feature's own spec are read only to mask those people; they are not fields of the pack.
+  const maskOnly = new Set(maskOnlyFields(table, feature));
   const wantJournal = (options.includeJournal ?? FEATURE_JOURNAL[feature]) === true;
   const readJournalNow = wantJournal && !minimised;
+  // When the organisation blocks the journal table, the record's own notes columns are not a way round it.
+  const journalBlocked = typeof deps.isBlocked === 'function' && deps.isBlocked('sys_journal_field');
   const memo = new Map(); // one "can this user see the table at all" read per table
+  const withheld = !minimised ? [] : unresolved ? readNames.filter((name) => !names.includes(name)) : withheldFields(table, feature, { allowSensitive, sensitivePrefixes: prefixes });
 
   // 1. The record: allowlisted columns only, plus the two note columns when notes are wanted (a chat's messages are elsewhere).
-  const row = await deps.fetchRecord(table, sysId, readJournalNow && !isChat ? [...names, ...JOURNAL_RECORD_FIELDS] : names, { displayValue: true });
+  const row = await deps.fetchRecord(table, sysId, readJournalNow && !isChat && !journalBlocked ? [...names, ...JOURNAL_RECORD_FIELDS] : names, { displayValue: true });
   if (!row) throw notFound(table, 'The record');
 
   const fields = {};
   for (const name of names) {
+    if (maskOnly.has(name)) continue;
     const value = cleanText(disp(row[name]), fieldLimit(name));
     if (value) fields[name] = value;
   }
 
   // 2. Notes (or the messages of a chat) and the per-kind extras (they do not depend on each other).
-  const recordText = readJournalNow && !isChat ? { comments: disp(row.comments), work_notes: disp(row.work_notes) } : null;
+  const recordText = readJournalNow && !isChat && !journalBlocked ? { comments: disp(row.comments), work_notes: disp(row.work_notes) } : null;
   const noJournal = { entries: [], loginNames: [], access: [] };
   const [journalResult, relatedResult] = await Promise.all([
     !readJournalNow ? Promise.resolve(noJournal) : isChat ? readChatMessages({ table, sysId }, deps, { memo }) : readJournal({ table, sysId, recordText }, deps, { memo }),
@@ -146,7 +198,15 @@ export async function readContextPack(ref, deps, options = {}) {
     finalPeople = chatPeople(people, journal);
   }
 
-  const access = [...policyAccess(table, feature, { minimised, wantJournal, allowSensitive }), ...journalResult.access, ...relatedResult.access, ...peopleAccess];
+  // The people named in rows of other tickets (linked incidents, overlapping changes...): their names are masked exactly too.
+  finalPeople = [...finalPeople, ...referencePeople(relatedResult.referenceNames, finalPeople)];
+
+  const access = [
+    ...policyAccess(table, { minimised, wantJournal, unresolved, withheld }),
+    ...journalResult.access,
+    ...relatedResult.access,
+    ...peopleAccess,
+  ];
   return {
     version: PACK_VERSION,
     table,
@@ -158,14 +218,20 @@ export async function readContextPack(ref, deps, options = {}) {
     journal,
     related: { ...relatedResult.related, ...kindExtras(kind, row, names) },
     access,
+    // The class of a record opened through `task` could not be looked up: the run is gated like an HR case (src/lib/pipeline.js).
+    ...(unresolved ? { sensitive: true } : {}),
+    // The text of other people's tickets is in this pack: the person sees what is sent every time, not once per feature.
+    ...(relatedResult.hasReference ? { requirePreview: true } : {}),
   };
 }
 
 // What was left out on purpose, so the pack never looks more complete than it is.
-function policyAccess(table, feature, { minimised, wantJournal, allowSensitive }) {
+function policyAccess(table, { minimised, wantJournal, unresolved, withheld }) {
   if (!minimised) return [];
-  const withheld = withheldFields(table, feature, { allowSensitive });
-  const out = [accessEntry(table, STATUS.SKIPPED, `${table} holds sensitive data, so free text and identities were not read${withheld.length ? ` (${withheld.join(', ')})` : ''}.`)];
+  const why = unresolved
+    ? `This record was opened as a general task and its real type could not be looked up, so it is treated as a sensitive record: free text and identities were not read`
+    : `${table} holds sensitive data, so free text and identities were not read`;
+  const out = [accessEntry(table, STATUS.SKIPPED, `${why}${withheld.length ? ` (${withheld.join(', ')})` : ''}.`)];
   if (wantJournal) out.push(accessEntry('journal', STATUS.SKIPPED, 'Notes and comments on sensitive records are not read unless sensitive data is allowed.'));
   return out;
 }

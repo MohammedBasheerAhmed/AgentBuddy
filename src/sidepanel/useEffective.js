@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { loadEffective, keyStore } from '../lib/storage.js';
+import { setReadPolicy } from './ask.js';
 
 /**
  * The effective settings (user choices with the organisation's policy on top) plus the AI key, kept fresh when storage
@@ -10,6 +11,7 @@ export function useEffective() {
 
   const refresh = useCallback(async () => {
     const eff = await loadEffective();
+    setReadPolicy(eff.policy); // every READ sent to the page carries the organisation's policy (see ask.js)
     const store = keyStore();
     // A key supplied by the organisation wins over a personal one.
     const apiKey = eff.values.providedApiKey || (await store.load(eff.values.provider));

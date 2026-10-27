@@ -102,3 +102,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .ab-nav { padding: 6px 12px 0; gap: 6px; }
 .ab-nav .ab-btn { flex: 1 1 auto; }
+
+/* ---- panes: sections and tab panels that stay mounted while another one shows ---- */
+/* A pane lays its children out like .ab-main does; the class would otherwise override the hidden attribute. */
+.ab-pane { display: flex; flex-direction: column; gap: 12px; }
+.ab-pane[hidden] { display: none; }
+.ab-boundary-text { margin: 0 0 6px; }
+.ab-backdrop:focus { outline: none; }

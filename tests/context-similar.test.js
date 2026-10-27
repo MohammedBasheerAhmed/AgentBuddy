@@ -52,7 +52,7 @@ test('similar tickets are ranked, boosted by CI and category, and never include 
   assert.deepEqual(access.map((a) => [a.source, a.status]), [['incident', 'ok']]);
 
   const shape = hits[0];
-  assert.deepEqual(Object.keys(shape).sort(), ['category', 'close_code', 'close_notes', 'cmdb_ci', 'cat_item', 'number', 'product', 'resolved_at', 'score', 'short_description', 'state', 'sysId', 'table', 'why'].sort());
+  assert.deepEqual(Object.keys(shape).sort(), ['category', 'close_code', 'close_notes', 'cmdb_ci', 'cat_item', 'number', 'people', 'product', 'resolved_at', 'score', 'short_description', 'state', 'sysId', 'table', 'why'].sort());
   assert.equal(shape.close_notes, 'Reinstalled the VPN client v5.2 and cleared the cached profile. Verified stable for 24h.');
   assert.equal(shape.close_code, 'Solution provided');
   assert.equal(shape.state, 'Closed');

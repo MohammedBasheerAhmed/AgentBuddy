@@ -34,13 +34,20 @@ export function kindForTable(table) {
 }
 
 // HR data (cases about a person's leave, pay, conduct) is the most sensitive thing a fulfiller reads. Its tables are
-// recognised by prefix so custom tables in the same family are covered too.
+// recognised by prefix so custom tables in the same family are covered too. The organisation's policy can add prefixes
+// (`sensitiveTablePrefixes`, src/policy/policy.js); `sn_hr_` is always on the list.
 const SENSITIVE_PREFIXES = ['sn_hr_'];
 
-/** True for tables whose free text and identities are only read when the caller asks for sensitive data. */
-export function isSensitiveTable(table) {
+/**
+ * True for tables whose free text and identities are only read when the caller asks for sensitive data.
+ * @param {string} table
+ * @param {string[]} [extraPrefixes] the policy's sensitiveTablePrefixes (lower case); the content script passes `deps.sensitivePrefixes`
+ */
+export function isSensitiveTable(table, extraPrefixes) {
   const name = String(table || '').trim().toLowerCase();
-  return SENSITIVE_PREFIXES.some((prefix) => name.startsWith(prefix));
+  if (!name) return false;
+  const extra = Array.isArray(extraPrefixes) ? extraPrefixes.map((p) => String(p || '').trim().toLowerCase()).filter(Boolean) : [];
+  return SENSITIVE_PREFIXES.some((prefix) => name.startsWith(prefix)) || extra.some((prefix) => name.startsWith(prefix));
 }
 
 // ---- Record numbers -----------------------------------------------------------------------------

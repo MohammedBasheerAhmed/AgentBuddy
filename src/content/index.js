@@ -5,7 +5,8 @@
 //               Portal pages are single-page apps: the address changes without a reload, so the address is read afresh on
 //               every request and no record is remembered between requests.
 //   READ        GET-only reads with the person's own session (the context engine in src/context)
-//   FILL_FIELD  put text into ONE field on the open form (the only write; the person presses Save)
+//   FILL_FIELD  put text into ONE field on the open form (the only write; the person presses Save). Only the fields in
+//               src/lib/fillable.js, only on the record the text was written for, with HTML escaped for an HTML field (fill.js)
 //
 // No UI is injected into the ServiceNow page, nothing is sent to any server from here, and the page cannot message this
 // script: chrome.runtime.onMessage only receives messages from this extension.
@@ -18,11 +19,8 @@ import { SYS_ID_RE, TABLE_RE, disp } from '../context/util.js';
 import { handleRead } from './reads.js';
 import { portalInfo, surfaceOf } from '../context/surface.js';
 import { isFromExtensionPage } from '../lib/senderCheck.js';
-
-const FIELD_RE = /^[a-z][a-z0-9_]{0,79}$/;
-const MAX_INSERT_CHARS = 20000;
-// The reasons the panel knows how to explain (src/sidepanel/ResultView.jsx). Anything else the page says becomes 'no-form'.
-const FILL_REASONS = new Set(['no-form', 'no-such-field', 'read-only', 'too-long', 'set-failed', 'bad-field']);
+import { handleFillField } from './fill.js';
+import { policyGuard } from './policyGuard.js';
 
 if (!window.__abContentInstalled) {
   window.__abContentInstalled = true;
@@ -47,7 +45,9 @@ if (!window.__abContentInstalled) {
     if (!sysId && number) {
       const cacheKey = `${ref.table}:${number}`;
       if (!numberCache.has(cacheKey) && Date.now() - (numberMisses.get(cacheKey) || 0) > MISS_MS) {
-        const rows = await queryTable(ref.table, `number=${number}`, ['sys_id', 'number'], { limit: 1 }).catch(() => []);
+        // (through the policy guard: a blocked table is not looked up)
+        const guarded = await policyGuard.deps({ queryTable });
+        const rows = await guarded.queryTable(ref.table, `number=${number}`, ['sys_id', 'number'], { limit: 1 }).catch(() => []);
         if (rows[0]?.sys_id) numberCache.set(cacheKey, rows[0].sys_id);
         else numberMisses.set(cacheKey, Date.now());
       }
@@ -81,32 +81,17 @@ if (!window.__abContentInstalled) {
     };
   }
 
-  async function header({ table, sysId }) {
+  async function header({ table, sysId }, policy) {
     assertRecord(table, sysId);
-    const rows = await queryTable(table, `sys_id=${sysId}`, ['number', 'short_description', 'state', 'priority'], { limit: 1, displayValue: true });
+    // The panel's policy rides along with the message (see src/sidepanel/ask.js); the guard merges it with the managed policy.
+    const guarded = await policyGuard.deps({ queryTable }, policy);
+    const rows = await guarded.queryTable(table, `sys_id=${sysId}`, ['number', 'short_description', 'state', 'priority'], { limit: 1, displayValue: true });
     const row = rows[0] || {};
     return { number: disp(row.number), short_description: disp(row.short_description), state: disp(row.state), priority: disp(row.priority) };
   }
 
   function assertRecord(table, sysId) {
     if (!TABLE_RE.test(table || '') || !SYS_ID_RE.test(sysId || '')) throw new Error('That is not a valid record.');
-  }
-
-  async function fillField({ field, value, label, mode }) {
-    if (!FIELD_RE.test(field || '')) return { ok: false, reason: 'bad-field' };
-    const text = String(value ?? '');
-    if (!text) return { ok: false, reason: 'bad-field' };
-    if (text.length > MAX_INSERT_CHARS) return { ok: false, reason: 'too-long' };
-    try {
-      // 'append' = never overwrite what the agent already typed: the bridge adds the text below it, on a classic form
-      // (g_form), on a Workspace page and on a portal page (the box it finds in the DOM) alike.
-      const answer = await callPage('fillField', [field, text, typeof label === 'string' ? label.slice(0, 100) : '', mode === 'append']);
-      // The answer comes from the page: only the two shapes the panel understands go back.
-      if (answer?.ok === true) return { ok: true, method: answer.method === 'gform' ? 'gform' : 'dom' };
-      return { ok: false, reason: FILL_REASONS.has(answer?.reason) ? answer.reason : 'no-form' };
-    } catch {
-      return { ok: false, reason: 'no-form' };
-    }
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -120,10 +105,10 @@ if (!window.__abContentInstalled) {
         case MSG.PAGE_STATE:
           return pageState();
         case MSG.READ:
-          if (message.op === 'header') return header(message.args || {});
-          return handleRead(message.op, message.args || {});
+          if (message.op === 'header') return header(message.args || {}, message.policy);
+          return handleRead(message.op, message.args || {}, { policy: message.policy });
         case MSG.FILL_FIELD:
-          return fillField(message);
+          return handleFillField(message, { callPage, currentRecord: () => resolveRecord(location.href), currentNewRecord: newRecordState, href: () => location.href });
         default:
           throw new Error('Unknown request.');
       }

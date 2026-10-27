@@ -23,6 +23,7 @@ import { detect, detectCandidates, resolveOverlaps, DEFAULT_MIN_CONFIDENCE, HIGH
 import { createDictionary } from './dictionary.js';
 import { createTokenizer } from './tokenizer.js';
 import { seal } from './seal.js';
+import { columnsForPart } from '../features/partColumns.js';
 
 export class FirewallError extends Error {
   /**
@@ -37,6 +38,11 @@ export class FirewallError extends Error {
 }
 
 const MODES = Object.freeze(['standard', 'strict', 'local-only']);
+
+// HR-family tables: their free text is not sent in Strict mode unless the organisation allowed it. 'sn_hr_' always counts; the
+// policy can add prefixes (sensitiveTablePrefixes) and the caller can say the record is sensitive for another reason (a base-class
+// record whose real class could not be resolved).
+const DEFAULT_SENSITIVE_PREFIXES = ['sn_hr_'];
 
 /** Fixed, trusted text added to every system message. It contains no ticket data. */
 export const RULES_PREAMBLE = [
@@ -145,6 +151,8 @@ export function assertNoHighConfidencePii(text, regions) {
  *   blockedFields?: string[],
  *   endpointIsLocal?: boolean,
  *   allowHrFreeText?: boolean,
+ *   sensitivePrefixes?: string[],
+ *   sensitiveRecord?: boolean,
  *   regions?: string[],
  * }} [options]
  */
@@ -154,6 +162,8 @@ export function createFirewall(options = {}) {
   const blocked = new Set((Array.isArray(options.blockedFields) ? options.blockedFields : []).map((f) => String(f).toLowerCase()));
   const endpointIsLocal = options.endpointIsLocal === true;
   const allowHrFreeText = options.allowHrFreeText === true;
+  const sensitivePrefixes = [...new Set([...DEFAULT_SENSITIVE_PREFIXES, ...(Array.isArray(options.sensitivePrefixes) ? options.sensitivePrefixes : []).map((p) => String(p).toLowerCase()).filter(Boolean)])];
+  const sensitiveRecord = options.sensitiveRecord === true;
   const regions = options.regions;
 
   const dictionary = createDictionary(options.people);
@@ -223,17 +233,26 @@ export function createFirewall(options = {}) {
   }
 
   function checkParts(parts, table) {
+    const hrTable = sensitiveRecord || sensitivePrefixes.some((prefix) => table.toLowerCase().startsWith(prefix));
     for (const part of parts) {
       const name = String(part.field ?? part.label ?? '');
-      if (name && blocked.has(name.toLowerCase())) {
-        throw new FirewallError('BLOCKED_FIELD', `The field "${attrSafe(name)}" is blocked by policy, so nothing was sent.`);
+      // The part's own name, and every column it carries: a list of linked incidents carries short_description and close_notes
+      // (src/features/partColumns.js), so a policy that blocks either stops it.
+      const hit = columnsForPart(name).find((column) => blocked.has(column));
+      if (hit) {
+        throw new FirewallError(
+          'BLOCKED_FIELD',
+          hit === name.toLowerCase()
+            ? `The field "${attrSafe(name)}" is blocked by policy, so nothing was sent.`
+            : `The part "${attrSafe(name)}" carries the field "${attrSafe(hit)}", which is blocked by policy, so nothing was sent.`
+        );
       }
       if (mode !== 'strict') continue;
       // The field name decides; a part with no field is judged by its label.
       if (name && isSensitiveField(name)) {
         throw new FirewallError('BLOCKED_FIELD', `Strict mode: the field "${attrSafe(name)}" is sensitive and is never sent.`);
       }
-      if (table.toLowerCase().startsWith('sn_hr_') && !allowHrFreeText && isFreeText(part)) {
+      if (hrTable && !allowHrFreeText && isFreeText(part)) {
         throw new FirewallError('BLOCKED_FIELD', 'Strict mode: free text from HR tables is not sent.');
       }
     }

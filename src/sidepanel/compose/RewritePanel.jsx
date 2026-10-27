@@ -4,8 +4,9 @@ import { useRun } from '../useRun.js';
 import RunPanel from '../RunPanel.jsx';
 import { parseSafeText, toPlainText } from '../../render/safeText.js';
 import { FORM_FIELDS, MAX_FORM_TEXT, formFieldByName } from '../../compose/formFields.js';
-import { LANGUAGES, REWRITE_PRESETS, buildComposePack, mergePeople, peopleFromNames, withLanguage } from '../../compose/rewrite.js';
-import { FillFeedback, aiNotReadyText, featureState, isAiReady, readRecordPeople, useFill } from './shared.js';
+import { LANGUAGES, REWRITE_PRESETS, buildComposePack, formReadRefusal, mergePeople, pageTable, peopleFromNames, withLanguage } from '../../compose/rewrite.js';
+import { currentFromPage, expectFromPage, matchesExpect, wrongRecordText } from '../../lib/fillable.js';
+import { FillFeedback, ReviewHints, aiNotReadyText, featureState, hintsFor, isAiReady, readRecordPeople, useFill } from './shared.js';
 
 const isRewriteFeature = (feature) => Boolean(feature?.id) && REWRITE_PRESETS.some((p) => p.featureId === feature.id);
 const SIMPLE = REWRITE_PRESETS.filter((p) => !p.needsLanguage);
@@ -20,12 +21,22 @@ export default function RewritePanel({ page, eff }) {
   const [names, setNames] = useState('');
   const [status, setStatus] = useState(null); // { kind, text } about reading the form
   const [reading, setReading] = useState(false);
+  // Where the text in the box came from, when it was read from the open form: { field, expect, number }. Pasted text has none.
+  const [provenance, setProvenance] = useState(null);
+  // The record that was open when the rewrite was made: Replace / Add below only work while it is the one open ({ expect, number }).
+  const [made, setMade] = useState(null);
   const aiReady = isAiReady(eff);
   const hasText = text.trim().length > 0;
   const field = formFieldByName(target);
 
   async function useForm() {
     setStatus(null);
+    // An HR case, a table the organisation blocks, or a blocked field: the text is not read at all (the run would be refused anyway).
+    const refusal = formReadRefusal(pageTable(page), target, eff.policy);
+    if (refusal) {
+      setStatus({ kind: 'warn', text: refusal });
+      return;
+    }
     setReading(true);
     try {
       const answer = await read(page.tabId, 'formValues', { names: [target] });
@@ -34,6 +45,7 @@ export default function RewritePanel({ page, eff }) {
       else if (!value.trim()) setStatus({ kind: 'warn', text: `The ${field.label.toLowerCase()} field is empty. Type something in the form first, or paste the text here.` });
       else {
         setText(value);
+        setProvenance({ field: target, expect: expectFromPage(page), number: page.record?.number || '' });
         setStatus({ kind: 'ok', text: `Took the ${field.label.toLowerCase()} from the form.` });
       }
     } catch (err) {
@@ -46,6 +58,12 @@ export default function RewritePanel({ page, eff }) {
   function go(preset) {
     const { feature, available } = featureState(preset.featureId, eff.policy);
     if (!feature || !available || !hasText) return;
+    // Text read from a form belongs to that record: another record's policy (or HR gate) would not have applied to it.
+    if (provenance && !matchesExpect(provenance.expect, currentFromPage(page))) {
+      setStatus({ kind: 'warn', text: `This text was read from ${provenance.number || 'another record'}. Open that ticket again, or paste the text here.` });
+      return;
+    }
+    setMade({ expect: expectFromPage(page), number: page.record?.number || '' });
     const chosen = preset.needsLanguage ? withLanguage(feature, language) : feature;
     if (!chosen) return;
     fill.clear();
@@ -55,7 +73,9 @@ export default function RewritePanel({ page, eff }) {
       getPack: async () => {
         const known = await readRecordPeople(page, eff);
         if (!known.ok) setStatus({ kind: 'warn', text: "The ticket's people could not be read, so only the names you list are hidden. Check the preview." });
-        return buildComposePack({ text, people: mergePeople(known.people, peopleFromNames(names)) });
+        // The pack carries the real table of this page and the form field the text came from, so the table policy, the HR gate
+        // and blockedFields apply to it like to any action on this record.
+        return buildComposePack({ text, people: mergePeople(known.people, peopleFromNames(names)), table: pageTable(page), field: provenance?.field || 'text' });
       },
     });
   }
@@ -78,7 +98,8 @@ export default function RewritePanel({ page, eff }) {
 
   const showResult = run.phase === 'done' && isRewriteFeature(run.active);
   const plain = showResult ? toPlainText(parseSafeText(run.result || '')) : '';
-  const put = (mode) => fill.insert({ field: target, value: plain, label: field.fieldLabel, mode, check: field.customerVisible });
+  const wrongRecord = Boolean(made?.expect) && !matchesExpect(made.expect, currentFromPage(page));
+  const put = (mode) => fill.insert({ field: target, value: plain, label: field.fieldLabel, mode, key: `${target}:${mode}`, expect: made ? made.expect : undefined, number: made?.number });
 
   return (
     <div className="ab-compose-stack">
@@ -92,7 +113,10 @@ export default function RewritePanel({ page, eff }) {
             className="ab-textarea ab-compose-text"
             value={text}
             maxLength={MAX_FORM_TEXT}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (!e.target.value.trim()) setProvenance(null);
+            }}
             placeholder="Paste or type the text here"
           />
           <span className="ab-hint">{text.length.toLocaleString()} of {MAX_FORM_TEXT.toLocaleString()} characters</span>
@@ -140,32 +164,53 @@ export default function RewritePanel({ page, eff }) {
       <RunPanel run={run} eff={eff} page={page} readingText="Getting ready…" />
 
       {showResult && (
-        <section className="ab-card ab-compose-actions" aria-label="Use the rewrite">
-          <h3 className="ab-h">Use it in the form</h3>
-          <p className="ab-hint">Goes into: {field.label}. Change the field above if you need another one.</p>
-          <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" onClick={() => put('replace')}>
-              Replace what is in the form
-            </button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => put('append')}>
-              Add below
-            </button>
-            <button
-              type="button"
-              className="ab-btn ab-btn-sm ab-btn-quiet"
-              onClick={() => {
-                setText(plain.slice(0, MAX_FORM_TEXT));
-                run.reset();
-                fill.clear();
-              }}
-            >
-              Use as my text
-            </button>
-          </div>
-          <FillFeedback fill={fill} />
-          <p className="ab-hint">Nothing is saved or sent. You press Save in the form yourself.</p>
-        </section>
+        <RewriteResultActions
+          field={field}
+          fill={fill}
+          made={made}
+          wrongRecord={wrongRecord}
+          hints={hintsFor(target, plain, { people: run.people, scan: run.scan, internalTexts: run.lastPack?.internalTexts })}
+          onPut={put}
+          onUseAsText={() => {
+            setText(plain.slice(0, MAX_FORM_TEXT));
+            run.reset();
+            fill.clear();
+          }}
+        />
       )}
     </div>
+  );
+}
+
+/**
+ * "Use it in the form" under a rewrite. "Add below" is the main button: it keeps what is in the form. "Replace" overwrites it, so it is
+ * never the main button and says so. A one-line field (a short description) has no "below", so only Replace is offered.
+ * Every button is off while an insert is in flight, after it worked into this field ("Inserted"), and when another record is open
+ * than the one the rewrite was made on.
+ */
+export function RewriteResultActions({ field, fill, made, wrongRecord, hints, onPut, onUseAsText }) {
+  return (
+    <section className="ab-card ab-compose-actions" aria-label="Use the rewrite">
+      <h3 className="ab-h">Use it in the form</h3>
+      <p className="ab-hint">Goes into: {field.label}. Change the field above if you need another one.</p>
+      <ReviewHints hints={hints} />
+      {wrongRecord && <p className="ab-note ab-note-warn" role="status">{wrongRecordText(made)}</p>}
+      <div className="ab-row">
+        {!field.singleLine && (
+          <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={fill.busy || wrongRecord || Boolean(fill.inserted[`${field.name}:append`])} onClick={() => onPut('append')}>
+            {fill.inserted[`${field.name}:append`] ? 'Inserted' : 'Add below'}
+          </button>
+        )}
+        <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy || wrongRecord || Boolean(fill.inserted[`${field.name}:replace`])} onClick={() => onPut('replace')}>
+          {fill.inserted[`${field.name}:replace`] ? 'Inserted' : 'Replace what is in the form'}
+        </button>
+        <button type="button" className="ab-btn ab-btn-sm ab-btn-quiet" disabled={fill.busy} onClick={onUseAsText}>
+          Use as my text
+        </button>
+      </div>
+      <p className="ab-hint">{field.singleLine ? 'This replaces what is in the form: it is a one-line field.' : 'This replaces what is in the form if you choose Replace. Add below keeps it.'}</p>
+      <FillFeedback fill={fill} />
+      <p className="ab-hint">Nothing is saved or sent. You press Save in the form yourself.</p>
+    </section>
   );
 }

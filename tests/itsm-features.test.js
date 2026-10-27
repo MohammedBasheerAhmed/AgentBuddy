@@ -44,7 +44,8 @@ test('kinds are real record kinds, never HR cases, and match the brief', () => {
     'sentiment-risk': ['incident', 'request', 'requested_item', 'catalog_task', 'case', 'task'],
     'next-best-action': ['incident', 'case', 'requested_item', 'catalog_task', 'task'],
     'thread-summary': ['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'task', 'other'],
-    'routing-hint': ['incident', 'case', 'request', 'requested_item', 'task'],
+    // (integration review M6: only where the ceiling has category and assignment group; tests/panel-features.test.js checks that)
+    'routing-hint': ['incident', 'case'],
     'kb-article-draft': ['incident', 'problem', 'case', 'requested_item', 'task'],
     'major-incident-comms': ['incident', 'problem', 'change'],
   };
@@ -61,12 +62,12 @@ test('featuresFor shows the right features per kind', () => {
   assert.deepEqual(mine('incident'), [...MINE].sort());
   assert.deepEqual(mine('problem'), ['kb-article-draft', 'major-incident-comms', 'thread-summary']);
   assert.deepEqual(mine('change'), ['major-incident-comms', 'thread-summary']);
-  assert.deepEqual(mine('request'), ['routing-hint', 'sentiment-risk', 'thread-summary']);
-  assert.deepEqual(mine('requested_item'), ['kb-article-draft', 'next-best-action', 'routing-hint', 'sentiment-risk', 'thread-summary']);
+  assert.deepEqual(mine('request'), ['sentiment-risk', 'thread-summary']);
+  assert.deepEqual(mine('requested_item'), ['kb-article-draft', 'next-best-action', 'sentiment-risk', 'thread-summary']);
   assert.deepEqual(mine('catalog_task'), ['next-best-action', 'sentiment-risk', 'thread-summary']);
   assert.deepEqual(mine('case'), ['kb-article-draft', 'next-best-action', 'routing-hint', 'sentiment-risk', 'thread-summary']);
   assert.deepEqual(mine('hr_case'), []);
-  assert.deepEqual(mine('task'), ['kb-article-draft', 'next-best-action', 'routing-hint', 'sentiment-risk', 'thread-summary']);
+  assert.deepEqual(mine('task'), ['kb-article-draft', 'next-best-action', 'sentiment-risk', 'thread-summary']);
   assert.deepEqual(mine('other'), ['thread-summary']);
   assert.deepEqual(mine('knowledge'), []);
   assert.deepEqual(mine('chat'), []);

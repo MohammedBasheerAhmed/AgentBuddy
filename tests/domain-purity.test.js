@@ -75,7 +75,8 @@ test('the extras and the read operation use only the four read functions of the 
   }
   await OPS.accountCases({ table: 'sn_customerservice_case', sysId: IDS.case }, { deps, checkRecord, checkPack });
   await readContextPack({ table: 'change_request', sysId: IDS.change }, deps, { feature: 'change-cab-brief' });
-  const allowed = new Set(['queryTable', 'fetchRecord', 'countRecords', 'countByColumn', 'now']);
+  // sensitivePrefixes and isBlocked are optional policy properties that the content script's guard adds (src/content/policyGuard.js).
+  const allowed = new Set(['queryTable', 'fetchRecord', 'countRecords', 'countByColumn', 'now', 'sensitivePrefixes', 'isBlocked']);
   for (const name of touched) assert.ok(allowed.has(name), `the deps were asked for ${name}`);
   assert.ok(touched.has('queryTable') && touched.has('countRecords'));
 });

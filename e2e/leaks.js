@@ -18,13 +18,24 @@ const literal = (value) => ({
 });
 
 function criticalList(data) {
-  const { SEED, ABEL, BETH } = data;
+  const { SEED, MORE_SEED, ABEL, BETH, CHARLIE, DAVE, ERIN } = data;
   const parts = (n) => n.split(' ');
-  return [
+  const list = [
     literal(SEED.callerName), word(parts(ABEL.name)[0]), word(parts(ABEL.name)[1]), literal(SEED.callerEmail), literal('abel.tuter'),
     literal(BETH.name), word(parts(BETH.name)[0]), word(parts(BETH.name)[1]), literal(BETH.email),
     literal('+1 555-0134'), literal('555-0134'), literal(SEED.card), literal(SEED.cardDigits), literal(SEED.password),
   ];
+  // The people and secrets of the newer fixtures (data.more.js). Erin's surname is a common word ("Contact"), so only her full name counts.
+  if (CHARLIE) list.push(literal(CHARLIE.name), word(parts(CHARLIE.name)[0]), word(parts(CHARLIE.name)[1]), literal(CHARLIE.email));
+  if (DAVE) list.push(literal(DAVE.name), word(parts(DAVE.name)[0]), word(parts(DAVE.name)[1]), literal(DAVE.email));
+  if (ERIN) list.push(literal(ERIN.name), word(parts(ERIN.name)[0]), literal(ERIN.email));
+  if (MORE_SEED) {
+    list.push(
+      literal(MORE_SEED.secret), literal(MORE_SEED.articleSecret), literal(MORE_SEED.chatEmail), literal(MORE_SEED.chatPhone), literal(MORE_SEED.articleEmail), literal(MORE_SEED.articlePhone),
+      literal(MORE_SEED.rewriteCard), literal(MORE_SEED.rewriteName), word('Priya'), word('Raman'), literal(MORE_SEED.rewriteEmail), literal(MORE_SEED.rewritePhone), literal(MORE_SEED.rewritePassword)
+    );
+  }
+  return list;
 }
 
 function gapList(data) {

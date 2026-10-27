@@ -4,7 +4,10 @@
 // firewall masks and wraps it like any ticket text; it is never put into a prompt. This file builds the ContextPack-shaped
 // object those runs use, the parts, the list of presets and languages, and the "names to hide" list.
 
-import { MAX_FORM_TEXT } from './formFields.js';
+import { FORM_FIELD_NAMES, MAX_FORM_TEXT } from './formFields.js';
+import { isTableAllowed } from '../policy/policy.js';
+import { isSensitiveTable } from '../context/kinds.js';
+import { TABLE_RE } from '../context/util.js';
 
 export { MAX_FORM_TEXT };
 
@@ -90,14 +93,28 @@ export function mergePeople(...lists) {
   return out;
 }
 
+// Part names a compose pack may use. A text read from a form field keeps that field's name, so a policy that blocks the field
+// (blockedFields) blocks the text too; pasted text is 'text'; call notes are 'notes'.
+const COMPOSE_FIELDS = new Set([...FORM_FIELD_NAMES, 'text', 'notes']);
+
+/** The table of the page the person is on ('' when there is no record and no blank form). */
+export const pageTable = (page) => String(page?.record?.table || page?.newRecord?.table || '');
+
 /**
- * A ContextPack-shaped object for a run whose only data is the text the agent supplied. `table` and `sysId` only label the
- * audit entry. `compose` is the transient field the feature's parts() reads.
+ * A ContextPack-shaped object for a run whose only data is the text the agent supplied.
+ *
+ * `table` is the REAL table of the page the person is on (page.record.table or page.newRecord.table; see pageTable), so the
+ * table policy (blockedTables), the HR gate and the Strict-mode HR rule apply to a rewrite exactly as they do to an action on
+ * that record. Without a page table it stays 'compose' (text pasted with no ticket open). `sysId` is always synthetic: the
+ * pack stands for the supplied text, not for a record, and nothing is read with it.
+ * `field` names the form field the text came from (comments, work_notes, close_notes, description, short_description) so
+ * blockedFields applies; 'text' for pasted text. `compose` is the transient field the feature's parts() reads.
  */
-export function buildComposePack({ text, people = [], label = 'Text to rewrite', field = 'text' } = {}) {
+export function buildComposePack({ text, people = [], label = 'Text to rewrite', field = 'text', table = '' } = {}) {
+  const realTable = TABLE_RE.test(String(table || '')) ? String(table) : 'compose';
   return {
     version: 1,
-    table: 'compose',
+    table: realTable,
     sysId: 'compose',
     number: '',
     kind: 'other',
@@ -106,8 +123,19 @@ export function buildComposePack({ text, people = [], label = 'Text to rewrite',
     journal: [],
     related: {},
     access: [],
-    compose: { text: clipComposeText(text), label, field },
+    compose: { text: clipComposeText(text), label, field: COMPOSE_FIELDS.has(field) ? field : 'text' },
   };
+}
+
+/**
+ * Why text may not be read from the open form into a rewrite ('' when it may): the organisation blocks the table, or it is an
+ * HR table and HR content is not allowed, or the field itself is blocked. The same rules the run would hit later, said up front.
+ */
+export function formReadRefusal(table, field, policy) {
+  if (table && !isTableAllowed(table, policy)) return `Your organisation does not allow Agent Buddy to use ${table} records.`;
+  if (table && isSensitiveTable(table) && !policy?.allowHrContent) return 'HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.';
+  if (field && (policy?.blockedFields || []).includes(String(field).toLowerCase())) return `Your organisation does not allow the ${field} field to be sent to an AI model.`;
+  return '';
 }
 
 /** The one part a rewrite or notes run sends: the supplied text. Nothing else. */

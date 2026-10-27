@@ -18,9 +18,10 @@ export default {
    * @returns {Promise<{ hits: object[], keywords: string[], access: object[] }>} hits as in 'similar', plus
    *   assignment_group, priority and subcategory (display values, '' when not readable)
    */
-  async routingLookalikes(args, { deps, checkPack }) {
+  async routingLookalikes(args, { deps, checkPack, allowSensitive = false }) {
     const pack = checkPack(args?.pack);
-    const found = await findSimilarTickets(pack, deps, { resolvedOnly: true, limit: LIMIT, allowSensitive: args?.allowSensitive === true });
+    // `allowSensitive` is the panel's request after the managed policy has had its say (src/content/reads.js).
+    const found = await findSimilarTickets(pack, deps, { resolvedOnly: true, limit: LIMIT, allowSensitive });
     const access = [...found.access];
 
     // sys_ids come from our own read above, but they are still checked: the query is built from them.
@@ -29,7 +30,8 @@ export default {
     if (ids.length) {
       const { rows, failure } = await softRead(deps, pack.table, `sys_idIN${ids.join(',')}`, EXTRA_COLUMNS, { limit: ids.length + 1, displayValue: true });
       if (failure) {
-        access.push(accessEntry(pack.table, failure.status === STATUS.DENIED ? STATUS.DENIED : STATUS.ERROR, 'The assignment group and priority of the look-alike tickets could not be read.'));
+        const blocked = failure.status === STATUS.BLOCKED;
+        access.push(accessEntry(pack.table, blocked ? STATUS.BLOCKED : failure.status === STATUS.DENIED ? STATUS.DENIED : STATUS.ERROR, blocked ? failure.note : 'The assignment group and priority of the look-alike tickets could not be read.'));
       } else {
         rows.forEach((row) => extra.set(raw(row.sys_id).toLowerCase(), row));
       }

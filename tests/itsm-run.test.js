@@ -46,8 +46,30 @@ async function prepare(id, { pack = hostilePack(), read = hostileRead(), mode = 
 }
 
 // A seeded value counts as present only as a whole word: "Abel" is not in the word "label" (every data block has a label attribute).
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[]\]/g, '\const outgoing = (prepared) =>');
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const has = (text, secret) => new RegExp(`(?<![A-Za-z0-9])${escapeRegex(secret)}(?![A-Za-z0-9])`, 'i').test(text);
+
+// The leak check must be able to FAIL. A helper that escapes nothing (an editing tool once expanded `$&` here) treats each seeded
+// value as a pattern and says "absent" for any value with a regex character in it, so these keep the helper honest.
+test('the leak check finds a seeded value that leaks, including values with regex characters', () => {
+  for (const secret of SEEDED) assert.ok(has(`before ${secret} after`, secret), `"${secret}" would not be noticed`);
+  for (const secret of ['a+b (c) [d]', 'x.y?z*', '$1 ^ | {2} \\n', 'abel.tuter@example.com']) {
+    assert.ok(has(`wrote ${secret}, then stopped`, secret), secret);
+    assert.ok(!has('nothing of the sort here', secret), secret);
+  }
+  assert.ok(!has('abelXtuter@exampleXcom', 'abel.tuter@example.com'), 'a dot is a dot, not any character');
+  assert.ok(!has('a label attribute', 'Abel'), 'a whole word only');
+  assert.equal(escapeRegex('a.b*c'), 'a\\.b\\*c');
+});
+
+test('a request that carries a seeded value is caught by the same check the leak tests use', async () => {
+  const { prepared } = await prepare('thread-summary');
+  const clean = outgoing(prepared);
+  for (const secret of SEEDED) {
+    assert.ok(!has(clean, secret), `"${secret}" is not in the real request`);
+    assert.ok(has(`${clean}\n${secret}`, secret), `"${secret}" would be caught if it leaked`);
+  }
+});
 
 const outgoing = (prepared) => prepared.request.messages.map((m) => m.content).join('\n');
 const userMessage = (prepared) => prepared.request.messages.find((m) => m.role === 'user').content;
@@ -129,8 +151,14 @@ test('a policy that blocks a field blocks every part that carries it', async () 
     assert.equal(await blocked(id, 'comments'), 'BLOCKED_FIELD', id);
   }
   assert.equal(await blocked('routing-hint', 'work_notes'), null, 'routing reads no notes');
-  // Other tickets' close notes are sent as close_notes: a policy against close notes covers them.
-  for (const id of ['next-best-action', 'routing-hint']) assert.equal(await blocked(id, 'close_notes'), 'BLOCKED_FIELD', id);
+  // Other tickets' close notes are sent inside the reference tickets, whose field stands for the columns they carry: a policy against
+  // close notes (or the short description, the category...) covers them. The routing hint no longer sends other tickets' resolution
+  // text (group, priority and category only), so close notes do not stop it, but the wording of those tickets still does.
+  assert.equal(await blocked('next-best-action', 'close_notes'), 'BLOCKED_FIELD', 'next-best-action');
+  assert.equal(await blocked('routing-hint', 'close_notes'), null, 'routing-hint sends no close notes of other tickets');
+  for (const id of ['next-best-action', 'routing-hint']) {
+    for (const column of ['short_description', 'category']) assert.equal(await blocked(id, column), 'BLOCKED_FIELD', `${id} / ${column}`);
+  }
   assert.equal(await blocked('thread-summary', 'close_notes'), null);
   assert.equal(await blocked('sentiment-risk', 'signals'), 'BLOCKED_FIELD', 'even the counted signals have a field name to block');
 });

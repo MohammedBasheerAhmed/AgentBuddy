@@ -5,7 +5,7 @@ import { LIMITS, addSnippet, exportSnippets, importSnippets, removeSnippet, sear
 import { BUILTIN_VARIABLES } from '../../snippets/render.js';
 import { changeSnippets, loadSnippets, starterSnippets } from '../../snippets/library.js';
 import { describeMissing, previewSnippet, unknownVariables } from '../../snippets/preview.js';
-import { FillFeedback, useFill } from './shared.js';
+import { FillFeedback, ReviewHints, hintsFor, useFill } from './shared.js';
 
 const area = () => chrome.storage.local;
 const token = (name) => `{{${name}}}`; // (braces cannot be written inside JSX text)
@@ -31,7 +31,7 @@ function PreviewBox({ preview, label }) {
 }
 
 export default function SnippetsPanel({ page, eff, active }) {
-  const fill = useFill({ page, eff, run: null });
+  const fill = useFill({ page, eff, run: null, feature: 'snippets' }); // (no AI run: the audit log names the action 'snippets')
   const [list, setList] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState('');
@@ -68,6 +68,14 @@ export default function SnippetsPanel({ page, eff, active }) {
       chrome.storage.onChanged.removeListener(onChange);
     };
   }, []);
+
+  // Another record is open: what was inserted into the last one is no longer "Inserted" here.
+  useEffect(() => {
+    fill.clear();
+    setAskMissing(null);
+    // fill.clear is stable; the open record's identity is what counts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   // ---- the open record's values, read once per record while a snippet is shown ----
   useEffect(() => {
@@ -179,11 +187,16 @@ export default function SnippetsPanel({ page, eff, active }) {
       return;
     }
     setAskMissing(null);
+    // The customer reads a comment: the review runs first (it looks at the field the text goes into). The text was filled in from the
+    // record whose values were read, so it only goes into that record's form.
     const spec =
       kind === 'comment'
-        ? { field: 'comments', label: 'Additional comments', check: true } // the customer reads it: safe-to-send check first
-        : { field: 'work_notes', label: 'Work notes', check: false };
-    await fill.insert({ ...spec, value: real.text, mode: 'append' }, { people: realPack?.people || [] });
+        ? { field: 'comments', label: 'Additional comments', key: 'comment' }
+        : { field: 'work_notes', label: 'Work notes', key: 'note' };
+    await fill.insert(
+      { ...spec, value: real.text, mode: 'append', expect: realPack ? { table: realPack.table, sysId: realPack.sysId } : undefined, number: realPack?.number },
+      { people: realPack?.people || [] }
+    );
   }
 
   function addVariable(name) {
@@ -354,26 +367,28 @@ export default function SnippetsPanel({ page, eff, active }) {
           </div>
           <p className="ab-hint">{sourceNote}</p>
           <PreviewBox preview={detail} label="Snippet as it will be inserted" />
+          {/* what the customer would see if this goes in as a comment: low-severity findings never block, but they are shown */}
+          <ReviewHints hints={hintsFor('comments', actual(selected.body).text, { people: realPack?.people || [] })} />
 
           {askMissing && askMissing.id === selected.id && (
             <div className="ab-note ab-note-warn" role="alert">
               <strong>Some values are missing.</strong> If you insert now, these stay as written in the text:{' '}
               {realMissing.map((n) => token(n)).join(', ')}.
               <div className="ab-row ab-compose-gap">
-                <button type="button" className="ab-btn ab-btn-sm" onClick={() => insertSnippet(selected, askMissing.kind, true)}>Insert anyway</button>
+                <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => insertSnippet(selected, askMissing.kind, true)}>Insert anyway</button>
                 <button type="button" className="ab-btn ab-btn-sm" onClick={() => setAskMissing(null)}>Cancel</button>
               </div>
             </div>
           )}
 
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={Boolean(key) && packState.state === 'loading'} onClick={() => insertSnippet(selected, 'comment')}>
-              Insert as customer comment
+            <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={(Boolean(key) && packState.state === 'loading') || fill.busy || fill.inserted.comment} onClick={() => insertSnippet(selected, 'comment')}>
+              {fill.inserted.comment ? 'Inserted' : 'Insert as customer comment'}
             </button>
-            <button type="button" className="ab-btn ab-btn-sm" disabled={Boolean(key) && packState.state === 'loading'} onClick={() => insertSnippet(selected, 'note')}>
-              Insert as work note
+            <button type="button" className="ab-btn ab-btn-sm" disabled={(Boolean(key) && packState.state === 'loading') || fill.busy || fill.inserted.note} onClick={() => insertSnippet(selected, 'note')}>
+              {fill.inserted.note ? 'Inserted' : 'Insert as work note'}
             </button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => fill.copy(actual(selected.body).text)}>Copy</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.copy(actual(selected.body).text)}>Copy</button>
           </div>
           <FillFeedback fill={fill} />
           <div className="ab-row">

@@ -61,9 +61,9 @@ test('at most 10 other cases of the same account: open ones first, then the newe
   assert.match(answer.access[0].note, /2 more cases exist/);
 });
 
-test('each case has exactly number, short_description, state, priority, opened_at and resolved_at', async () => {
+test('each case has exactly number, short_description, state, priority, opened_at, resolved_at and the names of its people (for masking)', async () => {
   const { answer } = await run(args);
-  for (const c of answer.cases) assert.deepEqual(Object.keys(c), ['number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at']);
+  for (const c of answer.cases) assert.deepEqual(Object.keys(c), ['number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at', 'people']);
   const open = answer.cases[0];
   assert.equal(open.state, 'Open');
   assert.equal(open.resolved_at, '');
@@ -82,7 +82,8 @@ test('the reads are GET-only through the deps: the case, then its account\'s cas
   assert.equal(others.query, `account=${IDS.account}^sys_id!=${IDS.case}^ORDERBYDESCactive^ORDERBYDESCopened_at`);
   assert.equal(others.options.limit, 11);
   assert.equal(others.options.displayValue, true);
-  assert.deepEqual(others.fields, ['sys_id', 'number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at', 'account']);
+  // contact, consumer and assigned_to are read for their display names only: the people on another case are masked by name.
+  assert.deepEqual(others.fields, ['sys_id', 'number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at', 'account', 'contact', 'consumer', 'assigned_to']);
   assert.deepEqual(count.fields, ['sys_id'], 'the count asks for no data');
 });
 
@@ -107,10 +108,10 @@ test('if the count cannot be read, `more` is null: "more exist" without a made-u
   assert.match(answer.access[0].note, /More cases exist/);
 });
 
-test('columns the instance returns beyond the six never get through', async () => {
+test('columns the instance returns beyond the ones asked for never get through', async () => {
   const { answer } = await run(args, domainTables(), { leaky: true });
   assert.ok(!JSON.stringify(answer).includes('LEAK'));
-  for (const c of answer.cases) assert.deepEqual(Object.keys(c), ['number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at']);
+  for (const c of answer.cases) assert.deepEqual(Object.keys(c), ['number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at', 'people']);
 });
 
 // ---- Access ---------------------------------------------------------------------------------------------------------------------

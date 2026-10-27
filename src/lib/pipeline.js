@@ -5,7 +5,7 @@
 // Dependencies are injected so the whole flow is unit-tested without a browser or network (tests/pipeline.test.js).
 // The side panel passes the real firewall, sendChat and logAudit. Nothing here knows about React or chrome.*.
 
-import { checkProviderAllowed, isFeatureEnabled, isTableAllowed } from '../policy/policy.js';
+import { checkProviderAllowed, isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { partsFor, isFeatureAvailable } from '../features/registry.js';
 import { peopleFor } from '../features/parts.js';
 
@@ -21,12 +21,23 @@ export class RunBlocked extends Error {
   }
 }
 
-const isHrTable = (table) => String(table || '').startsWith('sn_hr_');
+/**
+ * Is this record in a sensitive (HR-family) table under the policy? `sn_hr_` always counts, the policy's sensitiveTablePrefixes add
+ * to it. A pack can also say so itself (`pack.sensitive`): the context engine sets it when a record was addressed by a base class
+ * (`task`) and its real class could not be looked up, so it is treated as HR rather than guessed to be harmless.
+ */
+export const isSensitivePack = (pack, policy) => pack?.sensitive === true || isSensitiveByPolicy(pack?.table, policy);
 
-/** Should the person see the exact outgoing text first? `seen` is the set of feature ids already confirmed once. */
-export function previewRequired(previewMode, featureId, seen = []) {
+/**
+ * Should the person see the exact outgoing text first? `seen` is the set of feature ids already confirmed once.
+ * `pack` is optional: a pack with `requirePreview === true` carries text about OTHER people's tickets or articles (look-alikes,
+ * linked incidents, an account's other cases...), so even in "first" mode the person sees it every time, not only once per
+ * feature. "never" is the organisation's or the person's explicit choice and is kept.
+ */
+export function previewRequired(previewMode, featureId, seen = [], pack = null) {
   if (previewMode === 'never') return false;
   if (previewMode === 'always') return true;
+  if (pack?.requirePreview === true) return true;
   return !seen.includes(featureId);
 }
 
@@ -44,9 +55,11 @@ export function connectionProblem(config) {
 
 /**
  * Everything that can be refused before a single byte is built. Throws RunBlocked with a message fit for the person.
- * @param {object} p { feature, pack, values (effective settings), policy, config (resolveProviderConfig), hasKey }
+ * @param {object} p { feature, pack, values (effective settings), policy, config (resolveProviderConfig), hasKey, pageTable }
+ *   pageTable: the table of the form the person is on, when it can differ from the pack's table (Rewrite and Notes-to-ticket label
+ *   their pack 'compose'). The blocked-table and HR rules apply to it as well as to `pack.table`.
  */
-export function assertRunnable({ feature, pack, values, policy, config, hasKey }) {
+export function assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable = '' }) {
   if (!isFeatureEnabled(feature.id, policy)) throw new RunBlocked('Your organisation has switched this feature off.', 'FEATURE_OFF');
   // A feature that stays off until the organisation turns it on (the coaching snapshot).
   if (!isFeatureAvailable(feature, policy)) throw new RunBlocked('Your organisation has not switched this feature on.', 'FEATURE_OFF');
@@ -55,9 +68,22 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey }
   if (needed && (MODE_RANK[values.piiMode] ?? 0) < (MODE_RANK[needed] ?? 0)) {
     throw new RunBlocked(`This needs ${MODE_LABEL[needed] || needed} privacy mode. Change it in Settings.`, 'MODE_TOO_LOW');
   }
-  if (!isTableAllowed(pack.table, policy)) throw new RunBlocked(`Your organisation does not allow Agent Buddy to use ${pack.table} records.`, 'TABLE_BLOCKED');
-  if (isHrTable(pack.table) && !policy?.allowHrContent) {
-    throw new RunBlocked('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.', 'HR_BLOCKED');
+  const page = String(pageTable || '').trim();
+  for (const table of [pack.table, page]) {
+    if (table && !isTableAllowed(table, policy)) throw new RunBlocked(`Your organisation does not allow Agent Buddy to use ${table} records.`, 'TABLE_BLOCKED');
+  }
+  if (isSensitivePack(pack, policy) || (page && isSensitiveByPolicy(page, policy))) {
+    if (!policy?.allowHrContent) {
+      throw new RunBlocked('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.', 'HR_BLOCKED');
+    }
+    // Allowing HR content is not enough on its own: the text may only go to an endpoint the organisation has approved, which means
+    // the policy pins the AI provider or address, or the model runs on this computer.
+    if (!(policy?.aiProvider || policy?.aiBaseUrl || config?.local)) {
+      throw new RunBlocked(
+        'HR case content can only be sent to an AI endpoint your organisation has approved. Ask your administrator to set the AI provider in the policy, or use a model that runs on this computer.',
+        'HR_BLOCKED'
+      );
+    }
   }
   const problem = connectionProblem(config);
   if (problem) throw new RunBlocked(problem, 'BAD_URL');
@@ -74,15 +100,18 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey }
  * Mask and seal the request for a feature. Returns what the preview shows; nothing has been sent yet.
  * @returns {{ request: object, firewall: object, preview: string, stats: object }}
  */
-export function prepareRun({ feature, pack, values, policy, config, hasKey = true, createFirewall }) {
-  assertRunnable({ feature, pack, values, policy, config, hasKey });
+export function prepareRun({ feature, pack, values, policy, config, hasKey = true, createFirewall, pageTable = '' }) {
+  assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable });
+  const sensitive = isSensitivePack(pack, policy) || Boolean(pageTable && isSensitiveByPolicy(pageTable, policy));
   const firewall = createFirewall({
     mode: values.piiMode,
     people: peopleFor(pack),
     blockedFields: policy?.blockedFields || [],
     endpointIsLocal: Boolean(config.local),
     // HR free text only gets here when the policy allowed it explicitly (assertRunnable).
-    allowHrFreeText: isHrTable(pack.table) && Boolean(policy?.allowHrContent),
+    allowHrFreeText: sensitive && Boolean(policy?.allowHrContent),
+    sensitivePrefixes: policy?.sensitiveTablePrefixes || [],
+    sensitiveRecord: sensitive,
   });
   const request = firewall.buildRequest({
     feature: feature.id,
@@ -98,8 +127,11 @@ export function prepareRun({ feature, pack, values, policy, config, hasKey = tru
  * Send a prepared (and, if required, confirmed) request. Always writes an audit entry, whatever happens.
  * @returns {{ text: string, usage: object }} text is re-hydrated: real names are back, locally only.
  */
-export async function executeRun({ prepared, config, values, host = '', previewShown = false, sendChat, logAudit, now = () => Date.now() }) {
+export async function executeRun({ prepared, config, values, host = '', previewShown = false, sendChat, logAudit, now = () => Date.now(), policy = null, tokensUsedToday = null }) {
   const { request, firewall, feature, pack } = prepared;
+  // The organisation's daily token budget (policy.tokenBudgetPerDay), checked before anything is sent. The person's own cap in
+  // Settings is checked by the provider layer (src/providers/budget.js), so the smaller of the two always wins.
+  await assertWithinPolicyBudget({ policy, tokensUsedToday, feature, pack, config, values, logAudit });
   const started = now();
   const base = {
     feature: feature.id,
@@ -122,6 +154,26 @@ export async function executeRun({ prepared, config, values, host = '', previewS
     await logAudit({ ...base, outcome: 'error', reason: errorReason(err), ms: now() - started });
     throw err;
   }
+}
+
+/**
+ * Refuse the call when the policy's daily token budget is used up. `tokensUsedToday` is an injected `async () => number` (the
+ * panel reads its usage log: src/lib/aiUsage.js tokensTodayReader). With no budget in the policy, or no reader, nothing is checked.
+ * A storage problem reading the log does not stop the work: the same stance as the person's own caps, which "fail soft".
+ */
+export async function assertWithinPolicyBudget({ policy, tokensUsedToday, feature, pack, config, values, logAudit }) {
+  const cap = Number(policy?.tokenBudgetPerDay) || 0;
+  if (!(cap > 0) || typeof tokensUsedToday !== 'function') return;
+  let used = 0;
+  try {
+    used = Number(await tokensUsedToday()) || 0;
+  } catch {
+    used = 0;
+  }
+  if (used < cap) return;
+  const err = new RunBlocked(`Your organisation's daily limit of ${cap.toLocaleString('en-US')} AI tokens has been reached. It starts again tomorrow.`, 'BUDGET');
+  await auditBlocked({ feature, pack, config, values, err, logAudit });
+  throw err;
 }
 
 /** Machine-readable reason for the audit log (never the message, which could echo content). */

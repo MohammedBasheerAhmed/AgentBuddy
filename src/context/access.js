@@ -4,7 +4,9 @@
 // denial: it is reported in the pack's `access` list and the feature works with what it has.
 //
 // access entry: { source, status, note }
-//   status: 'ok' | 'empty' | 'empty-or-hidden' | 'denied' | 'error' | 'skipped'
+//   status: 'ok' | 'empty' | 'empty-or-hidden' | 'denied' | 'error' | 'skipped' | 'blocked'
+//   'blocked' is NOT 'denied': the person's user may well be able to read the table, but the organisation's policy (blockedTables)
+//   does not let Agent Buddy read it. It is never an empty result and never "you cannot see it".
 
 import { oneLine } from './util.js';
 
@@ -15,6 +17,7 @@ export const STATUS = Object.freeze({
   DENIED: 'denied',
   ERROR: 'error',
   SKIPPED: 'skipped', // not read on purpose (policy or not needed)
+  BLOCKED: 'blocked', // the organisation's policy does not allow Agent Buddy to read this table (error code BLOCKED_TABLE)
 });
 
 export const entry = (source, status, note = '', extra = {}) => ({ source, status, note, ...extra });
@@ -22,9 +25,14 @@ export const entry = (source, status, note = '', extra = {}) => ({ source, statu
 export const isSessionExpired = (err) => err?.code === 'SESSION_EXPIRED';
 const isAbort = (err) => err?.name === 'AbortError';
 
-/** { status: 'denied' | 'error', note } for an error raised while reading `table`. Session expiry is not handled here. */
+export const isBlockedTable = (err) => err?.code === 'BLOCKED_TABLE';
+
+/** { status: 'blocked' | 'denied' | 'error', note } for an error raised while reading `table`. Session expiry is not handled here. */
 export function classifyReadError(err, table) {
   const text = (err && err.message) || String(err || '');
+  // The policy guard (src/content/policyGuard.js) refused the read: say whose rule it is. Its message names the table that was blocked,
+  // which can differ from `table` (a reference answer, a task whose class is blocked).
+  if (isBlockedTable(err)) return { status: STATUS.BLOCKED, note: oneLine(text, 200) || `Your organisation does not allow reading ${table}.` };
   if (err?.code === 'ACCESS_DENIED' || /\b403\b|not allowed|forbidden|not authorized|security|denied|\bacl\b/i.test(text)) {
     return { status: STATUS.DENIED, note: `Your user cannot read ${table}.` };
   }

@@ -2,6 +2,7 @@
 // Every row says its status in words ("Look at this", "Note", "Fine"); colour only backs it up.
 import React from 'react';
 import { Tag } from './Bits.jsx';
+import { plainNote } from '../plainAccess.js';
 
 const LABEL = { warn: ['Look at this', 'warn'], info: ['Note', ''], ok: ['Fine', 'ok'] };
 
@@ -20,7 +21,7 @@ export function CheckList({ checks }) {
             <span className="ab-chk-head">
               <Tag tone={tone}>{word}</Tag> <span className="ab-chk-item-main">{c.title}</span>
             </span>
-            {c.hint && <span className="ab-hint">{c.hint}</span>}
+            {c.hint && <span className="ab-hint">{plainNote(c.hint)}</span>}
           </li>
         );
       })}

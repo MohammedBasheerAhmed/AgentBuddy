@@ -4,6 +4,7 @@ import { articleFromPack, checkArticle } from '../../knowledge/articleChecks.js'
 import { checkOutgoing } from '../../safeSend/index.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import Notes from '../knowledge/Notes.jsx';
+import { aiNeedsText } from '../aiReady.js';
 
 // C5: checks on the article that is open, then optional AI suggestions. The checks run here on the pack the context engine read
 // (nothing is sent anywhere); "Suggest improvements" goes through useRun like every other AI feature and is Copy only.
@@ -89,6 +90,7 @@ export default function KnowledgeRecordView({ page, eff, record, run, aiReady })
         <h2 className="ab-h">Suggestions from AI</h2>
         <p className="ab-sub">Title, keywords, structure, clarity, missing prerequisites and steps that look out of date. The text goes through the privacy filter first. You copy what you want into the article yourself.</p>
         {!available && <p className="ab-note ab-note-warn">Your organisation has switched this off.</p>}
+        {available && !aiReady && <p className="ab-hint">{aiNeedsText(eff, 'this button') || 'Add an AI key in Settings to use this button.'}</p>}
         <div className="ab-row">
           <button type="button" className="ab-btn ab-btn-primary" disabled={!aiReady || !available || run.busy} onClick={() => run.run(feature)}>
             {feature.title}

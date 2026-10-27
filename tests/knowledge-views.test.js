@@ -78,7 +78,8 @@ test('the Knowledge section has Duplicates and Gaps tabs with the standard tab r
   const markup = html(KnowledgeToolsView, { page: page('incident', 'incident'), eff: eff() });
   assert.match(markup, /role="tablist"/);
   assert.equal((markup.match(/role="tab"/g) || []).length, 2);
-  assert.match(markup, /aria-selected="true" class="ab-btn ab-btn-sm ab-btn-primary">Duplicates</);
+  // (the shared tab list also names the panel each tab controls and keeps one tab stop: tests/panel-tabs.test.js)
+  assert.match(markup, /id="ab-kbt-tab-duplicates"[^>]*aria-selected="true"[^>]*class="ab-btn ab-btn-sm ab-btn-primary">Duplicates</);
   assert.match(markup, />Gaps<\/button>/);
   assert.match(markup, /Find near-duplicate articles/);
   const noKey = html(KnowledgeToolsView, { page: page('incident', 'incident'), eff: eff({ apiKey: '' }) });
@@ -100,7 +101,9 @@ test('the Duplicates tool starts by looking for knowledge bases', () => {
   assert.doesNotMatch(markup, /Find duplicates<\/button>/, 'no search button until there is something to choose');
 });
 
-test('notes show only what could not be read, in the access entry\'s own words, as text', () => {
+// Changed with the integration review (L7): a person cannot act on a table name, so the source and the table names inside the note
+// are put into plain words (src/sidepanel/plainAccess.js; the wording itself is tested in tests/panel-parts.test.js).
+test('notes show only what could not be read, in plain words (no table names), as text', () => {
   const markup = html(Notes, {
     access: [
       { source: 'kb_use', status: 'denied', note: 'Your user cannot read kb_use.' },
@@ -109,8 +112,9 @@ test('notes show only what could not be read, in the access entry\'s own words, 
       { source: 'x', status: 'error', note: '' },
     ],
   });
-  assert.match(markup, /kb_use: Your user cannot read kb_use\./);
-  assert.match(markup, /x: not available to you\./);
+  assert.match(markup, /Article links: You cannot read article links\./);
+  assert.ok(!markup.includes('kb_use'), 'no table name');
+  assert.match(markup, /X: not available to you\./);
   assert.ok(!markup.includes('m2m_kb_task'));
   assert.ok(!markup.includes('<img'), 'text is escaped, never markup');
   assert.match(markup, /&lt;img/);

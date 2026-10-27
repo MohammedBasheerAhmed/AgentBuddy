@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { MSG } from '../lib/messages.js';
+import { read } from './ask.js';
 import { openRecord } from './openRecord.js';
+import { plainNote, plainSource } from './plainAccess.js';
 
 const RISK_LABEL = { breached: 'SLA breached', 'at-risk': 'SLA at risk' };
 
@@ -11,8 +12,7 @@ export default function MyDayView({ page }) {
   const load = useCallback(async () => {
     setState((s) => ({ ...s, phase: 'loading', error: '' }));
     try {
-      const answer = await chrome.tabs.sendMessage(page.tabId, { type: MSG.READ, op: 'myday', args: {} });
-      if (answer?.error) throw new Error(answer.error.message);
+      const answer = await read(page.tabId, 'myday', {});
       setState({ phase: 'ready', items: answer.items || [], access: answer.access || [], error: '' });
     } catch (err) {
       setState({ phase: 'error', items: [], access: [], error: err.message });
@@ -29,7 +29,7 @@ export default function MyDayView({ page }) {
         <h2 className="ab-h" style={{ margin: 0 }}>My day</h2>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
       </div>
-      <p className="ab-sub">Your open tickets, most urgent first.</p>
+      <p className="ab-sub">Your open tickets, most urgent first. Each one opens in this tab.</p>
 
       {state.phase === 'loading' && <p className="ab-note" role="status">Reading your queue…</p>}
       {state.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{state.error}</p>}
@@ -39,7 +39,7 @@ export default function MyDayView({ page }) {
         <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {state.items.map((item) => (
             <li key={item.sysId}>
-              <button type="button" className="ab-feature" onClick={() => openRecord(page, item)}>
+              <button type="button" className="ab-feature" onClick={() => openRecord(page, item)} title="Opens in this tab">
                 <span className="ab-row">
                   <span className="ab-record-number">{item.number}</span>
                   {RISK_LABEL[item.risk] && <span className={`ab-tag ab-risk-${item.risk}`}>{RISK_LABEL[item.risk]}{item.sla ? ` ${item.sla.percentage}%` : ''}</span>}
@@ -57,7 +57,7 @@ export default function MyDayView({ page }) {
       {state.access.length > 0 && (
         <p className="ab-hint" style={{ marginTop: 8 }}>
           {/* A denied queue gets a short line; a denied SLA table keeps its own note, which says why the order changed. */}
-          {state.access.map((a) => (a.status === 'denied' && a.source !== 'task_sla' ? `${a.source}: you cannot read this.` : a.note)).join(' ')}
+          {state.access.map((a) => (a.status === 'denied' && a.source !== 'task_sla' ? `${plainSource(a.source)}: you cannot read this.` : plainNote(a.note))).filter(Boolean).join(' ')}
         </p>
       )}
     </section>

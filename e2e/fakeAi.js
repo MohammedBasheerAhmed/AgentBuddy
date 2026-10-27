@@ -10,6 +10,9 @@
 //   'slow'            the normal answer after 1.5 seconds (to switch tabs while a request is in flight)
 //   'bad-key'         HTTP 401, as a provider rejecting the key
 //   'error'           HTTP 500
+//
+// setReplier(fn): a scenario may script the answer. fn({ system, user, body }) returns the answer text, or null/undefined to use the
+// mode above. The replier only ever sees what was SENT (placeholders, never raw personal data), like a real model. reset() removes it.
 const http = require('http');
 
 const EXPECTED_KEY = 'sk-e2e-test-key-0001';
@@ -39,7 +42,7 @@ function echoAnswer(userText) {
 }
 
 function startFakeAi() {
-  const state = { mode: 'echo' };
+  const state = { mode: 'echo', replier: null };
   /** Every chat request received: { path, method, auth, body (parsed), raw, at } */
   const requests = [];
   /** Every chat request of the whole run (reset() does not clear it): the final leak sweep reads this. */
@@ -77,6 +80,7 @@ function startFakeAi() {
 
       const messages = Array.isArray(body?.messages) ? body.messages : [];
       const userText = messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+      const systemText = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
       let content = echoAnswer(userText);
       if (state.mode === 'markdown-image') {
         const person = placeholdersIn(userText).PERSON?.[0] || 'the caller';
@@ -85,6 +89,10 @@ function startFakeAi() {
       if (state.mode === 'bare-secret') {
         const p = placeholdersIn(userText);
         content = `Hello ${p.PERSON?.[0] || 'there'}, your temporary sign-in value is ${p.SECRET?.[0] || '(none)'} - please use it once.`;
+      }
+      if (state.replier) {
+        const scripted = state.replier({ system: systemText, user: userText, body });
+        if (typeof scripted === 'string') content = scripted;
       }
       if (state.mode === 'slow') await new Promise((r) => setTimeout(r, 1500));
       return send(200, {
@@ -111,11 +119,15 @@ function startFakeAi() {
         setMode: (mode) => {
           state.mode = mode;
         },
+        setReplier: (fn) => {
+          state.replier = typeof fn === 'function' ? fn : null;
+        },
         /** Forget what was received (between scenarios). */
         reset: () => {
           requests.length = 0;
           other.length = 0;
           state.mode = 'echo';
+          state.replier = null;
         },
         close: () => new Promise((r) => { server.close(() => r()); server.closeAllConnections?.(); }),
       });

@@ -70,6 +70,7 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
           <Notes access={data.access} />
           {data.clusters.length === 0 && data.scanned > 0 && <p className="ab-hint">No topic came up more than once.</p>}
           {data.scanned === 0 && <p className="ab-hint">No resolved tickets were found in that window.</p>}
+          {data.clusters.length > 0 && <p className="ab-hint">Each ticket opens in this tab.</p>}
           {data.clusters.map((c) => (
             <div key={c.id} className="ab-kb-cluster">
               <div className="ab-row">
@@ -85,7 +86,7 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
               <ul className="ab-kb-articles">
                 {c.examples.map((e) => (
                   <li key={e.sysId}>
-                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open" onClick={() => openRecord(page, { table: e.table, sysId: e.sysId })} title="Open this ticket">
+                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open" onClick={() => openRecord(page, { table: e.table, sysId: e.sysId })} title="Opens in this tab">
                       <span className="ab-record-number">{e.number}</span> {e.title}
                     </button>
                   </li>

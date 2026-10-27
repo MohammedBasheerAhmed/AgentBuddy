@@ -1,0 +1,116 @@
+import React, { useState } from 'react';
+import RunPanel from '../RunPanel.jsx';
+import { SafeText } from '../../render/SafeText.jsx';
+import { parseSafeText, toPlainText } from '../../render/safeText.js';
+import { resolveProviderConfig } from '../../providers/config.js';
+import { logAudit } from '../../lib/storage.js';
+import { featureById, isFeatureAvailable } from '../../features/registry.js';
+import { aiNeedsText, isAiReady } from '../aiReady.js';
+
+export { isAiReady };
+
+/** The sentence for a section that cannot use the AI yet (no key, or the key is locked). */
+export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this') || 'Add an AI key in Settings to use this.';
+
+/** A feature by id, and whether the organisation's policy lets it run. */
+export function featureState(id, policy) {
+  const feature = featureById(id);
+  return { feature, available: Boolean(feature) && isFeatureAvailable(feature, policy) };
+}
+
+// The pieces the three AI report sections share. They sit on top of useRun()/RunPanel: the run itself (policy, firewall, preview,
+// provider, audit) is exactly the shared pipeline; this file only draws what comes back.
+
+/**
+ * RunPanel without its own result card: progress, errors and the preview of exactly what will be sent come from RunPanel, but
+ * the result is drawn by <AiResult>, because a team note offers Copy and Print (not Insert) and may need a check in front of it.
+ */
+export function RunProgress({ run, eff, page, readingText = 'Getting ready…' }) {
+  return <RunPanel run={{ ...run, phase: run.phase === 'done' ? 'idle' : run.phase }} eff={eff} page={page} readingText={readingText} />;
+}
+
+const KIND_TEXT = {
+  ranking: 'ranks people',
+  'person-rating': 'rates a named person',
+  'agent-label': 'rates a person by a label such as "Agent A"',
+};
+
+/**
+ * The finished answer, as safe text, with Copy and Print. Shown only when the finished run is for `featureId`.
+ *   heading   the card's title
+ *   notice    extra notes above the text (the word count, a missing heading...): an array of strings
+ *   withhold  { note, findings } holds the text back behind a warning until the person chooses to see it (the coaching snapshot,
+ *             when its answer seems to rate individuals)
+ */
+export function AiResult({ run, eff, featureId, heading, notice = [], withhold = null }) {
+  const [note, setNote] = useState('');
+  const [shown, setShown] = useState(false);
+  if (run.phase !== 'done' || run.result === null || run.active?.id !== featureId) return null;
+
+  const held = Boolean(withhold) && !shown;
+  const config = resolveProviderConfig(eff.values, eff.apiKey);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(toPlainText(parseSafeText(run.result)));
+      setNote('Copied to the clipboard.');
+      logAudit({ feature: featureId, table: run.lastPack?.table, sysId: run.lastPack?.sysId, provider: config.provider, model: config.model, mode: eff.values.piiMode, outcome: 'copied' });
+    } catch {
+      setNote('The browser blocked copying. Select the text and copy it by hand.');
+    }
+  }
+
+  return (
+    <section className="ab-card ab-ai-result" aria-live="polite" aria-label={heading}>
+      <h3 className="ab-h">{heading}</h3>
+      {notice.map((n) => (
+        <p key={n} className="ab-note ab-note-warn">{n}</p>
+      ))}
+      {held ? (
+        <div className="ab-note ab-note-warn" role="alert">
+          <p>{withhold.note}</p>
+          {withhold.findings?.length > 0 && (
+            <ul className="ab-ai-findings">
+              {withhold.findings.map((f) => (
+                <li key={`${f.kind}-${f.excerpt}`}>
+                  {KIND_TEXT[f.kind] || 'looks like a rating'}: <span className="ab-mono">{f.excerpt}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => setShown(true)}>Show the answer anyway</button>
+        </div>
+      ) : (
+        <div className="ab-output">
+          <SafeText text={run.result} />
+        </div>
+      )}
+      {note && <p className="ab-note ab-note-ok" role="status">{note}</p>}
+      <div className="ab-row ab-ai-actions">
+        {!held && <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" onClick={copy}>Copy</button>}
+        {!held && <button type="button" className="ab-btn ab-btn-sm" onClick={() => window.print()}>Print</button>}
+        {run.again && <button type="button" className="ab-btn ab-btn-sm" onClick={run.again}>Try again</button>}
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={run.reset}>Close</button>
+      </div>
+      <p className="ab-hint">AI can be wrong. Check the text before you use it.</p>
+    </section>
+  );
+}
+
+/** The card a section without engine data sits in (coaching, explain). */
+export function AiShell({ title, help, children }) {
+  return (
+    <section className="ab-card ab-widget" aria-label={title}>
+      <div className="ab-widget-head">
+        <h2 className="ab-h">{title}</h2>
+      </div>
+      {help && <p className="ab-sub ab-widget-help">{help}</p>}
+      <div className="ab-widget-body">{children}</div>
+    </section>
+  );
+}
+
+/** The calm line shown where an AI action is not allowed or not ready. */
+export function AiBlocked({ children }) {
+  return <p className="ab-note" role="status">{children}</p>;
+}

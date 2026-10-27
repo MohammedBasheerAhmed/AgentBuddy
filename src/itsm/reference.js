@@ -12,8 +12,19 @@
 export const SIMILAR_LIMIT = 3;
 export const KNOWLEDGE_LIMIT = 3;
 
-// Fixed vocabulary for what a read came back with. Anything else becomes 'error'.
-const STATUSES = new Set(['ok', 'empty', 'empty-or-hidden', 'denied', 'skipped', 'error']);
+// Fixed vocabulary for what a read came back with. Anything else becomes 'error'. 'blocked' is the organisation's rule (blockedTables).
+const STATUSES = new Set(['ok', 'empty', 'empty-or-hidden', 'denied', 'skipped', 'error', 'blocked']);
+
+// The people named on the rows of the other tickets and articles (display names only). They go on the pack's people list, so the
+// firewall masks them exactly wherever the wording of those tickets mentions them.
+export const MAX_HIT_PEOPLE = 8;
+export const MAX_REFERENCE_PEOPLE = 40;
+const namesOf = (list) =>
+  (Array.isArray(list) ? list : [])
+    .filter((n) => typeof n === 'string')
+    .map((n) => text(n, 100))
+    .filter((n) => n && !/^[0-9a-f]{32}$/i.test(n))
+    .slice(0, MAX_HIT_PEOPLE);
 
 // A record number: letters then digits (INC0010123, KB0010004, SCTASK0000999, CS0001234).
 const NUMBER_RE = /^[A-Za-z]{2,12}\d{4,12}$/;
@@ -34,14 +45,18 @@ const text = (value, max) => {
 const whyText = (why) => (Array.isArray(why) ? why.filter((w) => typeof w === 'string').slice(0, 5).map((w) => text(w, 120)).filter(Boolean).join('; ') : '');
 const scoreOf = (value) => (Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0);
 
-/** A solved look-alike ticket, rebuilt from an untrusted hit. Returns null when it cannot be cited (no valid number). */
-export function cleanTicketHit(hit) {
+/**
+ * A solved look-alike ticket, rebuilt from an untrusted hit. Returns null when it cannot be cited (no valid number).
+ * `closeNotes: false` leaves the resolution text and code out (the routing hint needs group, priority and category only).
+ */
+export function cleanTicketHit(hit, { closeNotes = true } = {}) {
   if (!hit || typeof hit !== 'object' || typeof hit.number !== 'string' || !NUMBER_RE.test(hit.number)) return null;
   return {
     number: hit.number.toUpperCase(),
     short_description: text(hit.short_description, 300),
-    close_notes: text(hit.close_notes, 600),
-    close_code: text(hit.close_code, 60),
+    close_notes: closeNotes ? text(hit.close_notes, 600) : '',
+    close_code: closeNotes ? text(hit.close_code, 60) : '',
+    people: namesOf(hit.people),
     category: text(hit.category, 100),
     subcategory: text(hit.subcategory, 100),
     cmdb_ci: text(hit.cmdb_ci, 100),
@@ -61,6 +76,7 @@ export function cleanArticleHit(hit) {
     short_description: text(hit.short_description, 300),
     excerpt: text(hit.excerpt, 600),
     knowledgeBase: text(hit.knowledgeBase, 100),
+    people: namesOf(hit.people),
     score,
     why,
     strong: score >= STRONG_SCORE && /\btitle\b/i.test(why),
@@ -105,17 +121,22 @@ async function attempt(promise) {
   }
 }
 
-const statusFromError = (err) => (err?.code === 'ACCESS_DENIED' || /\b403\b|not allowed|denied/i.test(String(err?.message || '')) ? 'denied' : 'error');
+const statusFromError = (err) => {
+  if (err?.code === 'BLOCKED_TABLE') return 'blocked'; // the organisation's rule, not the person's access
+  return err?.code === 'ACCESS_DENIED' || /\b403\b|not allowed|denied/i.test(String(err?.message || '')) ? 'denied' : 'error';
+};
 
 /**
  * Add reference material to a pack for a run.
  * @param {object} pack ContextPack (not changed; a copy is returned)
  * @param {{ read: (op: string, args: object) => Promise<object>, allowSensitive?: boolean }} context from useRun
- * @param {{ similar?: 'similar' | 'routingLookalikes' | null, knowledge?: boolean }} wanted which reads to make
- * @returns {Promise<object>} the pack with `reference` = { similar?: {status, hits}, knowledge?: {status, hits} } and the reads'
- *   access entries appended to `access`
+ * @param {{ similar?: 'similar' | 'routingLookalikes' | null, knowledge?: boolean, closeNotes?: boolean }} wanted which reads to make;
+ *   closeNotes: false drops the look-alikes' resolution text (the routing hint)
+ * @returns {Promise<object>} the pack with `reference` = { similar?: {status, hits}, knowledge?: {status, hits} }, the reads'
+ *   access entries appended to `access`, the people named on the other tickets added to `people` (role 'reference_person'), and
+ *   `requirePreview: true` when any other ticket or article is part of it (the person sees the outgoing text every time)
  */
-export async function addReference(pack, { read, allowSensitive = false } = {}, { similar = null, knowledge = false } = {}) {
+export async function addReference(pack, { read, allowSensitive = false } = {}, { similar = null, knowledge = false, closeNotes = true } = {}) {
   const args = { pack: packForSearch(pack), allowSensitive: allowSensitive === true };
   const ask = (op, extra = {}) => (typeof read === 'function' ? attempt(Promise.resolve().then(() => read(op, { ...args, ...extra }))) : Promise.resolve({ error: new Error('no reader') }));
 
@@ -132,11 +153,25 @@ export async function addReference(pack, { read, allowSensitive = false } = {}, 
     const hits = raw.map(clean).filter(Boolean).slice(0, limit);
     reference[key] = { status: result.error ? statusFromError(result.error) : statusOf(result.answer, hits), hits };
     if (Array.isArray(result.answer?.access)) access.push(...result.answer.access.filter((a) => a && typeof a === 'object'));
-    if (result.error) access.push({ source: key === 'similar' ? 'similar tickets' : 'knowledge', status: reference[key].status, note: reference[key].status === 'denied' ? 'Your user cannot read this.' : 'Could not be read.' });
+    if (result.error) access.push({ source: key === 'similar' ? 'similar tickets' : 'knowledge', status: reference[key].status, note: reference[key].status === 'denied' ? 'Your user cannot read this.' : reference[key].status === 'blocked' ? 'Your organisation does not allow Agent Buddy to read this.' : 'Could not be read.' });
   };
-  settle('similar', t, cleanTicketHit, SIMILAR_LIMIT);
+  settle('similar', t, (hit) => cleanTicketHit(hit, { closeNotes }), SIMILAR_LIMIT);
   settle('knowledge', k, cleanArticleHit, KNOWLEDGE_LIMIT);
-  return { ...pack, reference, access };
+
+  // The people on the other tickets: exact masking for their names. Display names only; no email, no other table.
+  const people = [...(Array.isArray(pack.people) ? pack.people : [])];
+  const known = new Set(people.map((p) => String(p?.name || '').toLowerCase()).filter(Boolean));
+  let added = 0;
+  for (const hit of [...(reference.similar?.hits || []), ...(reference.knowledge?.hits || [])]) {
+    for (const name of hit.people || []) {
+      if (known.has(name.toLowerCase()) || added >= MAX_REFERENCE_PEOPLE) continue;
+      known.add(name.toLowerCase());
+      added += 1;
+      people.push({ role: 'reference_person', name, email: '', sysId: '' });
+    }
+  }
+  const anyHit = (reference.similar?.hits?.length || 0) + (reference.knowledge?.hits?.length || 0) > 0;
+  return { ...pack, reference, access, people, ...(anyHit ? { requirePreview: true } : {}) };
 }
 
 /** The plain-language state of one read, for the status part the model is shown. */
@@ -153,6 +188,8 @@ export function statusSentence(entry) {
       return 'could not be read (no access)';
     case 'skipped':
       return 'not searched';
+    case 'blocked':
+      return 'not allowed by the organisation';
     default:
       return 'could not be read';
   }

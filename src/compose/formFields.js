@@ -2,14 +2,20 @@
 // form (src/content/ops/compose.js), by the Rewrite view and by the safe-to-send check, so they cannot drift apart.
 //
 // `name` is the column name, `fieldLabel` is how a Workspace control is named (its aria-label, which is how the page
-// bridge finds it when there is no g_form), `customerVisible` says whether the person who raised the ticket can read it.
+// bridge finds it when there is no g_form), `customerVisible` and `singleLine` come from FILLABLE_FIELDS (src/lib/fillable.js):
+// whether the person who raised the ticket can read the field, and whether it holds one line only.
+
+import { FILLABLE_FIELDS, isCustomerVisible as fieldIsCustomerVisible } from '../lib/fillable.js';
+
+const field = (name, label, fieldLabel) =>
+  Object.freeze({ name, label, fieldLabel, customerVisible: FILLABLE_FIELDS[name].customerVisible === true, singleLine: FILLABLE_FIELDS[name].singleLine === true });
 
 export const FORM_FIELDS = Object.freeze([
-  Object.freeze({ name: 'comments', label: 'Customer comment', fieldLabel: 'Additional comments', customerVisible: true }),
-  Object.freeze({ name: 'work_notes', label: 'Work note', fieldLabel: 'Work notes', customerVisible: false }),
-  Object.freeze({ name: 'close_notes', label: 'Resolution notes', fieldLabel: 'Resolution notes', customerVisible: true }),
-  Object.freeze({ name: 'description', label: 'Description', fieldLabel: 'Description', customerVisible: true }),
-  Object.freeze({ name: 'short_description', label: 'Short description', fieldLabel: 'Short description', customerVisible: true }),
+  field('comments', 'Customer comment', 'Additional comments'),
+  field('work_notes', 'Work note', 'Work notes'),
+  field('close_notes', 'Resolution notes', 'Resolution notes'),
+  field('description', 'Description', 'Description'),
+  field('short_description', 'Short description', 'Short description'),
 ]);
 
 /** The only names the form-reading operation will ask the page for. */
@@ -21,4 +27,4 @@ export const MAX_FORM_TEXT = 20000;
 export const formFieldByName = (name) => FORM_FIELDS.find((f) => f.name === name) || null;
 
 /** Can the person who raised the ticket read this field? Unknown fields count as visible (the safe side). */
-export const isCustomerVisible = (name) => formFieldByName(name)?.customerVisible !== false;
+export const isCustomerVisible = (name) => fieldIsCustomerVisible(name);

@@ -5,6 +5,9 @@
 //   reportGroups   search groups by name (for "chosen groups")
 //   reportRun      run one section or one builder report
 //   reportClear    forget the short-lived cache (the Refresh button)
+//   coachingSample the sample of resolved tickets for ONE group (close notes, close code, the group's customer-visible comments)
+//                  that the coaching snapshot reviews. Only the panel's 'coaching' section asks for it, and only when the
+//                  organisation's policy has switched coaching on; this file cannot see the policy, the panel is the gate.
 //
 // The one cache and the one limit on parallel requests live here, so every widget on every open dashboard shares them.
 import { SYS_ID_RE, TABLE_RE, oneLine } from '../../context/util.js';
@@ -17,6 +20,9 @@ import { readMyGroups } from '../../reports/engine/scope.js';
 import { buildQuery } from '../../reports/engine/queryBuilder.js';
 import { SECTION_IDS, REPORT_TABLE_IDS } from '../../reports/engine/constants.js';
 import { TREND_CHOICES } from '../../reports/engine/quality.js';
+import { normalizeHours } from '../../reports/engine/handover.js';
+import { readCoachingSample } from '../../reports/engine/coaching.js';
+import { normalizeCoachingRequest } from '../../reports/ai/coaching.js';
 
 const clean = (value, min, max) => {
   const n = Math.floor(Number(value));
@@ -31,6 +37,8 @@ export function cleanParams(input) {
   if (stale !== undefined) out.staleDays = stale;
   const top = clean(input?.top, 3, 30);
   if (top !== undefined) out.top = top;
+  // The shift handover's period: 8, 12 or 24 hours (anything else is ignored, so the section uses its default).
+  if (input?.hours !== undefined && Number(input.hours) === normalizeHours(input.hours)) out.hours = normalizeHours(input.hours);
   return out;
 }
 
@@ -99,6 +107,15 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
     async reportClear() {
       runtime.cache.clear();
       return { ok: true };
+    },
+
+    // Every argument is checked by normalizeCoachingRequest (one group id, a date range of at most 92 days, a sample of 1 to 10,
+    // known non-HR tables). The answer is plain JSON; nothing is kept here (the read uses a cache of its own that is dropped).
+    async coachingSample(args = {}) {
+      const { userId } = await whoAmI();
+      const now = Date.now();
+      const request = normalizeCoachingRequest(args, { now });
+      return readCoachingSample(request, { deps, userId, blocked: cleanBlocked(args.blocked), now });
     },
   };
 }

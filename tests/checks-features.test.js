@@ -9,6 +9,7 @@ import { effectiveSettings, normalizePolicy } from '../src/policy/policy.js';
 import { resolveProviderConfig } from '../src/providers/config.js';
 import { withCurrentNotes } from '../src/checks/resolutionCheck.js';
 import { mergeParentPack } from '../src/checks/checklistParts.js';
+import { isCustomerVisible } from '../src/lib/fillable.js';
 
 const MINE = ['request-explain', 'resolution-improve', 'fulfilment-checklist'];
 const feature = (id) => featureById(id);
@@ -48,10 +49,15 @@ test('each feature has a title, a description, a wave, a prompt, an instruction 
   }
 });
 
-test('inserts go to the intended form field, and customer-visible fields are the ones ResultView checks first', () => {
+// (Integration review T3: this test used to claim to check "the fields ResultView checks first" and only compared field names.
+// It now says what it does: the names, and what the one list of fillable fields (src/lib/fillable.js, which the send check reads)
+// says about each of them. ResultView is a component; its wiring is covered where it is owned.)
+test('inserts go to the intended form field; the two that the customer reads are customer-visible, the checklist\'s is internal', () => {
   assert.deepEqual(insertsFor(feature('request-explain')).map((i) => i.field), ['comments']);
   assert.deepEqual(insertsFor(feature('resolution-improve')).map((i) => i.field), ['close_notes']);
   assert.deepEqual(insertsFor(feature('fulfilment-checklist')).map((i) => i.field), ['work_notes'], 'the checklist is internal');
+  for (const id of ['request-explain', 'resolution-improve']) for (const i of insertsFor(feature(id))) assert.equal(isCustomerVisible(i.field), true, `${id} writes to ${i.field}, which the customer can read`);
+  assert.equal(isCustomerVisible('work_notes'), false, 'work notes are internal');
   for (const id of MINE) for (const i of insertsFor(feature(id))) assert.ok(i.label && i.fieldLabel, id);
 });
 

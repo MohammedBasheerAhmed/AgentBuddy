@@ -113,10 +113,10 @@ export default [
     title: 'Where should this go?',
     description: 'Suggested category, assignment group and priority, based on similar solved tickets.',
     wave: 2,
-    kinds: ['incident', 'case', 'request', 'requested_item', 'task'],
+    kinds: ['incident', 'case'], // the other kinds' ceilings have no category (a request is routed through its items)
     journal: 0,
     // 'routingLookalikes' is this area's read (src/content/ops/itsm.js): like 'similar', plus each ticket's group and priority.
-    enrich: (pack, ctx) => addReference(pack, ctx, { similar: 'routingLookalikes' }),
+    enrich: (pack, ctx) => addReference(pack, ctx, { similar: 'routingLookalikes', closeNotes: false }),
     parts: (pack) => [...fieldParts(pack, PEOPLE_COLUMNS), ...referenceParts(pack, { routing: true })],
     // Copy only: the agent decides where a ticket goes.
     system:

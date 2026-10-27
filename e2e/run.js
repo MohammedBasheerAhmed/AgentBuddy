@@ -76,7 +76,10 @@ async function main() {
     try {
       await withTimeout(s.run(t, ctx), SCENARIO_TIMEOUT_MS, `scenario ${s.id}`);
     } catch (err) {
-      t.check(`scenario ${s.id} ran to the end`, false, String(err.stack || err).split('\n').slice(0, 4).join(' | '));
+      // The message, then where in OUR files it happened (the lines inside puppeteer say nothing about which step stalled).
+      const lines = String(err.stack || err).split('\n');
+      const ours = lines.filter((l) => /[\\/]e2e[\\/]/.test(l) && !/[\\/]node_modules[\\/]/.test(l)).slice(0, 2).map((l) => l.trim().replace(/^at /, '').replace(/.*[\\/]e2e[\\/]/, 'e2e/'));
+      t.check(`scenario ${s.id} ran to the end`, false, `${lines.slice(0, 2).join(' | ')} | at ${ours.join(' | ') || 'unknown'}`);
       for (const page of await Promise.race([ctx.browser.pages(), after(3000, [])])) {
         const url = page.url();
         const file = await ctx.shot(page, `fail-${s.id}-${url.split('/').pop().slice(0, 20)}`);

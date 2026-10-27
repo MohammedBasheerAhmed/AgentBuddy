@@ -30,7 +30,7 @@
     },
     "previewMode": {
       "title": "Show what will be sent",
-      "description": "always shows the exact outgoing text before every AI call; first shows it the first time per feature; never skips it.",
+      "description": "always shows the exact outgoing text before every AI call; first shows it the first time per feature (and every time when the request carries text from other tickets or articles); never skips it.",
       "type": "string",
       "enum": ["always", "first", "never"]
     },
@@ -47,27 +47,36 @@
     },
     "disabledFeatures": {
       "title": "Disabled features",
-      "description": "Feature ids to switch off, for example coaching-snapshot.",
+      "description": "Feature ids to switch off, for example coaching-snapshot. Not case-sensitive. The full list of ids is in docs/deployment.md.",
       "type": "array",
       "items": { "type": "string" }
     },
     "blockedTables": {
       "title": "Tables that are never read or sent",
+      "description": "Table names (not case-sensitive). Agent Buddy refuses to read these tables, including the table of a related record, a reference answer, the journal of such a record and tasks of such a class, and it never sends their records to an AI. Needs the content script to see this policy; see docs/deployment.md.",
       "type": "array",
       "items": { "type": "string" }
     },
     "blockedFields": {
       "title": "Fields that are never sent",
+      "description": "Column names (not case-sensitive). A part of the request that is one of these columns, or that carries one (for example the list of linked incidents carries short_description and close_notes), is refused and nothing is sent.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "sensitiveTablePrefixes": {
+      "title": "Extra sensitive table families",
+      "description": "Table-name prefixes that are treated like HR cases (for example x_acme_hr_ or x_acme_legal_): minimised reads, and no content sent unless allowHrContent is true. sn_hr_ is always included and cannot be removed here.",
       "type": "array",
       "items": { "type": "string" }
     },
     "allowHrContent": {
       "title": "Allow free text from HR cases",
-      "description": "HR case text is special-category personal data. It is excluded unless this is true and the AI endpoint is approved.",
+      "description": "HR case text is special-category personal data. It is excluded unless this is true AND the AI endpoint is pinned by this policy (aiProvider or aiBaseUrl) or runs on this computer. Without that, runs on HR content are refused.",
       "type": "boolean"
     },
     "tokenBudgetPerDay": {
       "title": "Daily token budget per person",
+      "description": "Counted per person per day on this computer from the local usage log. When used tokens reach this number no further AI call is made until tomorrow. A person's own lower cap in Settings still applies.",
       "type": "integer",
       "minimum": 0
     },

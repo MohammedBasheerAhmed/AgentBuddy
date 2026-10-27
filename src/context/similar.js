@@ -6,16 +6,23 @@ import { rankSimilar, similarKeywords, similarQuery } from '../lib/similar.js';
 import { LIMITS } from './allowlists.js';
 import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
 import { isSensitiveTable } from './kinds.js';
-import { cleanText, disp, oneLine, parseSnTime, queryValue, raw, stripHtml } from './util.js';
+import { SYS_ID_RE, cleanText, disp, oneLine, parseSnTime, queryValue, raw, stripHtml } from './util.js';
 
 const HOUR = 3600000;
 const SENSITIVE_NOTE = 'This record is in a sensitive table, so other records are not searched unless sensitive data is allowed.';
 
+// The columns of a candidate that name a person. They are read (display names only, no other table) so the people a look-alike
+// ticket is about are masked exactly wherever its wording or close notes mention them (src/itsm/reference.js puts them on the pack).
+export const HIT_PERSON_COLUMNS = ['caller_id', 'opened_for', 'contact', 'consumer', 'requested_for', 'opened_by', 'assigned_to'];
+
 // Columns asked of the candidates; a column the table does not have is simply not returned.
 const TICKET_FIELDS = [
   'sys_id', 'number', 'short_description', 'state', 'close_notes', 'close_code', 'resolution_code', 'resolved_at', 'closed_at',
-  'category', 'cmdb_ci', 'cat_item', 'product', 'sys_updated_on',
+  'category', 'cmdb_ci', 'cat_item', 'product', 'sys_updated_on', ...HIT_PERSON_COLUMNS,
 ];
+
+// The display names on a row's person columns: strings only, never a bare id.
+const namesOn = (row, columns = HIT_PERSON_COLUMNS) => [...new Set(columns.map((c) => oneLine(disp(row?.[c]), 100)).filter((n) => n && !SYS_ID_RE.test(n)))];
 
 const same = (a, b) => Boolean(a) && Boolean(b) && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 
@@ -82,6 +89,7 @@ function toHit(row, table) {
     cmdb_ci: oneLine(disp(row.cmdb_ci), 100),
     cat_item: oneLine(disp(row.cat_item), 100),
     product: oneLine(disp(row.product), 100),
+    people: namesOn(row),
   };
 }
 
@@ -97,7 +105,7 @@ function toHit(row, table) {
  */
 export async function findSimilarTickets(pack, deps, { resolvedOnly = false, limit = 8, allowSensitive = false } = {}) {
   const table = pack.table;
-  if (isSensitiveTable(table) && !allowSensitive) return { hits: [], keywords: [], access: [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)] };
+  if (isSensitiveTable(table, deps.sensitivePrefixes) && !allowSensitive) return { hits: [], keywords: [], access: [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)] };
   const keywords = searchKeywords(pack);
   if (!keywords.length) return { hits: [], keywords, access: [accessEntry(table, STATUS.SKIPPED, 'The short description has no words worth searching for.')] };
 
@@ -142,7 +150,7 @@ const DUPLICATE_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'act
  */
 export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit = 10, now = Date.now(), allowSensitive = false } = {}) {
   const table = pack.table;
-  if (isSensitiveTable(table) && !allowSensitive) return { hits: [], windowHours, access: [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)] };
+  if (isSensitiveTable(table, deps.sensitivePrefixes) && !allowSensitive) return { hits: [], windowHours, access: [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)] };
   const keys = [
     ['cmdb_ci', queryValue(pack.fields?.cmdb_ci)],
     ['business_service', queryValue(pack.fields?.business_service)],
@@ -222,7 +230,7 @@ export async function searchKnowledge(pack, deps, { limit = 5, now = Date.now(),
 
   const like = keywords.flatMap((w) => [`short_descriptionLIKE${w}`, `textLIKE${w}`]).join('^OR');
   const query = `workflow_state=published^${like}^ORDERBYDESCsys_updated_on`;
-  const fields = ['sys_id', 'number', 'short_description', 'text', 'sys_updated_on', 'kb_knowledge_base', 'view_count', 'sys_view_count', 'valid_to'];
+  const fields = ['sys_id', 'number', 'short_description', 'text', 'sys_updated_on', 'kb_knowledge_base', 'view_count', 'sys_view_count', 'valid_to', 'author'];
   const { rows, failure } = await softRead(deps, source, query, fields, { limit: 15, displayValue: true });
   if (failure) return { hits: [], keywords, access: [accessEntry(source, failure.status, failure.note)] };
 
@@ -241,6 +249,7 @@ export async function searchKnowledge(pack, deps, { limit = 5, now = Date.now(),
         knowledgeBase: oneLine(disp(row.kb_knowledge_base), 100),
         viewCount: Number.parseInt(raw(row.view_count) || raw(row.sys_view_count), 10) || 0,
         updated: oneLine(disp(row.sys_updated_on), 40),
+        people: namesOn(row, ['author']),
         score,
         why,
       };

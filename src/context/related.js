@@ -184,20 +184,43 @@ const SECRET_NAME = /(?<![a-z])(pass(word|code|phrase|wd)?|pwd|secrets?|tokens?|
 const ID_LIST = /^[0-9a-f]{32}(,[0-9a-f]{32})*$/i;
 
 // Reference answers hold a sys_id. The column that shows a person what it is, by table; 'name' for the rest.
-const DISPLAY_COLUMN = { task: 'number', incident: 'number', sc_req_item: 'number', change_request: 'number', problem: 'number', kb_knowledge_base: 'title', sc_cat_item: 'name' };
+const DISPLAY_COLUMN = {
+  task: 'number',
+  incident: 'number',
+  sc_req_item: 'number',
+  sc_request: 'number',
+  sc_task: 'number',
+  change_request: 'number',
+  problem: 'number',
+  kb_knowledge_base: 'title',
+  kb_knowledge: 'short_description',
+  sc_cat_item: 'name',
+};
+
+// The tables a reference answer may be resolved against. The table comes from the variable's definition (record data), so it is not
+// trusted: a name outside this list is not read, and the answer is left out with a note. People, groups, places, configuration items,
+// catalog items, articles and the task tables are what request forms ask for. Subclasses of cmdb_ci are allowed by prefix.
+export const REFERENCE_TABLES = Object.freeze([
+  'sys_user', 'sys_user_group', 'cmn_location', 'cmn_department', 'cmn_cost_center', 'core_company', 'customer_account', 'csm_consumer',
+  'customer_contact', 'cmdb_ci', 'cmdb_ci_service', 'cmdb_model', 'sc_cat_item', 'kb_knowledge', 'kb_knowledge_base', 'task', 'incident',
+  'problem', 'change_request', 'sc_request', 'sc_req_item', 'sc_task',
+]);
+export const isReferenceTableAllowed = (table) => REFERENCE_TABLES.includes(table) || /^cmdb_ci_[a-z0-9_]+$/.test(table);
 
 async function resolveReferences(wanted, deps) {
   // wanted: Map<refTable, Set<sysId>> -> Map<sysId, display name>
   const names = new Map();
   let failed = false;
+  const blocked = new Set(); // tables the organisation does not allow
   for (const [refTable, ids] of wanted) {
     const column = DISPLAY_COLUMN[refTable] || 'name';
     // eslint-disable-next-line no-await-in-loop -- a few small reads, kept sequential.
     const { rows, failure } = await softRead(deps, refTable, `sys_idIN${[...ids].join(',')}`, ['sys_id', column], { limit: ids.size + 2, displayValue: false });
-    if (failure) failed = true;
+    if (failure?.status === STATUS.BLOCKED) blocked.add(refTable);
+    else if (failure) failed = true;
     rows.forEach((row) => raw(row[column]) && names.set(raw(row.sys_id).toLowerCase(), oneLine(raw(row[column]), 100)));
   }
-  return { names, failed };
+  return { names, failed, blocked: [...blocked] };
 }
 
 async function readVariables({ sysId }, deps, memo) {
@@ -232,15 +255,21 @@ async function readVariables({ sysId }, deps, memo) {
     return { access: accessEntry(source, STATUS.DENIED, 'Your user cannot read the variable definitions, so the answers could not be labelled with their questions.') };
   }
 
-  // Reference answers are sys_ids: show the name, or leave the answer out. Never a raw id.
+  // Reference answers are sys_ids: show the name, or leave the answer out. Never a raw id. A table that is not on the allow-list is
+  // never read (silently refused; the note below counts the answers that were left out).
   const wanted = new Map();
+  let notAllowed = 0;
   candidates.forEach((c) => {
     if (!ID_LIST.test(c.value)) return;
     if (!TABLE_RE.test(c.refTable)) return;
+    if (!isReferenceTableAllowed(c.refTable)) {
+      notAllowed += 1;
+      return;
+    }
     if (!wanted.has(c.refTable)) wanted.set(c.refTable, new Set());
     c.value.split(',').forEach((id) => wanted.get(c.refTable).add(id.toLowerCase()));
   });
-  const { names, failed } = wanted.size ? await resolveReferences(wanted, deps) : { names: new Map(), failed: false };
+  const { names, failed, blocked } = wanted.size ? await resolveReferences(wanted, deps) : { names: new Map(), failed: false, blocked: [] };
 
   let unresolved = 0;
   const items = [];
@@ -260,7 +289,10 @@ async function readVariables({ sysId }, deps, memo) {
   const shownItems = items.slice(0, LIMITS.variables);
   const notes = [];
   if (left) notes.push(`${left} masked or secret answer${left === 1 ? ' was' : 's were'} left out.`);
-  if (unresolved) notes.push(`${unresolved} reference answer${unresolved === 1 ? '' : 's'} could not be shown${failed ? ' (the referenced table could not be read)' : ''}.`);
+  if (unresolved) {
+    const why = blocked.length ? ` (your organisation does not allow reading ${blocked.join(', ')})` : notAllowed ? ' (a referenced table is not one Agent Buddy reads)' : failed ? ' (the referenced table could not be read)' : '';
+    notes.push(`${unresolved} reference answer${unresolved === 1 ? '' : 's'} could not be shown${why}.`);
+  }
   if (items.length > shownItems.length) notes.push(`Showing the first ${shownItems.length}.`);
   // A person named in an answer ("Manager: ...") is a person on this record: add them so the firewall masks the name wherever it appears.
   const refs = [];
@@ -312,7 +344,15 @@ const skipped = (source, note) => ({ access: accessEntry(source, STATUS.SKIPPED,
 
 // ---- Incidents linked to a problem
 
-const INCIDENT_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'opened_at', 'resolved_at', 'cmdb_ci', 'close_notes', 'problem_id'];
+// caller_id, opened_by and assigned_to are read so the people named in these incidents' wording and close notes are masked exactly
+// (display names only). Every column here is on the 'problem-rca' spec for the incident kind (src/context/specs/domain.js); a test
+// keeps the two in step.
+const INCIDENT_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'opened_at', 'resolved_at', 'cmdb_ci', 'close_notes', 'problem_id', 'caller_id', 'opened_by', 'assigned_to'];
+
+// The display names of the people on rows of other tickets (people columns of the rows, display values only: no extra table is read).
+const REFERENCE_PERSON_COLUMNS = ['caller_id', 'opened_for', 'contact', 'consumer', 'requested_for', 'requested_by', 'assigned_to', 'opened_by'];
+const personNames = (rows, columns = REFERENCE_PERSON_COLUMNS) =>
+  rows.flatMap((row) => columns.map((column) => oneLine(disp(row[column]), 100))).filter((name) => name && !SYS_ID_RE.test(name));
 
 function shapeIncident(row) {
   return {
@@ -349,10 +389,10 @@ async function readLinkedIncidents({ sysId, table: ownTable }, deps, memo) {
   }
   if (!first.rows.length) return emptyResult(source, ownTable, deps, memo, []);
 
-  const shaped = (rows) => rows.map((row) => ({ id: raw(row.sys_id).toLowerCase(), t: parseSnTime(raw(row.opened_at)), item: shapeIncident(row) }));
+  const shaped = (rows) => rows.map((row) => ({ id: raw(row.sys_id).toLowerCase(), t: parseSnTime(raw(row.opened_at)), item: shapeIncident(row), row }));
   const finish = (entries, total, note) => {
     const sorted = [...entries].sort(byOpened);
-    return { items: sorted.map((e) => e.item), summary: { total, shown: sorted.length }, access: accessEntry(source, STATUS.OK, note) };
+    return { items: sorted.map((e) => e.item), summary: { total, shown: sorted.length }, access: accessEntry(source, STATUS.OK, note), names: personNames(sorted.map((e) => e.row)), reference: true };
   };
 
   if (first.rows.length <= cap) return finish(shaped(first.rows), first.rows.length, '');
@@ -378,7 +418,8 @@ async function readLinkedIncidents({ sysId, table: ownTable }, deps, memo) {
 
 // ---- Other changes in a change's window (conflicts) and recent changes on a case's CI
 
-const CHANGE_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'type', 'risk', 'start_date', 'end_date', 'cmdb_ci', 'business_service'];
+// requested_by and assigned_to are read for the same reason as on the linked incidents: to mask the people the rows name.
+const CHANGE_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'type', 'risk', 'start_date', 'end_date', 'cmdb_ci', 'business_service', 'requested_by', 'assigned_to'];
 const CONFLICT_ROWS = 10;
 const CONFLICT_READ = 50;
 const RECENT_ROWS = 5;
@@ -440,7 +481,7 @@ async function readConflicts(record, deps, memo) {
       const s = parseSnTime(raw(row.start_date));
       const e = parseSnTime(raw(row.end_date));
       if (!SYS_ID_RE.test(rowId) || rowId === record.sysId || !Number.isFinite(s) || !Number.isFinite(e) || s > end || e < start) continue;
-      const hit = found.get(rowId) || { t: s, ...shapeChange(row), same: [] };
+      const hit = found.get(rowId) || { t: s, ...shapeChange(row), same: [], who: personNames([row]) };
       hit.same.push(field);
       found.set(rowId, hit);
     }
@@ -449,12 +490,13 @@ async function readConflicts(record, deps, memo) {
   // "None found" is only a fact when every check could be read.
   if (failures.length && !found.size) return { access: accessEntry(CHANGE_TABLE, failures[0].status, failures[0].note) };
   const all = [...found.values()].sort((a, b) => a.t - b.t);
-  const items = all.slice(0, CONFLICT_ROWS).map(({ t, ...rest }) => rest);
+  const shown = all.slice(0, CONFLICT_ROWS);
+  const items = shown.map(({ t, who, ...rest }) => rest);
   const notes = [];
   if (failures.length) notes.push('One of the two checks (configuration item or business service) could not be read.');
   if (all.length > items.length) notes.push(`Showing the first ${items.length} of ${all.length}.`);
   if (crowded) notes.push('The instance returned a very long list for this window, so some changes may not be listed.');
-  return { items, summary: { total: all.length, shown: items.length }, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY, notes.join(' ')) };
+  return { items, summary: { total: all.length, shown: items.length }, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY, notes.join(' ')), names: shown.flatMap((h) => h.who), reference: items.length > 0 };
 }
 
 /** Changes on the case's configuration item made in the last 14 days or planned for the next 7: "did something change?". */
@@ -476,15 +518,15 @@ async function readRecentChanges(record, deps, memo) {
   }
   if (!rows.length) return emptyResult(CHANGE_TABLE, record.table, deps, memo, []);
 
-  const items = rows
+  const kept = rows
     .filter((row) => {
       const s = parseSnTime(raw(row.start_date));
       const e = parseSnTime(raw(row.end_date));
       return Number.isFinite(s) && Number.isFinite(e) && e >= from && s <= until;
     })
-    .slice(0, RECENT_ROWS)
-    .map(shapeChange);
-  return { items, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY) };
+    .slice(0, RECENT_ROWS);
+  const items = kept.map(shapeChange);
+  return { items, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY), names: personNames(kept), reference: items.length > 0 };
 }
 
 // Extras that are not a plain list of rows linked to the record.
@@ -511,5 +553,8 @@ export async function readRelated(keys, record, deps, memo) {
     const sysId = ref.sysId.toLowerCase();
     if (!refs.has(sysId)) refs.set(sysId, { ...ref, sysId, table: 'sys_user' });
   });
-  return { related, refs: [...refs.values()], access: results.map((r) => r.access) };
+  // People named on rows of OTHER tickets (display names), and whether any such row is in the result at all.
+  const referenceNames = [...new Set(results.flatMap((r) => r.names || []))];
+  const hasReference = results.some((r) => r.reference === true);
+  return { related, refs: [...refs.values()], access: results.map((r) => r.access), referenceNames, hasReference };
 }

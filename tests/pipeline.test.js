@@ -106,7 +106,7 @@ test('HR content is blocked unless the organisation allows it', () => {
   const hr = { ...PACK, table: 'sn_hr_core_case', kind: 'hr_case' };
   const base = { feature: featureById('record-summary'), pack: hr, values: values(), config: config() };
   assert.throws(() => assertRunnable({ ...base, policy: policy() }), (e) => e.code === 'HR_BLOCKED');
-  assert.doesNotThrow(() => assertRunnable({ ...base, policy: policy({ allowHrContent: true }) }));
+  assert.doesNotThrow(() => assertRunnable({ ...base, policy: policy({ allowHrContent: true, aiProvider: 'anthropic' }) }));
 });
 
 test('a feature can require a stricter privacy mode than the person chose', () => {

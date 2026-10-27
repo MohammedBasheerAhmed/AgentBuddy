@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isFeatureEnabled } from '../../policy/policy.js';
 import { read } from '../ask.js';
+import { useSectionVisible } from '../SectionVisible.js';
 import { PRESETS, CAPS, addDashboard, addPresetDashboard, addWidget, moveWidget, removeDashboard, removeWidget, renameDashboard, setActive, setDashboardSetup, updateWidget } from '../../reports/dashboards.js';
 import { createLimiter } from '../../reports/engine/cache.js';
-import { REPORT_SECTIONS, sectionById } from './sections.js';
+import { createLoadedStore } from '../../reports/ai/loaded.js';
+import { addableSections, sectionById } from './sections.js';
 import { useDashboards, useReportContext } from './hooks.js';
 import { openList, openTicket } from './drill.js';
 import { clock } from './format.js';
@@ -62,7 +64,8 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
   const [editing, setEditing] = useState(null); // { widgetId } for an existing custom report, {} for a new one
   const [auto, setAuto] = useState(readAuto);
   const [readAts, setReadAts] = useState({});
-  const [adding, setAdding] = useState(REPORT_SECTIONS[0].id);
+  const addable = useMemo(() => addableSections(policy), [policy]);
+  const [adding, setAdding] = useState('overview');
   const [confirmRemove, setConfirmRemove] = useState(false);
   const context = useReportContext({ tabId: page.tabId, blocked, refreshKey });
 
@@ -83,13 +86,15 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
     setRefreshKey((k) => k + 1);
   }, [page.tabId]);
 
+  // The Team section stays mounted (hidden) while another section shows, so the timer pauses unless this section is on screen.
+  const sectionVisible = useSectionVisible();
   useEffect(() => {
-    if (!auto) return undefined;
+    if (!auto || !sectionVisible) return undefined;
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
     }, AUTO_MS);
     return () => clearInterval(timer);
-  }, [auto, refresh]);
+  }, [auto, sectionVisible, refresh]);
 
   const toggleAuto = (on) => {
     setAuto(on);
@@ -102,8 +107,12 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
 
   // At most two widgets read at a time, top to bottom: each gets its own time limit and the first ones appear first.
   const limiter = useMemo(() => createLimiter(2), []);
+  // What the widgets have loaded, in memory only, so 'Explain this dashboard' explains the numbers on screen without reading again.
+  const loaded = useMemo(() => createLoadedStore(), []);
   const noteRead = useCallback((id, ms) => setReadAts((prev) => (prev[id] === ms ? prev : { ...prev, [id]: ms })), []);
 
+  const groupsJson = JSON.stringify(context.data?.groups || []);
+  const groupsNote = context.data?.groupsNote || '';
   const scopeJson = dash ? JSON.stringify(dash.scope) : '';
   const selectedJson = JSON.stringify(selected);
   const env = useMemo(
@@ -123,10 +132,13 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
       openTicket: (ref) => openTicket(page, ref, { focus }),
       setWidgetParams: (widget, params) => update((s) => updateWidget(s, dash.id, widget.id, { params: { ...(widget.params || {}), ...params } })),
       noteRead,
+      loaded,
+      myGroups: JSON.parse(groupsJson),
+      groupsNote,
     }),
     // The scope is compared by value so a re-render of the dashboard does not restart every widget's read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page.tabId, page.href, layout, scopeJson, selectedJson, blocked, refreshKey, limiter, mask, canEdit, dash?.id, focus, update, noteRead]
+    [page.tabId, page.href, layout, scopeJson, selectedJson, blocked, refreshKey, limiter, mask, canEdit, dash?.id, focus, update, noteRead, loaded, groupsJson, groupsNote]
   );
 
   if (disabled) {
@@ -189,7 +201,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
             <label className="ab-widget-select">
               <span className="ab-chart-sr">Section to add</span>
               <select className="ab-select" value={adding} onChange={(e) => setAdding(e.target.value)}>
-                {REPORT_SECTIONS.map((s) => (
+                {addable.map((s) => (
                   <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
               </select>
@@ -267,7 +279,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel' }) {
             return (
               <div key={w.id} className="ab-widget-slot">
                 {tools}
-                {w.type === 'builder' ? <BuilderView widget={w} env={env} /> : section ? <section.View widget={w} env={env} /> : null}
+                {w.type === 'builder' ? <BuilderView widget={w} env={env} /> : section ? <section.View widget={w} env={env} eff={eff} /> : null}
               </div>
             );
           })}

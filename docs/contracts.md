@@ -94,7 +94,7 @@ Each area has its own files; add yours, do not edit another area's.
 {
   id: 'sentiment-risk',              // unique; also what policy `disabledFeatures` names
   title, description,                // shown on the Actions button
-  wave: 1 | 2 | 3,
+  wave: 1 | 2 | 3,                   // informational only (the build wave it came from): nothing in src reads it
   kinds: ['incident', ...],          // record kinds whose Actions list shows it. [] = not on the Actions list (a report or
                                      // compose feature that a view runs itself)
   context: 'record-summary',         // optional: the context spec (allowlist) to read the pack with; default = id

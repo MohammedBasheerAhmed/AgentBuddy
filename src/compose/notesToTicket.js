@@ -187,8 +187,12 @@ export function planFill(values, newRecord) {
   };
   add('short_description', oneLine(v.shortDescription).slice(0, MAX_SHORT));
   add('description', String(v.description ?? '').replace(/\r\n?/g, '\n').trim().slice(0, MAX_DESCRIPTION));
-  add('impact', normalizeLevel(v.impact)?.value || '');
-  add('urgency', normalizeLevel(v.urgency)?.value || '');
+  // Impact and urgency are fields of the incident form (the choice values above are its). A case form does not have them, so
+  // nothing is offered for it: otherwise every case fill would end with "Not filled: Impact, Urgency".
+  if (newRecord.kind !== 'case') {
+    add('impact', normalizeLevel(v.impact)?.value || '');
+    add('urgency', normalizeLevel(v.urgency)?.value || '');
+  }
   // A choice value only counts when it is on the list above, and only on the form those values belong to.
   const channel = CONTACT_TYPES.find((c) => c.value === v.contactType);
   if (channel && CONTACT_TYPE_TABLES.has(newRecord.table)) add('contact_type', channel.value);

@@ -95,6 +95,7 @@ const EMAIL_FEATURES = EMAIL_TYPES.map((type) => {
     title: t.title,
     description: type.blurb,
     wave: 1,
+    previewGroup: 'email', // one "check what will be sent" for all six email drafts, not six
     kinds: [],
     context: 'email-compose',
     journal: 10,
@@ -142,6 +143,7 @@ const REWRITE_FEATURES = REWRITE_PRESETS.map((preset) => {
     title: preset.title,
     description: `Rewrites the text you give it: ${preset.label.toLowerCase()}.`,
     wave: 2,
+    previewGroup: 'rewrite', // one "check what will be sent" for all the rewrite presets
     kinds: [],
     context: 'compose-people', // only used to read the record's people, so their names are masked
     journal: 0,
@@ -167,7 +169,8 @@ const NOTES_TO_TICKET = {
   context: 'compose-people',
   journal: 0,
   parts: composeParts,
-  open: { table: 'incident', label: 'Open a new incident form' },
+  // No `open`: the Notes panel knows the form and fills it itself ("Fill the form"). An `open` button would carry the answer to a
+  // blank form as a draft card that can only Copy.
   system:
     'You help a service desk agent log a ticket from rough call, chat or walk-up notes. The notes are in the data part labelled "Call notes".\n' +
     'Write exactly these lines, in this order, each starting with its label:\n' +

@@ -219,6 +219,31 @@ export function checkCaps(log, capsInput, provider, now = new Date()) {
   return { status, items, worst, message };
 }
 
+// --- The organisation's daily token budget (managed policy `tokenBudgetPerDay`) ---------------------------------------
+
+/** Tokens used today in the user's time zone, counting every real call and not the key-validation pings. */
+export function tokensUsedToday(log, now = new Date()) {
+  const today = dayKey(now);
+  return (Array.isArray(log) ? log : [])
+    .filter((e) => e && e.time && e.kind !== 'validate' && dayKey(e.time) === today)
+    .reduce((total, e) => total + totalTokens(e), 0);
+}
+
+/**
+ * The daily token cap that applies: the smaller of the organisation's and the person's own (each 0 = none). 0 means no cap.
+ * The person's own cap is enforced by checkCaps; this is what Settings shows as "the limit that applies".
+ */
+export function effectiveDailyTokenCap(policyCap, ownCap) {
+  const caps = [num(policyCap), num(ownCap)].filter((n) => n > 0);
+  return caps.length ? Math.floor(Math.min(...caps)) : 0;
+}
+
+/**
+ * The reader the pipeline wants (`async () => tokens used today`), from a function that reads the stored log:
+ *   tokensUsedToday: tokensTodayReader(async () => (await readBudgetState()).log)
+ */
+export const tokensTodayReader = (readLog, now = () => new Date()) => async () => tokensUsedToday(await readLog(), now());
+
 // --- CSV ----------------------------------------------------------------------------------------------------------
 
 const csvCell = (value) => {

@@ -24,7 +24,9 @@ export const featureById = (id) => FEATURES.find((f) => f.id === id) || null;
 /** A feature marked `defaultOff` (for example the coaching snapshot) stays off until the organisation's policy turns it on. */
 export function isFeatureAvailable(feature, policy) {
   if (!feature) return false;
-  if ((policy?.disabledFeatures || []).includes(feature.id)) return false;
+  // Lower case on both sides: "Reply-Draft" in a hand-written policy switches off reply-draft.
+  const off = Array.isArray(policy?.disabledFeatures) ? policy.disabledFeatures : [];
+  if (off.some((id) => String(id ?? '').trim().toLowerCase() === String(feature.id).toLowerCase())) return false;
   if (feature.defaultOff && policy?.coachingEnabled !== true) return false;
   return true;
 }

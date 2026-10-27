@@ -31,6 +31,7 @@ export const LIMITS = {
   relatedRows: 20,
   relatedText: 200,
   people: 30,
+  referencePeople: 40, // names read from rows of OTHER tickets (linked incidents, look-alikes...), added to the pack only to be masked
   historyRows: 10,
   historyCloseNotes: 400,
   similarCloseNotes: 600,
@@ -255,37 +256,70 @@ export const FEATURE_RELATED = Object.freeze({
 
 const FEATURE_SPEC = { ...BASE_SPEC, ...EXTRA.spec };
 
+// The columns that hold a PERSON. A person who is not on the pack's people list is not masked by name wherever the text mentions
+// them ("VPN fails for Abel Tuter" in a title, a note or a close note), so every feature that sends text to an AI reads ALL the
+// person columns of the kind's ceiling, even when it shows none of them. They are read to be masked, not to be sent: the pack's
+// `fields` leave them out unless the feature's own spec lists them (maskOnlyFields below), and the people list gets the names.
+// (src/context/people.js PERSON_FIELDS maps most of these to roles; tests/policy-hardening-people.test.js keeps the two in step.)
+export const PERSON_COLUMNS = Object.freeze([
+  'caller_id', 'requested_for', 'contact', 'consumer', 'opened_by', 'requested_by', 'assigned_to', 'opened_for', 'subject_person', 'author',
+]);
+
+// Search-only features: they rank tickets and articles locally and send nothing to an AI, so they read no extra columns.
+export const SEARCH_ONLY_FEATURES = Object.freeze(['caller-history', 'similar', 'kb-recs']);
+
 function buildFeatureFields() {
   const out = {};
+  const maskOnly = {};
   for (const feature of FEATURES) {
     const { common, by } = FEATURE_SPEC[feature];
     out[feature] = {};
+    maskOnly[feature] = {};
     for (const kind of Object.keys(FIELDS_BY_KIND)) {
       const ceiling = FIELDS_BY_KIND[kind];
-      const wanted = new Set([...common, ...(by[kind] || [])]);
+      const declared = new Set([...common, ...(by[kind] || [])]);
+      const wanted = new Set(declared);
+      if (!SEARCH_ONLY_FEATURES.includes(feature)) for (const name of ceiling) if (PERSON_COLUMNS.includes(name)) wanted.add(name);
       // Ceiling order, so the list reads the same everywhere and nothing outside the ceiling can slip in.
       out[feature][kind] = Object.freeze(ceiling.filter((name) => wanted.has(name)));
+      maskOnly[feature][kind] = Object.freeze(out[feature][kind].filter((name) => !declared.has(name)));
     }
     Object.freeze(out[feature]);
+    Object.freeze(maskOnly[feature]);
   }
-  return Object.freeze(out);
+  return { fields: Object.freeze(out), maskOnly: Object.freeze(maskOnly) };
 }
 
-/** FEATURE_FIELDS[feature][kind] -> the columns that feature may read for that kind. */
-export const FEATURE_FIELDS = buildFeatureFields();
+const BUILT = buildFeatureFields();
 
-/** The columns to read for `table` and `feature`. Throws for a feature that is not on the list (fail closed). */
-export function allowedFields(table, feature, { allowSensitive = false } = {}) {
+/** FEATURE_FIELDS[feature][kind] -> the columns that feature may read for that kind (its own spec plus every person column). */
+export const FEATURE_FIELDS = BUILT.fields;
+
+/** FEATURE_MASK_ONLY[feature][kind] -> the person columns read only so their names can be masked (not in the feature's own spec). */
+export const FEATURE_MASK_ONLY = BUILT.maskOnly;
+
+/**
+ * The columns to read for `table` and `feature`. Throws for a feature that is not on the list (fail closed).
+ * `sensitivePrefixes`: the policy's extra HR-family prefixes (the content script passes deps.sensitivePrefixes).
+ */
+export function allowedFields(table, feature, { allowSensitive = false, sensitivePrefixes } = {}) {
   const forFeature = FEATURE_FIELDS[feature];
   if (!forFeature) throw new Error(`Unknown feature "${feature}". Known: ${FEATURES.join(', ')}.`);
   const fields = forFeature[kindForTable(table)] || forFeature.other;
-  return isSensitiveTable(table) && !allowSensitive ? fields.filter((name) => !HR_HIDDEN.has(name)) : [...fields];
+  return isSensitiveTable(table, sensitivePrefixes) && !allowSensitive ? fields.filter((name) => !HR_HIDDEN.has(name)) : [...fields];
+}
+
+/** The subset of allowedFields() that is read only for its people (it does not become a field of the pack). */
+export function maskOnlyFields(table, feature) {
+  const forFeature = FEATURE_MASK_ONLY[feature];
+  if (!forFeature) throw new Error(`Unknown feature "${feature}". Known: ${FEATURES.join(', ')}.`);
+  return [...(forFeature[kindForTable(table)] || forFeature.other)];
 }
 
 /** Columns that stayed unread because the table is sensitive and the caller did not allow it. */
 export function withheldFields(table, feature, options = {}) {
-  if (!isSensitiveTable(table) || options.allowSensitive) return [];
-  const all = allowedFields(table, feature, { allowSensitive: true });
+  if (!isSensitiveTable(table, options.sensitivePrefixes) || options.allowSensitive) return [];
+  const all = allowedFields(table, feature, { allowSensitive: true, sensitivePrefixes: options.sensitivePrefixes });
   const kept = new Set(allowedFields(table, feature, options));
   return all.filter((name) => !kept.has(name));
 }

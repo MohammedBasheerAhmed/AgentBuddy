@@ -6,7 +6,9 @@ import RunPanel from '../RunPanel.jsx';
 import { openUrl } from '../openRecord.js';
 import { parseSafeText, toPlainText } from '../../render/safeText.js';
 import { recommendEmails, parseEmailDraft, emailFormUrl, EMAIL_TYPES } from '../../compose/emailRecommend.js';
-import { FillFeedback, aiNotReadyText, featureState, isAiReady, useFill } from './shared.js';
+import { internalTextsOf } from '../../safeSend/review.js';
+import { currentFromPage, emailClientTarget, matchesExpect } from '../../lib/fillable.js';
+import { FillFeedback, ReviewHints, aiNotReadyText, featureState, hintsFor, isAiReady, useFill } from './shared.js';
 
 const isEmailFeature = (feature) => Boolean(feature?.id) && EMAIL_TYPES.some((t) => t.featureId === feature.id);
 
@@ -27,11 +29,14 @@ function TypeRow({ type, why, primary, disabled, offReason, onDraft }) {
 }
 
 /** Below the draft: copy it, open the email form, try to put the body into it. Copy always works. */
-function DraftActions({ page, run, fill, target }) {
+export function DraftActions({ page, run, fill, target, internalTexts }) {
   const plain = toPlainText(parseSafeText(run.result || ''));
   const draft = parseEmailDraft(plain);
   const url = target ? emailFormUrl(page.href, target) : '';
   const [opened, setOpened] = useState(false);
+  // The body goes into the email form of the record the draft is for, and nowhere else.
+  const expect = target ? { email: true, table: target.table, sysId: target.sysId } : null;
+  const onOtherEmail = Boolean(expect) && Boolean(emailClientTarget(page.href)) && !matchesExpect(expect, currentFromPage(page));
 
   return (
     <section className="ab-card ab-compose-actions" aria-label="Use the draft">
@@ -56,12 +61,14 @@ function DraftActions({ page, run, fill, target }) {
         <button
           type="button"
           className="ab-btn ab-btn-sm"
-          disabled={!draft.body}
-          onClick={() => fill.insert({ field: 'body', value: draft.body, label: 'Body', mode: 'append', check: true })}
+          disabled={!draft.body || fill.busy || fill.inserted.body || onOtherEmail}
+          onClick={() => fill.insert({ field: 'body', value: draft.body, label: 'Body', mode: 'append', key: 'body', expect }, { internalTexts })}
         >
-          Insert into the email body
+          {fill.inserted.body ? 'Inserted' : 'Insert into the email body'}
         </button>
       </div>
+      <ReviewHints hints={hintsFor('body', draft.body, { people: run.people, scan: run.scan, internalTexts })} />
+      {onOtherEmail && <p className="ab-note ab-note-warn" role="status">This email form is for another ticket. Open the email form for this draft again, or use Copy.</p>}
       <FillFeedback fill={fill} />
       <p className="ab-hint">
         {opened ? 'The email form is opening in this tab. When it is ready, press Insert, or paste what you copied. ' : ''}
@@ -77,6 +84,7 @@ export default function EmailPanel({ page, eff, active }) {
   const fill = useFill({ page, eff, run });
   const [recs, setRecs] = useState({ state: 'idle', value: null, error: '' });
   const [target, setTarget] = useState(null); // the record the current draft is for (kept when the page moves on to the email form)
+  const [internalTexts, setInternalTexts] = useState([]); // that record's work notes, for the check on the draft (memory only)
   const token = useRef(0);
   const lastKey = useRef('');
   const key = record ? `${record.table}:${record.sysId}` : '';
@@ -90,6 +98,7 @@ export default function EmailPanel({ page, eff, active }) {
       run.reset();
       fill.clear();
       setTarget(null);
+      setInternalTexts([]);
     }
     lastKey.current = key;
     token.current += 1;
@@ -124,7 +133,13 @@ export default function EmailPanel({ page, eff, active }) {
     fill.clear();
     setTarget(ref);
     // The pack is read for THIS record even if the page has moved on by the time "Try again" is pressed (to the email form).
-    run.run(feature, { getPack: () => read(page.tabId, 'pack', { ...ref, feature: contextFor(feature), allowSensitive: Boolean(eff.policy?.allowHrContent) }) });
+    run.run(feature, {
+      getPack: async () => {
+        const pack = await read(page.tabId, 'pack', { ...ref, feature: contextFor(feature), allowSensitive: Boolean(eff.policy?.allowHrContent) });
+        setInternalTexts(internalTextsOf(pack));
+        return pack;
+      },
+    });
   };
 
   const idle = run.phase === 'idle' || run.phase === 'error';
@@ -193,7 +208,7 @@ export default function EmailPanel({ page, eff, active }) {
 
       <RunPanel run={run} eff={eff} page={page} />
 
-      {showResult && <DraftActions page={page} run={run} fill={fill} target={target || (record && { table: record.table, sysId: record.sysId })} />}
+      {showResult && <DraftActions page={page} run={run} fill={fill} target={target || (record && { table: record.table, sysId: record.sysId })} internalTexts={internalTexts} />}
     </div>
   );
 }

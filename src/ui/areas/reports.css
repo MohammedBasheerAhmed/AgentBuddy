@@ -335,3 +335,21 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
   .ab-chart-table td.ab-chart-align-right { text-align: left !important; }
 }
 .ab-chart-table tbody th { overflow-wrap: break-word; } /* a ticket number keeps its digits together; long titles still wrap in the other cells */
+
+/* ---- the AI sections: shift handover, coaching snapshot, explain this dashboard (src/sidepanel/reports/*View.jsx) ---- */
+.ab-handover-block { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ab-handover-h { margin: 0; font-size: var(--ab-text-md); }
+.ab-handover-ai { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--ab-border); min-width: 0; }
+.ab-ai-result { box-shadow: none; }
+.ab-ai-result .ab-output { overflow-wrap: anywhere; }
+.ab-ai-actions { margin-top: 4px; }
+.ab-ai-findings { margin: 4px 0 8px; padding-left: 18px; overflow-wrap: anywhere; }
+.ab-coach-reminder { margin: 0; font-weight: 600; }
+.ab-coach-controls { align-items: flex-end; gap: 6px 12px; }
+.ab-coach-controls .ab-field { margin-bottom: 0; min-width: 0; }
+.ab-coach-sample { display: flex; flex-direction: column; gap: 6px; }
+.ab-coach-sample .ab-mono { overflow-wrap: anywhere; }
+@media print {
+  /* A printed note keeps its text and drops its buttons. */
+  .ab-ai-actions, .ab-handover-ai > .ab-row, .ab-handover-ai > .ab-hint { display: none !important; }
+}

@@ -1,15 +1,20 @@
 // Small helpers shared by the Write section's panels.
-import React, { useCallback, useState } from 'react';
-import { MSG } from '../../lib/messages.js';
-import { logAudit } from '../../lib/storage.js';
+import React, { useCallback, useRef, useState } from 'react';
+import { auditInsert } from '../../lib/storage.js';
 import { read } from '../ask.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
-import { seriousFindings } from '../../compose/sendCheck.js';
+import { reviewForInsert } from '../../safeSend/review.js';
+import { buildFillMessage, auditRefFromPage, fillReasonText, isCustomerVisible, sourceFromPack } from '../../lib/fillable.js';
+import { createGuard, performInsert } from '../insertFlow.js';
+import { resolveProviderConfig } from '../../providers/config.js';
+import { aiNeedsText } from '../aiReady.js';
+import ReviewHints from '../ReviewHints.jsx';
 
-/** Same rule RecordView uses: a key (or a key the organisation provides, or a local model) is there. */
-export const isAiReady = (eff) => Boolean(eff.apiKey) || Boolean(eff.values?.providedApiKey) || ['ollama'].includes(eff.values?.provider);
+export { ReviewHints };
 
-export const aiNotReadyText = (eff) => (eff.keyLocked ? 'Your AI key is locked. Unlock it in Settings.' : 'Add an AI key in Settings to use this.');
+// One rule for "is the AI ready" everywhere (a key, a key the organisation provides, or a model that needs none): src/sidepanel/aiReady.js.
+export { isAiReady } from '../aiReady.js';
+export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this');
 
 /** A feature by id, and whether the organisation's policy lets it run. */
 export function featureState(id, policy) {
@@ -17,24 +22,18 @@ export function featureState(id, policy) {
   return { feature, available: Boolean(feature) && isFeatureAvailable(feature, policy) };
 }
 
-const FILL_REASONS = {
-  'no-form': 'Agent Buddy could not reach a form field on this page.',
-  'no-such-field': 'That field is not on this form.',
-  'read-only': 'That field is read-only on this form.',
-  'too-long': 'The text is too long to insert.',
-  'set-failed': 'The form did not accept the text.',
-  'bad-field': 'That field cannot be filled.',
-};
-export const fillReason = (reason) => FILL_REASONS[reason] || 'Could not insert it.';
+export const fillReason = fillReasonText;
 
 /**
  * Ask the page to put text into ONE field of the open form (FILL_FIELD). It never saves: the person presses Save.
- * mode 'append' adds below what the field holds; anything else replaces it.
- * @returns {Promise<{ ok: boolean, reason?: string }>}
+ * mode 'append' adds below what the field holds; anything else replaces it (a one-line field is always replaced).
+ * `expect` is the record the text was written for ({ table, sysId } or { table, newRecord: true }): the content script refuses
+ * with 'wrong-record' when another form is open. Left out, it means "the page as it is now"; pass null for "any form".
+ * @returns {Promise<{ ok: boolean, reason?: string, method?: string, label?: string }>}
  */
-export async function fillField(page, { field, value, label = '', mode = 'replace' }) {
+export async function fillField(page, { field, value, label = '', mode = 'replace', expect }) {
   try {
-    const answer = await chrome.tabs.sendMessage(page.tabId, { type: MSG.FILL_FIELD, field, value, label, mode: mode === 'append' ? 'append' : 'replace' });
+    const answer = await chrome.tabs.sendMessage(page.tabId, buildFillMessage({ field, value, label, mode, expect, page }));
     return answer && typeof answer === 'object' && !answer.error ? answer : { ok: false, reason: 'no-form' };
   } catch {
     return { ok: false, reason: 'no-form' };
@@ -57,29 +56,47 @@ export async function readRecordPeople(page, eff) {
 }
 
 /**
- * Insert and copy for the Write panels, with the safe-to-send check in front of anything the customer can read.
- *   insert({ field, value, label, mode, check }, { people, scan, force })
- *     check: true runs the check; findings are held in `findings` until the person chooses
- * `run` (from useRun) is optional: when given, its people and scan feed the check and the audit log gets "inserted" / "copied".
+ * Insert and copy for the Write panels, with the review in front of anything that goes into a form.
+ *   insert({ field, value, label, mode, key?, expect?, number? }, { people, scan, internalTexts, force })
+ *     The review (src/safeSend/review.js) looks at the text for the field it goes into; serious findings are held in `findings`
+ *     until the person chooses.
+ *     expect: the record the text was written for (see fillField); number: its number, for the message when it is not open.
+ *     key: names the button, so it can say "Inserted" afterwards.
+ * `run` (from useRun) is optional: when given, its people and scan feed the check. `feature` names the action in the audit log
+ * for inserts that did not come from a run (a snippet). Every successful insert or copy lands in the audit log, without content.
+ *
+ * `busy` is true while a FILL_FIELD call is in flight: disable every insert button with it. `inserted[key]` is true after a
+ * successful insert until clear() (a new draft, Try again, Close): the button then says "Inserted".
  */
-export function useFill({ page, eff, run }) {
+export function useFill({ page, eff, run, feature = '' }) {
   const [note, setNote] = useState(null); // { kind: 'ok' | 'danger' | 'warn', text }
-  const [findings, setFindings] = useState(null); // { items, spec, people, scan }
+  const [findings, setFindings] = useState(null); // { items, hints, spec, people, scan, internalTexts }
+  const [busy, setBusy] = useState(false);
+  const [inserted, setInserted] = useState({});
+  const guard = useRef(null); // one insert at a time, decided at once (not at the next render)
+  if (!guard.current) guard.current = createGuard();
 
   const audit = useCallback(
     (outcome) => {
-      if (!run?.active) return;
-      logAudit({
-        feature: run.active.id,
-        table: run.lastPack?.table,
-        sysId: run.lastPack?.sysId,
-        provider: eff.values?.provider,
-        model: eff.values?.models?.[eff.values?.provider] || '',
+      // The record the text went into: the run's own record, or (a pasted text, a snippet) the record that is open.
+      const ref = sourceFromPack(run?.lastPack) ? run.lastPack : auditRefFromPage(page);
+      let config = {};
+      try {
+        config = run?.active ? resolveProviderConfig(eff.values, eff.apiKey) : {};
+      } catch {
+        config = {};
+      }
+      auditInsert({
+        feature: run?.active?.id || feature,
+        table: ref.table,
+        sysId: ref.sysId,
+        provider: config.provider,
+        model: config.model,
         mode: eff.values?.piiMode,
         outcome,
       });
     },
-    [run, eff]
+    [run, eff, page, feature]
   );
 
   const copy = useCallback(
@@ -98,29 +115,46 @@ export function useFill({ page, eff, run }) {
   );
 
   const insert = useCallback(
-    async (spec, { people, scan, force = false } = {}) => {
+    async (spec, { people, scan, internalTexts, force = false } = {}) => {
       setNote(null);
       const value = String(spec.value ?? '');
       if (!value.trim()) {
         setNote({ kind: 'danger', text: 'There is nothing to insert.' });
         return null;
       }
-      if (!force && spec.check) {
-        const serious = seriousFindings(value, people ?? run?.people ?? [], scan ?? run?.scan ?? null);
-        if (serious.length) {
-          setFindings({ items: serious, spec, people, scan });
-          return null;
+      const key = spec.key || `${spec.field}:${spec.mode || ''}`;
+      // One insert at a time; a second click while the first is in flight (or after it worked) does nothing.
+      const outcome = await guard.current.run(key, async () => {
+        setBusy(true);
+        try {
+          return await performInsert({
+            page,
+            spec,
+            value,
+            force,
+            expect: spec.expect,
+            number: spec.number,
+            review: { people: people ?? run?.people ?? [], scan: scan ?? run?.scan ?? null, internalTexts: internalTexts ?? run?.lastPack?.internalTexts ?? [] },
+            send: (tabId, message) => chrome.tabs.sendMessage(tabId, message),
+          });
+        } finally {
+          setBusy(false);
         }
+      });
+      if (!outcome) return null;
+      if (outcome.status === 'findings') {
+        setFindings({ items: outcome.items, hints: outcome.hints, spec, people, scan, internalTexts });
+        return null;
       }
       setFindings(null);
-      const answer = await fillField(page, spec);
-      if (answer.ok) {
-        setNote({ kind: 'ok', text: 'Inserted into the form. Review it, then save the record yourself.' });
+      if (outcome.status === 'inserted') {
+        setNote({ kind: 'ok', text: outcome.note });
+        setInserted((prev) => ({ ...prev, [key]: true }));
         audit('inserted');
       } else {
-        await copy(value, fillReason(answer.reason));
+        await copy(value, outcome.why);
       }
-      return answer;
+      return outcome.answer;
     },
     [page, run, audit, copy]
   );
@@ -128,9 +162,17 @@ export function useFill({ page, eff, run }) {
   const clear = useCallback(() => {
     setNote(null);
     setFindings(null);
+    setInserted({});
+    guard.current.reset();
   }, []);
 
-  return { note, setNote, findings, setFindings, insert, copy, clear, audit };
+  return { note, setNote, findings, setFindings, busy, inserted, insert, copy, clear, audit };
+}
+
+/** The non-blocking findings for text that is about to go into `field` (what ReviewHints shows before the person presses Insert). */
+export function hintsFor(field, text, { people, scan, internalTexts } = {}) {
+  if (!isCustomerVisible(field) || !String(text || '').trim()) return [];
+  return reviewForInsert(field, text, { people, scan, internalTexts }).hints;
 }
 
 /** The warning and the result line that go with useFill(). */
@@ -140,7 +182,7 @@ export function FillFeedback({ fill }) {
     <>
       {findings && (
         <div className="ab-note ab-note-warn" role="alert">
-          <strong>Check before sending to the customer:</strong>
+          <strong>{isCustomerVisible(findings.spec.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
           <ul className="ab-compose-list">
             {findings.items.map((f, i) => (
               <li key={i}>
@@ -148,13 +190,15 @@ export function FillFeedback({ fill }) {
               </li>
             ))}
           </ul>
+          <ReviewHints hints={findings.hints} />
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => fill.insert(findings.spec, { people: findings.people, scan: findings.scan, force: true })}>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.insert(findings.spec, { people: findings.people, scan: findings.scan, internalTexts: findings.internalTexts, force: true })}>
               Insert anyway
             </button>
             <button
               type="button"
               className="ab-btn ab-btn-sm"
+              disabled={fill.busy}
               onClick={() => {
                 const value = findings.spec.value;
                 fill.setFindings(null);

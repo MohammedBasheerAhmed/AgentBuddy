@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { MSG } from '../lib/messages.js';
+import { read as ask } from './ask.js';
 import { openRecord } from './openRecord.js';
+import Notes from './knowledge/Notes.jsx';
 
 // A2, A3, C4 and the outage check (E2): what happened before for this person, tickets solved like this one, open tickets on
 // the same service, and knowledge that may help. All of it is read with the person's own session and ranked locally: no AI
 // call, no key needed, nothing leaves the browser. Items open in the same tab.
 
 const CALLER_ROLES = ['caller', 'requested_for', 'contact', 'opened_by', 'requester'];
-
-const ask = async (tabId, op, args) => {
-  const answer = await chrome.tabs.sendMessage(tabId, { type: MSG.READ, op, args });
-  if (answer?.error) throw new Error(answer.error.message);
-  return answer;
-};
 
 const clip = (text, n) => (text && text.length > n ? `${text.slice(0, n).trimEnd()}…` : text || '');
 
@@ -29,19 +24,13 @@ function Section({ title, count, children, defaultOpen = true }) {
 
 function Item({ page, item, line, extra }) {
   return (
-    <button type="button" className="ab-feature" onClick={() => openRecord(page, item)}>
+    <button type="button" className="ab-feature" onClick={() => openRecord(page, item)} title="Opens in this tab">
       <span className="ab-record-number">{item.number}</span>
       <span className="ab-feature-title">{item.short_description}</span>
       {line && <span className="ab-feature-desc">{line}</span>}
       {extra && <span className="ab-feature-desc">{extra}</span>}
     </button>
   );
-}
-
-function Notes({ access }) {
-  const notes = (access || []).filter((a) => a.status === 'denied' || a.status === 'error' || a.status === 'empty-or-hidden');
-  if (!notes.length) return null;
-  return <p className="ab-hint">{notes.map((a) => (a.note ? `${a.source}: ${a.note}` : `${a.source}: not available to you.`)).join(' ')}</p>;
 }
 
 export default function RelatedView({ page, eff }) {
@@ -90,7 +79,7 @@ export default function RelatedView({ page, eff }) {
   return (
     <>
       <div className="ab-row" style={{ justifyContent: 'space-between' }}>
-        <span className="ab-sub">Found with your own session. Nothing here is sent to an AI.</span>
+        <span className="ab-sub">Found with your own session. Nothing here is sent to an AI. Each ticket opens in this tab.</span>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
       </div>
       {state.phase === 'loading' && !state.pack && <p className="ab-note" role="status">Looking…</p>}

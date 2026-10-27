@@ -5,9 +5,10 @@ import RunPanel from '../RunPanel.jsx';
 import { parseSafeText, toPlainText } from '../../render/safeText.js';
 import { MAX_FORM_TEXT } from '../../compose/formFields.js';
 import { CONTACT_TYPES, LEVELS, parseTicketProposal, planFill } from '../../compose/notesToTicket.js';
-import { buildComposePack, peopleFromNames } from '../../compose/rewrite.js';
-import { seriousFindings } from '../../compose/sendCheck.js';
-import { aiNotReadyText, featureState, fillField, fillReason, isAiReady, useFill } from './shared.js';
+import { buildComposePack, pageTable, peopleFromNames } from '../../compose/rewrite.js';
+import { reviewForCustomer } from '../../safeSend/review.js';
+import { expectFromPage } from '../../lib/fillable.js';
+import { ReviewHints, aiNotReadyText, featureState, fillField, fillReason, isAiReady, useFill } from './shared.js';
 
 const FEATURE_ID = 'notes-to-ticket';
 const FIELD_NAMES = { short_description: 'Short description', description: 'Description', impact: 'Impact', urgency: 'Urgency', contact_type: 'Contact type' };
@@ -22,6 +23,8 @@ export default function NotesPanel({ page, eff }) {
   const [warnings, setWarnings] = useState(null); // things to confirm before filling
   const [outcome, setOutcome] = useState(null); // { kind, text } after a fill
   const [filling, setFilling] = useState(false);
+  const [filled, setFilled] = useState(false); // the form was filled: the button says so until the values change or a new answer comes
+  const fillingNow = useRef(false); // set at once, so a second click before the next render cannot start a second fill
   const parsed = useRef(null); // the answer already turned into editable values
   const aiReady = isAiReady(eff);
   const { feature, available } = featureState(FEATURE_ID, eff.policy);
@@ -35,6 +38,7 @@ export default function NotesPanel({ page, eff }) {
     setValues({ shortDescription: p.shortDescription, description: p.description, impact: p.impact, urgency: p.urgency, contactType: p.contactType });
     setWarnings(null);
     setOutcome(null);
+    setFilled(false);
     fill.clear();
     // fill.clear is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,22 +51,39 @@ export default function NotesPanel({ page, eff }) {
     setProposal(null);
     setOutcome(null);
     setWarnings(null);
+    setFilled(false);
     fill.clear();
     // The notes are the only data. Names the agent lists are masked precisely; the preview shows what is sent.
-    run.run(feature, { getPack: async () => buildComposePack({ text: notes, people: peopleFromNames(names), label: 'Call notes', field: 'notes' }) });
+    // The pack carries the real table of the page (the blank form), so the table policy and the HR gate apply to the notes.
+    run.run(feature, { getPack: async () => buildComposePack({ text: notes, people: peopleFromNames(names), label: 'Call notes', field: 'notes', table: pageTable(page) }) });
   }
 
-  const set = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }));
+  const set = (key) => (e) => {
+    setFilled(false);
+    setValues((v) => ({ ...v, [key]: e.target.value }));
+  };
   const plan = values ? planFill(values, page.newRecord) : null;
 
   async function fillForm(force = false) {
-    if (!plan?.canFill) return;
+    if (!plan?.canFill || fillingNow.current) return;
+    // Held from the first moment (the check below reads the form), so a second click cannot start a second fill.
+    fillingNow.current = true;
+    setFilling(true);
+    try {
+      await fillFormNow(force);
+    } finally {
+      fillingNow.current = false;
+      setFilling(false);
+    }
+  }
+
+  async function fillFormNow(force) {
     setOutcome(null);
     if (!force) {
       const found = [];
       // The description and short description are read by the customer on a portal: same check as a customer comment.
       const text = `${values.shortDescription}\n${values.description}`.trim();
-      for (const f of seriousFindings(text, run.people, run.scan)) found.push(`${f.advice} ${f.excerpt}`);
+      for (const f of reviewForCustomer(text, { people: run.people, scan: run.scan }).serious) found.push(`${f.advice} ${f.excerpt}`);
       // Do not silently replace what the agent already typed.
       try {
         const textFields = plan.fields.map((f) => f.field).filter((n) => n === 'short_description' || n === 'description');
@@ -79,16 +100,17 @@ export default function NotesPanel({ page, eff }) {
       }
     }
     setWarnings(null);
-    setFilling(true);
+    // Every field goes to the blank form that is open now, and only to it: if another form comes up halfway, the rest are refused.
+    const expect = expectFromPage(page);
     const done = [];
     const failed = [];
     for (const f of plan.fields) {
       // eslint-disable-next-line no-await-in-loop -- one field at a time, in a fixed order
-      const answer = await fillField(page, { field: f.field, value: f.value, label: f.label, mode: 'replace' });
+      const answer = await fillField(page, { field: f.field, value: f.value, label: f.label, mode: 'replace', expect });
       if (answer.ok) done.push(FIELD_NAMES[f.field]);
       else failed.push(`${FIELD_NAMES[f.field]} (${fillReason(answer.reason).replace(/\.$/, '').toLowerCase()})`);
     }
-    setFilling(false);
+    if (done.length && !failed.length) setFilled(true);
     if (done.length) fill.audit('inserted');
     if (done.length && !failed.length) setOutcome({ kind: 'ok', text: `Filled: ${done.join(', ')}. Review the form, then save the record yourself.` });
     else if (done.length) setOutcome({ kind: 'warn', text: `Filled: ${done.join(', ')}. Not filled: ${failed.join('; ')}. Copy those values instead.` });
@@ -201,6 +223,8 @@ export default function NotesPanel({ page, eff }) {
           )}
 
           {plan && !plan.canFill && <p className="ab-note" role="status">{plan.reason}</p>}
+          <ReviewHints hints={reviewForCustomer(`${values.shortDescription}
+${values.description}`.trim(), { people: run.people, scan: run.scan }).hints} />
 
           {warnings && (
             <div className="ab-note ab-note-warn" role="alert">
@@ -218,8 +242,8 @@ export default function NotesPanel({ page, eff }) {
           )}
 
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!plan?.canFill || filling} onClick={() => fillForm(false)}>
-              Fill the form
+            <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!plan?.canFill || filling || filled} onClick={() => fillForm(false)}>
+              {filled ? 'Filled' : 'Fill the form'}
             </button>
             <button type="button" className="ab-btn ab-btn-sm" disabled={!values.shortDescription.trim()} onClick={() => fill.copy(values.shortDescription)}>
               Copy short description
