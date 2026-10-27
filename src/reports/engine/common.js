@@ -44,19 +44,23 @@ export function normalizeTables(input) {
  * @returns {Promise<{ table, meta, vis: {status, note}, cols: {known, has}, usable: boolean }[]>}
  */
 export async function probeTables(reader, tables) {
+  const none = { known: false, has: () => false, names: [] };
   return Promise.all(
     tables.map(async (table) => {
       const meta = REPORT_TABLES[table];
-      const vis = await reader.visibility(table);
-      let cols = { known: false, has: () => false, names: [] };
-      if (vis.status === 'ok') {
+      // One unfiltered one-row read shows both things at once: a row means the table is readable, and its keys are the columns.
+      if (!reader.isBlocked(table)) {
         try {
-          cols = await reader.columns(table, meta.optional);
+          const cols = await reader.columns(table, meta.optional);
+          if (cols.known) return { table, meta, vis: { status: 'ok', note: '' }, cols, usable: true };
         } catch (err) {
           if (err?.code === 'SESSION_EXPIRED') throw err;
+          // A denial or a timeout is classified below.
         }
       }
-      return { table, meta, vis, cols, usable: vis.status === 'ok' };
+      // No row: a 403, or a 200 with nothing, which proves nothing (confirmEmptyIsReallyEmpty inside visibility()).
+      const vis = await reader.visibility(table);
+      return { table, meta, vis, cols: none, usable: vis.status === 'ok' };
     })
   );
 }

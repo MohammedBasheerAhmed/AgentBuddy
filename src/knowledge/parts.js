@@ -48,8 +48,11 @@ export function mergeParts(pack) {
   return parts;
 }
 
-/** A ContextPack-shaped object for the merge draft. Published content: no people, no notes. */
-export function mergePack(articles, access = []) {
+/**
+ * A ContextPack-shaped object for the merge draft. Published content: no notes. `people` are the authors of the articles; they
+ * are not sent as fields, but the privacy filter masks their names wherever the article text mentions them.
+ */
+export function mergePack(articles, access = [], people = []) {
   const picked = (articles || []).slice(0, MERGE_MAX_ARTICLES).map((a) => ({ number: a.number, title: a.title, text: a.text, meta: a.meta || '' }));
   const first = articles?.[0] || {};
   return {
@@ -59,7 +62,7 @@ export function mergePack(articles, access = []) {
     number: first.number || '',
     kind: 'knowledge',
     fields: {},
-    people: [],
+    people: Array.isArray(people) ? people : [],
     journal: [],
     related: { articles: picked },
     access,
@@ -84,6 +87,7 @@ export function gapParts(pack) {
 
 /** A ContextPack-shaped object for one cluster of the radar (cluster as built by src/knowledge/gaps.js). */
 export function gapPack(cluster, { days = 60 } = {}) {
+  const people = (cluster?.people || []).map((name) => ({ role: 'caller', name }));
   const example = cluster?.examples?.[0] || {};
   const tickets = cluster.count === 1 ? 'ticket' : 'tickets';
   return {
@@ -93,7 +97,7 @@ export function gapPack(cluster, { days = 60 } = {}) {
     number: example.number || '',
     kind: 'other',
     fields: {},
-    people: [],
+    people,
     journal: [],
     related: {
       gap: {

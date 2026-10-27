@@ -164,6 +164,9 @@ const BASE_SPEC = {
     common: [
       'number', 'short_description', 'description', 'state', 'category', 'subcategory', 'cmdb_ci', 'business_service',
       'assigned_to', 'opened_at', 'resolved_at', 'close_code', 'close_notes', 'hold_reason',
+      // The people on the record are read so the firewall can mask their names wherever the text mentions them. They are not
+      // sent as fields (the notes feature's parts leave them out), but a name inside the notes is only masked if it is known.
+      ...WHO, 'opened_by',
     ],
     by: {
       problem: ['known_error', 'cause_notes', 'workaround', 'fix_notes', 'resolution_code'],

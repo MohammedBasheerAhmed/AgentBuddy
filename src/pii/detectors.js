@@ -327,6 +327,8 @@ const ASSIGN = new RegExp(
     '(?:[ \\t]+' + ci('for') + '[ \\t]+\\S{1,40})?' +
     '[ \\t]{0,3}' +
     `(?:(:=|=>|[:=])|[ \\t]+(${SEP_WORDS.map((w) => w.split(' ').map(ci).join('[ \\t]+')).join('|')}))` +
+    // "password is: x", "password was = x": a colon or equals sign may follow the word
+    '(?:[ \\t]{0,3}[:=])?' +
     '[ \\t]{0,3}' +
     '(?:"([^"\\r\\n]{1,200})"|\'([^\'\\r\\n]{1,200})\'|([^\\s"\'<>;]{1,200}))',
   'gd'

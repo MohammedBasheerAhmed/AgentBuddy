@@ -207,7 +207,7 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
                   type="button"
                   className="ab-btn ab-btn-primary"
                   disabled={!aiReady || !available || run.busy}
-                  onClick={() => run.run(feature, { getPack: async () => mergePack(picked.texts.articles, picked.texts.access) })}
+                  onClick={() => run.run(feature, { getPack: async () => mergePack(picked.texts.articles, picked.texts.access, picked.texts.people) })}
                 >
                   {feature.title}
                 </button>

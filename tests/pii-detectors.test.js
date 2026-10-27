@@ -215,6 +215,13 @@ test('a 7-digit local number is a phone only after a calling verb', () => {
   }
 });
 
+test('a colon after "is" or "was" does not hide a password', () => {
+  for (const text of ['Password is: Winter2026!Vpn#9', 'password was: Winter2026!Vpn#9', 'The password is = Winter2026!Vpn#9', 'password is Winter2026!Vpn#9', 'password: Winter2026!Vpn#9']) {
+    assert.deepEqual(valuesOf(text), ['Winter2026!Vpn#9'], text);
+  }
+  assert.deepEqual(kindsOf('the password is: incorrect'), [], 'prose after the colon is still prose');
+});
+
 test('"employee id is E12345" is found, not only "employee id: E12345"', () => {
   assert.deepEqual(kindsOf('employee id is E12345'), ['EMPLOYEE_ID']);
   assert.equal(valuesOf('Her employee number was 40817')[0], '40817');

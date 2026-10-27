@@ -262,7 +262,16 @@ async function readVariables({ sysId }, deps, memo) {
   if (left) notes.push(`${left} masked or secret answer${left === 1 ? ' was' : 's were'} left out.`);
   if (unresolved) notes.push(`${unresolved} reference answer${unresolved === 1 ? '' : 's'} could not be shown${failed ? ' (the referenced table could not be read)' : ''}.`);
   if (items.length > shownItems.length) notes.push(`Showing the first ${shownItems.length}.`);
-  return { items: shownItems, access: accessEntry(source, STATUS.OK, notes.join(' ')) };
+  // A person named in an answer ("Manager: ...") is a person on this record: add them so the firewall masks the name wherever it appears.
+  const refs = [];
+  for (const c of candidates) {
+    if (c.refTable !== 'sys_user' || !ID_LIST.test(c.value)) continue;
+    for (const id of c.value.split(',')) {
+      const name = names.get(id.toLowerCase());
+      if (name) refs.push({ role: 'variable_reference', sysId: id.toLowerCase(), name });
+    }
+  }
+  return { items: shownItems, refs, access: accessEntry(source, STATUS.OK, notes.join(' ')) };
 }
 
 // ---- Domain extras: linked incidents, schedule conflicts, recent changes ----------------------------------------------------

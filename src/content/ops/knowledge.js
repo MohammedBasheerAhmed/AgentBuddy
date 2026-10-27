@@ -52,6 +52,7 @@ export default {
 
     const articles = [];
     const access = [];
+    const people = new Map(); // the authors, by id or name: the privacy filter must know them
     for (const sysId of ids) {
       // eslint-disable-next-line no-await-in-loop -- four small reads at most, kept sequential.
       const pack = await readContextPack({ table: 'kb_knowledge', sysId }, deps, { feature: 'kb-merge-draft', includeJournal: false });
@@ -65,8 +66,9 @@ export default {
         category: pack.fields.kb_category || '',
       });
       access.push(...pack.access.filter((a) => a.status !== 'ok'));
+      for (const person of pack.people) people.set(person.sysId || person.name.toLowerCase(), person);
     }
-    return { articles, pairs: pairwiseText(articles), access };
+    return { articles, people: [...people.values()], pairs: pairwiseText(articles), access };
   },
 
   /**

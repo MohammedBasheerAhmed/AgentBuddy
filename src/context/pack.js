@@ -12,7 +12,7 @@ import { articleHtmlStats, statsToStrings } from './knowledge.js';
 import { isSensitiveTable, kindForTable, tableForNumber } from './kinds.js';
 import { personRefs, resolvePeople } from './people.js';
 import { readRelated, relatedPlan } from './related.js';
-import { SYS_ID_RE, TABLE_RE, cleanText, disp, raw, uniq } from './util.js';
+import { SYS_ID_RE, TABLE_RE, cleanText, disp, oneLine, raw, uniq } from './util.js';
 import { parseRecordNumber } from '../lib/recordNumber.js';
 
 export { stripHtml } from './util.js';
@@ -38,6 +38,19 @@ function kindExtras(kind, row, names) {
   }
   if (Object.keys(times).length) extras.times = times;
   return extras;
+}
+
+// Person columns that only one of the new kinds has (people.js knows the ticket ones). The author of an article is never shown
+// or sent as a field; reading the column lets the privacy filter mask the name wherever the article text mentions it.
+const KIND_PERSON_FIELDS = { knowledge: { author: 'author' } };
+
+function kindPersonRefs(kind, row, names) {
+  return Object.entries(KIND_PERSON_FIELDS[kind] || {}).flatMap(([name, role]) => {
+    const sysId = raw(row[name]);
+    if (!names.includes(name) || !SYS_ID_RE.test(sysId)) return [];
+    const shown = disp(row[name]);
+    return [{ role, sysId: sysId.toLowerCase(), name: SYS_ID_RE.test(shown) ? '' : oneLine(shown, 100), table: 'sys_user' }];
+  });
 }
 
 // Chat participants get the role they played, once the messages say who spoke on which side.
@@ -120,7 +133,7 @@ export async function readContextPack(ref, deps, options = {}) {
   // 3. People: from the record, the extras and the note authors, with emails where sys_user allows.
   const displayNames = isChat ? journalResult.names || [] : uniq(journalResult.entries.map((e) => e.by).filter((by) => /\s/.test(by)));
   const { people, access: peopleAccess, namesByLogin } = await resolvePeople(
-    { refs: [...personRefs(row, names), ...relatedResult.refs], logins: journalResult.loginNames, names: displayNames },
+    { refs: [...personRefs(row, names), ...kindPersonRefs(kind, row, names), ...relatedResult.refs], logins: journalResult.loginNames, names: displayNames },
     deps
   );
 

@@ -22,7 +22,7 @@ test('the knowledge and chat ceilings are the documented ones, and every feature
   for (const name of ['number', 'short_description', 'text', 'workflow_state', 'kb_knowledge_base', 'kb_category', 'meta', 'valid_to', 'sys_updated_on', 'sys_view_count']) {
     assert.ok(FIELDS_BY_KIND.knowledge.includes(name), name);
   }
-  assert.ok(!FIELDS_BY_KIND.knowledge.includes('author'), 'who wrote an article is never read');
+  assert.ok(FIELDS_BY_KIND.knowledge.includes('author'), 'the author is read, as a person, so the privacy filter knows the name');
   assert.ok(!FIELDS_BY_KIND.chat.includes('comments') && !FIELDS_BY_KIND.chat.includes('work_notes'));
   for (const feature of ['article-check', 'article-optimise', 'kb-merge-draft', 'kb-gap-outline', 'chat-summary', 'chat-reply']) {
     for (const kind of ['knowledge', 'chat', 'incident', 'case']) {
@@ -41,9 +41,11 @@ test('the bulk reads stay inside the ceiling of the kinds they read', () => {
   for (const name of KB_LIST_FIELDS.filter((n) => n !== 'sys_id')) assert.ok(FIELDS_BY_KIND.knowledge.includes(name), `duplicate finder: ${name}`);
   assert.ok(!KB_LIST_FIELDS.includes('text'), 'the first read never carries article text');
   for (const [table, kind] of Object.entries(GAP_TABLES)) {
-    for (const name of GAP_FIELDS.filter((n) => n !== 'sys_id')) assert.ok(FIELDS_BY_KIND[kind].includes(name), `gap radar ${table}: ${name}`);
-    for (const name of GAP_FIELDS.filter((n) => n !== 'sys_id')) assert.ok(FEATURE_FIELDS['kb-gap-outline'][kind].includes(name), `kb-gap-outline spec ${kind}: ${name}`);
+    const columns = GAP_FIELDS[table].filter((n) => n !== 'sys_id');
+    for (const name of columns) assert.ok(FIELDS_BY_KIND[kind].includes(name), `gap radar ${table}: ${name}`);
+    for (const name of columns) assert.ok(FEATURE_FIELDS['kb-gap-outline'][kind].includes(name), `kb-gap-outline spec ${kind}: ${name}`);
   }
+  assert.ok(GAP_FIELDS.incident.includes('caller_id') && GAP_FIELDS.sn_customerservice_case.includes('contact'), 'the people of a ticket are read');
   assert.ok(!Object.keys(GAP_TABLES).some((t) => t.startsWith('sn_hr_')), 'HR cases are never part of the radar');
 });
 
@@ -71,7 +73,8 @@ test('an article pack: plain text up to 6000 characters, display fields, stored 
   // Every related value is a string, as the contract says.
   for (const group2 of Object.values(pack.related)) for (const value of Object.values(group2)) assert.equal(typeof value, 'string');
   assert.deepEqual(pack.journal, []);
-  assert.deepEqual(pack.people, [], 'the author is never read');
+  // The author is read as a person (so the privacy filter knows the name), with the email when sys_user allows it.
+  assert.deepEqual(pack.people.map((p) => [p.role, p.name, p.email]), [['author', 'Abel Tuter', 'abel.tuter@example.com']]);
 });
 
 test('a long article is capped in the pack but its full length is still counted', async () => {
@@ -90,12 +93,12 @@ test('the AI feature reads fewer columns than the check, and the allowlist holds
   for (const feature of ['article-check', 'article-optimise', 'kb-merge-draft']) {
     const { pack, deps } = await article(1, feature, { leaky: true });
     const text = JSON.stringify(pack);
-    for (const leak of ['ARTICLE-LEAK-1', 'LEAK-VERSION-9', 'Abel Tuter']) assert.ok(!text.includes(leak), `${feature} leaked ${leak}`);
+    for (const leak of ['ARTICLE-LEAK-1', 'LEAK-VERSION-9']) assert.ok(!text.includes(leak), `${feature} leaked ${leak}`);
     const allowed = new Set(allowedFields('kb_knowledge', feature));
     for (const key of Object.keys(pack.fields)) assert.ok(allowed.has(key), `${feature}: ${key}`);
     for (const call of deps.callsTo('kb_knowledge')) for (const name of call.fields) assert.ok(allowed.has(name), `${feature} asked for ${name}`);
     assert.equal(deps.callsTo('sys_journal_field').length, 0);
-    assert.equal(deps.callsTo('sys_user').length, 0, 'no people to look up');
+    assert.equal(deps.callsTo('sys_user').length, 1, 'one read for the author, nothing else');
   }
 });
 
@@ -233,7 +236,8 @@ test('resolved tickets: the last 60 days only, short fields only, the close note
   assert.equal(truncated, false);
   assert.equal(tickets.length, 7, 'the ticket resolved in May is outside the window');
   assert.ok(tickets.every((t) => t.resolvedUtc >= '2026-08-27'));
-  assert.deepEqual(Object.keys(tickets[0]).sort(), ['category', 'ci', 'fixLength', 'kind', 'number', 'resolvedUtc', 'sysId', 'table', 'title']);
+  assert.deepEqual(Object.keys(tickets[0]).sort(), ['category', 'ci', 'fixLength', 'kind', 'number', 'resolvedUtc', 'sysId', 'table', 'title', 'who']);
+  assert.deepEqual(tickets[0].who, ['Abel Tuter'], 'the name of who raised it, for the privacy filter');
   const first = tickets.find((t) => t.number === 'INC0000001');
   assert.equal(first.fixLength, 'Restarted the gateway profile and renewed the certificate for the user.'.length);
   assert.ok(!JSON.stringify(tickets).includes('Restarted the gateway'), 'the notes themselves are dropped');
@@ -241,7 +245,7 @@ test('resolved tickets: the last 60 days only, short fields only, the close note
   assert.equal(tickets.find((t) => t.number === 'INC0000007').fixLength, 0);
   assert.equal(access[0].status, 'ok');
   const call = deps.callsTo('incident')[0];
-  assert.deepEqual(call.fields, [...GAP_FIELDS]);
+  assert.deepEqual(call.fields, [...GAP_FIELDS.incident]);
   assert.ok(call.options.limit <= 500);
   assert.match(call.query, /^resolved_atISNOTEMPTY\^resolved_at>=2026-08-27 12:00:00\^ORDERBYDESCresolved_at$/);
 });

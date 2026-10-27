@@ -60,7 +60,7 @@ export function stemsOf(text, stop = STOP_TITLE) {
 }
 
 /**
- * The keywords of a text: [{ stem, form }] without repeats, at most `max`, acronyms and long words first (they say the most).
+ * The keywords of a text: [{ stem, form, weight }] without repeats, at most `max`, acronyms and long words first (they say the most).
  * `form` is the word as written, for showing.
  */
 export function keywordsOf(text, { stop = STOP_TICKET, max = 8 } = {}) {
@@ -75,7 +75,7 @@ export function keywordsOf(text, { stop = STOP_TICKET, max = 8 } = {}) {
   return [...seen.values()]
     .sort((a, b) => b.weight - a.weight || a.stem.localeCompare(b.stem))
     .slice(0, max)
-    .map(({ stem: s, form }) => ({ stem: s, form }));
+    .map(({ stem: s, form, weight }) => ({ stem: s, form, weight }));
 }
 
 /** Jaccard similarity of two Sets (1 for two empty sets is avoided: empty means 0). */

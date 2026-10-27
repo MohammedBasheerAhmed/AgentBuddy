@@ -40,6 +40,9 @@ instead of Insert" or a less specific email suggestion, never a wrong write.
 8. **Columns on the 'email-compose' spec.** `hold_reason`, `approval`, `due_date`, `closed_at`, `resolution_code`, `start_date`,
    `end_date` and the `WHO` columns are intersected with each kind's ceiling, so a column a kind lacks is just absent. Confirm the
    case table (`sn_customerservice_case`) and `sc_req_item` really answer for `contact` / `consumer` / `approval` / `due_date`.
+   `assigned_to`, `opened_by` and `requested_by` are read only so the firewall knows those people by name (a name can sit inside
+   a description or a comment); the drafts leave them out of the parts. Check on a non-admin account that the people list of a
+   pack then holds the assignee and the opener, with names.
 9. **HR cases.** The drafts follow the existing rule: blocked unless the organisation allows HR content, and free text and
    identities are read only then. Not exercised against a real HR table.
 

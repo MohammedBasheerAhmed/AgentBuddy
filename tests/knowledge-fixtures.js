@@ -52,6 +52,7 @@ export function articleRow({
 
 export function knowledgeTables() {
   return {
+    sys_user: userRows(),
     kb_knowledge: [
       articleRow({ n: 1, title: 'How to reset your VPN password', views: 340, updated: '2026-10-01 09:00:00' }),
       articleRow({ n: 2, title: 'Reset VPN password', views: 90, updated: '2026-08-15 09:00:00', html: '<p>Open the VPN client, choose Forgot password and follow the email.</p>' }),
@@ -103,8 +104,8 @@ export function incidentRows() {
     cmdb_ci: v(`ci${n}`, ci),
     close_notes: v(notes),
     resolved_at: v(resolved, resolved),
+    caller_id: v(ABEL.sysId, ABEL.name), // a person: read so the privacy filter knows them
     // Not on any allowlist:
-    caller_id: v(ABEL.sysId, ABEL.name),
     description: v('TICKET-LEAK-DESCRIPTION'),
   }));
 }
@@ -175,7 +176,7 @@ export function chatMessageRows() {
     message('2026-10-26 09:02:00', {
       direction: v('inbound'),
       sys_created_by: v('abel.tuter'),
-      message: v(`Error 809. The vendor charged my card ${SEEDS.card}. My SSN is ${SEEDS.ssn}. password: ${SEEDS.password} ${INJECTION}`),
+      message: v(`${INJECTION} Error 809. The vendor charged my card ${SEEDS.card}. My SSN is ${SEEDS.ssn}. password: ${SEEDS.password}`),
     }),
     message('2026-10-26 09:03:00', { direction: v('outbound'), sender: v('', SEEDS.agentName), sys_created_by: v('beth.anglin'), message: v('Please never share a password in chat. I will reset your VPN profile now.') }),
     message('2026-10-26 09:10:00', { direction: v('inbound'), sys_created_by: v('abel.tuter'), message: v('Thanks, still not working. Can you fix it today?') }),

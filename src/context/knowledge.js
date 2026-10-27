@@ -130,15 +130,21 @@ export async function readKnowledgeList({ knowledgeBase = '', category = '' } = 
 
 // Tickets worth a knowledge article. HR cases are deliberately not here: their content is sensitive.
 export const GAP_TABLES = Object.freeze({ incident: 'incident', sn_customerservice_case: 'case' });
-export const GAP_FIELDS = Object.freeze(['sys_id', 'number', 'short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at']);
+// Each table also names who raised the ticket (caller_id; contact and consumer on a case). They are read so the privacy filter
+// knows those people, and so their names can be kept out of the topic words; they are never shown or sent as such.
+export const GAP_FIELDS = Object.freeze({
+  incident: Object.freeze(['sys_id', 'number', 'short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'caller_id']),
+  sn_customerservice_case: Object.freeze(['sys_id', 'number', 'short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'contact', 'consumer']),
+});
+const WHO_COLUMNS = ['caller_id', 'contact', 'consumer'];
 export const GAP_MAX_TICKETS = 500;
 export const GAP_MAX_DAYS = 90;
 
 /**
- * Tickets resolved in the last `days` days (at most 500 in all). Only short description, category, CI and the LENGTH of the
- * resolution notes are kept: the notes themselves are dropped as soon as their length is known.
+ * Tickets resolved in the last `days` days (at most 500 in all). Only short description, category, CI, the names of who raised
+ * the ticket and the LENGTH of the resolution notes are kept: the notes themselves are dropped as soon as their length is known.
  * @returns {Promise<{ tickets: object[], truncated: boolean, days: number, access: object[] }>}
- *   ticket: { table, kind, sysId, number, title, category, ci, fixLength, resolvedUtc }
+ *   ticket: { table, kind, sysId, number, title, category, ci, who: string[], fixLength, resolvedUtc }
  */
 export async function readResolvedTickets({ days = 60, tables = ['incident'] } = {}, deps, { now = Date.now(), max = GAP_MAX_TICKETS, memo } = {}) {
   const span = Math.max(1, Math.min(GAP_MAX_DAYS, Math.floor(Number(days)) || 60));
@@ -153,7 +159,7 @@ export async function readResolvedTickets({ days = 60, tables = ['incident'] } =
   const perTable = Math.max(1, Math.floor(Math.min(max, GAP_MAX_TICKETS) / wanted.length));
   for (const table of wanted) {
     // eslint-disable-next-line no-await-in-loop -- at most two reads.
-    const { rows, failure } = await softRead(deps, table, `resolved_atISNOTEMPTY^resolved_at>=${cutoff}^ORDERBYDESCresolved_at`, GAP_FIELDS, { limit: perTable, displayValue: true });
+    const { rows, failure } = await softRead(deps, table, `resolved_atISNOTEMPTY^resolved_at>=${cutoff}^ORDERBYDESCresolved_at`, GAP_FIELDS[table], { limit: perTable, displayValue: true });
     if (failure) {
       access.push(accessEntry(table, failure.status, failure.note));
       continue;
@@ -180,6 +186,7 @@ export async function readResolvedTickets({ days = 60, tables = ['incident'] } =
         title: cleanText(disp(row.short_description), LIMITS.shortDescription),
         category: oneLine(disp(row.category), 100),
         ci: oneLine(disp(row.cmdb_ci), 100),
+        who: [...new Set(WHO_COLUMNS.map((column) => oneLine(disp(row[column]), 100)).filter((name) => name && !SYS_ID_RE.test(name)))],
         fixLength: Math.min(2000, stripHtml(disp(row.close_notes)).length),
         resolvedUtc: raw(row.resolved_at),
       });

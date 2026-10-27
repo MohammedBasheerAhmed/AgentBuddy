@@ -6,7 +6,7 @@
 // group is chosen from what is left. A group can therefore always be explained by its label. Tickets left over are grouped by
 // category, then by configuration item, when at least two share one.
 
-import { STOP_TICKET, keywordsOf } from './text.js';
+import { STOP_TICKET, keywordsOf, wordsOf } from './text.js';
 
 export const MIN_CLUSTER = 2;
 export const MAX_CLUSTERS = 15;
@@ -21,9 +21,22 @@ const lower = (text) => String(text || '').trim().toLowerCase();
 const NOISE = [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, /https?:\/\/\S+/gi, /\+?\d[\d\s().-]{6,}\d/g, /\b[A-Z]{2,8}\d{5,}\b/g];
 const withoutNoise = (text) => NOISE.reduce((out, re) => out.replace(re, ' '), String(text ?? ''));
 
+// The people a ticket names (its caller or contact) are not a topic either: their name words are taken out of the title, so a
+// person who raised several tickets never becomes a group label. (A name that is not the caller's cannot be recognised.)
+function withoutNames(text, names) {
+  const tokens = new Set(names.flatMap((n) => wordsOf(n)).filter((w) => w.length > 1));
+  return tokens.size ? text.replace(/[\p{L}\p{N}]+/gu, (word) => (tokens.has(word.toLowerCase()) ? ' ' : word)) : text;
+}
+
 function prepare(ticket) {
-  const words = keywordsOf(withoutNoise(ticket.title), { stop: STOP_TICKET, max: MAX_KEYWORDS });
-  return { ticket, keys: new Set(words.map((w) => w.stem)), forms: new Map(words.map((w) => [w.stem, w.form])) };
+  const clean = withoutNames(withoutNoise(ticket.title), Array.isArray(ticket.who) ? ticket.who : []);
+  const words = keywordsOf(clean, { stop: STOP_TICKET, max: MAX_KEYWORDS });
+  return {
+    ticket,
+    keys: new Set(words.map((w) => w.stem)),
+    forms: new Map(words.map((w) => [w.stem, w.form])),
+    weights: new Map(words.map((w) => [w.stem, w.weight])),
+  };
 }
 
 const bump = (map, key) => map.set(key, (map.get(key) || 0) + 1);
@@ -32,14 +45,20 @@ const bump = (map, key) => map.set(key, (map.get(key) || 0) + 1);
 function nextLabel(items, minSize) {
   const singles = new Map();
   const pairs = new Map();
+  const weight = new Map();
   for (const item of items) {
     const keys = [...item.keys].sort();
-    for (const k of keys) bump(singles, k);
+    for (const k of keys) {
+      bump(singles, k);
+      weight.set(k, Math.max(weight.get(k) || 0, item.weights.get(k) || 0));
+    }
     for (let i = 0; i < keys.length; i += 1) for (let j = i + 1; j < keys.length; j += 1) bump(pairs, `${keys[i]}\u0001${keys[j]}`);
   }
-  // Most common first; ties go to longer (more specific) words, then alphabetical, so the result is the same every time.
+  const weightOf = (key) => key.split('\u0001').reduce((sum, k) => sum + (weight.get(k) || 0), 0);
+  // Most common first; ties go to the more telling words (acronyms such as VPN, then longer words), then alphabetical, so the
+  // result is the same every time.
   const best = (map) =>
-    [...map.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length || a[0].localeCompare(b[0]))[0] || null;
+    [...map.entries()].sort((a, b) => b[1] - a[1] || weightOf(b[0]) - weightOf(a[0]) || a[0].localeCompare(b[0]))[0] || null;
   const single = best(singles);
   const pair = best(pairs);
   if (pair && pair[1] >= minSize && single && pair[1] >= 0.5 * single[1]) return pair[0].split('\u0001');
@@ -74,6 +93,9 @@ function describe(id, basis, label, keywords, tickets) {
     category: dominant(tickets, (t) => t.category),
     ci: dominant(tickets, (t) => t.ci),
     tables: [...new Set(tickets.map((t) => t.table))],
+    // Everyone the group's tickets name as caller or contact: handed to the privacy filter, so a name that shows up in the
+    // topic words anyway is still masked. Never shown, never sent as such.
+    people: [...new Set(tickets.flatMap((t) => (Array.isArray(t.who) ? t.who : [])))].slice(0, 30),
     examples,
   };
 }

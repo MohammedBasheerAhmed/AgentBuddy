@@ -9,11 +9,6 @@ import { effectiveSettings, normalizePolicy } from '../src/policy/policy.js';
 import { resolveProviderConfig } from '../src/providers/config.js';
 import { withCurrentNotes } from '../src/checks/resolutionCheck.js';
 import { mergeParentPack } from '../src/checks/checklistParts.js';
-import { readContextPack } from '../src/context/pack.js';
-import { fakeDeps, v } from './fixtures/sn-fakeDeps.js';
-import { buildInstance } from './fixtures/sn-instance.js';
-import { INCIDENT_ID } from './fixtures/sn-incident.js';
-import { RITM_ID } from './fixtures/sn-requested-item.js';
 
 const MINE = ['request-explain', 'resolution-improve', 'fulfilment-checklist'];
 const feature = (id) => featureById(id);

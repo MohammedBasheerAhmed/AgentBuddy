@@ -75,7 +75,7 @@ export default [
       'Merged article: the whole merged article as plain text. Start with one line saying what it is for, then "Before you begin" if the articles need prerequisites, then numbered steps, then "If this does not work". Keep every step and fact that appears in the articles.\n' +
       'Retire: the article numbers (for example KB0010001) that the merged article replaces, one per line, or "None" when none should be retired. Name the article you would keep, if any.\n' +
       'What changed: short bullets on what was combined, dropped or reworded, and every place where the articles disagree, so the author can check it.\n' +
-      'Rules: use only what the articles say. Where they disagree, keep the safer wording and list the conflict under What changed. Never invent steps, versions, links or contact details. Keep placeholders such as [EMAIL_1] exactly as written: the author fills them in. No greeting.',
+      'Rules: use only what the articles say. Where they disagree, keep the safer wording and list the conflict under What changed. Never invent steps, versions, links or contact details. Keep every placeholder written in square brackets exactly as it is: the author fills them in. No greeting.',
     instruction: 'Draft one merged article from these near-duplicates and say which article numbers to retire.',
   },
   {
@@ -93,7 +93,7 @@ export default [
       'Who it is for: who has this problem and when they would look for the article.\n' +
       'Outline: a numbered list of sections, for example Symptoms, Cause (only if the data suggests one), Steps, How to check it worked, When to ask for help.\n' +
       'Facts to collect first: what the author still has to find out from the resolved tickets before writing, because the data does not say.\n' +
-      'Rules: use only the data. Never invent causes, fixes, versions or links. Keep placeholders such as [PERSON_1] exactly as written. No greeting. At most 200 words.',
+      'Rules: use only the data. Never invent causes, fixes, versions or links. Keep every placeholder written in square brackets exactly as it is. No greeting. At most 200 words.',
     instruction: 'Draft an outline for a knowledge article about this topic.',
   },
   {

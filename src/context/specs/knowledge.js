@@ -19,6 +19,7 @@ const KNOWLEDGE_CEILING = [
   'sys_updated_on', // last change: stale articles are a finding
   'sys_view_count', // how often it was read (which instance column carries it varies, so both are asked)
   'view_count',
+  'author', // a person: read so the privacy filter knows who wrote it and masks the name wherever the text mentions it
 ];
 
 // The conversation record. A column a given chat table does not have is simply not returned by the Table API.
@@ -40,21 +41,22 @@ export default {
     // "Suggest improvements": no view count, no workflow state.
     'article-optimise': {
       common: ['number'],
-      by: { knowledge: ['short_description', 'text', 'kb_category', 'article_type', 'meta', 'published', 'valid_to', 'sys_updated_on'] },
+      by: { knowledge: ['short_description', 'text', 'kb_category', 'article_type', 'meta', 'published', 'valid_to', 'sys_updated_on', 'author'] },
     },
     // Drafting one article out of several near-duplicates: the picked articles are read one by one, with their text.
     'kb-merge-draft': {
       common: ['number'],
-      by: { knowledge: ['short_description', 'text', 'kb_knowledge_base', 'kb_category', 'meta'] },
+      by: { knowledge: ['short_description', 'text', 'kb_knowledge_base', 'kb_category', 'meta', 'author'] },
     },
     // The knowledge-gap radar reads resolved incidents and cases in bulk (src/context/knowledge.js, GAP_FIELDS). This entry
     // names those columns, so the allowlist test can prove the bulk read stays inside the display ceiling. close_notes is
-    // read only to learn whether a fix is written down; its text is dropped on the spot and only its length is kept.
+    // read only to learn whether a fix is written down; its text is dropped on the spot and only its length is kept. The person
+    // columns (caller_id, contact, consumer) are read so the privacy filter knows those people and their names stay out of the topic.
     'kb-gap-outline': {
       common: ['number'],
       by: {
-        incident: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at'],
-        case: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at'],
+        incident: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'caller_id'],
+        case: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'contact', 'consumer'],
       },
     },
     'chat-summary': { common: ['number'], by: { chat: CHAT_CEILING } },
