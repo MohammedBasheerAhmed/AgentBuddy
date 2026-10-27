@@ -117,7 +117,7 @@ export function linkTables() {
       { sys_id: v(id(0x601)), task: v(incidentId(1)), kb_knowledge: v(id(1), 'KB0000001') },
       { sys_id: v(id(0x602)), task: v(incidentId(4)), kb_knowledge: v(id(5), 'KB0000005') },
     ],
-    kb_use: [{ sys_id: v(id(0x611)), task: v(incidentId(5)), article: v(id(5), 'KB0000005'), user: v(ABEL.sysId, ABEL.name) }],
+    kb_use: [{ sys_id: v(id(0x611)), task_id: v(incidentId(5)), article: v(id(5), 'KB0000005'), user: v(ABEL.sysId, ABEL.name) }],
   };
 }
 

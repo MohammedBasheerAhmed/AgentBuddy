@@ -90,3 +90,20 @@ instead of Insert" or a less specific email suggestion, never a wrong write.
     noisy, the phrase list can be passed per snippet kind.
 20. **Storage.** Snippets are saved under `agentbuddy_snippets` in `chrome.storage.local` (500 snippets of 8000 characters is at
     most 4 MB, under the 10 MB quota). Check that two panels (two windows) see each other's changes.
+
+## Insert safety (moved here from `docs/review/security-fixes-insert.md`)
+
+21. **Workspace control labels.** The Workspace fallback needs the control's `aria-label` (or its `<label>`) to be the field's label
+    ("Additional comments", "Work notes", "Description"), optionally followed by a marker in brackets ("Work notes (internal)"). Before
+    it also accepted any label that merely contained the words. Check on a Workspace record: does Insert still find the comment box and
+    the work-notes box? If the labels are different (for example "Customer comments"), change `fieldLabel` of the insert spec, not the bridge.
+22. **`g_form.getGlideUIElement(name).type` of the article body.** The bridge treats a type that contains "html" as an HTML field. Check
+    the type of `kb_knowledge.text` on classic and on the Knowledge workspace, and what the editor shows after Insert (paragraphs and
+    line breaks should stay). If the type is something else, the field is still escaped (the name `text` is in the list), only the extra
+    refusal for unlisted HTML fields would not fire.
+23. **Email client address.** The panel and the content script recognise the email form of a record by `email_client.do` with
+    `sysparm_table` and `sysparm_sys_id` in the address (also inside `nav_to.do?uri=`). Check that these are in the address of the form
+    that opens from "Open the email form"; if the instance adds them differently, Insert into the email body answers `wrong-record` and
+    the panel offers Copy.
+24. **`chrome.storage.session` in the side panel.** The checklist ticks need it. It exists in Chrome 102+ and Edge for extension
+    pages; without it the ticks live only as long as the panel does (an in-memory stand-in).

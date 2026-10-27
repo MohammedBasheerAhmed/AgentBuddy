@@ -303,7 +303,7 @@ test('links: tickets with an attached article (m2m_kb_task) or a use (kb_use) ar
 test('links: ids go in chunks of 40, two reads at a time at most, columns kept to the ticket id', async () => {
   const many = [];
   for (let i = 0; i < 130; i += 1) many.push(incidentId(0x100 + i));
-  const deps = fakeDeps({ m2m_kb_task: [{ sys_id: v(id(1)), task: v(many[100]) }], kb_use: [{ sys_id: v(id(2)), task: v(many[1]) }] });
+  const deps = fakeDeps({ m2m_kb_task: [{ sys_id: v(id(1)), task: v(many[100]) }], kb_use: [{ sys_id: v(id(2)), task_id: v(many[1]) }] });
   const out = await readArticleLinks(many, deps, {});
   const m2m = deps.callsTo('m2m_kb_task').filter((c) => c.query !== '');
   assert.equal(m2m.length, 4, '130 ids = 4 chunks');
@@ -341,13 +341,13 @@ test('links: a table that shows no rows at all is "cannot tell", not "no article
 });
 
 test('links: a table without the task column answers with every row; those rows are not used', async () => {
-  const tables = { m2m_kb_task: [{ sys_id: v(id(1)), kb_knowledge: v(id(7)) }], kb_use: [{ sys_id: v(id(2)), task: v('f'.repeat(32)) }] };
+  const tables = { m2m_kb_task: [{ sys_id: v(id(1)), kb_knowledge: v(id(7)) }], kb_use: [{ sys_id: v(id(2)), task_id: v('f'.repeat(32)) }] };
   // m2m: no task column -> condition ignored -> row has no task. kb_use: a row for a ticket nobody asked about.
   const deps = { queryTable: async (table) => tables[table].map((r) => ({ ...r })) };
   const out = await readArticleLinks([incidentId(1)], deps, {});
   assert.equal(out.known, false);
   assert.equal(out.linked.size, 0);
-  assert.ok(out.sources.every((s) => s.status === 'error' && /did not apply the task filter/.test(s.note)));
+  assert.ok(out.sources.every((s) => s.status === 'error' && /did not apply the task(_id)? filter/.test(s.note)));
 });
 
 test('links: nothing asked, nothing read; bad ids are dropped before they reach a query', async () => {

@@ -355,8 +355,8 @@ export function addMoreTables(tables) {
   add('incident', ...gapRows);
   // INC0030001 and INC0030002 already have an article attached; the third one has none, and neither do the printer tickets.
   add('m2m_kb_task', { sys_id: v('e2em2m1'), task: v(gapRows[0].sys_id.value, 'INC0030001'), kb_knowledge: v(hexId(51), 'KB0020001') });
-  // (src/context/knowledge.js reads kb_use.task, src/content/ops/checks.js reads kb_use.task_id: the row carries BOTH so each module is exercised.)
-  add('kb_use', { sys_id: v('e2eku1'), task: v(gapRows[1].sys_id.value, 'INC0030002'), task_id: v(gapRows[1].sys_id.value, 'INC0030002'), article: v(hexId(51), 'KB0020001') });
+  // (src/context/knowledge.js and src/content/ops/checks.js both read kb_use.task_id; docs/live-questions/knowledge.md question 21.)
+  add('kb_use', { sys_id: v('e2eku1'), task_id: v(gapRows[1].sys_id.value, 'INC0030002'), article: v(hexId(51), 'KB0020001') });
 
   // ---- 6. Chat: an interaction with a conversation and messages, and one that lives only in Connect Support tables -----------
   const customerSays = (n, when, text) => ({

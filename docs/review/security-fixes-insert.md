@@ -44,22 +44,9 @@ Add these.
 
 "Insert writes only the columns in a fixed list, only into the record the text was written for, one field at a time, and never saves."
 
-## D. Live questions (numbered; move them to `docs/live-questions/compose.md`)
+## D. Live questions
 
-1. **Workspace control labels.** The Workspace fallback now needs the control's `aria-label` (or its `<label>`) to be the field's label
-   ("Additional comments", "Work notes", "Description"), optionally followed by a marker in brackets ("Work notes (internal)"). Before it
-   also accepted any label that merely contained the words. Check on a Workspace record: does Insert still find the comment box and the
-   work-notes box? If the labels are different (for example "Customer comments"), change `fieldLabel` of the insert spec, not the bridge.
-2. **`g_form.getGlideUIElement(name).type` of the article body.** The bridge treats a type that contains "html" as an HTML field. Check
-   the type of `kb_knowledge.text` on classic and on the Knowledge workspace, and what the editor shows after Insert (paragraphs and line
-   breaks should stay). If the type is something else, the field is still escaped (the name `text` is in the list), only the extra refusal
-   for unlisted HTML fields would not fire.
-3. **Email client address.** The panel and the content script recognise the email form of a record by `email_client.do` with
-   `sysparm_table` and `sysparm_sys_id` in the address (also inside `nav_to.do?uri=`). Check that these are in the address of the form that
-   opens from "Open the email form"; if the instance adds them differently, Insert into the email body answers `wrong-record` and the
-   panel offers Copy.
-4. **`chrome.storage.session` in the side panel.** The checklist ticks need it. It exists in Chrome 102+ and Edge for extension pages;
-   without it the ticks live only as long as the panel does (an in-memory stand-in).
+Moved to `docs/live-questions/compose.md`, section "Insert safety" (questions 21 to 24).
 
 ## E. Changes needed in files this slice does not own
 

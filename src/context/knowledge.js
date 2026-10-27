@@ -199,9 +199,10 @@ export async function readResolvedTickets({ days = 60, tables = ['incident'] } =
 
 // Where the link between a ticket and an article is kept (the "Attached Knowledge" list and the knowledge-use log).
 // Neither could be verified on a real instance (docs/live-questions/knowledge.md), so each is tried and checked.
+// (The Check tab asks the same two tables in src/content/ops/checks.js KB_SOURCES: keep the column names the same.)
 export const LINK_SOURCES = Object.freeze([
   { table: 'm2m_kb_task', task: 'task' },
-  { table: 'kb_use', task: 'task' },
+  { table: 'kb_use', task: 'task_id' },
 ]);
 const LINK_CHUNK = 40;
 

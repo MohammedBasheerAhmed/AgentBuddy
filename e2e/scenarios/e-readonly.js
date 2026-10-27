@@ -18,8 +18,11 @@ const probe = (port, method, path, headers = {}) =>
     req.end();
   });
 
-// Which instance API reads the browser-side log did not see (the first few, as path and query), to explain a coverage mismatch.
-function missingFromBrowserLog(ctx, inst, api) {
+// Matches every API read the instance recorded against the browser-side log, address by address.
+//   missing: reads the instance saw that the browser log did not (the claim "the log covers the content scripts" fails on any)
+//   extra:   browser-log requests the instance never recorded (a read the page cancelled before it arrived, e.g. a poll cut off
+//            when a panel closed; harmless, the instance saw nothing, but worth showing)
+function matchBrowserLog(ctx, inst, api) {
   const seen = new Map();
   for (const n of ctx.net) if (n.url.startsWith(`${inst.origin}/api/now/`)) seen.set(n.url, (seen.get(n.url) || 0) + 1);
   const missing = [];
@@ -28,7 +31,9 @@ function missingFromBrowserLog(ctx, inst, api) {
     if (seen.get(url) > 0) seen.set(url, seen.get(url) - 1);
     else missing.push(`${r.path}${r.search}`.slice(0, 140));
   }
-  return missing.slice(0, 3).join(' | ') || 'none (a difference in how the two logs write the address)';
+  const extra = [];
+  for (const [url, count] of seen) for (let i = 0; i < count; i += 1) extra.push(url.slice(inst.origin.length).slice(0, 140));
+  return { missing, extra };
 }
 
 module.exports = {
@@ -80,7 +85,14 @@ module.exports = {
     // The log must really cover the content scripts and the panel, or "nothing outside" would be an empty promise.
     const netApi = ctx.net.filter((n) => n.url.startsWith(`${inst.origin}/api/now/`)).length;
     const netAi = ctx.net.filter((n) => n.url.startsWith(`http://localhost:${ai.port}/`) && n.method === 'POST').length;
-    t.check('coverage: the browser-side log saw every API read the instance saw (so it covers the content scripts)', netApi === api.length, `browser log ${netApi}, instance log ${api.length}${netApi === api.length ? '' : `; not seen by the browser log: ${missingFromBrowserLog(ctx, inst, api)}`}`);
+    const matched = matchBrowserLog(ctx, inst, api);
+    t.check(
+      'coverage: the browser-side log saw every API read the instance saw (so it covers the content scripts)',
+      matched.missing.length === 0 && netApi >= api.length,
+      `browser log ${netApi}, instance log ${api.length}${matched.missing.length ? `; not seen by the browser log: ${matched.missing.slice(0, 3).join(' | ')}` : ''}`,
+    );
+    // A request the browser sent that never reached the instance (cancelled in flight). Not a failure, but the log should say so.
+    if (matched.extra.length) t.info(`${matched.extra.length} request(s) the browser sent never reached the instance (cancelled in flight): ${matched.extra.slice(0, 3).join(' | ')}`);
     t.check('coverage: the browser-side log saw every request the AI server saw (so it covers the panel)', netAi === ai.all.length, `browser log ${netAi}, AI log ${ai.all.length}`);
     t.check('nothing contacted evil.example (the injected image and link)', !ctx.net.some((n) => /evil\.example/.test(n.url)));
     t.check('the service worker itself made no network request at all', !ctx.net.some((n) => n.from === 'service-worker'), ctx.net.filter((n) => n.from === 'service-worker').map((n) => n.url).join(' '));

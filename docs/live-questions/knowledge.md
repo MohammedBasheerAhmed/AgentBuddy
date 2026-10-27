@@ -78,8 +78,9 @@ Where to look: `src/context/chat.js` (chat), `src/context/knowledge.js` (article
 ## Knowledge gaps (C7)
 
 21. **Where the link between a ticket and an article lives.** Assumed: `m2m_kb_task` (columns `task`, `kb_knowledge`; the "Attached Knowledge"
-    list) and `kb_use` (column `task`; articles viewed or used from a task). Check: both tables as a fulfiller and which columns they
-    have. If neither can be read, or the filter is not applied, the radar says "could not tell which tickets had an article" and counts
+    list) and `kb_use` (column `task_id`; articles viewed or used from a task; the Check tab asks the same two tables with the same column names, see
+    `docs/live-questions/checks.md` question 11). Check: both tables as a fulfiller and which columns they have. If `kb_use` turns out to use
+    `task`, change it in both `LINK_SOURCES` and `KB_SOURCES`. If neither can be read, or the filter is not applied, the radar says "could not tell which tickets had an article" and counts
     every recent resolved ticket. A `kb_use` row (a view) counts as "has an article". Wrong: edit `LINK_SOURCES`.
 22. **`resolved_at` on `incident` and `sn_customerservice_case`**, and that `resolved_at>=YYYY-MM-DD HH:MM:SS` works as a condition for a fulfiller.
     The window is applied again locally against the stored time, so a condition the instance ignores is harmless.
