@@ -16,7 +16,7 @@ const REASONS = {
 };
 
 // Fields whose content the customer can read: checked for personal data and secrets before insert.
-const CUSTOMER_VISIBLE = new Set(['comments', 'close_notes']);
+const CUSTOMER_VISIBLE = new Set(['comments', 'close_notes', 'text']);
 
 // Kinds the firewall masks on the way out and that must never come back into a message the customer reads.
 const NEVER_BACK = new Set(['SECRET', 'URL_CREDENTIALS', 'CARD', 'IBAN', 'NATIONAL_ID']);

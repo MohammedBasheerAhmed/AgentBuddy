@@ -6,10 +6,12 @@ import RequestExplainerView from './tabs/RequestExplainerView.jsx';
 import QualityGateView from './tabs/QualityGateView.jsx';
 import KnowledgeRecordView from './tabs/KnowledgeRecordView.jsx';
 import ChatRecordView from './tabs/ChatRecordView.jsx';
+import FulfilmentChecklistView from './tabs/FulfilmentChecklistView.jsx';
 
 export const RECORD_TABS = [
   { id: 'request', label: 'Request', kinds: ['request', 'requested_item', 'catalog_task'], View: RequestExplainerView },
   { id: 'check', label: 'Check', kinds: ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'task'], View: QualityGateView },
   { id: 'article', label: 'Article', kinds: ['knowledge'], View: KnowledgeRecordView },
+  { id: 'checklist', label: 'Checklist', kinds: ['catalog_task', 'requested_item'], View: FulfilmentChecklistView },
   { id: 'chat', label: 'Chat', kinds: ['chat'], View: ChatRecordView },
 ];

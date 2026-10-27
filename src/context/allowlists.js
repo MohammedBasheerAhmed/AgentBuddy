@@ -106,7 +106,12 @@ const BASE_FIELDS_BY_KIND = {
 };
 
 /** The display ceiling per kind: the built-in kinds plus any kind a spec module adds (knowledge, chat, ...). */
-export const FIELDS_BY_KIND = Object.freeze({ ...BASE_FIELDS_BY_KIND, ...EXTRA.fieldsByKind });
+const MERGED_FIELDS_BY_KIND = { ...BASE_FIELDS_BY_KIND, ...EXTRA.fieldsByKind };
+for (const [kind, names] of Object.entries(EXTRA.extendFields)) {
+  if (!MERGED_FIELDS_BY_KIND[kind]) throw new Error(`extendFields names an unknown kind: ${kind}`);
+  MERGED_FIELDS_BY_KIND[kind] = list(...new Set([...MERGED_FIELDS_BY_KIND[kind], ...names]));
+}
+export const FIELDS_BY_KIND = Object.freeze(MERGED_FIELDS_BY_KIND);
 
 // Free text, and the columns that say WHO a sensitive record is about. On an HR-family table these stay unread
 // unless the caller allows sensitive data. (Non-HR tables are not affected.)

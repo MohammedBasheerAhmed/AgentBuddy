@@ -8,4 +8,5 @@ export default {
     knowledge: Object.freeze(['number', 'short_description', 'sys_updated_on']),
     chat: Object.freeze(['number', 'state', 'opened_at', 'assigned_to']),
   },
+  extendFields: {},
 };

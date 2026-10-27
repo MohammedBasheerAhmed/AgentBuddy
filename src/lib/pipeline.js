@@ -103,7 +103,8 @@ export async function executeRun({ prepared, config, values, host = '', previewS
   };
   try {
     const reply = await sendChat(config, request, { host });
-    const text = firewall.rehydrate(reply.content || '');
+    // keepMasked: for text that will be published or shared (a knowledge article) the placeholders stay: real names never come back.
+    const text = feature.keepMasked ? String(reply.content || '') : firewall.rehydrate(reply.content || '');
     await logAudit({ ...base, usage: reply.usage, outcome: 'sent', ms: now() - started });
     return { text, usage: reply.usage || {} };
   } catch (err) {

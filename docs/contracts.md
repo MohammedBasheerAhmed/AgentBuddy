@@ -107,6 +107,10 @@ Each area has its own files; add yours, do not edit another area's.
   instruction: '...',
   requires: { minMode: 'strict' },   // optional: refuse unless the person's privacy mode is at least this (standard < strict < local-only)
   defaultOff: true,                  // optional: off until the organisation's policy turns coaching on (coachingEnabled)
+  keepMasked: true,                  // optional: do NOT put real names back into the answer (text that gets published or shared)
+  enrich: async (pack, { read, allowSensitive }) => pack,   // optional: add related data to the pack first; text it adds is untrusted
+                                     // and reaches the AI only through parts()
+  open: { table: 'kb_knowledge', label: 'Open a new article form' },   // optional: a button on the result that opens a blank form
 }
 ```
 
@@ -120,7 +124,8 @@ export default {
   spec:    { 'sentiment-risk': { common: [columns...], by: { incident: [columns...] } } },   // what that feature may READ
   journal: { 'sentiment-risk': true },                                                       // read notes and comments?
   related: { 'sentiment-risk': ['slas', 'approvals'] },                                      // which extras (related.js)
-  fieldsByKind: { knowledge: [columns...] },                                                 // display ceiling for a new kind
+  fieldsByKind: { knowledge: [columns...] },                                                 // display ceiling for a NEW kind
+  extendFields: { incident: ['reopen_count'] },                                              // extra columns for an EXISTING kind (additive)
 };
 ```
 

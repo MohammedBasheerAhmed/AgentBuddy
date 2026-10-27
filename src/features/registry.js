@@ -15,8 +15,9 @@ import domain from './packs/domain.js';
 import knowledge from './packs/knowledge.js';
 import compose from './packs/compose.js';
 import reports from './packs/reports.js';
+import checks from './packs/checks.js';
 
-export const FEATURES = [...core, ...itsm, ...domain, ...knowledge, ...compose, ...reports];
+export const FEATURES = [...core, ...itsm, ...domain, ...knowledge, ...compose, ...reports, ...checks];
 
 export const featureById = (id) => FEATURES.find((f) => f.id === id) || null;
 

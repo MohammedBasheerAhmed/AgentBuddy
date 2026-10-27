@@ -6,5 +6,9 @@ import reports from './reports.js';
 import knowledge from './knowledge.js';
 import chat from './chat.js';
 import misc from './misc.js';
+import itsm from './itsm.js';
+import domain from './domain.js';
+import compose from './compose.js';
+import checks from './checks.js';
 
-export const OPS = Object.freeze({ ...reports, ...knowledge, ...chat, ...misc });
+export const OPS = Object.freeze({ ...reports, ...knowledge, ...chat, ...misc, ...itsm, ...domain, ...compose, ...checks });
