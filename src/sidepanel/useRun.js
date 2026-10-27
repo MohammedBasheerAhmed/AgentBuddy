@@ -89,6 +89,12 @@ export function useRun({ page, eff, record }) {
         ? getPack()
         : read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: contextFor(feature), allowSensitive: Boolean(eff.policy?.allowHrContent) }));
       if (mine !== token.current) return;
+      // A feature may add more to its pack first (similar solved tickets, an account's other cases...). Whatever it adds is
+      // untrusted text like the rest and reaches the AI only through feature.parts() and the firewall.
+      if (typeof feature.enrich === 'function') {
+        pack = await feature.enrich(pack, { read: (op, args) => read(page.tabId, op, args), allowSensitive: Boolean(eff.policy?.allowHrContent) });
+        if (mine !== token.current) return;
+      }
       p = prepareRun({ feature, pack, values: eff.values, policy: eff.policy, config: cfg, createFirewall });
     } catch (err) {
       // Refused by policy or by the firewall (fail closed): nothing was sent. Record that.

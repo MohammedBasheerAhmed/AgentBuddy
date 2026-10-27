@@ -44,8 +44,11 @@ function copyStatic() {
   copy('src/options/options.html');
   fs.mkdirSync(path.join(outdir, 'icons'), { recursive: true });
   fs.readdirSync(path.join(rootDir, 'assets/icons')).forEach((f) => fs.copyFileSync(path.join(rootDir, 'assets/icons', f), path.join(outdir, 'icons', f)));
-  // One stylesheet shared by the side panel and the settings page.
-  const css = ['theme.css', 'ui.css']
+  // One stylesheet shared by the side panel, the settings page and the dashboard page: theme.css, ui.css, then one file per area
+  // (src/ui/areas/*.css, alphabetical) so the areas do not edit the same file.
+  const areaDir = path.join(rootDir, 'src/ui/areas');
+  const areas = fs.existsSync(areaDir) ? fs.readdirSync(areaDir).filter((f) => f.endsWith('.css')).sort().map((f) => path.join('areas', f)) : [];
+  const css = ['theme.css', 'ui.css', ...areas]
     .map((f) => fs.readFileSync(path.join(rootDir, 'src/ui', f), 'utf8'))
     .join('\n');
   fs.writeFileSync(path.join(outdir, 'agentbuddy.css'), css);

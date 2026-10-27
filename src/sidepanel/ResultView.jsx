@@ -4,6 +4,7 @@ import { parseSafeText, toPlainText } from '../render/safeText.js';
 import { checkOutgoing, maskExcerpt } from '../safeSend/index.js';
 import { MSG } from '../lib/messages.js';
 import { insertsFor } from '../features/registry.js';
+import { openNewRecord } from './openRecord.js';
 
 const REASONS = {
   'no-form': 'Agent Buddy could not reach a form field on this page.',
@@ -122,6 +123,9 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
         {inserts.map((spec, i) => (
           <button key={spec.field + i} type="button" className={`ab-btn ab-btn-sm${i === 0 ? ' ab-btn-primary' : ''}`} onClick={() => insert(spec, false)}>{spec.label}</button>
         ))}
+        {feature.open?.table && (
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => openNewRecord(page, feature.open.table)}>{feature.open.label || 'Open a new form'}</button>
+        )}
         <button type="button" className="ab-btn ab-btn-sm" onClick={() => copy()}>Copy</button>
         <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>Try again</button>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>Close</button>

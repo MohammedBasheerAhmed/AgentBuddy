@@ -10,6 +10,7 @@
 // Environment: CHROME_PATH (default: Chrome in Program Files), AB_E2E_TMP (temp folder), E2E_HEADED=1,
 //   E2E_SCENARIO_TIMEOUT_MS, E2E_RUN_TIMEOUT_MS, and E2E_MUTATE=write|leak|beacon: breaks a COPY of the extension on purpose to
 //   show that the run then fails (a self-check of the harness, see MUTATIONS in e2e/harness.js).
+const fs = require('fs');
 const path = require('path');
 
 try {
@@ -22,16 +23,10 @@ try {
 const { createContext } = require('./harness.js');
 const { Checker } = require('./checker.js');
 
-// Scenario letters follow the test plan: a start-up, b enable + record detection, c full AI path, d insert, e read-only proof (runs
-// last, over everything), f failure modes, g My Day. The others cover what else the panel does.
-const SCENARIOS = ['a-startup', 'b-enable', 'c-ai-path', 'd-insert', 'f-failures', 'g-myday', 'i-related', 'j-panel-state', 'k-key-modes', 'h-settings-ui', 'e-readonly'].map((f) => {
-  try {
-    return require(path.join(__dirname, 'scenarios', f));
-  } catch (err) {
-    if (err.code === 'MODULE_NOT_FOUND' && String(err.message).includes(f)) return null;
-    throw err;
-  }
-}).filter(Boolean);
+// Scenarios are every file in e2e/scenarios/ (a new area adds <letter>-<name>.js; nothing here to edit). Each exports { id, title, run }.
+// Order: alphabetical, except e-readonly (it re-checks every request of the whole run) which goes last.
+const SCENARIO_FILES = fs.readdirSync(path.join(__dirname, 'scenarios')).filter((f) => f.endsWith('.js')).map((f) => f.slice(0, -3)).sort();
+const SCENARIOS = [...SCENARIO_FILES.filter((f) => f !== 'e-readonly'), ...SCENARIO_FILES.filter((f) => f === 'e-readonly')].map((f) => require(path.join(__dirname, 'scenarios', f)));
 
 const SCENARIO_TIMEOUT_MS = Number(process.env.E2E_SCENARIO_TIMEOUT_MS) || 45000; // a normal scenario takes 3 to 15 seconds
 const RUN_TIMEOUT_MS = Number(process.env.E2E_RUN_TIMEOUT_MS) || 175000; // a normal run takes about 40 seconds; the whole run stays under three minutes even when things fail
