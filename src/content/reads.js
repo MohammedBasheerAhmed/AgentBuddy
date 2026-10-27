@@ -8,7 +8,7 @@ import { SYS_ID_RE } from '../context/util.js';
 import { OPS } from './ops/index.js';
 import { checkRecord, checkPack } from './ops/validate.js';
 import { readMyDay } from '../reports/myDay.js';
-import { tryCallPage } from './pageBridge.js';
+import { getSessionUser } from './sessionToken.js';
 
 export async function handleRead(op, args) {
   const deps = createLiveDeps();
@@ -24,7 +24,7 @@ export async function handleRead(op, args) {
     }
     case 'myday': {
       // The signed-in user's own id comes from the page, never from the panel.
-      const session = await tryCallPage('getSessionInfo');
+      const session = await getSessionUser(deps);
       return readMyDay({ userId: session?.userId || '' }, deps, {});
     }
     case 'similar':

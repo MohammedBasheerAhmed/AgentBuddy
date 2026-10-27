@@ -69,10 +69,14 @@ function emailSystem(task) {
   );
 }
 
+// Columns that name people but add nothing to an email. The context spec reads them so the firewall knows those people by name
+// (a name can appear inside a description or a comment); they are left out of the parts.
+const PEOPLE_COLUMNS = ['assigned_to', 'opened_by', 'requested_by'];
+
 // The record as parts, plus what Agent Buddy worked out locally (the same facts the suggestion was based on) and, for a reminder,
 // who still has to approve. Names in them are on pack.people (approvers and note authors), so the firewall masks them.
 function emailParts(pack, { approvers = false } = {}) {
-  const parts = packToParts(pack, { journal: 10 });
+  const parts = packToParts(pack, { journal: 10, skipFields: PEOPLE_COLUMNS });
   const status = statusLines(pack);
   if (status.length) parts.push({ label: 'Status worked out by Agent Buddy', field: 'status', text: status.join('\n') });
   if (approvers) {

@@ -113,9 +113,11 @@ test('email-compose reads what an email needs and no more', () => {
   for (const name of ['number', 'short_description', 'description', 'state', 'hold_reason', 'opened_at', 'resolved_at', 'close_code', 'close_notes', 'caller_id']) {
     assert.ok(incident.includes(name), `incident lacks ${name}`);
   }
-  for (const name of ['assigned_to', 'assignment_group', 'priority', 'impact', 'urgency', 'category', 'cmdb_ci', 'opened_by', 'business_service', 'sys_updated_on']) {
+  for (const name of ['assignment_group', 'priority', 'impact', 'urgency', 'category', 'cmdb_ci', 'business_service', 'sys_updated_on']) {
     assert.ok(!incident.includes(name), `incident should not read ${name}`);
   }
+  // the assignee and the opener are read for their names only (see the people tests below)
+  for (const name of ['assigned_to', 'opened_by']) assert.ok(incident.includes(name), `incident should read ${name} for the firewall`);
   const change = allowedFields('change_request', 'email-compose');
   for (const name of ['type', 'start_date', 'end_date', 'approval']) assert.ok(change.includes(name), name);
   assert.ok(allowedFields('sc_req_item', 'email-compose').includes('due_date'));
@@ -317,4 +319,74 @@ test('an HR record is refused for email drafts unless the organisation allows it
 
 test('composeParts is what the rewrite features run', () => {
   for (const id of [...REWRITE_IDS, 'notes-to-ticket']) assert.equal(featureById(id).parts, composeParts, id);
+});
+
+// ---- People: the spec reads them so the firewall can mask a name that only appears inside text ---------------------------
+
+import { readContextPack } from '../src/context/pack.js';
+import { FIELDS_BY_KIND } from '../src/context/allowlists.js';
+import { kindForTable } from '../src/context/kinds.js';
+import { PERSON_FIELDS } from '../src/context/people.js';
+import { buildInstance } from './fixtures/sn-instance.js';
+import { fakeDeps } from './fixtures/sn-fakeDeps.js';
+import { INCIDENT_ID } from './fixtures/sn-incident.js';
+import { ABEL, BETH } from './fixtures/sn-users.js';
+
+const TABLES = ['incident', 'problem', 'change_request', 'sc_request', 'sc_req_item', 'sc_task', 'sn_customerservice_case', 'sn_hr_core_case', 'task'];
+
+test('both specs read every person column the kind has, so no person on a record is unknown to the firewall', () => {
+  for (const feature of ['email-compose', 'compose-people']) {
+    for (const table of TABLES) {
+      const ceiling = FIELDS_BY_KIND[kindForTable(table)];
+      const expected = Object.keys(PERSON_FIELDS).filter((name) => ceiling.includes(name));
+      const read = allowedFields(table, feature, { allowSensitive: true });
+      for (const name of expected) assert.ok(read.includes(name), `${feature}/${table} does not read ${name}`);
+    }
+  }
+});
+
+test('the assignee and the opener are read for their names but never sent as parts', () => {
+  const pack = { ...RECORD, fields: { ...RECORD.fields, assigned_to: 'Beth Anglin', opened_by: 'Cy Opener', requested_by: 'Dee Requester', caller_id: 'Abel Tuter' } };
+  for (const id of EMAIL_IDS) {
+    const fields = partsFor(featureById(id), pack).map((p) => p.field);
+    for (const name of ['assigned_to', 'opened_by', 'requested_by']) assert.ok(!fields.includes(name), `${id} sends ${name}`);
+    assert.ok(fields.includes('caller_id'), 'the caller stays: the greeting needs the name');
+  }
+});
+
+test('end to end with the real context engine: names that appear ONLY inside text are masked', async () => {
+  const tables = buildInstance();
+  const row = tables.incident.find((r) => r.sys_id.value === INCIDENT_ID);
+  // Beth is the assignee and Abel the caller; both are named only in free text here.
+  row.short_description = { value: 'VPN keeps disconnecting for Abel Tuter', display_value: 'VPN keeps disconnecting for Abel Tuter' };
+  row.description = { value: 'Abel Tuter says it drops. Beth Anglin will phone them back.', display_value: 'Abel Tuter says it drops. Beth Anglin will phone them back.' };
+  const pack = await readContextPack({ table: 'incident', sysId: INCIDENT_ID }, fakeDeps(tables), { feature: 'email-compose' });
+  // the engine put both on the pack's people because the spec reads their columns
+  const names = pack.people.map((p) => p.name);
+  assert.ok(names.includes(ABEL.name) && names.includes(BETH.name), `people: ${names}`);
+  assert.ok(pack.people.some((p) => p.role === 'assigned_to' && p.name === BETH.name));
+  for (const id of EMAIL_IDS) {
+    for (const mode of ['standard', 'strict']) {
+      const p = run(featureById(id), pack, { piiMode: mode });
+      const text = outgoing(p);
+      for (const secret of ['Abel', 'Tuter', 'Beth', 'Anglin', 'abel.tuter@example.com']) assert.ok(!text.includes(secret), `${id}/${mode} leaked ${secret}`);
+      assert.ok(text.includes('Abel') === false && /\[PERSON_\d+\]/.test(text), 'placeholders stand in for the names');
+    }
+  }
+  // the people-only read finds the same people with almost nothing else
+  const people = await readContextPack({ table: 'incident', sysId: INCIDENT_ID }, fakeDeps(tables), { feature: 'compose-people' });
+  assert.ok(people.people.some((p) => p.name === ABEL.name) && people.people.some((p) => p.name === BETH.name));
+  assert.deepEqual(Object.keys(people.fields).sort(), ['assigned_to', 'caller_id', 'number', 'opened_by']);
+  assert.deepEqual(people.journal, []);
+  assert.deepEqual(people.related, {});
+});
+
+test('a rewrite of a text that names the record\'s people masks them when their pack is used, and not otherwise', async () => {
+  const people = (await readContextPack({ table: 'incident', sysId: INCIDENT_ID }, fakeDeps(buildInstance()), { feature: 'compose-people' })).people;
+  const TEXT = 'Please ask Beth Anglin to call Abel Tuter back.';
+  const masked = run(featureById('rewrite-short'), buildComposePack({ text: TEXT, people }));
+  for (const secret of ['Beth', 'Anglin', 'Abel', 'Tuter']) assert.ok(!outgoing(masked).includes(secret), secret);
+  // documented limit: with no pack and no listed names, a name written only in the text cannot be found by pattern
+  const unknown = run(featureById('rewrite-short'), buildComposePack({ text: TEXT }));
+  assert.ok(outgoing(unknown).includes('Beth Anglin'));
 });

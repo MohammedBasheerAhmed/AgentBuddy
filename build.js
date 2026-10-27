@@ -30,6 +30,8 @@ const builds = [
   { entryPoints: ['src/page/bridge.js'], outfile: 'pagebridge.js' },
   { entryPoints: ['src/sidepanel/index.jsx'], outfile: 'sidepanel.bundle.js' },
   { entryPoints: ['src/options/index.jsx'], outfile: 'options.bundle.js' },
+  // The full-page Team dashboard (opened from the Team tab; reads through the ServiceNow tab named in its address).
+  { entryPoints: ['src/dashboard/index.jsx'], outfile: 'dashboard.bundle.js' },
 ].map((b) => ({
   ...common,
   entryPoints: b.entryPoints.map((e) => path.join(rootDir, e)),
@@ -42,6 +44,7 @@ function copyStatic() {
   copy('managed_schema.json');
   copy('src/sidepanel/sidepanel.html');
   copy('src/options/options.html');
+  copy('src/dashboard/dashboard.html');
   fs.mkdirSync(path.join(outdir, 'icons'), { recursive: true });
   fs.readdirSync(path.join(rootDir, 'assets/icons')).forEach((f) => fs.copyFileSync(path.join(rootDir, 'assets/icons', f), path.join(outdir, 'icons', f)));
   // One stylesheet shared by the side panel, the settings page and the dashboard page: theme.css, ui.css, then one file per area

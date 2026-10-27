@@ -11,7 +11,8 @@ test('words keep letters and digits, in order, lower case, across scripts', () =
   assert.deepEqual(wordsOf('Windows 11: VPN-client (v2.5) Überprüfung'), ['windows', '11', 'vpn', 'client', 'v2', '5', 'überprüfung']);
   assert.deepEqual(wordsOf(''), []);
   assert.deepEqual(wordsOf(null), []);
-  assert.deepEqual(wordsOf("don't can’t"), ["don't", 'can’t']);
+  const curly = String.fromCharCode(0x2019);
+  assert.deepEqual(wordsOf(`don't can${curly}t`), ["don't", `can${curly}t`]);
 });
 
 test('the stemmer makes plurals and verb forms meet, and leaves other words alone', () => {

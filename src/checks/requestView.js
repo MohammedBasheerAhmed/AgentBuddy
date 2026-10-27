@@ -108,7 +108,8 @@ export function buildRequestView(pack, { currentNumber = '', now = Date.now() } 
  * not need them). All of it is untrusted ticket text that the firewall masks.
  */
 export function requestExplainParts(pack) {
-  const parts = packToParts(pack, { journal: 6, journalTypes: ['comment'] });
+  // The assignee and the person who opened it are known to the firewall (the pack holds them) but are not sent as fields.
+  const parts = packToParts(pack, { journal: 6, journalTypes: ['comment'], skipFields: ['assigned_to', 'opened_by'] });
   const status = requestStatus(pack);
   const lines = [status.line, status.due ? `Due: ${status.due.text}` : '', status.sla ? status.sla.text : ''].filter(Boolean);
   parts.push({ label: 'Status worked out from the records', field: 'status', text: lines.join('\n') });

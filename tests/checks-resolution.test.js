@@ -43,6 +43,14 @@ test('notes: missing, filler, short and good', () => {
   assert.equal(run(GOOD_NOTES).status, 'ok');
 });
 
+test('notes: a work note typed on the form is mentioned but does not count as resolution notes', () => {
+  const pack = incident({ fields: { state: 'In Progress', close_code: 'x', close_notes: '' } });
+  const c = find(resolutionCheck(pack, { form: { close_notes: '', work_notes: 'Fixed the cert' } }), 'notes');
+  assert.equal(c.status, 'warn');
+  assert.match(c.hint, /work note you have typed is separate/);
+  assert.doesNotMatch(find(resolutionCheck(pack, { form: { close_notes: '', work_notes: '' } }), 'notes').hint, /work note/);
+});
+
 test('what is typed on the form wins over what is saved; a field the form does not have falls back to the saved value', () => {
   const pack = incident({ fields: { state: 'In Progress', close_code: 'Solution provided', close_notes: '' } });
   assert.equal(find(resolutionCheck(pack, { form: { close_notes: GOOD_NOTES } }), 'notes').status, 'ok');

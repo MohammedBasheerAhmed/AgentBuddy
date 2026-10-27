@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { FILTER_PRESETS } from '../../reports/engine/queryBuilder.js';
 import { GROUP_BY, METRICS, CHARTS, normalizeBuilderConfig } from '../../reports/engine/builder.js';
 import { REPORT_TABLES } from '../../reports/engine/constants.js';

@@ -87,7 +87,11 @@ export function isFillerNote(note) {
 function notesCheck(pack, form) {
   const { value } = effective(pack, form, 'close_notes');
   const body = text(value);
-  if (!body) return check('notes', 'warn', 'No resolution notes yet', 'Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.');
+  if (!body) {
+    // A work note typed on the form is not a substitute: it stays internal and is not what the next person searches.
+    const workNote = form && text(form.work_notes) ? ' The work note you have typed is separate from these notes.' : '';
+    return check('notes', 'warn', 'No resolution notes yet', `Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.${workNote}`);
+  }
   if (isFillerNote(body)) return check('notes', 'warn', 'The notes only say "resolved"', 'Add what was wrong and what you did, in a sentence or two. "Resolved" does not help anyone later.');
   const words = body.split(/\s+/).filter(Boolean).length;
   if (body.length < MIN_NOTE_CHARS || words < MIN_NOTE_WORDS) {

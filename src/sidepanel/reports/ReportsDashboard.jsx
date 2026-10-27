@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isFeatureEnabled } from '../../policy/policy.js';
 import { read } from '../ask.js';
 import { PRESETS, CAPS, addDashboard, addPresetDashboard, addWidget, moveWidget, removeDashboard, removeWidget, renameDashboard, setActive, setDashboardSetup, updateWidget } from '../../reports/dashboards.js';

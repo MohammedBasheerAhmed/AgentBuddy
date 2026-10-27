@@ -5,6 +5,7 @@
 // Prompts are fixed text. Ticket data only ever arrives as `parts` (untrusted, masked).
 import { requestExplainParts } from '../../checks/requestView.js';
 import { checklistParts } from '../../checks/checklistParts.js';
+import { resolutionImproveParts } from '../../checks/resolutionParts.js';
 
 export default [
   {
@@ -33,9 +34,9 @@ export default [
     description: 'Rewrites the notes you have started so they say the cause, the fix and how it was checked.',
     wave: 2,
     kinds: [],
-    // Reads what 'resolution-notes' reads (the saved record and its latest notes); the Check tab adds the notes typed on the form.
-    context: 'resolution-notes',
+    // Reads what 'resolution-notes' reads plus the people (spec 'resolution-improve'); the Check tab swaps in the notes typed on the form.
     journal: 15,
+    parts: resolutionImproveParts,
     insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes' },
     system:
       'You help a service desk agent improve the resolution notes they are writing for a ServiceNow ticket.\n' +

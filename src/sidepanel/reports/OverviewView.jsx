@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Tile, DataTable } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
@@ -6,12 +6,10 @@ import { useSection } from './useSection.js';
 // Tiles that mean "look at this" when they are not zero.
 const TONE = { breached: 'bad', dueSoon: 'warn', stale: 'warn', unassigned: 'warn' };
 
-// F2/F3/F5 start here: one look at how the queue stands. A click on a tile opens the matching list in ServiceNow.
-export default function OverviewView({ widget, env }) {
-  const state = useSection('overview', widget, env);
+/** The tiles for one Overview result (`d` is result.data). Drawn from data only, so it is tested without a browser. */
+export function OverviewBody({ d, env }) {
   const [picked, setPicked] = useState(null); // a tile with several tables behind it
-  const d = state.result?.data;
-  const tiles = d?.tiles || [];
+  const tiles = d.tiles || [];
 
   const open = (tile) => {
     const drills = tile.drills || [];
@@ -20,14 +18,7 @@ export default function OverviewView({ widget, env }) {
   };
 
   return (
-    <SectionShell
-      title="Overview"
-      help="Where the queue stands right now."
-      state={state}
-      env={env}
-      widgetId={widget?.id}
-      facts={d?.sla && !d.sla.unavailable ? [`SLA counts cover ${d.sla.activeSlas} active SLAs`] : []}
-    >
+    <>
       <div className="ab-tiles">
         {tiles.map((t) => (
           <Tile
@@ -51,7 +42,7 @@ export default function OverviewView({ widget, env }) {
           ))}
         </div>
       )}
-      {d?.perTable?.length > 1 && (
+      {d.perTable?.length > 1 && (
         <details className="ab-details">
           <summary>By table</summary>
           <DataTable
@@ -69,6 +60,24 @@ export default function OverviewView({ widget, env }) {
           />
         </details>
       )}
+    </>
+  );
+}
+
+// F2/F3/F5 start here: one look at how the queue stands. A click on a tile opens the matching list in ServiceNow.
+export default function OverviewView({ widget, env }) {
+  const state = useSection('overview', widget, env);
+  const d = state.result?.data;
+  return (
+    <SectionShell
+      title="Overview"
+      help="Where the queue stands right now."
+      state={state}
+      env={env}
+      widgetId={widget?.id}
+      facts={d?.sla && !d.sla.unavailable ? [`SLA counts cover ${d.sla.activeSlas} active SLAs`] : []}
+    >
+      {d && <OverviewBody d={d} env={env} />}
     </SectionShell>
   );
 }

@@ -42,12 +42,12 @@ function undouble(s) {
   return s.length > 3 && last === s[s.length - 2] && !VOWEL_OR_LIQUID.test(last) ? s.slice(0, -1) : s;
 }
 
+// A word is letters and digits, with an apostrophe (straight or curly) allowed inside it ("can't").
+const WORD = new RegExp(`[\\p{L}\\p{N}]+(?:['${String.fromCharCode(0x2019)}][\\p{L}]+)?`, 'gu');
+
 /** Words of a text, lower-case, in order. Letters and digits only ("windows 11" gives "windows", "11"). */
 export function wordsOf(text) {
-  return String(text ?? '')
-    .normalize('NFKC')
-    .toLowerCase()
-    .match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?/gu) || [];
+  return String(text ?? '').normalize('NFKC').toLowerCase().match(WORD) || [];
 }
 
 const keep = (word, stop) => !stop.has(word) && (word.length > 1 || /\d/.test(word));

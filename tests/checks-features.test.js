@@ -9,6 +9,11 @@ import { effectiveSettings, normalizePolicy } from '../src/policy/policy.js';
 import { resolveProviderConfig } from '../src/providers/config.js';
 import { withCurrentNotes } from '../src/checks/resolutionCheck.js';
 import { mergeParentPack } from '../src/checks/checklistParts.js';
+import { readContextPack } from '../src/context/pack.js';
+import { fakeDeps, v } from './fixtures/sn-fakeDeps.js';
+import { buildInstance } from './fixtures/sn-instance.js';
+import { INCIDENT_ID } from './fixtures/sn-incident.js';
+import { RITM_ID } from './fixtures/sn-requested-item.js';
 
 const MINE = ['request-explain', 'resolution-improve', 'fulfilment-checklist'];
 const feature = (id) => featureById(id);
@@ -39,7 +44,13 @@ test('each feature has a title, a description, a wave, a prompt, an instruction 
     assert.ok(SPEC_IDS.includes(contextFor(f)), `${id} reads context "${contextFor(f)}" which is not a known spec`);
     assert.ok(FEATURE_FIELDS[contextFor(f)], id);
   }
-  assert.equal(contextFor(feature('resolution-improve')), 'resolution-notes', 'reuses the existing spec, adds nothing to what it reads');
+  assert.equal(contextFor(feature('resolution-improve')), 'resolution-improve');
+  // It reads what 'resolution-notes' reads and nothing more about the ticket: the only additions are person columns.
+  const PEOPLE_COLUMNS = ['caller_id', 'requested_for', 'contact', 'consumer', 'opened_by', 'assigned_to'];
+  for (const kind of KINDS) {
+    const base = new Set(FEATURE_FIELDS['resolution-notes'][kind]);
+    for (const name of FEATURE_FIELDS['resolution-improve'][kind]) assert.ok(base.has(name) || PEOPLE_COLUMNS.includes(name), `resolution-improve/${kind} reads ${name}, which resolution-notes does not`);
+  }
 });
 
 test('inserts go to the intended form field, and customer-visible fields are the ones ResultView checks first', () => {
@@ -80,8 +91,12 @@ test('specs: the request message reads less than the Request tab; journal and ex
   assert.equal(FEATURE_JOURNAL['fulfilment-checklist'], false);
   assert.ok(FEATURE_RELATED['request-status'].includes('variables'));
   assert.ok(!FEATURE_RELATED['request-explain'].includes('variables'), 'the status message does not need the answers');
-  assert.ok(!FEATURE_FIELDS['request-explain'].requested_item.includes('assigned_to'));
-  assert.ok(!FEATURE_FIELDS['request-explain'].requested_item.includes('assignment_group'));
+  assert.ok(!FEATURE_FIELDS['request-explain'].requested_item.includes('assignment_group'), 'team names are not read');
+  // The people ARE read (so the firewall can mask them) even though the parts leave the assignee and the opener off.
+  for (const id of ['request-explain', 'resolution-improve', 'fulfilment-checklist']) {
+    for (const column of ['requested_for', 'opened_by', 'assigned_to']) assert.ok(FEATURE_FIELDS[id].requested_item.includes(column), `${id} reads ${column}`);
+  }
+  assert.ok(FEATURE_FIELDS['resolution-improve'].incident.includes('caller_id'));
   assert.ok(!FEATURE_FIELDS['resolution-check'].incident.includes('description'));
   assert.ok(FEATURE_FIELDS['resolution-check'].incident.includes('caller_id'), 'so the customer\'s messages can be told apart');
   assert.deepEqual(FEATURE_RELATED['fulfilment-checklist'], ['variables']);

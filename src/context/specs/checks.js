@@ -4,11 +4,15 @@
 //   request-status        the "Request" tab (local only, nothing is sent): the item, its answers, approvals and tasks
 //   request-explain       the plain-words status message (AI): the same, WITHOUT the answers to the request questions
 //   resolution-check      the "Check" tab (local only): saved notes, code, hold reason, who wrote what, open child work
+//   resolution-improve    "Improve my resolution notes" (AI): what 'resolution-notes' reads, plus the people columns
 //   fulfilment-checklist  the "Checklist" tab and its AI proposal: the written instructions and the answers
 //
-// "Improve my resolution notes" (C2) reuses the existing 'resolution-notes' spec; it adds nothing to what that reads.
+// The three AI specs read the PERSON columns (who it is for, who opened it, who it is assigned to) even where the parts that
+// go out leave those fields off (see src/checks/*Parts.js). The firewall masks exactly the people the pack knows: without
+// them a name written inside a title, a comment or an answer would go out unmasked.
 
 const WHO = ['caller_id', 'requested_for', 'contact', 'consumer'];
+const PEOPLE = [...WHO, 'opened_by', 'assigned_to'];
 
 export default {
   spec: {
@@ -20,10 +24,10 @@ export default {
         catalog_task: ['request_item'],
       },
     },
-    // The customer-facing message needs the state, the due date and who the request is for (so the name is masked
-    // precisely). It does not need the answers, the assignee or the team names.
+    // The customer-facing message needs the state and the due date. It does not need the answers or the team names; the
+    // people are read only so they can be masked, and the parts leave the assignee and opener out.
     'request-explain': {
-      common: ['number', 'short_description', 'state', 'hold_reason', 'requested_for', 'due_date'],
+      common: ['number', 'short_description', 'state', 'hold_reason', 'due_date', ...PEOPLE],
       by: {
         request: ['request_state', 'stage', 'approval'],
         requested_item: ['stage', 'approval', 'cat_item'],
@@ -38,9 +42,25 @@ export default {
         case: ['resolution_code'],
       },
     },
+    // The same fields 'resolution-notes' reads (so nothing new about the ticket is read) plus the people, so a name inside the
+    // typed notes or the description is masked. No related lists: this feature's parts do not use them.
+    'resolution-improve': {
+      common: [
+        'number', 'short_description', 'description', 'state', 'category', 'subcategory', 'cmdb_ci', 'business_service', 'opened_at',
+        'resolved_at', 'close_code', 'close_notes', 'hold_reason', ...PEOPLE,
+      ],
+      by: {
+        problem: ['known_error', 'cause_notes', 'workaround', 'fix_notes', 'resolution_code'],
+        change: ['type', 'risk'],
+        requested_item: ['cat_item', 'stage'],
+        catalog_task: ['request_item'],
+        case: ['product', 'account', 'resolution_code'],
+      },
+    },
     'fulfilment-checklist': {
-      // requested_for: the instructions and answers often name the requester; knowing who it is lets the firewall mask that name.
-      common: ['number', 'short_description', 'description', 'state', 'special_instructions', 'requested_for'],
+      // The people: the instructions and answers often name the requester or a colleague; knowing who they are lets the
+      // firewall mask them. The parts leave the assignee and the opener off.
+      common: ['number', 'short_description', 'description', 'state', 'special_instructions', ...PEOPLE],
       by: {
         requested_item: ['cat_item', 'stage', 'due_date'],
         catalog_task: ['request_item', 'due_date'],
@@ -52,12 +72,14 @@ export default {
     'request-status': false,
     'request-explain': true, // the latest customer-visible comments, so the message does not contradict what was said
     'resolution-check': true, // who wrote last, and whether the customer answered
+    'resolution-improve': true, // the facts the notes are rewritten from
     'fulfilment-checklist': false,
   },
   related: {
     'request-status': ['variables', 'approvals', 'catalogTasks', 'items', 'slas'],
     'request-explain': ['approvals', 'catalogTasks', 'items', 'slas'],
     'resolution-check': ['childTasks', 'catalogTasks', 'items'],
+    'resolution-improve': [],
     'fulfilment-checklist': ['variables'],
   },
   fieldsByKind: {},

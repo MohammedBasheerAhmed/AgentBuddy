@@ -61,7 +61,9 @@ test('kbDuplicates: the arguments are checked, the threshold is clamped, a lower
   assert.equal((await knowledgeOps.kbDuplicates({ knowledgeBase: KB_IT, threshold: 99 }, kb())).threshold, 0.9);
   assert.equal((await knowledgeOps.kbDuplicates({ knowledgeBase: KB_IT, threshold: -4 }, kb())).threshold, 0.4);
   assert.equal((await knowledgeOps.kbDuplicates({ knowledgeBase: KB_IT, threshold: 'x' }, kb())).threshold, 0.55);
-  assert.equal((await knowledgeOps.kbDuplicates({ knowledgeBase: KB_IT, threshold: 0.9 }, kb())).clusters.length, 0);
+  // At the highest setting only titles with the same words in the same order stay together.
+  const strict = await knowledgeOps.kbDuplicates({ knowledgeBase: KB_IT, threshold: 0.9 }, kb());
+  assert.deepEqual(strict.clusters.map((c) => c.articles.map((a) => a.number)), [['KB0000001', 'KB0000002']]);
 });
 
 test('kbDuplicates: a table the user cannot read comes back as an access note, not an error', async () => {
@@ -116,7 +118,8 @@ test('kbGaps: tickets that already have an article are left out; the rest are gr
   assert.ok(labels.some((l) => l.includes('vpn')) && labels.some((l) => l.includes('outlook')));
   const vpn = out.clusters.find((c) => /vpn/i.test(c.label));
   assert.deepEqual(vpn.examples.map((e) => e.number).sort(), ['INC0000002', 'INC0000003']);
-  assert.equal(vpn.withFix, 2);
+  assert.equal(vpn.withFix, 1, 'only INC2 has resolution notes of 40 characters or more');
+  assert.equal(vpn.examples[0].number, 'INC0000002', 'the ticket with a written fix comes first');
   assert.ok(vpn.examples.every((e) => e.table === 'incident' && /^[0-9a-f]{32}$/.test(e.sysId)));
   assert.deepEqual(JSON.parse(JSON.stringify(out)), out, 'plain JSON');
   assert.ok(!JSON.stringify(out).includes('TICKET-LEAK'));

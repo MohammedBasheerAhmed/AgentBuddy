@@ -75,8 +75,8 @@ export default {
    */
   kbGaps: async (args, { deps }) => {
     const days = Math.floor(boundedNumber(args?.days, 1, GAP_MAX_DAYS, 60));
-    const asked = Array.isArray(args?.tables) ? args.tables : ['incident'];
-    const tables = asked.filter((t) => typeof t === 'string' && Object.hasOwn(GAP_TABLES, t));
+    const asked = args?.tables === undefined ? ['incident'] : args.tables;
+    const tables = Array.isArray(asked) ? asked.filter((t) => typeof t === 'string' && Object.hasOwn(GAP_TABLES, t)) : [];
     if (!tables.length) throw new Error('Choose incidents or cases.');
 
     const memo = new Map();

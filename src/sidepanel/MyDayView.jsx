@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MSG } from '../lib/messages.js';
+import { openRecord } from './openRecord.js';
 
 const RISK_LABEL = { breached: 'SLA breached', 'at-risk': 'SLA at risk' };
-
-function openRecord(page, item) {
-  try {
-    const origin = new URL(page.href).origin;
-    const uri = encodeURIComponent(`${item.table}.do?sys_id=${item.sysId}`);
-    chrome.tabs.update(page.tabId, { url: `${origin}/nav_to.do?uri=${uri}` });
-  } catch {
-    /* the tab went away */
-  }
-}
 
 // F1. The agent's own open tickets, most urgent first. No AI: just reads with the person's own session.
 export default function MyDayView({ page }) {

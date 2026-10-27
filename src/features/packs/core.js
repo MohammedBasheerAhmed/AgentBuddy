@@ -1,6 +1,12 @@
 // The first five features: summary, customer reply, resolution notes, hand-off brief, missing information.
 import { packToParts } from '../parts.js';
 import { ALL_TASKS, WORKABLE } from './kinds.js';
+import { relatedParts } from '../../itsm/parts.js';
+
+// The extras a record carries (SLAs, approvals, tasks, answers on the request form). Which of them a feature actually gets is
+// decided by its context spec (FEATURE_RELATED); a list that could not be read is said so to the model, never left out silently.
+const RELATED_KEYS = ['slas', 'approvals', 'childTasks', 'changeTasks', 'catalogTasks', 'items', 'variables'];
+const withRelated = (id, journal) => (pack) => [...packToParts(pack, { journal }), ...relatedParts(pack, RELATED_KEYS, id)];
 
 const CORE = [
   {
@@ -10,6 +16,7 @@ const CORE = [
     wave: 1,
     kinds: ALL_TASKS,
     journal: 15,
+    parts: withRelated('record-summary', 15),
     insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
     system:
       'You help a service desk agent understand a ServiceNow ticket in seconds.\n' +
@@ -38,7 +45,7 @@ const CORE = [
       'End with one short closing line. Do not add a signature name. At most 150 words.',
     instruction: 'Draft the agent\'s reply to the requester.',
     // Internal notes are context for the agent, not material to quote back at the customer.
-    parts: (pack) => packToParts(pack, { journal: 10 }),
+    parts: withRelated('reply-draft', 10),
   },
   {
     id: 'resolution-notes',
@@ -47,6 +54,7 @@ const CORE = [
     wave: 1,
     kinds: ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'task'],
     journal: 25,
+    parts: withRelated('resolution-notes', 25),
     insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes' },
     system:
       'You help a service desk agent write resolution notes for a ServiceNow ticket they are about to resolve.\n' +
@@ -66,6 +74,7 @@ const CORE = [
     wave: 1,
     kinds: WORKABLE,
     journal: 20,
+    parts: withRelated('handoff-brief', 20),
     insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
     system:
       'You help a service desk agent hand a ticket to another team or shift.\n' +
@@ -81,6 +90,7 @@ const CORE = [
     wave: 1,
     kinds: WORKABLE,
     journal: 8,
+    parts: withRelated('missing-info', 8),
     insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
     system:
       'You help a service desk agent get the information needed to resolve a ticket.\n' +

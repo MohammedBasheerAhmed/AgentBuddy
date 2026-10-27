@@ -114,12 +114,14 @@ test('request-explain parts: the status the tool worked out, approvals and tasks
   for (const p of parts) assert.ok(p.label && p.field && typeof p.text === 'string' && p.text.trim(), JSON.stringify(p));
 });
 
-test('the request-explain pack reads less than the Request tab: no answers, no assignee column', async () => {
+test('the request-explain pack reads less than the Request tab: no answers, no team names; people are read but not sent as fields', async () => {
   const deps = fakeDeps(buildInstance());
   const pack = await readContextPack({ table: 'sc_req_item', sysId: RITM_ID }, deps, { feature: 'request-explain' });
   assert.equal(pack.related.variables, undefined);
   assert.equal(deps.callsTo('sc_item_option_mtom').length, 0);
-  assert.equal(pack.fields.assigned_to, undefined);
   assert.equal(pack.fields.assignment_group, undefined);
-  assert.ok(pack.fields.requested_for, 'the requester is on the pack so the firewall masks the name exactly');
+  assert.ok(pack.fields.requested_for && pack.fields.assigned_to && pack.fields.opened_by, 'the people are on the pack so the firewall masks their names exactly');
+  const sentFields = requestExplainParts(pack).map((p) => p.field);
+  assert.ok(!sentFields.includes('assigned_to') && !sentFields.includes('opened_by'), 'but the assignee and the opener are not sent as fields');
+  assert.ok(sentFields.includes('requested_for'));
 });

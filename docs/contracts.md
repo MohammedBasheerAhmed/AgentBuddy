@@ -100,9 +100,10 @@ Each area has its own files; add yours, do not edit another area's.
   context: 'record-summary',         // optional: the context spec (allowlist) to read the pack with; default = id
   journal: 15,                       // how many notes/comments go into the parts
   parts: (pack) => [{label, field, text}],   // optional: custom parts (default packToParts(pack, {journal}))
-  insert: { field, label, fieldLabel, pick? } | [ ... ] | omitted,   // omitted = Copy only. pick(plainText) chooses the part
-                                     // of the answer this button inserts. Customer-visible fields (comments, close_notes)
-                                     // get the safe-to-send check first.
+  insert: { field, label, fieldLabel, pick?, table? } | [ ... ] | omitted,   // omitted = Copy only. pick(plainText) chooses the
+                                     // part of the answer this button inserts. `table`: refused unless the open form is of that
+                                     // table (an article's short_description must not land on an incident). Customer-visible
+                                     // fields (comments, close_notes, text) get the safe-to-send check first.
   system: '...',                     // the task for the model. No ticket data in it, ever.
   instruction: '...',
   requires: { minMode: 'strict' },   // optional: refuse unless the person's privacy mode is at least this (standard < strict < local-only)
@@ -147,7 +148,7 @@ GET-only through the context engine or src/content/tableApi.js; validate every a
 - Top-level sections (src/sidepanel/App.jsx): This page, My day, Team (`tabs/ReportsView.jsx`), Write (`tabs/ComposeView.jsx`),
   Knowledge (`tabs/KnowledgeToolsView.jsx`). Props `{ page, eff }`. They work from any page of an enabled site.
 - Record tabs (src/sidepanel/recordTabs.js): extra tabs on a record for given kinds. Props `{ page, eff, record, header, run, aiReady }`.
-- `page` carries `{ tabId, href, surface: 'classic'|'workspace'|'portal'|'other', record, newRecord: {table, kind}|null, user }`.
+- `page` carries `{ tabId, href, surface: 'classic'|'workspace'|'portal'|'other', portal: {base, pageId}|null, record, newRecord: {table, kind}|null, user }`.
 - To run AI: `const run = useRun({ page, eff, record })`, then `run.run(feature, { getPack })` and render `<RunPanel run={run} eff page />`.
   A view that is not about one record builds a ContextPack-shaped object in `getPack` (its text goes through the firewall like any other).
 - To open another record in the same tab: `openRecord(page, {table, sysId})` (src/sidepanel/openRecord.js). It picks the classic or
