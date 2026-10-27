@@ -71,6 +71,19 @@ export const PROVIDERS = {
     defaultModel: 'llama-3.3-70b-versatile',
     models: [{ id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B - very fast' }],
   },
+  deepseek: {
+    api: 'openai',
+    freeModel: true,
+    baseUrl: 'https://api.deepseek.com/v1',
+    label: 'DeepSeek',
+    keyLabel: 'DeepSeek API key',
+    keyHint: 'Starts with sk-. Create one on the DeepSeek platform (platform.deepseek.com).',
+    defaultModel: 'deepseek-chat',
+    models: [
+      { id: 'deepseek-chat', label: 'DeepSeek Chat - fast and cheap' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner - slower, thinks first' },
+    ],
+  },
   openrouter: {
     api: 'openai',
     freeModel: true,

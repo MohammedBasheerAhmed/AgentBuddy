@@ -16,6 +16,13 @@
 | `blockedTables` / `blockedFields` | tables or fields that must never be read or sent | See "Blocked tables and fields" below. Names are not case-sensitive. |
 | `tokenBudgetPerDay` | an agreed daily cap | Cost and abuse control. Counted per person on that computer; nothing is sent once it is reached. |
 
+Choosing the AI endpoint is the decision a security team looks at first. Each provider in the list (Anthropic, OpenAI, Gemini, Mistral,
+Groq, DeepSeek, OpenRouter) is a public service run by that vendor: the masked text goes to the vendor's servers, in whatever country
+they are in. DeepSeek's own hosted API is operated from China; check its current terms and your organisation's rules on data
+residency before allowing it, or reach DeepSeek's models through a gateway or cloud region your organisation already approves
+(`aiProvider: openai` plus `aiBaseUrl`), or run a model on the person's computer (Ollama). Pin the one you approve with `aiProvider` and
+`aiBaseUrl`; people then cannot choose another.
+
 All keys are optional and are described in `managed_schema.json`. A person can always choose a stricter option than the policy; never
 a looser one. Locked settings show "Set by your organisation" in Settings.
 

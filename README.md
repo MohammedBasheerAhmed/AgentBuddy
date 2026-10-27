@@ -17,8 +17,8 @@ What it does (the side panel has five sections: This page, My day, Team, Write, 
 - **My day and Team**: your queue most urgent first; team dashboards (overview, SLA radar, fulfilment, workload, quality), a report
   builder, saved dashboards, CSV export with names masked, a full-page view, shift hand-over, "explain this dashboard", and an
   opt-in coaching snapshot (off unless the organisation switches it on).
-- Works with any AI key: OpenAI-compatible (Azure OpenAI, company gateways), Anthropic, Gemini, Mistral, Groq, OpenRouter, or a model
-  on your own computer (Ollama).
+- Works with any AI key: OpenAI-compatible (Azure OpenAI, company gateways), Anthropic, Gemini, Mistral, Groq, DeepSeek, OpenRouter,
+  or a model on your own computer (Ollama).
 - Personal data is masked before any AI call; you can see exactly what is sent. Nothing is ever written to ServiceNow by the
   extension: "Insert" fills a field on the open form and you press Save.
 

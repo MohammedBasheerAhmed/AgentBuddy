@@ -9,7 +9,7 @@
     },
     "aiProvider": {
       "title": "Required AI provider",
-      "description": "anthropic, openai (also Azure OpenAI and internal gateways), gemini, mistral, groq, openrouter, ollama or custom.",
+      "description": "anthropic, openai (also Azure OpenAI and internal gateways), gemini, mistral, groq, deepseek, openrouter, ollama or custom.",
       "type": "string"
     },
     "aiBaseUrl": {
