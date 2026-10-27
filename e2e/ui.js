@@ -7,13 +7,17 @@ async function clickButton(page, pattern, { timeout = 15000 } = {}) {
   const handle = await page.waitForFunction(
     (src, flags) => {
       const rx = new RegExp(src, flags);
-      return [...document.querySelectorAll('button')].find((b) => !b.disabled && rx.test(b.innerText.trim())) || null;
+      // Sections that are not on screen stay mounted (hidden), so a button of another section can have the same label: only a button
+      // a person could see and press counts.
+      const shown = (b) => b.getClientRects().length > 0 && getComputedStyle(b).visibility !== 'hidden';
+      return [...document.querySelectorAll('button')].find((b) => !b.disabled && shown(b) && rx.test(b.innerText.trim())) || null;
     },
     { timeout },
     re.source,
     re.flags
   );
   const el = handle.asElement();
+  await el.evaluate((node) => node.scrollIntoView({ block: 'center' })); // (not under a sticky bar when it is pressed)
   await el.click();
   return el;
 }
@@ -34,8 +38,12 @@ async function waitForText(page, text, { timeout = 15000 } = {}) {
   return handle.jsonValue();
 }
 
-/** Text of the first element matching a selector, or null. */
-const textOf = (page, selector) => page.evaluate((s) => document.querySelector(s)?.innerText ?? null, selector);
+/** Text of the first VISIBLE element matching a selector, or null. (Sections that are not on screen stay mounted, hidden, with their own results.) */
+const textOf = (page, selector) => page.evaluate((s) => [...document.querySelectorAll(s)].find((e) => e.getClientRects().length > 0)?.innerText ?? null, selector);
+
+/** Wait until an element matching the selector is visible (any of them, not only the first). */
+const waitForVisible = (page, selector, timeout = 15000) =>
+  page.waitForFunction((s) => [...document.querySelectorAll(s)].some((e) => e.getClientRects().length > 0), { timeout }, selector);
 
 /**
  * Open the preview, approve it, and return what the person saw. `feature` is a regexp for the action button.
@@ -43,12 +51,12 @@ const textOf = (page, selector) => page.evaluate((s) => document.querySelector(s
  */
 async function runFeature(page, feature, { approve = true } = {}) {
   await clickButton(page, feature);
-  await page.waitForSelector('.ab-dialog, .ab-note-danger, .ab-output', { timeout: 15000 });
+  await waitForVisible(page, '.ab-dialog, .ab-note-danger, .ab-output');
   const preview = await textOf(page, '.ab-preview');
   if (preview === null) return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, '.ab-note-danger') };
   if (!approve) return { preview, result: null, error: null };
   await clickButton(page, /^Send to AI/);
-  await page.waitForSelector('.ab-output, .ab-note-danger', { timeout: 15000 });
+  await waitForVisible(page, '.ab-output, .ab-note-danger');
   return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, '.ab-note-danger') };
 }
 
@@ -72,4 +80,4 @@ function deepTextareaValue(label) {
   return walk(document);
 }
 
-module.exports = { clickButton, waitForText, textOf, runFeature, waitForRecord, deepTextareaValue };
+module.exports = { clickButton, waitForText, textOf, waitForVisible, runFeature, waitForRecord, deepTextareaValue };

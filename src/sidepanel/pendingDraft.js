@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react';
 //   - it belongs to the ServiceNow site (origin) it was written on, and is shown only there: a draft made on one customer's
 //     instance is never offered on another's
 //   - it is shown only on a blank form of the table the feature names
-//   - it is dropped after 15 minutes, when the person closes it, and after it was inserted successfully
+//   - it is dropped after 15 minutes, when the person closes it, and once every insert it offers (an article: title and body) went in
 // It holds the text and the firewall's memory of the values it masked (`scan`), which is why it does not stay long.
 // <PendingDraft> shows it.
 
@@ -71,6 +71,21 @@ export function pendingFits(draft, page) {
   const table = draft?.feature?.open?.table;
   if (!draft || !table || !draft.origin) return false;
   return page?.newRecord?.table === table && originOf(page.href) === draft.origin;
+}
+
+/**
+ * Which inserts of the draft's feature are done once `spec` went in, and whether that is all of them. A draft is used up only then:
+ * an article draft has a title AND a body, and dropping it after the title would leave the body with nowhere to come from.
+ * @param {string[]} done fields already inserted from this draft
+ * @param {{ field?: string }} spec the insert that just succeeded
+ * @param {{ insert?: object|object[] }} feature
+ * @returns {{ done: string[], complete: boolean }}
+ */
+export function afterInsert(done, spec, feature) {
+  const field = String(spec?.field || '');
+  const next = field && !done.includes(field) ? [...done, field] : done;
+  const wanted = [].concat(feature?.insert || []).filter(Boolean).map((s) => String(s.field || ''));
+  return { done: next, complete: wanted.every((f) => next.includes(f)) };
 }
 
 const subscribe = (fn) => {

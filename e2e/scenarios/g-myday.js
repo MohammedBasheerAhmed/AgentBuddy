@@ -49,7 +49,7 @@ module.exports = {
     await clickButton(p, /^Refresh/);
     await waitForText(p, /you cannot read this/i, { timeout: 8000 });
     const hint = await p.evaluate(() => document.querySelector('section[aria-label="My day"] .ab-hint')?.innerText || '');
-    t.check('denied tables become a short note, not an error', /sn_customerservice_case: you cannot read this/.test(hint) && (await textOf(p, '.ab-note-danger')) === null, hint);
+    t.check('denied tables become a short note, not an error', /Customer service cases: you cannot read this/.test(hint) && (await textOf(p, '.ab-note-danger')) === null, hint);
     list = await readList(p);
     t.check('the readable tables are still listed', list.some((x) => x.number === 'INC0010100'), list.map((x) => x.number).join(', '));
 

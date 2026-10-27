@@ -28,10 +28,10 @@ const EXPECT = {
   change: [T.thread, T.major],
   case: [T.sentiment, T.nba, T.thread, T.routing, T.kb],
   hr_case: [],
-  requested_item: [T.sentiment, T.nba, T.thread, T.routing, T.kb],
+  requested_item: [T.sentiment, T.nba, T.thread, T.kb],
 };
 
-const actionTitles = (page) => page.evaluate(() => [...document.querySelectorAll('.ab-features .ab-feature-title')].map((e) => e.innerText.trim()));
+const actionTitles = (page) => page.evaluate(() => window.__vis(document.querySelectorAll('.ab-features .ab-feature-title')).map((e) => e.innerText.trim()));
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
 
 // What the stub AI answers, by what the system message is about. It reuses placeholders it was sent, as a model would.
@@ -52,7 +52,7 @@ function replier({ system, user }) {
   }
   if (/turn a solved ticket into a knowledge article/.test(system)) {
     // A model that ignores "no names": the placeholders must stay placeholders, because this text is published.
-    return `Title: VPN drops every ten minutes after a certificate rotation\nSymptoms: The VPN disconnects about every ten minutes. First reported by ${person} (${first(user, 'EMAIL') || '[EMAIL_1]'}).\nCause: The gateway certificate on EU-2 was replaced and the chain was incomplete.\nResolution: Install the full certificate chain and restart the gateway service.\nSteps:\n1. Check the certificate chain on the gateway.\n2. Import the intermediate certificate.\n3. Restart the gateway service.\nApplies to: VPN gateway EU`;
+    return `Title: VPN drops every ten minutes after a certificate rotation\nSymptoms: The VPN disconnects about every ten minutes. First reported by ${person} (${first(user, 'EMAIL') || '[EMAIL_1]'}).\nCause: The gateway certificate on EU-2 was replaced and the chain was incomplete.\nResolution: Install the full certificate chain and restart the gateway service.\nSteps:\n1. Check the certificate chain on the gateway.\n2. Import the intermediate certificate.\n3. Restart the gateway service <b>now</b> & check the logs.\nApplies to: VPN gateway EU`;
   }
   if (/write stakeholder updates during a major incident/.test(system)) {
     return 'Executive: Remote access is unstable for some staff. No estimate yet.\nTechnical: Session resets on gateway EU-2; the certificate chain is being checked.\nCustomer-facing: Some people see the VPN disconnect. We are working on it.\nNext update: [time]';
@@ -112,7 +112,7 @@ module.exports = {
     let ran = await runFeature(p, new RegExp(`^${T.sentiment}`));
     let req = await checkAiRun(t, ctx, p, 'sentiment-risk', ran, { before, system: /see early whether a customer is getting upset/, userHas: [/Signals counted by Agent Buddy/i] });
     t.check('sentiment-risk: the answer shows the real caller name (put back locally) and the four lines', Boolean(ran.result) && ran.result.includes(data.SEED.callerName) && /Mood: frustrated/.test(ran.result) && /Escalation risk: High/.test(ran.result), (ran.result || '').replace(/\s+/g, ' ').slice(0, 120));
-    t.check('sentiment-risk: offers "Add to work notes" (internal) and Copy, nothing to the customer', (await p.evaluate(() => [...document.querySelectorAll('.ab-card button')].map((b) => b.innerText.trim()))).includes('Add to work notes') && !(await panelText(p)).includes('Insert as customer comment'));
+    t.check('sentiment-risk: offers "Add to work notes" (internal) and Copy, nothing to the customer', (await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card button')).map((b) => b.innerText.trim()))).includes('Add to work notes') && !(await panelText(p)).includes('Insert as customer comment'));
     await close();
 
     // next-best-action: it reads solved look-alikes and articles first (reads through the content script), then the AI is asked
@@ -142,7 +142,7 @@ module.exports = {
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.routing}`));
     req = await checkAiRun(t, ctx, p, 'routing-hint', ran, { before, system: /send a ticket to the right place/, userHas: [/Network Support/, /INC0009\d{3}/] });
-    const routingButtons = await p.evaluate(() => [...document.querySelectorAll('.ab-card .ab-row button')].map((b) => b.innerText.trim()));
+    const routingButtons = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
     t.check('routing-hint: Copy only: no Insert button of any kind', routingButtons.includes('Copy') && !routingButtons.some((b) => /^(Add|Insert)/.test(b)), routingButtons.join(' | '));
     await close();
 
@@ -158,11 +158,11 @@ module.exports = {
     ran = await runFeature(p, new RegExp(`^${T.kb}`));
     req = await checkAiRun(t, ctx, p, 'kb-article-draft', ran, { placeholders: 'kept', before, system: /turn a solved ticket into a knowledge article/, userHas: [/REFERENCE MATERIAL/i], userLacks: [data.INCIDENT_NUMBER] });
     t.check('kb-article-draft: the draft keeps hidden details hidden: placeholders stay, the caller name and email are NOT put back', /\[PERSON_\d+\]/.test(ran.result || '') && !(ran.result || '').includes(data.SEED.callerName) && !(ran.result || '').includes(data.SEED.callerEmail), (ran.result || '').replace(/\s+/g, ' ').slice(0, 140));
-    const buttons = await p.evaluate(() => [...document.querySelectorAll('.ab-card .ab-row button')].map((b) => b.innerText.trim()));
+    const buttons = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
     t.check('kb-article-draft: offers title and body inserts, "Open a new article form" and Copy', ['Insert title into the article form', 'Insert body into the article form', 'Open a new article form', 'Copy'].every((b) => buttons.includes(b)), buttons.join(' | '));
     const callsBefore = await gform(() => window.__gformCalls.length);
     await clickButton(p, /^Insert title into the article form/);
-    await waitForText(p, /This goes into a kb_knowledge form\. Open that form first/, { timeout: 8000 });
+    await waitForText(p, /This goes into a knowledge article form\. Open that form first/, { timeout: 8000 });
     t.check('kb-article-draft: Insert is REFUSED on an incident (short_description of the incident is not touched)', (await gform(() => window.__gformCalls.length)) === callsBefore, await textOf(p, '.ab-note-warn'));
 
     await clickButton(p, /^Open a new article form/);
@@ -179,11 +179,19 @@ module.exports = {
     await clickButton(p, /^Insert title into the article form/);
     await waitForText(p, /Inserted into the form/, { timeout: 10000 });
     await clickButton(p, /^Insert body into the article form/);
+    // The body still holds the placeholders (this text is published) and the model's own markup: the review stops it and says so
+    await p.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
+    const review = (await textOf(p, '.ab-note-warn[role="alert"]')) || '';
+    t.check('Insert body: the review stops the draft and says why (a hidden-name marker is still in the text; the model wrote markup)', /hidden-name marker such as \[PERSON_1\]/.test(review) && /has markup in it/.test(review), review.replace(/\s+/g, ' ').slice(0, 200));
+    t.check('...and nothing was written to the body while the warning is shown', (await kbFrame.evaluate(() => window.__gformCalls.length)) === 1);
+    await clickButton(p, /^Insert anyway/);
     await ctx.waitUntil('the body to be inserted', async () => (await kbFrame.evaluate(() => window.__gformCalls.length)) >= 2, { timeout: 8000 });
     const kbCalls = await kbFrame.evaluate(() => window.__gformCalls);
     t.check('the title went into short_description and the body into text, one setValue each, nothing saved', kbCalls.length === 2 && kbCalls[0].name === 'short_description' && kbCalls[1].name === 'text' && (await kbFrame.evaluate(() => window.__gformSaves.length)) === 0, kbCalls.map((c) => c.name).join(','));
     t.check('the title is just the title line', kbCalls[0]?.value === 'VPN drops every ten minutes after a certificate rotation', kbCalls[0]?.value);
-    t.check('the body starts at Symptoms and has the steps; the Title line is not in it', /^Symptoms:/.test(kbCalls[1]?.value || '') && /1\. Check the certificate chain/.test(kbCalls[1]?.value || '') && !/^Title:/m.test(kbCalls[1]?.value || ''), (kbCalls[1]?.value || '').replace(/\n/g, '\\n').slice(0, 120));
+    const body = kbCalls[1]?.value || '';
+    t.check('the body starts at Symptoms and has the steps; the Title line is not in it', /^<p>Symptoms:/.test(body) && /1\. Check the certificate chain/.test(body) && !/Title:/.test(body), body.replace(/\n/g, '\\n').slice(0, 120));
+    t.check('the article body is HTML that cannot carry markup: only <p> and <br> that the panel wrote itself, the model\'s "<b>" and "&" are escaped', !/<(?!\/?(p|br)\b)[a-z]/i.test(body) && /&lt;b&gt;now&lt;\/b&gt; &amp; check/.test(body), body.replace(/\n/g, '\\n').slice(-160));
     const published = `${kbCalls[0]?.value}\n${kbCalls[1]?.value}`;
     t.check('what went into the article form holds no real name, email or number of the ticket (placeholders only)', findLeaks(published, data).critical.length === 0 && !published.includes(data.INCIDENT_NUMBER) && /\[PERSON_\d+\]/.test(published), findLeaks(published, data).critical.join(' | '));
 

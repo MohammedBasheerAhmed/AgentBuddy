@@ -259,6 +259,12 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
     const page = await target.page();
     trackPage(page, 'sidepanel.html');
     await page.waitForSelector('.ab-app', { timeout: 8000 });
+    // Sections that are not on screen stay mounted (hidden): scenarios that look at the page use this to see only what a person sees.
+    const installVisible = () => {
+      window.__vis = (list) => [...list].filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
+    };
+    await page.evaluateOnNewDocument(installVisible);
+    await page.evaluate(installVisible);
     return {
       page,
       windowId,

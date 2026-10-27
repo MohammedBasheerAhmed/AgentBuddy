@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { usePending, clearPending, pendingFits } from './pendingDraft.js';
+import { usePending, clearPending, pendingFits, afterInsert } from './pendingDraft.js';
 import ResultView from './ResultView.jsx';
 import { auditInsert } from '../lib/storage.js';
 
@@ -13,8 +13,12 @@ import { auditInsert } from '../lib/storage.js';
 export default function PendingDraft({ page, eff }) {
   const draft = usePending();
   const [inserted, setInserted] = useState(null); // { table } after a successful insert: one line of confirmation until it is closed
+  const [doneFields, setDoneFields] = useState([]); // the inserts of this draft that went in (an article has a title and a body)
   useEffect(() => {
-    if (draft) setInserted(null);
+    if (draft) {
+      setInserted(null);
+      setDoneFields([]);
+    }
   }, [draft]);
 
   if (!draft) {
@@ -37,9 +41,14 @@ export default function PendingDraft({ page, eff }) {
       internalTexts={draft.internalTexts}
       // The draft goes into a blank form of the table the feature names, nowhere else.
       target={{ table, newRecord: true }}
-      onInserted={() => {
-        setInserted({ table });
-        clearPending();
+      onInserted={(spec) => {
+        // The draft is used up when EVERY insert it offers went in (title and body), not after the first one.
+        const next = afterInsert(doneFields, spec, draft.feature);
+        setDoneFields(next.done);
+        if (next.complete) {
+          setInserted({ table });
+          clearPending();
+        }
       }}
       onClose={clearPending}
       audit={(outcome) => auditInsert({ feature: draft.feature.id, table, sysId: '', mode: eff?.values?.piiMode, outcome })}

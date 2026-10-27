@@ -18,6 +18,19 @@ const probe = (port, method, path, headers = {}) =>
     req.end();
   });
 
+// Which instance API reads the browser-side log did not see (the first few, as path and query), to explain a coverage mismatch.
+function missingFromBrowserLog(ctx, inst, api) {
+  const seen = new Map();
+  for (const n of ctx.net) if (n.url.startsWith(`${inst.origin}/api/now/`)) seen.set(n.url, (seen.get(n.url) || 0) + 1);
+  const missing = [];
+  for (const r of api) {
+    const url = `${inst.origin}${r.path}${r.search}`;
+    if (seen.get(url) > 0) seen.set(url, seen.get(url) - 1);
+    else missing.push(`${r.path}${r.search}`.slice(0, 140));
+  }
+  return missing.slice(0, 3).join(' | ') || 'none (a difference in how the two logs write the address)';
+}
+
 module.exports = {
   id: 'e',
   title: 'Read-only and network proof over the whole run',
@@ -67,7 +80,7 @@ module.exports = {
     // The log must really cover the content scripts and the panel, or "nothing outside" would be an empty promise.
     const netApi = ctx.net.filter((n) => n.url.startsWith(`${inst.origin}/api/now/`)).length;
     const netAi = ctx.net.filter((n) => n.url.startsWith(`http://localhost:${ai.port}/`) && n.method === 'POST').length;
-    t.check('coverage: the browser-side log saw every API read the instance saw (so it covers the content scripts)', netApi === api.length, `browser log ${netApi}, instance log ${api.length}`);
+    t.check('coverage: the browser-side log saw every API read the instance saw (so it covers the content scripts)', netApi === api.length, `browser log ${netApi}, instance log ${api.length}${netApi === api.length ? '' : `; not seen by the browser log: ${missingFromBrowserLog(ctx, inst, api)}`}`);
     t.check('coverage: the browser-side log saw every request the AI server saw (so it covers the panel)', netAi === ai.all.length, `browser log ${netAi}, AI log ${ai.all.length}`);
     t.check('nothing contacted evil.example (the injected image and link)', !ctx.net.some((n) => /evil\.example/.test(n.url)));
     t.check('the service worker itself made no network request at all', !ctx.net.some((n) => n.from === 'service-worker'), ctx.net.filter((n) => n.from === 'service-worker').map((n) => n.url).join(' '));

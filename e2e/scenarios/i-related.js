@@ -30,8 +30,9 @@ module.exports = {
     // The knowledge table is off limits for this user.
     inst.setBehaviour({ denied: ['kb_knowledge'] });
     await clickButton(p, /^Refresh/);
-    await waitForText(p, /kb_knowledge: /, { timeout: 10000 });
-    t.check('knowledge table denied (403): an access note, not an error', /kb_knowledge: .*cannot read/i.test(await panel.text()) && (await textOf(p, '.ab-note-danger')) === null, '');
+    // (The note names the thing in plain words, not the table.)
+    await waitForText(p, /Knowledge articles: /, { timeout: 10000 });
+    t.check('knowledge table denied (403): an access note, not an error', /Knowledge articles: .*cannot read/i.test(await panel.text()) && (await textOf(p, '.ab-note-danger')) === null, '');
     await waitForText(p, 'Earlier tickets from Abel Tuter', { timeout: 10000 });
     t.check('the other sections still show', (await panel.text()).includes('Earlier tickets from Abel Tuter') && (await panel.text()).includes('Solved before'));
     inst.setBehaviour();

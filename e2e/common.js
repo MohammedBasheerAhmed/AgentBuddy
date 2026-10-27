@@ -1,6 +1,6 @@
 // Helpers shared by the newer scenarios (m and later). Nothing here weakens a check of the older ones.
 const { findLeaks } = require('./leaks.js');
-const { clickButton, waitForText, textOf } = require('./ui.js');
+const { clickButton, waitForText, textOf, waitForVisible } = require('./ui.js');
 
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -29,11 +29,15 @@ const describeErrors = (list) => list.slice(0, 3).map((e) => `${e.from}/${e.kind
 /** Click a tab/section button (role=tab) by its text. */
 async function clickTab(page, label) {
   const handle = await page.waitForFunction(
-    (text) => [...document.querySelectorAll('[role="tab"]')].find((b) => !b.disabled && b.innerText.trim() === text) || null,
+    // (Only a tab a person could see: sections that are not on screen stay mounted, hidden.)
+    (text) => [...document.querySelectorAll('[role="tab"]')].find((b) => !b.disabled && b.getClientRects().length > 0 && b.innerText.trim() === text) || null,
     { timeout: 15000 },
     label
   );
-  await handle.asElement().click();
+  const el = handle.asElement();
+  // In the middle of the view: next to the panel's sticky section bar a tab scrolled to the very top can end up under it, and the click lands there.
+  await el.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+  await el.click();
 }
 
 /** The label of every tab in a tablist (by the tablist's aria-label), and which one is selected. */
@@ -105,14 +109,15 @@ module.exports = { prepare, errorMark, errorsSince, describeErrors, clickTab, ta
 
 /** Like runFeature() in ui.js, but the first click is made by `act` (for buttons that share one label, such as several "Draft"s). */
 async function runAfter(page, act) {
-  // (A run's error banner has role=alert; a summary line on some tabs also looks like a danger note, and must not count.)
+  // (A run's error banner has role=alert; a summary line on some tabs also looks like a danger note, and must not count. Only what is
+  // on screen counts: other sections stay mounted, hidden, with their own results.)
   const ERROR = '.ab-note-danger[role="alert"]';
   await act();
-  await page.waitForSelector(`.ab-dialog, ${ERROR}, .ab-output`, { timeout: 15000 });
+  await waitForVisible(page, `.ab-dialog, ${ERROR}, .ab-output`);
   const preview = await textOf(page, '.ab-preview');
   if (preview === null) return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, ERROR) };
   await clickButton(page, /^Send to AI/);
-  await page.waitForSelector(`.ab-output, ${ERROR}`, { timeout: 15000 });
+  await waitForVisible(page, `.ab-output, ${ERROR}`);
   return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, ERROR) };
 }
 
@@ -179,3 +184,11 @@ module.exports.waitPanel = waitPanel;
 /** The frame of a classic page (nav_to.do + gsft_main) whose own address path is `pathname`, or null. (The top frame's address also CONTAINS it.) */
 const frameByPath = (page, origin, pathname) => page.frames().find((f) => f.url().startsWith(origin) && new URL(f.url()).pathname === pathname) || null;
 module.exports.frameByPath = frameByPath;
+
+/** page.click(selector), scrolled to the middle of the view first (a button at the very top can sit under the panel's sticky bar). */
+async function clickSel(page, selector) {
+  await page.waitForSelector(selector, { visible: true, timeout: 10000 });
+  await page.$eval(selector, (node) => node.scrollIntoView({ block: 'center' }));
+  await page.click(selector);
+}
+module.exports.clickSel = clickSel;

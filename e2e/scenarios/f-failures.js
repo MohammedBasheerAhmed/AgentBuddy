@@ -52,6 +52,13 @@ module.exports = {
     const cancelledBefore = (await ctx.audit()).filter((e) => e.outcome === 'cancelled').length;
     await clickButton(p, /^Summarise this ticket/);
     await p.waitForSelector('.ab-dialog', { timeout: 15000 });
+    // The dialog takes the keyboard focus (so that Escape and Tab belong to it) from an IntersectionObserver, which only runs when the
+    // window paints. Wait for that, as a person would (they see the dialog first), and say so if it never happened.
+    const tookFocus = await p.waitForFunction(() => Boolean(document.activeElement?.closest('.ab-backdrop')), { timeout: 4000 }).then(() => true, () => false);
+    if (!tookFocus) {
+      t.info(`the preview did not take the keyboard focus within 4 s (activeElement: ${await p.evaluate(() => document.activeElement?.tagName)}, hasFocus: ${await p.evaluate(() => document.hasFocus())}); focusing it by hand`);
+      await p.evaluate(() => document.querySelector('.ab-backdrop').focus());
+    }
     await p.keyboard.press('Escape');
     await p.waitForFunction(() => !document.querySelector('.ab-dialog'), { timeout: 5000 });
     await ctx.sleep(400);

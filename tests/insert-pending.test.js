@@ -91,3 +91,24 @@ test('the card shows on the right page with the same Insert / Copy buttons, and 
   clearPending();
   assert.equal(card(blankArticle()), '', 'nothing once it is cleared');
 });
+
+// Found by the end-to-end run: a carried article draft offers a title AND a body, and it was dropped after the first insert, so the
+// body could never be inserted from it.
+test('a draft is used up only when every insert it offers has gone in', async () => {
+  const { afterInsert } = await import('../src/sidepanel/pendingDraft.js');
+  const article = featureById('kb-article-draft');
+  const title = { field: 'short_description' };
+  const body = { field: 'text' };
+  let step = afterInsert([], title, article);
+  assert.deepEqual(step, { done: ['short_description'], complete: false }, 'after the title the body is still to come');
+  step = afterInsert(step.done, title, article);
+  assert.deepEqual(step, { done: ['short_description'], complete: false }, 'the same insert twice counts once');
+  step = afterInsert(step.done, body, article);
+  assert.deepEqual(step, { done: ['short_description', 'text'], complete: true }, 'title and body: used up');
+  // one insert only (or a different order): complete as soon as that one is in
+  assert.equal(afterInsert([], { field: 'work_notes' }, { insert: { field: 'work_notes' } }).complete, true);
+  assert.equal(afterInsert(['text'], title, article).complete, true);
+  // a feature with no inserts is used up at once; odd input never throws
+  assert.equal(afterInsert([], title, { id: 'x' }).complete, true);
+  assert.deepEqual(afterInsert([], null, null), { done: [], complete: true });
+});

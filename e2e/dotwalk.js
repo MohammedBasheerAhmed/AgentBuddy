@@ -30,16 +30,32 @@ function walk(tables, row, parts) {
   return walk(tables, target.row, parts.slice(1)) ?? empty();
 }
 
+// `task` is the parent of every ticket table: a read of it sees the tickets of its children (the reports look tickets up there by sys_id).
+const TASK_CHILDREN = ['incident', 'problem', 'change_request', 'sc_req_item', 'sc_task', 'sn_customerservice_case', 'change_task'];
+function withTaskUnion(tables) {
+  const seen = new Set((tables.task || []).map((r) => rawOf(r.sys_id)));
+  const rows = [...(tables.task || [])];
+  for (const child of TASK_CHILDREN) {
+    for (const row of tables[child] || []) {
+      if (seen.has(rawOf(row.sys_id))) continue;
+      seen.add(rawOf(row.sys_id));
+      rows.push(row.sys_class_name === undefined ? { ...row, sys_class_name: { value: child, display_value: child } } : row);
+    }
+  }
+  return { ...tables, task: rows };
+}
+
 const DOTTED = /[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+/g;
 
 /** Same four functions as fakeDeps, with dot-walked columns understood. */
-export function dotwalkDeps(tables, behaviour) {
-  const plain = fakeDeps(tables, behaviour);
+export function dotwalkDeps(source, behaviour) {
+  const plain = fakeDeps(source, behaviour);
   async function queryTable(table, query = '', fields = [], options = {}) {
+    const tables = table === 'task' ? withTaskUnion(source) : source;
     const names = [...new Set(`${query},${fields.join(',')}`.match(DOTTED) || [])];
     const rows = tables[table] || [];
     const usable = names.filter((n) => rows.some((r) => n.split('.')[0] in r));
-    if (!usable.length) return plain.queryTable(table, query, fields, options);
+    if (!usable.length) return (table === 'task' ? fakeDeps(tables, behaviour) : plain).queryTable(table, query, fields, options);
     const augmented = rows.map((row) => {
       const extra = {};
       for (const n of usable) {

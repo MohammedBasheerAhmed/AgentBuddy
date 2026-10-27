@@ -25,7 +25,7 @@ function replier({ system, user }) {
   return null;
 }
 
-const checkRows = (p) => p.evaluate(() => [...document.querySelectorAll('ul[aria-label="Checks"] li')].map((li) => ({ status: li.getAttribute('data-status'), text: li.innerText.replace(/\s+/g, ' ').trim() })));
+const checkRows = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('ul[aria-label="Checks"] li')).map((li) => ({ status: li.getAttribute('data-status'), text: li.innerText.replace(/\s+/g, ' ').trim() })));
 const findCheck = (rows, re) => rows.find((r) => re.test(r.text));
 const sessionStore = (ctx) => ctx.ext(async () => JSON.stringify(await chrome.storage.session.get(null)));
 const localStore = (ctx) => ctx.ext(async () => JSON.stringify(await chrome.storage.local.get(null)));

@@ -1,6 +1,6 @@
 // End-to-end run: real Chrome + the built extension + a fake ServiceNow (HTTPS) + a fake AI endpoint.
 //
-//   npm run e2e                   rebuilds dist/ first, then runs every scenario (about 40 seconds)
+//   npm run e2e                   rebuilds dist/ first, then runs every scenario (about two minutes)
 //   node e2e/run.js [a,c,g]       run only some scenarios (dist/ must be built already)
 //   node e2e/run.js --headed      show the browser (needs a display)
 //
@@ -29,7 +29,7 @@ const SCENARIO_FILES = fs.readdirSync(path.join(__dirname, 'scenarios')).filter(
 const SCENARIOS = [...SCENARIO_FILES.filter((f) => f !== 'e-readonly'), ...SCENARIO_FILES.filter((f) => f === 'e-readonly')].map((f) => require(path.join(__dirname, 'scenarios', f)));
 
 const SCENARIO_TIMEOUT_MS = Number(process.env.E2E_SCENARIO_TIMEOUT_MS) || 45000; // a normal scenario takes 3 to 15 seconds
-const RUN_TIMEOUT_MS = Number(process.env.E2E_RUN_TIMEOUT_MS) || 175000; // a normal run takes about 40 seconds; the whole run stays under three minutes even when things fail
+const RUN_TIMEOUT_MS = Number(process.env.E2E_RUN_TIMEOUT_MS) || 270000; // a normal run takes under two minutes (20 scenarios); the whole run stays under 4.5 minutes even when steps time out
 
 const after = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
 

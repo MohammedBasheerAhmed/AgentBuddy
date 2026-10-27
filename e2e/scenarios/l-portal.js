@@ -103,6 +103,7 @@ module.exports = {
     t.check('the safe-to-send check also guards a portal comment: nothing is written while it warns', warned.comment === before.comment && inputsOf(warned, 'comment') === 0);
     await clickButton(panel.page, /^Insert anyway/);
     await waitForText(panel.page, /Inserted into the form/, { timeout: 8000 });
+    t.check('the success note names the box the text went into ("Additional comments")', /It went into the box labelled "Additional comments"/.test((await textOf(panel.page, '.ab-note-ok')) || ''), (await textOf(panel.page, '.ab-note-ok')) || '');
     const after = await boxes(sp);
     t.check('what the agent typed is kept and the AI text is APPENDED below it', after.comment.startsWith('Hi, thanks for waiting.\n\n') && after.comment.includes('Issue:'), after.comment.replace(/\n/g, '\\n').slice(0, 100));
     t.check("the page's own model followed (input and change events were delivered, like typing)", after.model.comment === after.comment && inputsOf(after, 'comment') >= 1 && (after.events.comment?.change || 0) >= 1, JSON.stringify(after.events.comment));
@@ -128,6 +129,10 @@ module.exports = {
     await sp.evaluate((u) => window.__portal.go(u), `/sp?id=ticket&table=incident&sys_id=${A.sysId}&nobox=1`);
     const missing = await boxes(sp);
     t.check('the page has no comment box now', missing.comment === null && missing.comment2 === null);
+    // (After a successful insert the button reads "Inserted": a fresh draft is needed to try the insert again.)
+    await clickButton(panel.page, /^Close/);
+    const redraft = await runFeature(panel.page, /^Draft a reply to the customer/);
+    t.check('a fresh reply draft for the page that has no comment box any more', Boolean(redraft.result), redraft.error || '');
     await clickButton(panel.page, /^Insert as customer comment/);
     await panel.page.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
     await clickButton(panel.page, /^Insert anyway/);

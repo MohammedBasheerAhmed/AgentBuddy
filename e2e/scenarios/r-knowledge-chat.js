@@ -35,7 +35,7 @@ function replier({ system, user }) {
 }
 
 const text = (p) => p.evaluate(() => document.body.innerText);
-const tagsOf = (p) => p.evaluate(() => [...document.querySelectorAll('.ab-tags .ab-tag')].map((x) => x.innerText.trim()));
+const tagsOf = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-tags .ab-tag')).map((x) => x.innerText.trim()));
 
 module.exports = {
   id: 'r',
@@ -62,7 +62,7 @@ module.exports = {
     const ran = await runAfter(p, () => clickButton(p, /^Suggest improvements/));
     const req = await checkAiRun(t, ctx, p, 'article-optimise', ran, { before, system: /improve one ServiceNow knowledge article/, userHas: [/Guest Wi-Fi/] });
     t.check('article-optimise: the password in the article text reached the AI only as a placeholder', req ? !req.raw.includes(data.MORE_SEED.articleSecret) && /\[SECRET_\d+\]/.test(req.raw) : false);
-    const buttons = await p.evaluate(() => [...document.querySelectorAll('.ab-card .ab-row button')].map((b) => b.innerText.trim()));
+    const buttons = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
     t.check('article-optimise: Copy only (the author edits the article in its own form): no Insert button', buttons.includes('Copy') && !buttons.some((b) => /^(Add|Insert)/.test(b)), buttons.join(' | '));
     await clickButton(p, /^Close/);
     await ticket.close();
@@ -96,7 +96,7 @@ module.exports = {
     t.check('kb-merge-draft: the author named in the article text (Dave Loftus), his email and phone reached the AI only as placeholders', mreq ? !/Dave|Loftus|dave\.loftus|555-0166/i.test(mreq.raw) : false);
     const mergedText = merged.result || '';
     t.check('kb-merge-draft: the merged draft is shown with its placeholders: NO real name, email or phone is put back into a text that will be published', /\[PERSON_\d+\]/.test(mergedText) && /\[EMAIL_\d+\]/.test(mergedText) && /\[PHONE_\d+\]/.test(mergedText) && findLeaks(mergedText, data).critical.length === 0, mergedText.replace(/\s+/g, ' ').slice(0, 200));
-    const mbuttons = await p.evaluate(() => [...document.querySelectorAll('.ab-card .ab-row button')].map((b) => b.innerText.trim()));
+    const mbuttons = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
     t.check('kb-merge-draft: Copy only', mbuttons.includes('Copy') && !mbuttons.some((b) => /^(Add|Insert)/.test(b)));
     await clickButton(p, /^Close/);
 
@@ -119,13 +119,13 @@ module.exports = {
     const gapText = await text(p);
     const already = Number(/(\d+) already had an article/.exec(gapText)?.[1] || 0);
     t.check('Gaps: the resolved tickets that already have an article (one through the attached-knowledge list, one through the use log) are counted and left out', already >= 2, (/Looked at[^.]*\./.exec(gapText) || [''])[0]);
-    const printer = await p.evaluate(() => [...document.querySelectorAll('.ab-kb-cluster')].map((c) => c.innerText.replace(/\s+/g, ' ').trim()).find((x) => /printer/i.test(x)) || '');
+    const printer = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-kb-cluster')).map((c) => c.innerText.replace(/\s+/g, ' ').trim()).find((x) => /printer/i.test(x)) || '');
     t.check('Gaps: the printer tickets (no article, no written fix) form a topic with their category and configuration item', /printer/i.test(printer) && /Hardware/.test(printer) && /Print Server 2F/.test(printer) && /\d+ tickets?/.test(printer), printer.slice(0, 200));
     t.check('Gaps: finding topics made no AI request', ai.requests.length === gapsBaseline);
     const before3 = ai.requests.length;
     const outline = await runAfter(p, async () => {
       await p.evaluate(() => {
-        const cluster = [...document.querySelectorAll('.ab-kb-cluster')].find((c) => /printer/i.test(c.innerText));
+        const cluster = window.__vis(document.querySelectorAll('.ab-kb-cluster')).find((c) => /printer/i.test(c.innerText));
         [...cluster.querySelectorAll('button')].find((b) => /^Draft an article outline/.test(b.innerText.trim())).click();
       });
     });
@@ -174,7 +174,7 @@ module.exports = {
     let chatRun = await runAfter(p, () => clickButton(p, /^Summarise this chat/));
     let creq = await checkAiRun(t, ctx, p, 'chat-summary', chatRun, { before: b4, system: /wrap up a live chat/, userHas: [/VPN keeps dropping/i, /ten minutes/] });
     t.check('chat-summary: the customer\'s email, phone and name in the chat never reached the AI (placeholders only)', creq ? !creq.raw.includes(data.MORE_SEED.chatEmail) && !creq.raw.includes(data.MORE_SEED.chatPhone) && /\[EMAIL_\d+\]/.test(creq.raw) && /\[PHONE_\d+\]/.test(creq.raw) : false);
-    const insertLabel = await p.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.innerText.trim()).find((x) => /^Add notes to work notes/.test(x)) || '');
+    const insertLabel = await p.evaluate(() => window.__vis(document.querySelectorAll('button')).map((b) => b.innerText.trim()).find((x) => /^Add notes to work notes/.test(x)) || '');
     t.check('chat-summary: offers "Add notes to work notes" (only the notes section, not the whole summary)', Boolean(insertLabel));
     await clickButton(p, /^Add notes to work notes/);
     await waitForText(p, /Inserted into the form/, { timeout: 8000 });
@@ -187,7 +187,7 @@ module.exports = {
     chatRun = await runAfter(p, () => clickButton(p, /^Suggest replies/));
     creq = await checkAiRun(t, ctx, p, 'chat-reply', chatRun, { before: b4, system: /answer a customer in a live chat/, userHas: [/still not working|Version 5\.2/] });
     const kbReads = inst.requests.slice(kbReadsBefore).filter((r) => r.path === '/api/now/table/kb_knowledge');
-    t.check('chat-reply: it looked for knowledge articles that match the chat (one GET) before asking, and the answer is Copy only', kbReads.length >= 1 && !(await p.evaluate(() => [...document.querySelectorAll('.ab-card .ab-row button')].map((b) => b.innerText.trim()).some((x) => /^(Add|Insert)/.test(x)))));
+    t.check('chat-reply: it looked for knowledge articles that match the chat (one GET) before asking, and the answer is Copy only', kbReads.length >= 1 && !(await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()).some((x) => /^(Add|Insert)/.test(x)))));
     await clickButton(p, /^Close/);
     await ticket.close();
 
@@ -204,7 +204,7 @@ module.exports = {
     await waitForText(p, 'INT0000103', { timeout: 20000 });
     await clickTab(p, 'Chat');
     await waitForText(p, /No chat messages are available to you/, { timeout: 20000 });
-    t.check('a chat with no readable messages: "No chat messages are available to you" (not "an empty chat"), and the AI buttons are off', await p.evaluate(() => ['Summarise this chat', 'Suggest replies'].every((label) => [...document.querySelectorAll('button')].find((b) => b.innerText.trim() === label)?.disabled === true)));
+    t.check('a chat with no readable messages: "No chat messages are available to you" (not "an empty chat"), and the AI buttons are off', await p.evaluate(() => ['Summarise this chat', 'Suggest replies'].every((label) => window.__vis(document.querySelectorAll('button')).find((b) => b.innerText.trim() === label)?.disabled === true)));
     await ticket.close();
     inst.setBehaviour({ denied: ['sys_cs_message'] });
     ticket = await ctx.openInstancePage(`/interaction.do?sys_id=${data.INTERACTION_ID}`, 'ticket-chat-denied');

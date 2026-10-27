@@ -130,7 +130,8 @@ function startFakeInstance(tls, { tables, makeApi, user, portal }) {
       isNew,
       values,
       editable: layout.filter((f) => !f.readonly).map((f) => f.name),
-      types: { work_notes: 'journal_input', comments: 'journal_input', description: 'string' },
+      // (A knowledge article body is an HTML field on a real instance: the page bridge then fills it with escaped HTML.)
+      types: { work_notes: 'journal_input', comments: 'journal_input', description: 'string', ...(tableName === 'kb_knowledge' ? { text: 'html' } : {}) },
     };
     const inputs = layout.map((f) => {
       const id = `${formTable}.${f.name}`;

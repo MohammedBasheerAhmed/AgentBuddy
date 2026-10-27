@@ -1,13 +1,16 @@
 // m. The panel's five sections (This page, My day, Team, Write, Knowledge): each one loads in the real side panel, on a record page
 //    and on a page that is not a record, with no console error, page error or CSP violation; the chosen section is remembered when
-//    the panel is reloaded; and on a site that is not turned on only the setup help shows (no sections, nothing to read with).
+//    the panel is reloaded; a tab that is not a ServiceNow page leaves the section bar and what was typed in place (a one-line banner
+//    says so, and "This page" shows the setup help); only when there is no ServiceNow tab at all is the setup help all there is, and a
+//    draft typed in Write > Rewrite is still there when a ServiceNow tab comes back.
+const waitPanelGone = (page, text) => page.waitForFunction((x) => !document.body.innerText.includes(x), { timeout: 15000 }, text);
 const { prepare, errorMark, errorsSince, describeErrors, clickTab, tabsOf, loadingElements, panelShows, waitForText, clickButton } = require('../common.js');
 
 const SECTIONS = ['This page', 'My day', 'Team', 'Write', 'Knowledge'];
 
 module.exports = {
   id: 'm',
-  title: 'Panel sections: all five load without errors, the choice is remembered, a site that is not turned on shows only the setup help',
+  title: 'Panel sections: all five load without errors, the choice is remembered, a tab that is not ServiceNow keeps the sections and the typed text, the setup help shows where it belongs',
   async run(t, ctx) {
     const { inst, data } = ctx;
     await prepare(ctx);
@@ -72,32 +75,51 @@ module.exports = {
     await waitForText(p, 'INC0010100', { timeout: 15000 });
     t.check('all sections also loaded on a page that is not a record', (await p.$('.ab-note-danger')) === null);
 
-    // ---- 4. A site that is not turned on: only the setup help ---------------------------------------------------------------
-    //  (a) an address the browser gave the extension no access to: it cannot even read the address, so the help is generic
+    // ---- 4. A tab that is not a ServiceNow page: the sections and what was typed stay ----------------------------------------------
+    const DRAFT = 'A draft that must survive a look at another tab';
+    await clickTab(p, 'Write');
+    await clickTab(p, 'Rewrite');
+    await p.waitForSelector('#ab-rewrite-text', { visible: true, timeout: 10000 });
+    await p.click('#ab-rewrite-text');
+    await p.type('#ab-rewrite-text', DRAFT, { delay: 0 });
+    const draftNow = () => p.$eval('#ab-rewrite-text', (el) => el.value);
+
+    //  (a) an address the browser gave the extension no access to (so even the address is hidden): "not a ServiceNow page"
     const other = await ctx.newPage('other-origin');
     await other.goto(`https://127.0.0.1:${inst.port}/home`, { waitUntil: 'load' });
     await other.bringToFront();
+    await waitForText(p, 'This tab is not a ServiceNow page. Agent Buddy keeps working with your last ServiceNow tab.', { timeout: 20000 });
+    const stay = await tabsOf(p, 'Agent Buddy sections');
+    t.check('a tab that is not a ServiceNow page: the banner says so, the section bar stays and Write stays selected', JSON.stringify(stay?.labels) === JSON.stringify(SECTIONS) && JSON.stringify(stay.selected) === '["Write"]', JSON.stringify(stay));
+    t.check('...and the text typed in Write > Rewrite is still there (nothing was thrown away)', (await draftNow()) === DRAFT, await draftNow());
+    await clickTab(p, 'This page');
     await waitForText(p, 'Not turned on for this page', { timeout: 15000 });
     let setup = await panel.text();
-    t.check('a site the extension has no access to: the setup help is shown, with no section bar and nothing read', /Open your ServiceNow instance in this tab/.test(setup) && (await tabsOf(p, 'Agent Buddy sections')) === null && !/Which email fits|Find near-duplicate|Summarise this ticket|INC0010100/.test(setup), setup.replace(/\s+/g, ' ').slice(0, 140));
-    t.check('...and no actions list is offered', (await p.$('.ab-features')) === null);
+    t.check('"This page" shows the setup help for that tab (no address to turn on: open the instance first), and no actions list', /Open your ServiceNow instance in this tab/.test(setup) && (await p.$('.ab-features')) === null && !/Turn on for this site/.test(setup), setup.replace(/\s+/g, ' ').slice(0, 160));
+    await clickTab(p, 'Write');
+    t.check('back in Write the draft is still there', (await draftNow()) === DRAFT);
+    await home.bringToFront();
+    await waitPanelGone(p, 'This tab is not a ServiceNow page');
+    t.check('back on the ServiceNow tab the banner is gone and the draft is still there', !(await panel.text()).includes('This tab is not a ServiceNow page') && (await draftNow()) === DRAFT);
     await other.close();
 
-    //  (b) the instance is turned OFF: a new page of it shows "Turn on for this site", the address, and nothing else
+    //  (b) the instance is turned OFF and no ServiceNow tab is left: the setup help is all there is, and nothing typed is lost
     await home.close();
     await ticket.close();
     await ctx.ext((origin) => chrome.runtime.sendMessage({ type: 'ab:disable-instance', origin }), inst.origin);
     const off = await ctx.openInstancePage('/home', 'home-off');
-    await waitForText(p, 'Not turned on for this page', { timeout: 15000 });
+    await waitForText(p, 'Not turned on for this page', { timeout: 20000 });
     setup = await panel.text();
-    t.check('an instance that is turned off: the help names the address and offers "Turn on for this site"', setup.includes(`localhost:${inst.port}`) && /Turn on for this site/.test(setup), setup.replace(/\s+/g, ' ').slice(0, 140));
-    t.check('...there is no section bar (the remembered section is not shown) and My day / Team / Write / Knowledge read nothing', (await tabsOf(p, 'Agent Buddy sections')) === null && !/Which email fits|Find near-duplicate|Open a ticket/.test(setup));
+    t.check('an instance that is turned off: the help names the address and offers "Turn on for this site"', setup.includes(`localhost:${inst.port}`) && /Turn on for this site/.test(setup), setup.replace(/\s+/g, ' ').slice(0, 160));
+    t.check('...with no ServiceNow tab left to work with there is no section bar, and no section shows its content', (await tabsOf(p, 'Agent Buddy sections')) === null && !/Which email fits|Find near-duplicate|Text to rewrite/.test(setup));
 
-    // ---- 5. Turning it on again brings the sections, on the section that was chosen last --------------------------------------------
+    // ---- 5. Turning it on again brings the sections back, on the one chosen last, with the draft ----------------------------------------
     await clickButton(p, /^Turn on for this site/);
-    await waitForText(p, 'INC0010100', { timeout: 25000 });
+    await ctx.waitUntil('the section bar to come back', async () => (await tabsOf(p, 'Agent Buddy sections')) !== null, { timeout: 25000 });
     const back = await tabsOf(p, 'Agent Buddy sections');
-    t.check('after "Turn on for this site" the section bar is back, on the section chosen last (My day)', JSON.stringify(back?.selected) === '["My day"]', JSON.stringify(back));
+    t.check('after "Turn on for this site" the section bar is back, on the section chosen last (Write)', JSON.stringify(back?.selected) === '["Write"]', JSON.stringify(back));
+    await p.waitForSelector('#ab-rewrite-text', { visible: true, timeout: 10000 });
+    t.check('...and the draft typed before the site was turned off is still in the Rewrite box', (await draftNow()) === DRAFT, await draftNow());
     await clickTab(p, 'This page');
     await off.close();
     await ctx.ensureEnabled();

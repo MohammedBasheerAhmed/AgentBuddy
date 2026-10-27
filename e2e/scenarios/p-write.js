@@ -37,8 +37,8 @@ function replier({ system, user }) {
 
 const CHIP_SELECTOR = '[aria-label="Suggested emails"] .ab-compose-row';
 const chips = (p) =>
-  p.evaluate((sel) => [...document.querySelectorAll(sel)].map((li) => ({ title: li.querySelector('.ab-compose-row-title').innerText.trim(), why: (li.querySelector('.ab-sub')?.innerText || '').trim(), primary: li.querySelector('button').className.includes('ab-btn-primary') })), CHIP_SELECTOR);
-const facts = (p) => p.evaluate(() => [...document.querySelectorAll('[aria-label="What the suggestions are based on"] .ab-tag')].map((x) => x.innerText.trim()));
+  p.evaluate((sel) => window.__vis(document.querySelectorAll(sel)).map((li) => ({ title: li.querySelector('.ab-compose-row-title').innerText.trim(), why: (li.querySelector('.ab-sub')?.innerText || '').trim(), primary: li.querySelector('button').className.includes('ab-btn-primary') })), CHIP_SELECTOR);
+const facts = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('[aria-label="What the suggestions are based on"] .ab-tag')).map((x) => x.innerText.trim()));
 
 module.exports = {
   id: 'p',
@@ -90,7 +90,7 @@ module.exports = {
     await checkAiRun(t, ctx, p, 'email-resolution', ran, { before, system: /write an email to the person who raised a ServiceNow ticket/, userHas: [/Status worked out by Agent Buddy/i, /marked resolved/i] });
     t.check('the draft shows the customer by name again (put back locally)', /Hello Abel Tuter/.test(ran.result || ''), (ran.result || '').replace(/\s+/g, ' ').slice(0, 100));
     await waitForText(p, 'Use the draft', { timeout: 8000 });
-    t.check('the draft offers Copy subject, Copy body, Open the email form and Insert into the email body', await p.evaluate(() => ['Copy subject', 'Copy body', 'Open the email form', 'Insert into the email body'].every((b) => [...document.querySelectorAll('button')].some((x) => x.innerText.trim() === b))));
+    t.check('the draft offers Copy subject, Copy body, Open the email form and Insert into the email body', await p.evaluate(() => ['Copy subject', 'Copy body', 'Open the email form', 'Insert into the email body'].every((b) => window.__vis(document.querySelectorAll('button')).some((x) => x.innerText.trim() === b))));
     await clickButton(p, /^Copy subject/);
     await ctx.waitUntil('copy subject', async () => (await clipboardLog(p)).length >= 1, { timeout: 5000 });
     t.check('Copy subject copies just the subject line', (await clipboardLog(p)).slice(-1)[0] === 'An update on your request', (await clipboardLog(p)).slice(-1)[0]);
@@ -187,7 +187,7 @@ module.exports = {
     ran = await runAfter(p, () => clickButton(p, /^Write the ticket/));
     await checkAiRun(t, ctx, p, 'notes-to-ticket', ran, { before, system: /log a ticket from rough call/, userHas: [/label="Call notes"/, /\[PHONE_\d+\]/] });
     await waitForText(p, 'Review, then fill the form', { timeout: 8000 });
-    const savedPlan = await p.evaluate(() => ({ fillDisabled: [...document.querySelectorAll('button')].find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled, reason: document.querySelector('[aria-label="Review before filling the form"] .ab-note[role="status"]')?.innerText || '' }));
+    const savedPlan = await p.evaluate(() => ({ fillDisabled: window.__vis(document.querySelectorAll('button')).find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled, reason: document.querySelector('[aria-label="Review before filling the form"] .ab-note[role="status"]')?.innerText || '' }));
     t.check('on a SAVED record the form cannot be filled: the button is off and says why; Copy buttons remain', savedPlan.fillDisabled === true && /only offered on a blank ticket form/.test(savedPlan.reason), JSON.stringify(savedPlan));
     t.check('the proposal is shown for review: short description, description, and the questions still to ask', (await p.$eval('#ab-notes-short', (el) => el.value)).startsWith('VPN is down for the sales team') && (await p.evaluate(() => document.body.innerText)).includes('Which VPN client version is installed?'));
     await captureClipboard(p);
@@ -206,7 +206,7 @@ module.exports = {
     const frame = await ctx.waitUntil('the incident form frame', async () => ticket.frames().find((f) => f.url().startsWith(inst.origin) && new URL(f.url()).pathname === '/incident.do') || null, { timeout: 10000 });
     await frame.waitForFunction(() => window.__gformReady === true, { timeout: 10000 });
     t.check('it is a new record with every proposed field empty', await frame.evaluate(() => window.g_form.isNewRecord() && ['short_description', 'description', 'impact', 'urgency', 'contact_type'].every((f) => window.g_form.getValue(f) === '')));
-    await waitPanel(ctx, p, 'the fill button to be enabled', async () => p.evaluate(() => [...document.querySelectorAll('button')].find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled === false), { timeout: 20000 });
+    await waitPanel(ctx, p, 'the fill button to be enabled', async () => p.evaluate(() => window.__vis(document.querySelectorAll('button')).find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled === false), { timeout: 20000 });
     t.check('the notes the agent typed and the proposal are still there after the page changed (the panel did not throw its work away)', (await p.$eval('#ab-notes-text', (el) => el.value)) === notesBefore && notesBefore.startsWith('vpn down since this morning') && (await p.$eval('#ab-notes-short', (el) => el.value)).startsWith('VPN is down for the sales team'));
     await clickButton(p, /^Fill the form/);
     await waitForText(p, /Filled: Short description, Description, Impact, Urgency, Contact type\./, { timeout: 15000 });
@@ -232,7 +232,7 @@ module.exports = {
     const hint = await p.evaluate(() => document.querySelector('[aria-label="Review before filling the form"] .ab-hint')?.innerText || '');
     t.check('values the AI made up (Catastrophic, ASAP, Carrier pigeon) are shown as "not recognised" and left out', /Impact "Catastrophic"/.test(hint) && /Urgency "ASAP"/.test(hint) && /Contact type "Carrier pigeon"/.test(hint), hint.replace(/\s+/g, ' '));
     await ticket.waitForFunction(() => window.__gformReady === true, { timeout: 10000 });
-    await waitPanel(ctx, p, 'fill enabled', async () => p.evaluate(() => [...document.querySelectorAll('button')].find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled === false), { timeout: 15000 });
+    await waitPanel(ctx, p, 'fill enabled', async () => p.evaluate(() => window.__vis(document.querySelectorAll('button')).find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled === false), { timeout: 15000 });
     await clickButton(p, /^Fill the form/);
     await waitForText(p, /Filled: Short description, Description\./, { timeout: 15000 });
     fcalls = await ticket.evaluate(() => window.__gformCalls);

@@ -48,7 +48,7 @@ module.exports = {
     let ticket = await ctx.openInstancePage(`/sn_customerservice_case.do?sys_id=${data.CASE_ID}`, 'ticket-case');
     await waitForText(p, data.CASE_NUMBER, { timeout: 20000 });
     await p.waitForSelector('.ab-features', { timeout: 15000 });
-    const offered = await p.evaluate(() => [...document.querySelectorAll('.ab-features .ab-feature-title')].map((e) => e.innerText.trim()));
+    const offered = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-features .ab-feature-title')).map((e) => e.innerText.trim()));
     t.check('a case offers "Brief me before the call" and "Draft an engineering escalation"; a problem/change/HR feature is not offered', offered.includes('Brief me before the call') && offered.includes('Draft an engineering escalation') && !offered.some((o) => /RCA|CAB|HR case brief/.test(o)), offered.join(' | '));
 
     let before = ai.requests.length;
@@ -80,7 +80,7 @@ module.exports = {
     const linked = readsOf(inst, fromLog, 'incident').filter((q) => q.includes('problem_id='));
     t.check('problem-rca: the linked incidents were read by problem_id (GET), oldest first', linked.length >= 1 && linked.some((q) => /ORDERBYopened_at/.test(q)), linked.join(' || ').slice(0, 160));
     t.check('problem-rca: the secret in the work note ("password: ...") is masked in the request', req ? !req.raw.includes(data.MORE_SEED.secret) && /\[SECRET_\d+\]/.test(req.raw) : false);
-    const inserts = await p.evaluate(() => [...document.querySelectorAll('.ab-card .ab-row button')].map((b) => b.innerText.trim()));
+    const inserts = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
     t.check('problem-rca: one Insert button per part: statement, cause, workaround', ['Insert problem statement', 'Insert probable cause', 'Insert workaround'].every((b) => inserts.includes(b)), inserts.join(' | '));
     await clickButton(p, /^Insert probable cause/);
     await waitForText(p, /Inserted into the form/, { timeout: 8000 });
@@ -119,11 +119,11 @@ module.exports = {
     await waitForText(p, data.HR_CASE_NUMBER, { timeout: 20000 });
     await p.waitForSelector('.ab-features', { timeout: 15000 });
     const hrCard = await p.evaluate(() => {
-      const b = [...document.querySelectorAll('.ab-feature')].find((x) => /^HR case brief/.test(x.innerText.trim()));
+      const b = window.__vis(document.querySelectorAll('.ab-feature')).find((x) => /^HR case brief/.test(x.innerText.trim()));
       return b ? b.innerText.replace(/\s+/g, ' ') : null;
     });
     t.check('HR case: the card says "Needs Strict privacy mode" in Standard mode', Boolean(hrCard) && /Needs Strict privacy mode\. Change it in Settings\./.test(hrCard), hrCard || 'no HR case brief card');
-    const hrOffered = await p.evaluate(() => [...document.querySelectorAll('.ab-features .ab-feature-title')].map((e) => e.innerText.trim()));
+    const hrOffered = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-features .ab-feature-title')).map((e) => e.innerText.trim()));
     t.check('HR case: none of the other ITSM / customer service features is offered on an HR case', !hrOffered.some((o) => /Sentiment|Next best|Summarise the discussion|Where should|knowledge article|Major incident|Brief me|engineering/.test(o)), hrOffered.join(' | '));
 
     before = ai.requests.length;
@@ -134,7 +134,7 @@ module.exports = {
     t.check('Standard mode: nothing reached the AI', ai.requests.length === before);
 
     await ctx.configure({ piiMode: 'strict' });
-    const hrCardText = () => p.evaluate(() => [...document.querySelectorAll('.ab-feature')].find((x) => /^HR case brief/.test(x.innerText.trim()))?.innerText || '');
+    const hrCardText = () => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-feature')).find((x) => /^HR case brief/.test(x.innerText.trim()))?.innerText || '');
     await ctx.waitUntil('the panel to follow the new privacy mode', async () => !(await hrCardText()).includes('Change it in Settings'), { timeout: 8000 });
     t.check('after switching to Strict the card no longer asks to change the mode (the panel followed the setting)', true);
     await clickButton(p, /^HR case brief/);

@@ -43,8 +43,8 @@ The HR case brief also needs Strict (or Local-only) privacy mode.
 
 ### Feature ids
 
-`disabledFeatures` takes these ids (lower case; a capital letter does not matter). There is no single `reports` switch: the Team
-section's three AI features each have their own id.
+`disabledFeatures` takes these ids (lower case; a capital letter does not matter). The id `reports` hides the whole Team section
+(dashboards, reports, hand-over); the Team section's three AI features also have their own ids.
 
 | Where | Ids |
 |---|---|
@@ -52,7 +52,7 @@ section's three AI features each have their own id.
 | Knowledge tools | `kb-merge-draft`, `kb-gap-outline` |
 | Write: email drafts | `email-ask-info`, `email-status-update`, `email-resolution`, `email-approval-nudge`, `email-apology`, `email-closure` |
 | Write: rewrite and notes | `rewrite-short`, `rewrite-friendly`, `rewrite-plain`, `rewrite-formal`, `rewrite-fix`, `rewrite-translate`, `rewrite-bilingual`, `notes-to-ticket` |
-| Team (reports) | `shift-handover`, `dashboard-insights`, `coaching-snapshot` (off until `coachingEnabled` is `true`; needs Strict mode) |
+| Team (reports) | `reports` (the whole section), `shift-handover`, `dashboard-insights`, `coaching-snapshot` (off until `coachingEnabled` is `true`; needs Strict mode) |
 | Record tabs | `request-explain`, `resolution-improve`, `fulfilment-checklist` |
 
 The deterministic tabs (Request, Check, Article, Duplicates, Gaps, Snippets and the lists) have no feature id: `disabledFeatures`

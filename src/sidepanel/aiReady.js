@@ -8,6 +8,9 @@ import { resolveProviderConfig } from '../providers/config.js';
 export function isAiReady(eff) {
   if (!eff?.values) return false;
   if (eff.apiKey || eff.values.providedApiKey) return true;
+  // A key was saved for this provider and is locked behind its passphrase: the person means to use it. A server that needs no key
+  // would otherwise be sent the request WITHOUT it and answer 401, and the panel would blame the key instead of saying "locked".
+  if (eff.keyLocked) return false;
   return resolveProviderConfig(eff.values, eff.apiKey || '').keyOptional;
 }
 

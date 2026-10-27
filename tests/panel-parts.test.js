@@ -260,3 +260,17 @@ test('SEC-05: a preview that is shown because it includes other tickets says so 
   assert.match(always, /This one includes other tickets, so you are always asked\./);
   assert.ok(!/asked/.test(dialog({ canSkipNext: false }).replace(/masked/g, '')), 'neither line when it is not the "first" mode');
 });
+
+// Found by the end-to-end run (k): with an AI server on this computer a LOCKED saved key was ignored, the actions stayed on, the request
+// went out with no Authorization header and the panel said "rejected the API key" instead of "locked".
+test('L5: a locked saved key keeps the AI off even for a server that needs no key', () => {
+  const local = { provider: 'custom', baseUrls: { custom: 'http://localhost:1234/v1' } };
+  assert.equal(isAiReady(eff(local)), true, 'no key saved: the local server is used as it is');
+  assert.equal(isAiReady(eff(local, { keyLocked: true })), false, 'a key is saved and locked: unlock it first');
+  assert.equal(aiNeeds(eff(local, { keyLocked: true })), 'unlock');
+  assert.equal(aiNeedsText(eff(local, { keyLocked: true })), 'Your AI key is locked. Unlock it in Settings.');
+  assert.equal(isAiReady(eff({ provider: 'ollama' }, { keyLocked: true })), false);
+  // unlocked (the key is there) or provided by the organisation: ready
+  assert.equal(isAiReady(eff(local, { keyLocked: true, apiKey: 'k' })), true);
+  assert.equal(isAiReady(eff({ ...local, providedApiKey: 'org' }, { keyLocked: true })), true);
+});
