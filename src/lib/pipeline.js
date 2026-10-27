@@ -6,8 +6,12 @@
 // The side panel passes the real firewall, sendChat and logAudit. Nothing here knows about React or chrome.*.
 
 import { checkProviderAllowed, isFeatureEnabled, isTableAllowed } from '../policy/policy.js';
-import { partsFor } from '../features/registry.js';
+import { partsFor, isFeatureAvailable } from '../features/registry.js';
 import { peopleFor } from '../features/parts.js';
+
+// Privacy modes from least to most protective (see src/policy/policy.js).
+const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
+const MODE_LABEL = { strict: 'Strict', 'local-only': 'Local-only' };
 
 export class RunBlocked extends Error {
   constructor(message, code) {
@@ -44,6 +48,13 @@ export function connectionProblem(config) {
  */
 export function assertRunnable({ feature, pack, values, policy, config, hasKey }) {
   if (!isFeatureEnabled(feature.id, policy)) throw new RunBlocked('Your organisation has switched this feature off.', 'FEATURE_OFF');
+  // A feature that stays off until the organisation turns it on (the coaching snapshot).
+  if (!isFeatureAvailable(feature, policy)) throw new RunBlocked('Your organisation has not switched this feature on.', 'FEATURE_OFF');
+  // A feature can ask for a stricter privacy mode than the person chose (the HR case brief needs Strict).
+  const needed = feature.requires?.minMode;
+  if (needed && (MODE_RANK[values.piiMode] ?? 0) < (MODE_RANK[needed] ?? 0)) {
+    throw new RunBlocked(`This needs ${MODE_LABEL[needed] || needed} privacy mode. Change it in Settings.`, 'MODE_TOO_LOW');
+  }
   if (!isTableAllowed(pack.table, policy)) throw new RunBlocked(`Your organisation does not allow Agent Buddy to use ${pack.table} records.`, 'TABLE_BLOCKED');
   if (isHrTable(pack.table) && !policy?.allowHrContent) {
     throw new RunBlocked('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.', 'HR_BLOCKED');

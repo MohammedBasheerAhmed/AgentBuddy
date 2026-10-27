@@ -108,6 +108,31 @@ test('HR content is blocked unless the organisation allows it', () => {
   assert.doesNotThrow(() => assertRunnable({ ...base, policy: policy({ allowHrContent: true }) }));
 });
 
+test('a feature can require a stricter privacy mode than the person chose', () => {
+  const needsStrict = { ...featureById('record-summary'), requires: { minMode: 'strict' } };
+  const run = (mode) => assertRunnable({ feature: needsStrict, pack: PACK, values: values({ piiMode: mode }), policy: policy(), config: config() });
+  assert.throws(() => run('standard'), (e) => e.code === 'MODE_TOO_LOW' && /Strict/.test(e.message));
+  assert.doesNotThrow(() => run('strict'));
+  const needsLocal = { ...featureById('record-summary'), requires: { minMode: 'local-only' } };
+  assert.throws(() => assertRunnable({ feature: needsLocal, pack: PACK, values: values({ piiMode: 'strict' }), policy: policy(), config: config() }), (e) => e.code === 'MODE_TOO_LOW');
+});
+
+test('a default-off feature runs only when the organisation turns coaching on', () => {
+  const coaching = { ...featureById('record-summary'), id: 'coaching-snapshot', defaultOff: true };
+  const base = { feature: coaching, pack: PACK, values: values(), config: config() };
+  assert.throws(() => assertRunnable({ ...base, policy: policy() }), (e) => e.code === 'FEATURE_OFF');
+  assert.doesNotThrow(() => assertRunnable({ ...base, policy: policy({ coachingEnabled: true }) }));
+  assert.throws(() => assertRunnable({ ...base, policy: policy({ coachingEnabled: true, disabledFeatures: ['coaching-snapshot'] }) }), (e) => e.code === 'FEATURE_OFF');
+});
+
+test('keepMasked leaves placeholders in the answer so real names never come back', async () => {
+  const fw = fakeFirewall({});
+  const feature = { ...featureById('record-summary'), keepMasked: true };
+  const prepared = { request: fw.buildRequest({ feature: 'x', system: 's', parts: [] }), firewall: fw, feature, pack: PACK };
+  const out = await executeRun({ prepared, config: config(), values: values(), sendChat: async () => ({ content: 'Call [PERSON_1] back.' }), logAudit: async () => {} });
+  assert.equal(out.text, 'Call [PERSON_1] back.');
+});
+
 test('a local model satisfies local-only mode', () => {
   const local = resolveProviderConfig({ provider: 'ollama' }, '');
   assert.equal(local.local, true);
