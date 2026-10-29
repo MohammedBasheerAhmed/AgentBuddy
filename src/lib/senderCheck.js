@@ -35,6 +35,19 @@ export function isFromExtensionPage(sender, runtimeId) {
   return Boolean(origin) && origin === `chrome-extension://${runtimeId}`;
 }
 
+/**
+ * The origin of the page that this extension's own content script sent a message from, or '' when the sender is anything else
+ * (another extension, an extension page, a frame inside the page, a tab id that is not a real tab). The only thing a content
+ * script may ask the service worker is what the bar on the page needs (src/background/bar.js).
+ */
+export function contentScriptOrigin(sender, runtimeId) {
+  if (!runtimeId || !sender || sender.id !== runtimeId) return '';
+  if (!Number.isInteger(sender.tab?.id) || sender.tab.id < 0 || sender.frameId !== 0) return '';
+  const origin = senderOrigin(sender);
+  // Instances are https only (normalizeInstance), so a content script on any other kind of page is not ours to answer.
+  return origin.startsWith('https://') ? origin : '';
+}
+
 /** Throws unless the message came from this extension's own pages. */
 export function checkExtensionSender(sender, runtimeId) {
   if (!isFromExtensionPage(sender, runtimeId)) throw new Error(EXTENSION_ONLY);

@@ -20,6 +20,7 @@ test('an empty or garbage policy means "nothing pinned"', () => {
     assert.deepEqual(p.disabledFeatures, []);
     assert.equal(p.allowHrContent, false);
     assert.equal(p.coachingEnabled, false);
+    assert.equal(p.disablePageBar, false);
   }
 });
 
@@ -107,4 +108,15 @@ test('feature and table switches', () => {
   assert.equal(isFeatureEnabled('record-summary', p), true);
   assert.equal(isTableAllowed('sn_hr_core_case', p), false);
   assert.equal(isTableAllowed('incident', p), true);
+});
+
+test('disablePageBar switches the bar on ServiceNow pages off and locks the setting; only true counts', () => {
+  assert.equal(normalizePolicy({ disablePageBar: true }).disablePageBar, true);
+  for (const junk of ['true', 1, 'yes', null, undefined, {}]) assert.equal(normalizePolicy({ disablePageBar: junk }).disablePageBar, false, String(junk));
+  const on = effectiveSettings({ pageBar: true }, { disablePageBar: true });
+  assert.equal(on.values.pageBar, false);
+  assert.match(on.locked.pageBar, /organisation/);
+  const free = effectiveSettings({ pageBar: true }, {});
+  assert.equal(free.values.pageBar, true);
+  assert.equal(free.locked.pageBar, undefined);
 });

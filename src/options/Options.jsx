@@ -344,6 +344,32 @@ function PrivacySection({ eff, reload }) {
   );
 }
 
+function QuickBarSection({ eff, reload }) {
+  const v = eff.values;
+  const change = async (patch) => {
+    await saveSettings(patch);
+    reload();
+  };
+  return (
+    <section className="ab-section">
+      <h2 className="ab-h">Quick actions</h2>
+      <p className="ab-sub">
+        A short bar of the main actions for the ticket that is open: at the top of the side panel, and as a small tab on the edge of the ServiceNow
+        page. Choose which actions it holds with Choose in the panel.
+      </p>
+      <label className="ab-check">
+        <input id="page-bar" type="checkbox" checked={v.pageBar !== false} disabled={Boolean(eff.locked.pageBar)} onChange={(e) => change({ pageBar: e.target.checked })} />
+        <span>Show the bar on ServiceNow pages. A click opens the side panel and starts the action there.</span>
+      </label>
+      <Locked why={eff.locked.pageBar} />
+      <label className="ab-check" style={{ marginTop: 6 }}>
+        <input id="panel-bar" type="checkbox" checked={v.quickBarOpen !== false} onChange={(e) => change({ quickBarOpen: e.target.checked })} />
+        <span>Keep the bar open at the top of the side panel.</span>
+      </label>
+    </section>
+  );
+}
+
 function InstancesSection({ eff, reload }) {
   const [address, setAddress] = useState('');
   const [error, setError] = useState('');
@@ -532,6 +558,7 @@ export default function Options() {
       {Object.keys(eff.locked).length > 0 && <p className="ab-note ab-note-warn">Some settings are managed by your organisation and cannot be changed.</p>}
       <ProviderSection eff={eff} reload={reload} />
       <PrivacySection eff={eff} reload={reload} />
+      <QuickBarSection eff={eff} reload={reload} />
       <InstancesSection eff={eff} reload={reload} />
       <AuditSection key={`audit-${epoch}`} eff={eff} />
       <StoredDataSection key={`stored-${epoch}`} eff={eff} onCleared={() => { setEpoch((n) => n + 1); reload(); }} />

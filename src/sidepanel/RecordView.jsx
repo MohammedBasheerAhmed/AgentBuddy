@@ -4,19 +4,24 @@ import { read } from './ask.js';
 import { useRun } from './useRun.js';
 import RunPanel from './RunPanel.jsx';
 import RelatedView from './RelatedView.jsx';
+import QuickBar from './QuickBar.jsx';
 import Tabs, { TabPanel } from './Tabs.jsx';
 import { RECORD_TABS } from './recordTabs.js';
 import { aiNeedsText, isAiReady } from './aiReady.js';
 import { describeHeader, headerPhase } from './recordHeader.js';
+import { launchIsForPage } from '../lib/launch.js';
+import { panelShowsBar } from '../features/quick.js';
 
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
 const needsStricter = (feature, mode) => Boolean(feature.requires?.minMode) && (MODE_RANK[mode] ?? 0) < (MODE_RANK[feature.requires.minMode] ?? 0);
 
-export default function RecordView({ page, eff }) {
+// launch / onLaunchDone: an action the bar on the ServiceNow page asked for (src/lib/launch.js); it is used once.
+export default function RecordView({ page, eff, launch = null, onLaunchDone = () => {} }) {
   const { record } = page;
   const [head, setHead] = useState({ phase: 'loading', header: null }); // phase: loading | ready | failed
   const [tab, setTab] = useState('actions'); // 'actions' | 'related' | a record tab id (src/sidepanel/recordTabs.js)
   const run = useRun({ page, eff, record });
+  const [launchNote, setLaunchNote] = useState('');
 
   const key = `${record.table}:${record.sysId}`;
   const aiReady = isAiReady(eff);
@@ -27,6 +32,7 @@ export default function RecordView({ page, eff }) {
     run.reset();
     setHead({ phase: 'loading', header: null });
     setTab('actions');
+    setLaunchNote('');
     let cancelled = false;
     read(page.tabId, 'header', { table: record.table, sysId: record.sysId })
       .then((h) => !cancelled && setHead({ phase: headerPhase(h), header: h }))
@@ -39,11 +45,29 @@ export default function RecordView({ page, eff }) {
   }, [key, page.tabId, record.table, record.sysId]);
 
   const features = featuresFor(record.kind || 'other', eff.policy);
+  const idle = run.phase === 'idle' || run.phase === 'error';
+
+  // The bar on the page asked for an action on THIS record: start it exactly as a click in the list would (same permission, masking,
+  // preview and policy steps). If the record on screen is not the one it named, it waits until it is, or until it expires.
+  useEffect(() => {
+    if (!launchIsForPage(launch, page)) return;
+    onLaunchDone();
+    const feature = features.find((f) => f.id === launch.featureId);
+    if (!feature) setLaunchNote('That action is not available for this record.');
+    else if (!aiReady) setLaunchNote(aiNeedsText(eff, 'this action'));
+    else if (!idle) setLaunchNote('Close the answer on screen first, then choose the action again.');
+    else {
+      setLaunchNote('');
+      run.run(feature);
+    }
+    // Only a new request, or the page it names arriving, matters here; the rest is read as it is at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launch, page.tabId, key]);
+
   const extraTabs = RECORD_TABS.filter((t) => t.kinds.includes(record.kind || 'other'));
   const tabs = [{ id: 'actions', label: 'Actions' }, { id: 'related', label: 'Related' }, ...extraTabs.map((t) => ({ id: t.id, label: t.label }))];
   const shown = tabs.some((t) => t.id === tab) ? tab : 'actions';
   const Extra = extraTabs.find((t) => t.id === shown)?.View;
-  const idle = run.phase === 'idle' || run.phase === 'error';
   const card = describeHeader(head, record);
 
   return (
@@ -57,6 +81,10 @@ export default function RecordView({ page, eff }) {
           ))}
         </div>
       </section>
+
+      {panelShowsBar(features.length) && <QuickBar kind={record.kind || 'other'} features={features} eff={eff} disabled={!aiReady || !idle} onRun={(f) => run.run(f)} />}
+
+      {launchNote && <p className="ab-note ab-note-warn" role="status">{launchNote}</p>}
 
       {!aiReady && <p className="ab-note ab-note-warn">{aiNeedsText(eff, 'these actions')}</p>}
 

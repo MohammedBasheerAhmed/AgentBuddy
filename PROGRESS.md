@@ -9,13 +9,13 @@ Rules every change follows: `docs/build-rules.md`.
 testing it on a real instance and improving it.** Nothing here has run against a real ServiceNow instance or a real AI model yet; the
 fake instance and stub AI server in `e2e/` stand in for them.
 
-Verified by me on 2026-10-27 (all committed locally, never pushed):
+Verified by me on 2026-10-29 (the quick-actions work below is NOT committed yet; the rest was committed locally on 2026-10-27, never pushed):
 
 | Check | Result |
 |---|---|
-| `node tests/run.js` (unit) | **1860 pass, 0 fail** |
+| `node tests/run.js` (unit) | **1914 pass, 0 fail** |
 | `node scripts/check-compile.js` (every build entry compiles) | all ok |
-| `npm run e2e` (real Chrome, fake ServiceNow, stub AI; scenarios a-w) | **834 pass, 0 fail, 2 warnings** (about 125 s) |
+| `npm run e2e` (real Chrome, fake ServiceNow, stub AI; scenarios a-z) | **889 pass, 0 fail, 2 warnings** (about 145 s) |
 | `node build.js` | `dist/` builds |
 
 The two e2e warnings are documented limits: a person named only inside a sentence ("manager is María-José O'Neil") reaches the AI
@@ -51,6 +51,29 @@ The two e2e warnings are documented limits: a person named only inside a sentenc
   `api-key` header) are NOT supported yet. Questions: `docs/live-questions/ai-provider.md`.
 - **Links:** tickets and articles in lists are real links (see "Small things left").
 
+### Added after user feedback (2026-10-29): "good in functionality, ease of use is not great"
+
+The Actions list was 9 to 12 equal buttons per ticket. Now the main ones are one click away, in two places:
+
+- **Quick-actions bar in the side panel** (`src/sidepanel/QuickBar.jsx`): above the record's tabs, folds to one strip (remembered), the person
+  chooses up to 4 actions per kind of record ("Choose"; saved in settings `quickPins`), "Use the suggested ones" resets. It shows only where
+  the Actions list has 4 or more actions (a chat or an article already has its own short list and its own tab). The full list is unchanged.
+  A click is exactly a click in the list: same preview, same policy.
+- **Small bar on the ServiceNow page** (`src/content/bar.js`, `src/background/bar.js`): a tab on the edge of the page, opens to the same
+  actions, can move to the other edge, remembers open/closed and side. A click asks the service worker to open the side panel and leave a
+  30-second request (`src/lib/launch.js`: tab, table, sys_id, feature id); the panel starts the action behind its usual preview.
+  It is the first UI the extension puts into a ServiceNow page, so: closed shadow root, real clicks only, two worker requests only,
+  nothing runs outside the panel (`docs/security.md`, "The bar on the page" and limits 15 and 16). Settings has a switch for it
+  (`pageBar`), and the policy key `disablePageBar` removes it for everyone (`docs/deployment.md`). No manifest change, no new permission.
+- Shared choice of actions and short labels: `src/features/quick.js` (a test keeps it in step with the feature registry).
+- Tests: `tests/quick-*.test.js`, `tests/bar-*.test.js`, policy cases; e2e scenarios x (panel bar), y (bar on the page, driven through the
+  devtools protocol because it lives in a closed shadow root), z (click on the page -> side panel -> preview).
+- Found by the e2e run: in the test Chrome a real click on the bar DID open Chrome's side panel (the click's permission travels page ->
+  worker -> `chrome.sidePanel.open`), and a first version that also showed the bar for chats was caught by scenario r (it would have
+  offered chat buttons the Chat tab deliberately switches off), hence the "4 or more actions" rule.
+- Not verified on a real instance and a headed browser: `docs/live-questions/quickbar.md` (does the panel open from the click in headed
+  Chrome and Edge, does the tab collide with Workspace or portal tools, z-order over ServiceNow dialogs, a real page's CSP).
+
 ### Decisions taken without the user (change if you disagree)
 
 - AI key default storage is plain local (the user's choice, like NowBuddy); `session` and passphrase-encrypted modes exist and
@@ -62,7 +85,7 @@ The two e2e warnings are documented limits: a person named only inside a sentenc
 ### NOT verified (needs a person on a real instance)
 
 The numbered questions are in `docs/live-questions/` (checks 17, compose 24, domain 26, itsm 16, knowledge 24, policy 10, portal 23,
-reports 20, reports-ai 21). Each says what was assumed, how to check it as a non-admin, and what to change if wrong. The biggest:
+reports 20, reports-ai 21, quickbar 10). Each says what was assumed, how to check it as a non-admin, and what to change if wrong. The biggest:
 1. Table and column names for CSM, HR, chat (`sys_cs_*`, `live_message`), `kb_use`, `m2m_kb_task`, `task_sla`, `sysapproval_approver`.
 2. Insert on Workspaces and portals (control labels, rich-text boxes, the email client form) and on the classic email client.
 3. Portal URL and DOM assumptions (widget boxes, route names, session user fallbacks).
@@ -72,6 +95,9 @@ reports 20, reports-ai 21). Each says what was assumed, how to check it as a non
    menu cannot be driven headless), and the DeepSeek key against the real DeepSeek API (tested only against the stub).
 6. Real model output quality for every prompt, and how well the output check catches per-person wording in the coaching snapshot.
 7. Aggregate API behaviour for dot-walked group-by and time zones on a real instance.
+
+8. The bar on the page (`docs/live-questions/quickbar.md`): opening the panel from a click in headed Chrome/Edge, collisions with real
+   Workspace and portal layouts, z-order over ServiceNow dialogs.
 
 ### Known limits (documented in `docs/security.md`)
 

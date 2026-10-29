@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEffective } from './useEffective.js';
 import { usePage } from './usePage.js';
+import { useLaunch } from './useLaunch.js';
 import SetupView from './SetupView.jsx';
 import RecordView from './RecordView.jsx';
 import MyDayView from './MyDayView.jsx';
@@ -88,8 +89,9 @@ function rememberedSection() {
  * The whole panel for a given state (everything it needs comes in as props, so it can be drawn without a browser).
  * page: the current page (a held answer counts); lastGood / lastSeen: see usePage.js; section: the chosen one; visited: Set of ids.
  * Pending: the card for a draft carried to a blank form (a prop so a test can leave it out).
+ * launch / onLaunchDone: an action the bar on the ServiceNow page asked for; it goes to the record on screen (see RecordView).
  */
-export function AppView({ eff, page, lastGood = null, lastSeen = null, section, visited, onChoose = () => {}, onChanged = () => {}, Pending = PendingDraft }) {
+export function AppView({ eff, page, lastGood = null, lastSeen = null, section, visited, onChoose = () => {}, onChanged = () => {}, Pending = PendingDraft, launch = null, onLaunchDone = () => {} }) {
   const plan = planPanel({ ids: SECTION_IDS, active: section, visited, page, lastGood, lastSeen });
 
   // A section that is not on screen keeps the page it last had on screen: it neither follows the person from record to record nor
@@ -109,7 +111,7 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
           {recordPage && (
             <div className="ab-pane" hidden={plan.showSetup}>
               <ErrorBoundary resetKey={recordKey}>
-                <RecordView page={recordPage} eff={eff} />
+                <RecordView page={recordPage} eff={eff} launch={launch} onLaunchDone={onLaunchDone} />
               </ErrorBoundary>
             </div>
           )}
@@ -170,6 +172,7 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
 function Panel() {
   const eff = useEffective();
   const { page, lastGood, lastSeen, refresh } = usePage();
+  const { launch, clear: clearLaunch } = useLaunch();
   const [nav, setNav] = useState(() => {
     const section = rememberedSection();
     return { section, visited: new Set([section]) };
@@ -184,6 +187,13 @@ function Panel() {
     }
   };
 
+  // An action asked for from the page belongs to the record, which is in "This page": bring that section forward.
+  useEffect(() => {
+    if (launch) choose('page');
+    // choose only sets state and a per-tab convenience; it does not need to be a dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launch]);
+
   if (!eff.ready) {
     return (
       <div className="ab-app">
@@ -192,7 +202,7 @@ function Panel() {
     );
   }
 
-  return <AppView eff={eff} page={page} lastGood={lastGood} lastSeen={lastSeen} section={nav.section} visited={nav.visited} onChoose={choose} onChanged={refresh} />;
+  return <AppView eff={eff} page={page} lastGood={lastGood} lastSeen={lastSeen} section={nav.section} visited={nav.visited} onChoose={choose} onChanged={refresh} launch={launch} onLaunchDone={clearLaunch} />;
 }
 
 export default function App() {

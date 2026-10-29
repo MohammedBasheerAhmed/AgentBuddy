@@ -84,6 +84,10 @@ No HTML, no images, no links that load anything; URLs are shown as text. `<SafeT
 
 Defined in src/lib/messages.js (`MSG` constants). The worker validates the sender of every message (src/lib/senderCheck.js).
 
+The one exception to "extension pages only" is the bar on the ServiceNow page: its content script may send `BAR_ACTIONS` and
+`BAR_LAUNCH` to the worker (src/background/bar.js), from the top frame of an enabled instance and nothing else. `BAR_LAUNCH` leaves a
+request in `chrome.storage.session` (src/lib/launch.js) that the panel reads, uses once and deletes.
+
 ## Extension points (how a feature is added without touching shared files)
 
 Each area has its own files; add yours, do not edit another area's.
@@ -114,6 +118,10 @@ Each area has its own files; add yours, do not edit another area's.
   open: { table: 'kb_knowledge', label: 'Open a new article form' },   // optional: a button on the result that opens a blank form
 }
 ```
+
+**Quick actions.** A feature that works on a record needs a short label in `QUICK_LABELS` (src/features/quick.js) so it can be pinned to the
+quick-actions bar; `tests/quick-actions.test.js` fails when it has none, and when a default or a label names a feature that does not exist.
+Add it to `QUICK_DEFAULTS` only if it is one of the few actions a fulfiller uses all day.
 
 Everything an AI feature sends goes through `prepareRun` (policy, firewall, seal) and `executeRun` (provider, audit) in
 src/lib/pipeline.js. Views never call `sendChat` themselves; they use `useRun()` (src/sidepanel/useRun.js).

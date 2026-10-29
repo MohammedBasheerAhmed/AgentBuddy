@@ -8,8 +8,9 @@
 //   FILL_FIELD  put text into ONE field on the open form (the only write; the person presses Save). Only the fields in
 //               src/lib/fillable.js, only on the record the text was written for, with HTML escaped for an HTML field (fill.js)
 //
-// No UI is injected into the ServiceNow page, nothing is sent to any server from here, and the page cannot message this
-// script: chrome.runtime.onMessage only receives messages from this extension.
+// The one thing it puts on the page is the small bar of main actions (bar.js, in a closed shadow root). The bar runs nothing itself:
+// a click asks the service worker to open the side panel and run the action there. Nothing is sent to any server from here, and the
+// page cannot message this script: chrome.runtime.onMessage only receives messages from this extension.
 import { MSG, toWireError } from '../lib/messages.js';
 import { tryCallPage, callPage } from './pageBridge.js';
 import { getSessionUser } from './sessionToken.js';
@@ -21,6 +22,7 @@ import { portalInfo, surfaceOf } from '../context/surface.js';
 import { isFromExtensionPage } from '../lib/senderCheck.js';
 import { handleFillField } from './fill.js';
 import { policyGuard } from './policyGuard.js';
+import { startBar } from './bar.js';
 
 if (!window.__abContentInstalled) {
   window.__abContentInstalled = true;
@@ -117,4 +119,8 @@ if (!window.__abContentInstalled) {
       .catch((err) => sendResponse(toWireError(err)));
     return true;
   });
+
+  // The bar of main actions. It follows the record that is open (the same detection the side panel uses) and hides itself when the
+  // service worker says it may not show (switched off in Settings, a blocked table, a site that is not turned on).
+  startBar({ resolveRecord: () => resolveRecord(location.href) });
 }

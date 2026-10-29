@@ -21,7 +21,7 @@ if (!entries.length) {
         bundle: true,
         write: false,
         logLevel: 'silent',
-        loader: { '.js': 'jsx', '.jsx': 'jsx' },
+        loader: { '.js': 'jsx', '.jsx': 'jsx', '.css': 'text' },
         jsx: 'automatic',
         target: ['chrome116'],
         format: 'iife',

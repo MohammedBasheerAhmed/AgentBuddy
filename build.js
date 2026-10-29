@@ -14,7 +14,7 @@ const common = {
   minify: false,
   sourcemap: false, // no source maps in the shipped build: the review pack ships the source instead
   logLevel: 'info',
-  loader: { '.js': 'jsx', '.jsx': 'jsx' },
+  loader: { '.js': 'jsx', '.jsx': 'jsx', '.css': 'text' },
   jsx: 'automatic',
   target: ['chrome116', 'edge116'],
   format: 'iife',

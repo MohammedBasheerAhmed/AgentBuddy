@@ -50,6 +50,8 @@ export function normalizePolicy(raw) {
     tokenBudgetPerDay: Number.isFinite(budget) && budget > 0 ? Math.floor(budget) : 0,
     auditExport: p.auditExport !== false,
     coachingEnabled: p.coachingEnabled === true,
+    // The one thing Agent Buddy draws on a ServiceNow page is the small bar of main actions; an organisation can switch it off for everyone.
+    disablePageBar: p.disablePageBar === true,
   };
 }
 
@@ -137,6 +139,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   previewSeen: [],
   instances: [],
   autoSignature: false,
+  quickBarOpen: true, // the quick-actions bar in the side panel is open (false = folded to one strip)
+  quickPins: {}, // per kind of record: the feature ids the person pinned to the bar (src/features/quick.js); {} = the defaults
+  pageBar: true, // the small bar on the ServiceNow page itself (src/content/bar.js)
 });
 
 /**
@@ -181,6 +186,10 @@ export function effectiveSettings(user, policyInput) {
   if (policy.allowedInstances) {
     values.instances = (values.instances || []).filter((o) => isInstanceAllowed(o, policy));
     lock('instances', 'Only instances approved by your organisation can be enabled.');
+  }
+  if (policy.disablePageBar) {
+    values.pageBar = false;
+    lock('pageBar', 'Switched off by your organisation.');
   }
   // A key supplied by the organisation wins, so people never have to handle one.
   values.providedApiKey = policy.providedApiKey;

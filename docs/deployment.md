@@ -14,6 +14,7 @@
 | `sensitiveTablePrefixes` | your own HR, legal or employee-relations table families, e.g. `["x_acme_hr_", "x_acme_legal_"]` | Treated like HR cases. `sn_hr_` is always included. |
 | `disabledFeatures` | `["coaching-snapshot"]` until HR/works-council sign-off | Feature ids are not case-sensitive. The list is below. |
 | `blockedTables` / `blockedFields` | tables or fields that must never be read or sent | See "Blocked tables and fields" below. Names are not case-sensitive. |
+| `disablePageBar` | `true` if a bar drawn inside ServiceNow pages is not acceptable | Removes the small bar of main actions from ServiceNow pages for everyone (the side panel is unaffected). See "The bar on the page" in `docs/security.md`. |
 | `tokenBudgetPerDay` | an agreed daily cap | Cost and abuse control. Counted per person on that computer; nothing is sent once it is reached. |
 
 Choosing the AI endpoint is the decision a security team looks at first. Each provider in the list (Anthropic, OpenAI, Gemini, Mistral,
@@ -92,7 +93,8 @@ macOS / Linux managed-policy file (Chrome: `/etc/opt/chrome/policies/managed/age
         "blockedFields": [],
         "sensitiveTablePrefixes": ["x_acme_hr_"],
         "tokenBudgetPerDay": 200000,
-        "auditExport": true
+        "auditExport": true,
+        "disablePageBar": false
       }
     }
   }

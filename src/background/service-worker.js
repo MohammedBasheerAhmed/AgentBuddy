@@ -1,10 +1,13 @@
 // Agent Buddy service worker. Deliberately small: it holds no keys, makes no AI calls and never talks to ServiceNow.
 // Its jobs are (1) open the side panel from the toolbar button, (2) register the content scripts on exactly the
-// instances the person enabled (and the browser granted), and (3) keep that registration in sync with the permissions.
+// instances the person enabled (and the browser granted), (3) keep that registration in sync with the permissions, and
+// (4) answer the bar on the ServiceNow page: which actions it may show, and "open the panel and run this one" (bar.js).
 import { MSG, toWireError } from '../lib/messages.js';
 import { checkExtensionSender } from '../lib/senderCheck.js';
 import { loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
 import { instancePattern, isInstanceAllowed, normalizeInstance } from '../policy/policy.js';
+import { BAR_TYPES, handleBarMessage } from './bar.js';
+import { LAUNCH_KEY } from '../lib/launch.js';
 
 const CONTENT_ID = 'ab-content';
 const BRIDGE_ID = 'ab-bridge';
@@ -92,9 +95,24 @@ async function disableInstance(rawOrigin) {
   return { instances };
 }
 
+// What the bar on the ServiceNow page may ask for (src/background/bar.js holds the rules).
+const barDeps = {
+  runtimeId: chrome.runtime.id,
+  activeInstances,
+  loadSettings,
+  loadPolicy,
+  now: () => Date.now(),
+  openPanel: (tabId) => chrome.sidePanel.open({ tabId }),
+  // storage.session: the panel can read it, a content script cannot
+  saveLaunch: (launch) => chrome.storage.session.set({ [LAUNCH_KEY]: launch }),
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
-    // Only this extension's own pages may ask the worker for anything.
+    // The bar's two requests come from a content script; it is checked inside handleBarMessage, before anything else runs.
+    // (No await before it: the panel can only be opened while the click that asked for it is still being handled.)
+    if (BAR_TYPES.has(message?.type)) return handleBarMessage(message, sender, barDeps);
+    // Everything else: only this extension's own pages may ask the worker for anything.
     checkExtensionSender(sender, chrome.runtime.id);
     switch (message?.type) {
       case MSG.ENABLE_INSTANCE:

@@ -88,6 +88,11 @@
       "title": "Enable the coaching snapshot",
       "description": "Reviews samples of closed tickets against a rubric. Off by default; confirm HR and works-council requirements first.",
       "type": "boolean"
+    },
+    "disablePageBar": {
+      "title": "Switch off the quick-actions bar on ServiceNow pages",
+      "description": "The only thing Agent Buddy shows inside a ServiceNow page is a small bar of main actions (a tab on the edge of the page). Set this to true to remove it for everyone; the side panel is not affected.",
+      "type": "boolean"
     }
   }
 }
