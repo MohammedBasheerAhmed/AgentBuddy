@@ -5,6 +5,8 @@
 // pages (side panel, settings). The check is against the frame that SENT the message (sender.origin, falling back to
 // sender.url), never the tab's top-level URL: a ServiceNow tab can hold frames from anywhere.
 
+import { MSG } from './messages.js';
+
 export const EXTENSION_ONLY = "This request is only allowed from Agent Buddy's own pages.";
 
 function originOfUrl(url) {
@@ -46,6 +48,21 @@ export function contentScriptOrigin(sender, runtimeId) {
   const origin = senderOrigin(sender);
   // Instances are https only (normalizeInstance), so a content script on any other kind of page is not ours to answer.
   return origin.startsWith('https://') ? origin : '';
+}
+
+/**
+ * What the content script does with a runtime message (src/content/index.js):
+ *   'answer'  one of this extension's own pages asks (the side panel, the full-page dashboard)
+ *   'retire'  this extension says the site was turned off (MSG.SITE_OFF). Only ever makes Agent Buddy do less, so any context of
+ *             this extension may say it (in practice the service worker, which may not report an extension origin)
+ *   'ignore'  anything else, and everything once the script has retired
+ * A content script's runtime.onMessage only ever hears this extension (web pages and other extensions cannot reach it), but the
+ * sender is checked anyway.
+ */
+export function contentMessageAction(message, sender, runtimeId, retired = false) {
+  if (retired || !runtimeId || !sender || sender.id !== runtimeId) return 'ignore';
+  if (message && message.type === MSG.SITE_OFF) return 'retire';
+  return isFromExtensionPage(sender, runtimeId) ? 'answer' : 'ignore';
 }
 
 /** Throws unless the message came from this extension's own pages. */

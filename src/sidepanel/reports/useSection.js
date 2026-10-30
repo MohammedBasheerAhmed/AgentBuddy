@@ -8,7 +8,10 @@ import { useReport } from './useReport.js';
  * dashboard" can explain exactly the numbers on screen without reading them again. It is taken out when the widget goes away.
  */
 export function useSection(sectionId, widget, env) {
-  const request = env.tables.length ? { kind: 'section', section: sectionId, scope: env.scope, tables: env.tables, params: widget?.params || {}, blocked: env.blocked } : null;
+  // The params are the widget's own plus the dashboard's "as of" instant for this load (env.widgetParams), so all widgets of one
+  // load ask identical questions and the second one is answered from the cache.
+  const params = env.widgetParams ? env.widgetParams(widget) : widget?.params || {};
+  const request = env.tables.length ? { kind: 'section', section: sectionId, scope: env.scope, tables: env.tables, params, blocked: env.blocked } : null;
   const state = useReport({ tabId: env.page.tabId, request, refreshKey: env.refreshKey, limiter: env.limiter });
 
   const loaded = env.loaded;

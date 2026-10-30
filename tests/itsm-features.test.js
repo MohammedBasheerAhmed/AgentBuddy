@@ -106,7 +106,7 @@ test('the prompts fix the output structure the brief asks for', () => {
   assert.match(sys('sentiment-risk'), /calm, worried, frustrated or angry/);
   assert.match(sys('sentiment-risk'), /Low, Medium or High/);
   assert.match(sys('sentiment-risk'), /up to three short quotes/);
-  assert.match(sys('sentiment-risk'), /Signals counted by Agent Buddy/);
+  assert.match(sys('sentiment-risk'), /Signals counted by simple rules/);
 
   assert.match(sys('next-best-action'), /starting exactly with "- \[ \] "/);
   assert.match(sys('next-best-action'), /\(from <ticket number>\)/);

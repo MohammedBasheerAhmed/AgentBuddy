@@ -8,6 +8,7 @@
 // Both are GET-only (the context deps) plus the page bridge's read of form values. Arguments are validated; whatever the page
 // world answers is treated as untrusted data and cut down to the fixed list below.
 import { STATUS, confirmEmptyIsReallyEmpty, softRead } from '../../context/access.js';
+import { LINK_SOURCES, detectLinkColumn } from '../../context/knowledge.js';
 import { SYS_ID_RE, raw } from '../../context/util.js';
 import { tryCallPage } from '../pageBridge.js';
 
@@ -62,32 +63,43 @@ async function problemLink({ table, sysId }, deps) {
   return SYS_ID_RE.test(raw(row.problem_id)) ? link('yes') : link('no');
 }
 
-// The places a ticket can be tied to an article. Every row is checked against the record again: ServiceNow ignores a condition
-// on a column the table does not have and then returns every row, which must never pass for "linked".
-const KB_SOURCES = [
-  { table: 'm2m_kb_task', query: (id) => `task=${id}`, fields: ['task', 'kb_knowledge'], column: 'task' },
-  { table: 'kb_use', query: (id) => `task_id=${id}`, fields: ['task_id', 'article'], column: 'task_id' },
-];
+// The places a ticket can be tied to an article, and the column that points at the ticket: the same list the knowledge-gap
+// radar reads (src/context/knowledge.js LINK_SOURCES). Every row is checked against the record again: ServiceNow ignores a
+// condition on a column the table does not have and then returns every row, which must never pass for "linked". Which column
+// kb_use has (`task_id` or `task`) is found out first with one row (detectLinkColumn), never by a query on a guess.
+const KB_ARTICLE_COLUMN = { m2m_kb_task: 'kb_knowledge', kb_use: 'article' };
 
 async function knowledgeLink({ sysId }, deps) {
   const memo = new Map();
   const unsure = [];
   let sawTable = false;
-  for (const source of KB_SOURCES) {
-    // eslint-disable-next-line no-await-in-loop -- two small reads, kept in order.
-    const { rows, failure } = await softRead(deps, source.table, source.query(sysId), source.fields, { limit: 5, displayValue: false });
+  for (const source of LINK_SOURCES) {
+    // eslint-disable-next-line no-await-in-loop -- two or three small reads, kept in order.
+    const detected = await detectLinkColumn(source.table, source.columns, deps, memo);
+    if (detected.failure) {
+      const f = detected.failure;
+      unsure.push(f.status === STATUS.DENIED ? `You cannot read ${source.table}.` : f.status === STATUS.EMPTY_OR_HIDDEN ? `Your user sees no rows of ${source.table}, so "none" cannot be confirmed.` : f.note);
+      continue;
+    }
+    const column = detected.column;
+    // eslint-disable-next-line no-await-in-loop
+    const { rows, failure } = await softRead(deps, source.table, `${column}=${sysId}`, [column, KB_ARTICLE_COLUMN[source.table]], { limit: 5, displayValue: false });
     if (failure) {
       unsure.push(failure.status === STATUS.DENIED ? `You cannot read ${source.table}.` : failure.note);
       continue;
     }
     if (rows.length) {
-      if (rows.some((r) => !sameId(raw(r[source.column]), sysId))) {
+      if (rows.some((r) => !sameId(raw(r[column]), sysId))) {
         unsure.push(`${source.table} did not apply the filter on this ticket, so it was not used.`);
         continue;
       }
       return link('yes');
     }
-    // Nothing found: only a fact when the user can see rows of the table at all.
+    // Nothing found: only a fact when the user can see rows of the table at all (the column probe may already have seen one).
+    if (detected.visible) {
+      sawTable = true;
+      continue;
+    }
     // eslint-disable-next-line no-await-in-loop
     const seen = await confirmEmptyIsReallyEmpty(source.table, deps, memo);
     if (seen.status === STATUS.EMPTY) sawTable = true;

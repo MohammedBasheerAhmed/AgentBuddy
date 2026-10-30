@@ -1,0 +1,20 @@
+{
+  "$comment": "Example enterprise build config. Copy it, put your own addresses in, then: npm run build:enterprise -- enterprise/<your-copy>.json. Every key except allowedInstances and aiProvider is optional; the keys are those of managed_schema.json (docs/deployment.md, 'Every policy key'). The browser's managed policy can only make these stricter.",
+  "label": "Example Corp",
+  "allowedInstances": ["https://example.service-now.com", "https://example-test.service-now.com"],
+  "aiProvider": "openai",
+  "aiBaseUrl": "https://ai-gateway.example.com/v1",
+  "allowedModels": ["gpt-5-mini"],
+  "piiMode": "strict",
+  "previewMode": "first",
+  "keyStorage": "session",
+  "allowHrContent": false,
+  "sensitiveTablePrefixes": ["x_example_hr_"],
+  "disabledFeatures": ["coaching-snapshot"],
+  "blockedTables": [],
+  "blockedFields": [],
+  "tokenBudgetPerDay": 200000,
+  "auditExport": true,
+  "coachingEnabled": false,
+  "disablePageBar": false
+}

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MSG } from '../src/lib/messages.js';
-import { contentScriptOrigin } from '../src/lib/senderCheck.js';
-import { BAR_TYPES, handleBarMessage } from '../src/background/bar.js';
+import { MSG, SITE_OFF_CODE } from '../src/lib/messages.js';
+import { contentMessageAction, contentScriptOrigin } from '../src/lib/senderCheck.js';
+import { BAR_TYPES, handleBarMessage, restrictStorageAccess, retireOpenTabs } from '../src/background/bar.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 import { QUICK_DEFAULTS } from '../src/features/quick.js';
 
@@ -74,7 +74,9 @@ test('a page of a site that is not turned on is refused, and nothing is saved', 
 });
 
 test('a table that is not a table name is refused', async () => {
-  for (const table of ['', 'a b', '../x', '1incident', 'x-y', 5, undefined]) await assert.rejects(handleBarMessage({ ...actions, table }, fromPage(), deps()), /valid record/, String(table));
+  for (const table of ['', 'a b', '../x', '1incident', 'x-y', 5, null]) await assert.rejects(handleBarMessage({ ...actions, table }, fromPage(), deps()), /valid record/, String(table));
+  // a launch always names a table (only BAR_ACTIONS may leave it out: "is the bar on here?")
+  for (const table of ['', undefined, 'a b']) await assert.rejects(handleBarMessage({ ...launch, table }, fromPage(), deps()), /valid record/, String(table));
 });
 
 // ---- BAR_ACTIONS ---------------------------------------------------------------------------------------------------
@@ -93,24 +95,24 @@ test('BAR_ACTIONS uses the person\'s pins', async () => {
 
 test('BAR_ACTIONS answers with nothing when the person switched the bar off', async () => {
   const d = deps({ loadSettings: async () => ({ pageBar: false }) });
-  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [] });
+  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: false });
 });
 
 test('BAR_ACTIONS answers with nothing when the organisation switched the bar off, whatever the person chose', async () => {
   const d = deps({ loadSettings: async () => ({ pageBar: true }), loadPolicy: async () => normalizePolicy({ disablePageBar: true }) });
-  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [] });
+  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: false });
   await assert.rejects(handleBarMessage(launch, fromPage(), d), /not available/);
   assert.deepEqual(d.calls.saved, []);
 });
 
 test('BAR_ACTIONS answers with nothing for a table the organisation blocked', async () => {
   const d = deps({ loadPolicy: async () => normalizePolicy({ blockedTables: ['incident'] }) });
-  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [] });
+  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: true });
 });
 
 test('BAR_ACTIONS answers with nothing on HR content unless the organisation allows it', async () => {
   const hr = { ...actions, table: 'sn_hr_core_case' };
-  assert.deepEqual(await handleBarMessage(hr, fromPage(), deps()), { actions: [] });
+  assert.deepEqual(await handleBarMessage(hr, fromPage(), deps()), { actions: [], bar: true });
   const allowed = deps({ loadPolicy: async () => normalizePolicy({ allowHrContent: true }) });
   assert.ok((await handleBarMessage(hr, fromPage(), allowed)).actions.length > 0);
 });
@@ -179,4 +181,94 @@ test('BAR_LAUNCH accepts a pinned action', async () => {
   const d = deps({ loadSettings: async () => ({ quickPins: { incident: ['handoff-brief'] } }) });
   assert.deepEqual(await handleBarMessage({ ...launch, featureId: 'handoff-brief' }, fromPage(), d), { opened: true });
   assert.equal(d.calls.saved[0].featureId, 'handoff-brief');
+});
+
+// ---- a site that was turned off (security audit 2, AB2-01 / AB2-02) --------------------------------------------------
+
+test('a page of a site that is no longer turned on is answered with the code SITE_OFF, for both requests and for the probe', async () => {
+  const d = deps({ activeInstances: async () => [] });
+  for (const message of [actions, launch, { type: MSG.BAR_ACTIONS }]) {
+    const err = await handleBarMessage(message, fromPage(), d).then(() => null, (e) => e);
+    assert.ok(err, JSON.stringify(message));
+    assert.equal(err.code, SITE_OFF_CODE, JSON.stringify(message));
+  }
+  assert.deepEqual(d.calls.saved, []);
+});
+
+test('BAR_ACTIONS without a table only says whether the bar is on here (nothing about any record)', async () => {
+  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), deps()), { actions: [], bar: true });
+  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), deps({ loadSettings: async () => ({ pageBar: false }) })), { actions: [], bar: false });
+  const org = deps({ loadPolicy: async () => normalizePolicy({ disablePageBar: true }) });
+  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), org), { actions: [], bar: false });
+  // and it is still only for a content script of a turned-on site
+  await assert.rejects(handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage({ frameId: 1 }), deps()), /only allowed/);
+  assert.deepEqual(org.calls.open, []);
+});
+
+test('turning a site off tells its open tabs to retire, and a tab that cannot be told does not stop the others', async () => {
+  const sent = [];
+  const count = await retireOpenTabs('https://acme.service-now.com/*', {
+    queryTabs: async (q) => {
+      assert.deepEqual(q, { url: 'https://acme.service-now.com/*' });
+      return [{ id: 3 }, { id: 4 }, { id: -1 }, {}, null];
+    },
+    sendToTab: async (id, message) => {
+      sent.push([id, message.type]);
+      if (id === 3) throw new Error('Could not establish connection. Receiving end does not exist.');
+    },
+  });
+  assert.equal(count, 2);
+  assert.deepEqual(sent.sort(), [[3, MSG.SITE_OFF], [4, MSG.SITE_OFF]]);
+  assert.equal(await retireOpenTabs('x', { queryTabs: async () => { throw new Error('no'); }, sendToTab: async () => {} }), 0);
+});
+
+test('the content script retires on SITE_OFF from this extension, and answers nothing after that', () => {
+  const panel = { id: ID, origin: `chrome-extension://${ID}`, url: `chrome-extension://${ID}/sidepanel.html` };
+  const worker = { id: ID, url: `chrome-extension://${ID}/background.bundle.js` };
+  const read = { type: MSG.READ, op: 'pack' };
+  assert.equal(contentMessageAction(read, panel, ID), 'answer');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, ID), 'retire');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, { id: ID }, ID), 'retire', 'the worker may not report an origin');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, { id: 'another-extension' }, ID), 'ignore');
+  assert.equal(contentMessageAction(read, { id: 'another-extension', origin: 'chrome-extension://another-extension' }, ID), 'ignore');
+  assert.equal(contentMessageAction(read, fromPage(), ID), 'ignore', 'a content script is not an extension page');
+  // retired: nothing at all, not even another SITE_OFF
+  assert.equal(contentMessageAction(read, panel, ID, true), 'ignore');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, ID, true), 'ignore');
+});
+
+// ---- storage closed to content scripts (security audit 2, AB2-03) ----------------------------------------------------
+
+test('the worker closes storage.session, storage.local and storage.sync to content scripts where the browser allows it', async () => {
+  const calls = [];
+  const area = (name, fail) => ({ setAccessLevel: async (o) => { calls.push([name, o.accessLevel]); if (fail) throw new Error('This StorageArea is not available for setting access level'); } });
+  const result = await restrictStorageAccess({ session: area('session'), local: area('local', true), sync: area('sync'), managed: area('managed') });
+  assert.deepEqual(calls, [['session', 'TRUSTED_CONTEXTS'], ['local', 'TRUSTED_CONTEXTS'], ['sync', 'TRUSTED_CONTEXTS']]);
+  assert.deepEqual(result, { session: 'closed', local: 'unchanged', sync: 'closed' }, 'an area the browser cannot close is reported, not thrown');
+  // managed is left alone: the content script reads the organisation's policy from it
+  assert.ok(!calls.some(([name]) => name === 'managed'));
+  assert.deepEqual(await restrictStorageAccess({}), { session: 'unchanged', local: 'unchanged', sync: 'unchanged' });
+  assert.deepEqual(await restrictStorageAccess(undefined), { session: 'unchanged', local: 'unchanged', sync: 'unchanged' });
+});
+
+test('the service worker closes storage first thing, and retires open tabs before it removes a site\'s permission', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'background', 'service-worker.js'), 'utf8');
+  assert.match(src, /^restrictStorageAccess\(chrome\.storage\)/m, 'called at the top level of the worker, on every start');
+  const disable = src.slice(src.indexOf('async function disableInstance'));
+  const retireAt = disable.indexOf('retireOpenTabs(');
+  const removeAt = disable.indexOf('chrome.permissions.remove');
+  assert.ok(retireAt > 0 && removeAt > retireAt, 'the tabs are told while the worker can still find them');
+});
+
+test('no content-script code reads or writes chrome.storage.local, .session or .sync (closing them breaks nothing)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', 'src', 'content');
+  const files = [];
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : /\.js$/.test(e.name) && files.push(path.join(d, e.name))));
+  walk(dir);
+  walk(path.join(__dirname, '..', 'src', 'page'));
+  for (const f of files) assert.ok(!/storage\??\.(local|session|sync)\b/.test(fs.readFileSync(f, 'utf8')), f);
 });

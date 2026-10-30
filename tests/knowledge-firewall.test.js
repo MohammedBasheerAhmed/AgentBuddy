@@ -108,10 +108,18 @@ test('names that appear ONLY inside the message text are masked, because the rec
   assert.ok(!mentions(sent, 'Abel') && !mentions(sent, 'Beth'), 'first names too');
   assert.match(sent, /This is \[PERSON_\d+\] from the service desk/);
 
-  // The control: had the record's person columns not been read, the same text would go out. That is the reason they are on the spec.
+  // The control: had the record's person columns not been read, only the names the text introduces ("I am ...", "This is ...") would
+  // be found, in prose (src/pii/names.js); those are masked now.
   const unknown = { ...pack, people: [] };
   const leaked = everythingSent(prepareRun({ feature: f('chat-summary'), pack: unknown, values: values(), policy: policy(), config: config(), createFirewall }));
-  assert.ok(mentions(leaked, 'Beth Anglin'), 'a name nobody told the firewall about is not found in prose');
+  assert.ok(!mentions(leaked, 'Beth Anglin'), '"This is Beth Anglin" is found in prose');
+  // A name with no cue around it would still go out. That is the reason the person columns are on the spec.
+  const plain = chatTables();
+  plain.sys_cs_message = plain.sys_cs_message.map(({ sender, sys_created_by, ...rest }) => rest);
+  plain.sys_cs_message[3].message = { value: 'Beth Anglin from the service desk here.', display_value: 'Beth Anglin from the service desk here.' };
+  const plainPack = await readContextPack({ table: 'interaction', sysId: INTERACTION_ID }, fakeDeps(plain, { denied: ['sys_user'] }), { feature: 'chat-summary' });
+  const bare = everythingSent(prepareRun({ feature: f('chat-summary'), pack: { ...plainPack, people: [] }, values: values(), policy: policy(), config: config(), createFirewall }));
+  assert.ok(mentions(bare, 'Beth Anglin'), 'a name nobody told the firewall about, with no cue, is not found in prose');
 });
 
 test('the spec of every chat feature reads the person columns of the record, whatever its parts send', () => {
@@ -274,7 +282,15 @@ test('kb-merge-draft through the real firewall: personal data in the articles is
 test('without the author in people, a name that appears only in the article text would go out: that is why the author is read', async () => {
   const pack = await mergeInput();
   const prepared = prepareRun({ feature: f('kb-merge-draft'), pack: { ...pack, people: [] }, values: values(), policy: policy(), config: config(), createFirewall });
-  assert.ok(mentions(everythingSent(prepared), 'Abel Tuter'), 'the control: the firewall cannot find a name nobody told it about');
+  // "Written by Abel Tuter" names the author with a cue, so it is found in prose (src/pii/names.js) even without the author column.
+  assert.ok(!mentions(everythingSent(prepared), 'Abel Tuter'), 'found in prose ("Written by ...")');
+  // The control: a name nobody told the firewall about, with no cue around it, still goes out.
+  const tables = knowledgeTables();
+  tables.kb_knowledge[0] = articleRow({ n: 1, title: 'How to reset your VPN password', html: '<p>Open the VPN client and choose Forgot password. Abel Tuter keeps this page up to date.</p>' });
+  tables.kb_knowledge[1] = articleRow({ n: 2, title: 'Reset VPN password', html: '<p>Use Forgot password in the client.</p>' });
+  const out = await knowledgeOps.kbArticleTexts({ sysIds: [id(1), id(2)] }, { deps: fakeDeps(tables), checkRecord, checkPack });
+  const bare = prepareRun({ feature: f('kb-merge-draft'), pack: { ...mergePack(out.articles, out.access, out.people), people: [] }, values: values(), policy: policy(), config: config(), createFirewall });
+  assert.ok(mentions(everythingSent(bare), 'Abel Tuter'), 'the control: the firewall cannot find a name nobody told it about');
 });
 
 test('kb-merge-draft keeps the placeholders in the answer (keepMasked), so published text never gets personal data back', async () => {

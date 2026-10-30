@@ -111,6 +111,11 @@ export async function runBuilder(ctx, rawConfig) {
   if (config.presets.includes('breached')) {
     const ids = await attempt(() => breachedIds(reader, config.table), 'task_sla');
     if (!ids.ok) return fail('SLA information is not available to you.', ids.status);
+    if (!ids.value.ids.length) {
+      // "Nothing breached" is only true when this person can see SLA records at all; otherwise the report would show a made-up 0.
+      const vis = await reader.visibility('task_sla');
+      if (vis.status !== 'ok') return fail(vis.status === 'hidden' ? 'You can see no SLA records at all, so "SLA breached" cannot be worked out.' : 'SLA information is not available to you.', vis.status);
+    }
     if (!ids.value.ids.length) conditions.push({ op: 'in', field: 'sys_id', values: ['0'.repeat(32)] }); // nothing breached: match nothing
     else conditions.push({ op: 'in', field: 'sys_id', values: ids.value.ids });
     if (ids.value.capped) ctx.notes.push('Only the first 100 breached tickets are included.');

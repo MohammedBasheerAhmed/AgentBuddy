@@ -41,6 +41,8 @@ export default function PendingDraft({ page, eff }) {
       internalTexts={draft.internalTexts}
       // The draft goes into a blank form of the table the feature names, nowhere else.
       target={{ table, newRecord: true }}
+      // It appears because the page changed (the blank form opened), not because the person asked for something in the panel.
+      focusOnShow={false}
       onInserted={(spec) => {
         // The draft is used up when EVERY insert it offers went in (title and body), not after the first one.
         const next = afterInsert(doneFields, spec, draft.feature);

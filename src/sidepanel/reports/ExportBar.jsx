@@ -9,8 +9,8 @@ export default function ExportBar({ title, result, env }) {
   const [note, setNote] = useState('');
   const tables = useMemo(() => {
     const all = resultTables(result).filter((t) => t.rows.length);
-    return env.mask ? maskTables(all) : all;
-  }, [result, env.mask]);
+    return env.mask ? maskTables(all, { mode: env.maskMode }) : all;
+  }, [result, env.mask, env.maskMode]);
   if (!tables.length) return null;
 
   const say = (text) => {
@@ -30,7 +30,7 @@ export default function ExportBar({ title, result, env }) {
         <input type="checkbox" checked={env.mask} onChange={(e) => env.setMask(e.target.checked)} />
         <span>Mask names and emails</span>
       </label>
-      {env.mask && <span className="ab-hint">People become Person 1, Person 2... Names that appear only inside a ticket title and nowhere else in the table are not found.</span>}
+      {env.mask && <span className="ab-hint">People become Person 1, Person 2... A name in a title is found when the words around it mark it as one ("for Anna Schmidt", "spoke with Tom"). Check the file before you share it.</span>}
       <span className="ab-hint" role="status">{note}</span>
     </div>
   );

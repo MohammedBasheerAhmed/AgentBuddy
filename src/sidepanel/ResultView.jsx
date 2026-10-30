@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SafeText } from '../render/SafeText.jsx';
 import { parseSafeText, toPlainText } from '../render/safeText.js';
 import { reviewForCustomer } from '../safeSend/review.js';
@@ -24,9 +24,21 @@ const NO_TEXTS = []; // (one array, so the memoised review below is not redone o
  *   target                   an expectation that replaces `source` for every insert (a draft waiting on a blank form: { table, newRecord: true })
  *   onAgain, onClose, audit  Try again, Close, and audit(outcome) for 'inserted' / 'copied'
  *   onInserted               called after a successful insert (a draft carried to a blank form is dropped then)
+ *   focusOnShow              move the focus to the answer when it appears (default). A draft that waits on a blank form does not:
+ *                            it shows up because the page changed, not because the person asked for something here.
+ *
+ * The card is not one big live region (a screen reader would read the whole answer, then read it again with every note): the focus
+ * moves to its heading when it appears, and the short notes under it (inserted, copied, could not insert) are announced as status.
  */
-export default function ResultView({ feature, text, page, people, scan, onAgain, onClose, audit, source = null, internalTexts = NO_TEXTS, target, onInserted }) {
+export default function ResultView({ feature, text, page, people, scan, onAgain, onClose, audit, source = null, internalTexts = NO_TEXTS, target, onInserted, focusOnShow = true }) {
   const [note, setNote] = useState(null);
+  const headingId = useId();
+  const heading = useRef(null);
+  useEffect(() => {
+    if (focusOnShow) heading.current?.focus();
+    // Once, when the answer appears.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [findings, setFindings] = useState(null);
   const [busy, setBusy] = useState(false); // a FILL_FIELD call is in flight: every insert button is off
   const [done, setDone] = useState({}); // buttons that inserted: they say "Inserted" until Try again or Close
@@ -119,10 +131,14 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   }
 
   const replacing = inserts.some((spec) => fillModeFor(spec.field, spec.mode) === 'replace');
+  // Which ticket this answer belongs to, said on the card itself where it can be inserted: an answer must never be taken for another
+  // ticket's. (A Copy-only answer, such as a rewrite of pasted text, is not bound to a record, so it names none.)
+  const writtenFor = !inserts.length ? '' : target?.newRecord ? `For a new ${target.table === 'kb_knowledge' ? 'knowledge article' : target.table} form` : source?.number ? `Written for ${source.number}` : '';
 
   return (
-    <section className="ab-card" aria-live="polite">
-      <h2 className="ab-h">{feature.title}</h2>
+    <section className="ab-card ab-result" aria-labelledby={headingId}>
+      <h2 className="ab-h" id={headingId} ref={heading} tabIndex={-1}>{feature.title}</h2>
+      {writtenFor && <p className="ab-sub ab-result-for">{writtenFor}</p>}
       <div className="ab-output">
         <SafeText text={text} />
       </div>
@@ -143,7 +159,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       )}
       {!findings && <ReviewHints hints={hints} />}
       {wrongRecord && <p className="ab-note ab-note-warn" role="status" style={{ marginTop: 8 }}>{wrongRecordText(source)}</p>}
-      {note && <p className={`ab-note ab-note-${note.kind}`} style={{ marginTop: 8 }}>{note.text}</p>}
+      {note && <p className={`ab-note ab-note-${note.kind}`} role="status" style={{ marginTop: 8 }}>{note.text}</p>}
       <div className="ab-row" style={{ marginTop: 8 }}>
         {inserts.map((spec, i) => {
           const key = `${spec.field}:${i}`;

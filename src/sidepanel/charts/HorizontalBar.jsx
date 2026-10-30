@@ -1,6 +1,7 @@
 import React from 'react';
 import ChartFrame from './ChartFrame.jsx';
 import { barLayout, clipLabel, formatNumber, itemsToTable, percent, summarizeItems, toneClass, withUnit } from './geometry.js';
+import DrillLink, { hrefOf } from './DrillLink.jsx';
 
 const BAR_HEIGHT = 10;
 
@@ -12,8 +13,10 @@ const BAR_HEIGHT = 10;
  *   unit    'incidents', '%', 'h' ...
  *   total   the denominator for the percentages (default: the sum of the items)
  *   onDrill(item)  makes every row a button
+ *   hrefFor(item)  with onDrill: the address of the list a row opens; the row is then a real link (see DrillLink.jsx). A row without
+ *                  an address is not clickable at all, so nothing looks like it opens something it cannot.
  */
-export default function HorizontalBar({ title, items, unit = '', total, onDrill, maxItems = 12, emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
+export default function HorizontalBar({ title, items, unit = '', total, onDrill, hrefFor, maxItems = 12, emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
   const list = Array.isArray(items) ? items.filter((it) => it && typeof it === 'object') : [];
   const layout = barLayout(list, { width: 100, rowHeight: BAR_HEIGHT, maxItems });
   const denominator = Number(total) > 0 ? Number(total) : layout.total;
@@ -41,10 +44,16 @@ export default function HorizontalBar({ title, items, unit = '', total, onDrill,
         </svg>
       </>
     );
+    const name = `${row.label}: ${valueText}${pct !== null ? `, ${pct}%` : ''}. Open the list.`;
+    const href = onDrill && hrefFor ? hrefOf(hrefFor, item) : '';
     return (
       <li key={row.key}>
-        {onDrill ? (
-          <button type="button" className="ab-hbar-row" aria-label={`${row.label}: ${valueText}${pct !== null ? `, ${pct}%` : ''}. Open the list.`} onClick={() => onDrill(item)}>
+        {href ? (
+          <DrillLink className="ab-hbar-row" href={href} onOpen={() => onDrill(item)} label={name}>
+            {inner}
+          </DrillLink>
+        ) : onDrill && !hrefFor ? (
+          <button type="button" className="ab-hbar-row" aria-label={name} onClick={() => onDrill(item)}>
             {inner}
           </button>
         ) : (
@@ -58,7 +67,7 @@ export default function HorizontalBar({ title, items, unit = '', total, onDrill,
     <ChartFrame
       title={title}
       summary={summary}
-      interactive={Boolean(onDrill)}
+      interactive={Boolean(onDrill) && (!hrefFor || list.some((it) => hrefOf(hrefFor, it)))}
       defaultTable={defaultTable}
       empty={list.length === 0}
       emptyText={emptyText}

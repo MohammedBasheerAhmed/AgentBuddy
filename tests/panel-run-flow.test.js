@@ -173,7 +173,7 @@ const sendArgs = (w, prepared, over = {}) => ({ prepared, config: config(), valu
 test('send: the answer comes back as text and the call is audited as sent with the preview shown', async () => {
   const w = world();
   const out = await sendFlow(sendArgs(w, await ready(w)));
-  assert.deepEqual(out, { status: 'done', text: 'Cause: the certificate expired.' });
+  assert.deepEqual(out, { status: 'done', text: 'Cause: the certificate expired.', notice: '' }, 'no notice: the answer was not cut short');
   assert.equal(w.sent.length, 1);
   assert.equal(w.audits.at(-1).outcome, 'sent');
   assert.equal(w.audits.at(-1).preview, 'shown');

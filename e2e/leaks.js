@@ -21,6 +21,7 @@ function criticalList(data) {
   const { SEED, MORE_SEED, ABEL, BETH, CHARLIE, DAVE, ERIN } = data;
   const parts = (n) => n.split(' ');
   const list = [
+    literal(SEED.proseName), // named only inside a sentence ("manager is ..."): masked by the prose-name detector since round 2
     literal(SEED.callerName), word(parts(ABEL.name)[0]), word(parts(ABEL.name)[1]), literal(SEED.callerEmail), literal('abel.tuter'),
     literal(BETH.name), word(parts(BETH.name)[0]), word(parts(BETH.name)[1]), literal(BETH.email),
     literal('+1 555-0134'), literal('555-0134'), literal(SEED.card), literal(SEED.cardDigits), literal(SEED.password),
@@ -43,7 +44,6 @@ function gapList(data) {
   return [
     { ...literal('555-0199'), why: 'short local phone number after "Call me on"' },
     { ...literal('555-0123'), why: 'short local phone number after "please call"' },
-    { ...literal(SEED.proseName), why: 'a person named only inside a sentence' },
     { ...word('E12345'), why: 'employee id written as "employee id is E12345"' },
   ];
 }

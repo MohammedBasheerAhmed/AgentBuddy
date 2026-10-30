@@ -39,12 +39,12 @@ export function QualityBody({ d }) {
       {d.repeatCallers &&
         (d.repeatCallers.items.length > 0 ? (
           <DataTable
-            caption={`${d.repeatCallers.table}: callers with ${d.repeatCallers.min}+ tickets in ${d.repeatCallers.days} days (${d.repeatCallers.total} of ${d.repeatCallers.callers} callers)`}
+            caption={`${d.repeatCallers.table}: callers with ${d.repeatCallers.min}+ tickets in ${d.repeatCallers.days} days (${d.repeatCallers.total})`}
             columns={[{ key: 'name', label: 'Caller' }, { key: 'count', label: 'Tickets', align: 'right' }]}
             rows={d.repeatCallers.items}
           />
         ) : (
-          <p className="ab-hint">No caller has {d.repeatCallers.min} or more tickets in {d.repeatCallers.days} days ({d.repeatCallers.callers} callers).</p>
+          <p className="ab-hint">No caller has {d.repeatCallers.min} or more tickets in {d.repeatCallers.days} days.</p>
         ))}
     </>
   );

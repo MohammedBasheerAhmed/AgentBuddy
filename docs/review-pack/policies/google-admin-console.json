@@ -1,0 +1,53 @@
+{
+  "allowedInstances": {
+    "Value": [
+      "https://acme.service-now.com",
+      "https://acme-test.service-now.com"
+    ]
+  },
+  "aiProvider": {
+    "Value": "openai"
+  },
+  "aiBaseUrl": {
+    "Value": "https://ai-gateway.corp.example/v1"
+  },
+  "allowedModels": {
+    "Value": [
+      "gpt-5-mini"
+    ]
+  },
+  "piiMode": {
+    "Value": "strict"
+  },
+  "previewMode": {
+    "Value": "always"
+  },
+  "keyStorage": {
+    "Value": "session"
+  },
+  "allowHrContent": {
+    "Value": false
+  },
+  "sensitiveTablePrefixes": {
+    "Value": [
+      "x_acme_hr_"
+    ]
+  },
+  "disabledFeatures": {
+    "Value": [
+      "coaching-snapshot"
+    ]
+  },
+  "tokenBudgetPerDay": {
+    "Value": 200000
+  },
+  "auditExport": {
+    "Value": true
+  },
+  "coachingEnabled": {
+    "Value": false
+  },
+  "disablePageBar": {
+    "Value": false
+  }
+}

@@ -53,6 +53,77 @@ export const modelsUrl = (base) => `${base}/models`;
 /** `<base>/messages` for an Anthropic-compatible proxy (the base already ends in /v1 for the real API). */
 export const anthropicMessagesUrl = (base) => `${base}/messages`;
 
+// --- Azure OpenAI ---------------------------------------------------------------------------------------------------
+//
+// Azure has two address forms, and both take the key in an `api-key` header (never `Authorization: Bearer`):
+//   v1 (the current one):  <resource>/openai/v1/chat/completions                      the deployment name goes in the body as `model`
+//   deployment (classic):  <resource>/openai/deployments/<deployment>/chat/completions?api-version=<version>
+// The person enters the resource address only (https://<name>.openai.azure.com). The one query Agent Buddy ever adds is the
+// api-version of the classic form, built here from a checked value; a typed address may still carry no query at all.
+
+export const AZURE_API_FORMS = ['v1', 'deployment'];
+export const AZURE_DEFAULT_API_VERSION = '2024-10-21';
+const AZURE_VERSION_RE = /^\d{4}-\d{2}-\d{2}(-preview)?$/;
+// What Azure allows in a deployment name (letters, digits, - _ .), which also makes it safe in a URL path.
+const AZURE_DEPLOYMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+// The host names Azure OpenAI resources use. Another host (an API Management gateway in front of Azure) works too; Settings only
+// says that it is not one of these.
+const AZURE_HOST_RE = /\.(openai\.azure\.com|cognitiveservices\.azure\.com|services\.ai\.azure\.com|azure-api\.net)$/i;
+
+export const isAzureApiVersion = (value) => AZURE_VERSION_RE.test(String(value ?? '').trim());
+export const isAzureDeployment = (value) => AZURE_DEPLOYMENT_RE.test(String(value ?? '').trim());
+export const isAzureHost = (host) => AZURE_HOST_RE.test(String(host ?? '').replace(/:\d+$/, ''));
+
+/** { form, apiVersion } from what is saved; anything unknown falls back to v1 and the default version. */
+export function azureOptions(saved) {
+  const s = saved && typeof saved === 'object' ? saved : {};
+  const form = AZURE_API_FORMS.includes(s.form) ? s.form : 'v1';
+  const typed = String(s.apiVersion ?? '').trim();
+  return { form, apiVersion: typed || AZURE_DEFAULT_API_VERSION, apiVersionOk: !typed || isAzureApiVersion(typed) };
+}
+
+// A resource address may be typed with the part Azure's own pages show after it (/openai or /openai/v1); the URLs below add it back.
+const azureRoot = (base) => String(base || '').replace(/\/openai(\/v1)?$/i, '');
+
+/** The chat address for an Azure resource. `base` is a validated resource address; `deployment` is checked by the caller. */
+export function azureChatUrl(base, { form, apiVersion }, deployment) {
+  const root = azureRoot(base);
+  if (form === 'deployment') return `${root}/openai/deployments/${encodeURIComponent(deployment)}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
+  return `${root}/openai/v1/chat/completions`;
+}
+
+/**
+ * Split an Azure address someone pasted whole (the "Target URI" Azure shows, or a v1 address) into its parts, so each lands in its own
+ * field instead of the address carrying a path and a query. Returns null when there is nothing to split (a plain resource address, or
+ * not an Azure-shaped address at all). Never accepts a query other than api-version, a user name or password, or plain http.
+ * @returns {{ ok: boolean, base?: string, form?: string, deployment?: string, apiVersion?: string, error?: string } | null}
+ */
+export function splitAzureAddress(input) {
+  const text = String(input ?? '').trim();
+  if (!text || !/\/openai\/(deployments|v1)\b|[?&]api-version=/i.test(text)) return null;
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  const keys = [...url.searchParams.keys()];
+  if (url.hash || keys.some((k) => k !== 'api-version')) return { ok: false, error: 'Only api-version may follow the ? in an Azure address. Leave off everything else.' };
+  const root = validateBaseUrl(`${url.origin}${url.pathname.replace(/\/openai\/.*$/i, '')}`);
+  if (!root.ok) return { ok: false, error: root.error };
+  if (url.username || url.password) return { ok: false, error: 'Do not put a user name or password in the address. The key goes in the key field.' };
+  const deployment = (url.pathname.match(/\/openai\/deployments\/([^/]+)/i) || [])[1];
+  const apiVersion = url.searchParams.get('api-version') || '';
+  if (apiVersion && !isAzureApiVersion(apiVersion)) return { ok: false, error: 'The api-version in that address does not look like 2024-10-21.' };
+  if (deployment) {
+    const name = decodeURIComponent(deployment);
+    if (!isAzureDeployment(name)) return { ok: false, error: 'The deployment name in that address has characters Azure does not allow.' };
+    return { ok: true, base: root.url, form: 'deployment', deployment: name, apiVersion: apiVersion || AZURE_DEFAULT_API_VERSION };
+  }
+  // A v1 address, or only an api-version after a resource address (form '' = keep the form chosen in Settings).
+  return { ok: true, base: root.url, form: /\/openai\/v1(\/|$)/i.test(url.pathname) ? 'v1' : '', deployment: '', apiVersion };
+}
+
 /** The match pattern Chrome asks permission for: any port on that host. */
 export function originPattern(url) {
   const checked = validateBaseUrl(url);
@@ -185,7 +256,7 @@ export function normalizeCaps(caps) {
 
 const PROVIDER_LABEL = { anthropic: 'Anthropic', openai: 'OpenAI-compatible' };
 const money = (n) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
-const where = 'Agent Buddy settings > Usage';
+const where = 'Agent Buddy settings > Usage and limits';
 
 /**
  * Where the spend stands against every cap that applies to a call to `provider`.

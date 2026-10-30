@@ -5,16 +5,22 @@
   "description": "Agent Buddy: a privacy-first browser extension that helps ServiceNow fulfillers (ITSM, CSM, HR, catalog) and their team leads work tickets faster.",
   "scripts": {
     "build": "node build.js",
+    "build:enterprise": "node build.js --enterprise",
     "watch": "node build.js --watch",
     "test": "node tests/run.js",
     "e2e": "node build.js && node e2e/run.js",
-    "check": "node scripts/check-compile.js"
+    "check": "node scripts/check-compile.js",
+    "sbom": "node scripts/sbom.js",
+    "repro": "node scripts/repro-check.js",
+    "hashes": "node scripts/hashes.js",
+    "policy:check": "node scripts/check-policy.js",
+    "traceability": "node scripts/traceability.js"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "esbuild": "^0.23.1"
+    "esbuild": "0.23.1"
   }
 }

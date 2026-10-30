@@ -386,7 +386,10 @@ test('a rewrite of a text that names the record\'s people masks them when their 
   const TEXT = 'Please ask Beth Anglin to call Abel Tuter back.';
   const masked = run(featureById('rewrite-short'), buildComposePack({ text: TEXT, people }));
   for (const secret of ['Beth', 'Anglin', 'Abel', 'Tuter']) assert.ok(!outgoing(masked).includes(secret), secret);
-  // documented limit: with no pack and no listed names, a name written only in the text cannot be found by pattern
+  // With no pack, the names the text itself introduces ("ask Beth Anglin", "call Abel Tuter") are found in prose (src/pii/names.js).
   const unknown = run(featureById('rewrite-short'), buildComposePack({ text: TEXT }));
-  assert.ok(outgoing(unknown).includes('Beth Anglin'));
+  for (const secret of ['Beth', 'Anglin', 'Abel', 'Tuter']) assert.ok(!outgoing(unknown).includes(secret), `${secret} (found in prose)`);
+  // documented limit: with no pack and no cue around a name, a name written only in the text cannot be found
+  const bare = run(featureById('rewrite-short'), buildComposePack({ text: 'Beth Anglin and Abel Tuter both use the VPN.' }));
+  assert.ok(outgoing(bare).includes('Beth Anglin'));
 });

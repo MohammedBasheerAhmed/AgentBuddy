@@ -4,6 +4,7 @@ import ResultView from './ResultView.jsx';
 import { resolveProviderConfig } from '../providers/config.js';
 import { auditInsert } from '../lib/storage.js';
 import { auditRefFromPage, expectFromPage, sourceFromPack } from '../lib/fillable.js';
+import { startedOnAfter } from './runLogic.js';
 
 const NO_TEXTS = [];
 
@@ -21,9 +22,12 @@ const NO_TEXTS = [];
 export default function RunPanel({ run, eff, page, readingText = 'Reading the ticket with your session…' }) {
   const { phase, prepared, active, result, error, people, scan, lastPack } = run;
   const config = resolveProviderConfig(eff.values, eff.apiKey);
-  // The record that was open when the run started (its number is for the message when another one is open later).
+  // The record that was open when the run started (its number is for the message when another one is open later). Taken once, as
+  // the run starts reading, never again while it reads (src/sidepanel/runLogic.js startedOnAfter).
   const startedOn = useRef(null);
-  if (phase === 'reading') startedOn.current = { expect: expectFromPage(page), number: page.record?.number || '' };
+  const lastPhase = useRef(null);
+  startedOn.current = startedOnAfter(lastPhase.current, phase, startedOn.current, () => ({ expect: expectFromPage(page), number: page.record?.number || '' }));
+  lastPhase.current = phase;
   const source = startedOn.current && startedOn.current.expect ? startedOn.current : null;
   // The audit entry names the record the pack was about; a pasted text (Rewrite, Notes) is audited against the page it was used on.
   const ref = sourceFromPack(lastPack) ? lastPack : auditRefFromPage(page);
@@ -46,7 +50,12 @@ export default function RunPanel({ run, eff, page, readingText = 'Reading the ti
           canSkipNext={eff.values.previewMode === 'first'}
           onSend={run.confirmPreview}
           onCancel={run.cancelPreview}
+          onMask={run.maskMore}
         />
+      )}
+
+      {phase === 'done' && result !== null && active && run.notice && (
+        <p className="ab-note ab-note-warn" role="status">{run.notice}</p>
       )}
 
       {phase === 'done' && result !== null && active && (

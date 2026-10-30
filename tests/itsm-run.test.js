@@ -168,7 +168,7 @@ test('a policy that blocks a field blocks every part that carries it', async () 
 test('sentiment-risk sends the signals and marks the customer\'s lines', async () => {
   const { prepared } = await prepare('sentiment-risk');
   const user = userMessage(prepared);
-  assert.match(user, /label="Signals counted by Agent Buddy"/);
+  assert.match(user, /label="Signals counted by simple rules"/);
   assert.match(user, /Customer chasers .*: 2\./);
   assert.match(user, /Customer messages in a row with no reply from support: 2\./);
   assert.match(user, /Frustration words in the customer's messages: ridiculous\./);

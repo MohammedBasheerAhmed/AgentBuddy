@@ -10,7 +10,7 @@ export function FulfilmentBody({ d, env }) {
   return (
     <>
       <div className="ab-tiles">
-        <Tile label="Open items and tasks" value={d.open} unavailable={d.open === null} />
+        <Tile label="Open items and tasks" value={d.open} unavailable={d.open === null} hint={d.openPartial ? 'Some tables could not be counted' : ''} />
         <Tile label="Waiting for your approval" value={d.approvals.mine} unavailable={d.approvals.mine === null} hint={d.approvals.mineNote || ''} tone={d.approvals.mine > 0 ? 'warn' : 'neutral'} />
         {d.approvals.team !== undefined && <Tile label="Approvals holding up the team" value={d.approvals.team} unavailable={d.approvals.team === null} hint={d.approvals.teamNote || 'On requested items in this scope'} tone={d.approvals.team > 0 ? 'warn' : 'neutral'} />}
       </div>
@@ -24,6 +24,7 @@ export function FulfilmentBody({ d, env }) {
             unit={t.label.toLowerCase()}
             labelHeader="State"
             onDrill={(item) => t.stateQuery?.[item.key] && env.openList(t.table, t.stateQuery[item.key])}
+            hrefFor={env.listHref ? (item) => (t.stateQuery?.[item.key] ? env.listHref(t.table, t.stateQuery[item.key]) : '') : undefined}
           />
         ) : (
           <p key={t.table} className="ab-hint">{t.label}: the states could not be read.</p>

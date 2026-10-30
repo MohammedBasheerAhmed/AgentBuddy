@@ -61,14 +61,27 @@ export function normalizeGroups(result) {
  * @param {ReturnType<import('./cache.js').createLimiter>} options.limiter shared across sections
  * @param {string} [options.prefix] cache namespace (the signed-in user)
  * @param {string[]} [options.blocked] tables the organisation's policy does not allow
+ * @param {(table: string) => boolean} [options.isBlocked] the content script's own policy check (src/content/policyGuard.js), on
+ *   top of `blocked`; it is asked BEFORE the cache, so a table blocked after a number was cached is refused all the same
  * @param {AbortSignal} [options.signal]
  */
-export function createReader({ deps, cache, limiter, prefix = '', blocked = [], signal }) {
+export function createReader({ deps, cache, limiter, prefix = '', blocked = [], isBlocked: policyBlocks = null, signal }) {
   let oldest = Infinity;
   const blockedSet = new Set(blocked.map((t) => String(t).toLowerCase()));
+  const blocks = (table) => {
+    const name = String(table).toLowerCase();
+    if (blockedSet.has(name)) return true;
+    try {
+      return Boolean(policyBlocks?.(name));
+    } catch {
+      return true; // a policy that cannot answer is not a yes
+    }
+  };
 
   const aborted = () => Boolean(signal?.aborted);
   const timeoutError = () => new ReportError('TIMEOUT', 'It took too long to read this.');
+  // A shared request that stopped because ANOTHER section gave up on it (its own time limit), not because of this one.
+  const gaveUp = (err) => err?.code === 'TIMEOUT' || err?.name === 'AbortError';
 
   // Rejects when the signal fires, so a request whose deps ignore the signal still stops waiting.
   const abortion = signal
@@ -81,13 +94,23 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
 
   function check(table) {
     if (aborted()) throw timeoutError();
-    if (blockedSet.has(String(table).toLowerCase())) throw new ReportError('BLOCKED', `Your organisation does not allow reports to read ${table}.`);
+    if (blocks(table)) throw new ReportError('BLOCKED', `Your organisation does not allow reports to read ${table}.`);
   }
 
   const limited = (fn) => limiter.run(() => (abortion ? Promise.race([Promise.resolve().then(fn), abortion]) : fn()));
 
   async function cached(key, fn) {
-    const entry = await cache.load(`${prefix}|${key}`, fn);
+    const full = `${prefix}|${key}`;
+    let entry;
+    try {
+      entry = await cache.load(full, fn);
+    } catch (err) {
+      // Two sections asking for the same number share one request. When the OTHER section ran out of time, the shared request is
+      // cancelled under this one too: that is not this section's failure, so it asks once more on its own time (the failed load
+      // is no longer in the cache, so this is a new request, with this section's own time limit).
+      if (!gaveUp(err) || aborted()) throw err;
+      entry = await cache.load(full, fn);
+    }
     if (entry.at < oldest) oldest = entry.at;
     return entry.value;
   }
@@ -98,7 +121,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
       return Number.isFinite(oldest) ? oldest : null;
     },
 
-    isBlocked: (table) => blockedSet.has(String(table).toLowerCase()),
+    isBlocked: (table) => blocks(table),
 
     async count(table, query = '') {
       check(table);
@@ -112,12 +135,19 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
       );
     },
 
-    /** Counts per value of one or two columns. `avg` names numeric columns to average per group. */
-    async groups(table, query, columns, { avg = [] } = {}) {
+    /**
+     * Counts per value of one or two columns. `avg` names numeric columns to average per group. `minCount` asks the instance to
+     * leave out the groups smaller than that (the Aggregate API's sysparm_having), so a breakdown with thousands of small groups
+     * does not travel; the caller still filters, because an instance (or a table client) may ignore it.
+     */
+    async groups(table, query, columns, { avg = [], minCount = 0 } = {}) {
       check(table);
-      return cached(`groups|${table}|${query}|${columns.join(',')}|${avg.join(',')}`, () =>
+      const min = Math.max(0, Math.floor(Number(minCount)) || 0);
+      // aggregate^field^operator^value; "> min - 1" because ">" is the operator every release documents.
+      const having = min > 1 && columns.length === 1 ? `count^${columns[0]}^>^${min - 1}` : '';
+      return cached(`groups|${table}|${query}|${columns.join(',')}|${avg.join(',')}|${having}`, () =>
         limited(async () => {
-          const result = await deps.aggregate(table, { query, groupBy: columns, avgFields: avg, signal });
+          const result = await deps.aggregate(table, { query, groupBy: columns, avgFields: avg, signal, ...(having ? { having } : {}) });
           const groups = normalizeGroups(result);
           // A column the table does not have may be ignored by the instance: the answer is then not grouped at all.
           if (!groups) throw new ReportError('NO_COLUMN', `${columns.join(' and ')} is not available on ${table}.`);
@@ -191,15 +221,24 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
      * zero from this table proves nothing (confirmEmptyIsReallyEmpty, as everywhere else in Agent Buddy).
      */
     async visibility(table) {
-      if (blockedSet.has(String(table).toLowerCase())) return { status: 'blocked', note: `Your organisation does not allow reports to read ${table}.` };
+      if (blocks(table)) return { status: 'blocked', note: `Your organisation does not allow reports to read ${table}.` };
       if (aborted()) return { status: 'error', note: 'It took too long to read this.' };
-      return cached(`visible|${table}`, async () => {
-        const reads = { queryTable: (t, q, f, o) => api.rows(t, q, f, o) };
-        const answer = await confirmEmptyIsReallyEmpty(table, reads, new Map());
-        if (answer.status === STATUS.EMPTY) return { status: 'ok', note: '' };
-        if (answer.status === STATUS.EMPTY_OR_HIDDEN) return { status: 'hidden', note: answer.note };
-        return { status: answer.status === STATUS.DENIED ? 'denied' : 'error', note: answer.note };
-      });
+      try {
+        return await cached(`visible|${table}`, async () => {
+          const reads = { queryTable: (t, q, f, o) => api.rows(t, q, f, o) };
+          const answer = await confirmEmptyIsReallyEmpty(table, reads, new Map());
+          if (answer.status === STATUS.EMPTY) return { status: 'ok', note: '' };
+          if (answer.status === STATUS.EMPTY_OR_HIDDEN) return { status: 'hidden', note: answer.note };
+          if (answer.status === STATUS.DENIED) return { status: 'denied', note: answer.note };
+          if (answer.status === STATUS.BLOCKED) return { status: 'blocked', note: answer.note };
+          // A passing failure (a timeout, a busy instance) is an answer for now only: thrown so the cache does not keep it, and a
+          // table is not reported as unreadable for the next minute because of one slow request.
+          throw Object.assign(new Error(answer.note), { visibility: { status: 'error', note: answer.note } });
+        });
+      } catch (err) {
+        if (err?.visibility) return err.visibility;
+        throw err;
+      }
     },
 
     /** Which of `names` exist as columns of the table, judged from one row. { known, has(name) }. */

@@ -28,7 +28,7 @@ export default [
     parts: handoverParts,
     system:
       'You help a service desk team lead write the hand-over note that one shift gives to the next.\n' +
-      'The data holds figures counted by Agent Buddy for the chosen team and period, and a list of notable tickets with their number, type, priority, state, group, assignee, short description and the reason each was picked.\n' +
+      'The data holds figures counted locally by simple rules for the chosen team and period, and a list of notable tickets with their number, type, priority, state, group, assignee, short description and the reason each was picked.\n' +
       'Write exactly these five sections, in this order. Each heading starts its own line and is followed by short bullet points that start with "- ":\n' +
       'Headline: one sentence on how the shift ended.\n' +
       'Needs attention now: breached or about-to-breach SLAs and urgent tickets, each with its ticket number and the reason.\n' +

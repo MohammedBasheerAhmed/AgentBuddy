@@ -10,6 +10,8 @@ import ReportsView from './tabs/ReportsView.jsx';
 import ComposeView from './tabs/ComposeView.jsx';
 import KnowledgeToolsView from './tabs/KnowledgeToolsView.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
+import FirstRun from './FirstRun.jsx';
+import { isAiReady } from './aiReady.js';
 import Tabs from './Tabs.jsx';
 import { SectionVisibleProvider } from './SectionVisible.js';
 import { planPanel, withVisited } from './sections.js';
@@ -50,7 +52,7 @@ function ModelSwitch({ eff }) {
       aria-label="AI model"
       title="The AI model in use. Pick another to switch."
       value={current}
-      onChange={(e) => saveSettings({ models: { ...eff.values.models, [eff.values.provider]: e.target.value } })}
+      onChange={(e) => saveSettings({ models: { ...eff.values.models, [eff.values.provider]: e.target.value } }).catch(() => {})}
     >
       {choices.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
     </select>
@@ -117,6 +119,7 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
           )}
           {plan.showSetup && pane.selected && (
             <ErrorBoundary resetKey={page.status}>
+              <FirstRun page={page} lastSeen={lastSeen} aiReady={isAiReady(eff)} />
               <SetupView page={page} eff={eff} onChanged={onChanged} />
             </ErrorBoundary>
           )}

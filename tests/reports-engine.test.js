@@ -496,7 +496,9 @@ test('SLA radar: counts, the ten closest to breaking, and who owns the risk', as
   assert.equal(d.byGroup.find((r) => r.name === 'Service Desk').count, 3);
   // Both tables are in the class filter; the scope is dot-walked through the task.
   const q = inst.calls.find((c) => c.kind === 'query' && c.table === 'task_sla').query;
-  assert.match(q, new RegExp(`^active=true\\^task\\.sys_class_nameINincident,sc_req_item\\^task\\.assigned_to=${USER}\\^has_breached=true\\^ORpercentage>=75\\^ORplanned_end_time<=2026-10-27 16:00:00\\^ORDERBYDESChas_breached\\^ORDERBYDESCpercentage$`));
+  // The business percentage decides (an SLA on working hours); the plain one is asked for too, for rows without a business figure.
+  assert.match(q, new RegExp(`^active=true\\^task\\.sys_class_nameINincident,sc_req_item\\^task\\.assigned_to=${USER}\\^has_breached=true\\^ORbusiness_percentage>=75\\^ORpercentage>=75\\^ORplanned_end_time<=2026-10-27 16:00:00\\^ORDERBYDESChas_breached\\^ORDERBYDESCpercentage$`));
+  assert.ok(inst.calls.find((c) => c.kind === 'query' && c.table === 'task_sla').fields.includes('business_percentage'));
   assert.equal(resultTables(result)[0].rows.length, 4);
 });
 

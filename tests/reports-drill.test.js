@@ -9,8 +9,10 @@ test('probing the tables costs one read per readable table (the row also shows t
   const inst = fakeInstance();
   await run({ section: 'overview', scope: { kind: 'mine' }, tables: ['incident', 'problem', 'sc_task'] }, inst);
   const probes = inst.calls.filter((c) => c.kind === 'query' && c.query === '');
-  assert.deepEqual(probes.map((c) => c.table).sort(), ['incident', 'problem', 'sc_task']);
+  assert.deepEqual(probes.filter((c) => c.table !== 'task_sla').map((c) => c.table).sort(), ['incident', 'problem', 'sc_task']);
   assert.ok(probes.every((c) => c.options.limit === 1));
+  // The SLA count was 0, so ONE more one-row read checks that SLA records are visible at all before "0 breached" is believed.
+  assert.equal(probes.filter((c) => c.table === 'task_sla').length, 1);
 });
 
 test('a table that shows nothing is probed once more to tell "hidden" from "denied"', async () => {

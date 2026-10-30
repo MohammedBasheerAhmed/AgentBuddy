@@ -60,11 +60,14 @@ module.exports = {
     await clickButton(p, /^Quick actions$/);
     await p.waitForFunction(() => window.__vis(document.querySelectorAll('.ab-quick-toggle'))[0]?.getAttribute('aria-expanded') === 'false', { timeout: 5000 });
     t.check('folded: only the strip is left, no action buttons', (await barButtons(p)).length === 0);
-    t.check('the choice is saved', (await ctx.settings()).quickBarOpen === false);
+    // The bar answers the click at once and saves in the background: wait for the save, then look.
+    const savedClosed = await ctx.waitUntil('the folded bar to be saved', async () => (await ctx.settings()).quickBarOpen === false, { timeout: 5000 }).then(() => true, () => false);
+    t.check('the choice is saved', savedClosed);
     t.check('folded, the full list still offers every action', (await panel.text()).includes('Summarise this ticket'));
     await clickButton(p, /^Quick actions$/);
     await p.waitForSelector('.ab-quick-actions button', { timeout: 5000 });
-    t.check('opened again, saved as open', (await ctx.settings()).quickBarOpen === true && (await barButtons(p)).length === 3);
+    const savedOpen = await ctx.waitUntil('the opened bar to be saved', async () => (await ctx.settings()).quickBarOpen === true, { timeout: 5000 }).then(() => true, () => false);
+    t.check('opened again, saved as open', savedOpen && (await barButtons(p)).length === 3);
 
     // 4. Choose what the bar holds.
     await clickButton(p, /^Choose$/);

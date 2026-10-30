@@ -1,4 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
+import Tabs, { TabPanel } from '../Tabs.jsx';
+import ErrorBoundary from '../ErrorBoundary.jsx';
 import EmailPanel from '../compose/EmailPanel.jsx';
 import RewritePanel from '../compose/RewritePanel.jsx';
 import NotesPanel from '../compose/NotesPanel.jsx';
@@ -8,7 +10,8 @@ import SnippetsPanel from '../compose/SnippetsPanel.jsx';
 // there is one (page.record). Props (top-level tab): { page, eff }.
 //
 // All four panels stay mounted while another is shown (hidden, not removed), so a draft, a pasted text or a half-written snippet
-// survives a look at another tab.
+// survives a look at another tab. The tab list is the panel's one tab component (Tabs.jsx: arrow keys, Home, End, one tab stop), and
+// each tool has its own error boundary, so one that breaks leaves the other three and what was typed in them.
 const TABS = [
   { id: 'email', label: 'Email', Panel: EmailPanel },
   { id: 'rewrite', label: 'Rewrite', Panel: RewritePanel },
@@ -17,6 +20,7 @@ const TABS = [
 ];
 
 const STORAGE_KEY = 'ab-compose-tab';
+const ID_BASE = 'ab-compose';
 
 function remembered() {
   try {
@@ -29,57 +33,25 @@ function remembered() {
 
 export default function ComposeView({ page, eff }) {
   const [tab, setTab] = useState(remembered);
-  const buttons = useRef({});
 
-  const choose = (id, focus = false) => {
+  const choose = (id) => {
     setTab(id);
     try {
       sessionStorage.setItem(STORAGE_KEY, id);
     } catch {
       /* a per-tab convenience only */
     }
-    if (focus) buttons.current[id]?.focus();
-  };
-
-  // Arrow keys, Home and End move between the tabs (the standard tab pattern).
-  const onKeyDown = (e) => {
-    const at = TABS.findIndex((t) => t.id === tab);
-    let next = -1;
-    if (e.key === 'ArrowRight') next = (at + 1) % TABS.length;
-    else if (e.key === 'ArrowLeft') next = (at - 1 + TABS.length) % TABS.length;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = TABS.length - 1;
-    if (next < 0) return;
-    e.preventDefault();
-    choose(TABS[next].id, true);
   };
 
   return (
     <div className="ab-compose">
-      <div className="ab-row ab-compose-tabs" role="tablist" aria-label="Write tools" onKeyDown={onKeyDown}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            id={`ab-compose-tab-${t.id}`}
-            ref={(el) => {
-              buttons.current[t.id] = el;
-            }}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            aria-controls={`ab-compose-panel-${t.id}`}
-            tabIndex={tab === t.id ? 0 : -1}
-            className={`ab-btn ab-btn-sm${tab === t.id ? ' ab-btn-primary' : ''}`}
-            onClick={() => choose(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs idBase={ID_BASE} label="Write tools" tabs={TABS} value={tab} onChange={choose} className="ab-row ab-compose-tabs" />
       {TABS.map(({ id, Panel }) => (
-        <div key={id} id={`ab-compose-panel-${id}`} role="tabpanel" aria-labelledby={`ab-compose-tab-${id}`} className="ab-compose-panel" hidden={tab !== id}>
-          <Panel page={page} eff={eff} active={tab === id} />
-        </div>
+        <TabPanel key={id} idBase={ID_BASE} id={id} className="ab-compose-panel" hidden={tab !== id}>
+          <ErrorBoundary resetKey={id}>
+            <Panel page={page} eff={eff} active={tab === id} />
+          </ErrorBoundary>
+        </TabPanel>
       ))}
     </div>
   );

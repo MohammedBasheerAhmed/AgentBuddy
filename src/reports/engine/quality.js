@@ -97,7 +97,8 @@ async function readTable(ctx, t, { starts, since, step, windowDays }) {
     has(qual.reassign) ? attempt(() => reader.count(t.table, q(sinceOpened, buildQuery([{ op: 'gte', field: qual.reassign, value: LIMITS.pingPongMin }]))), t.table) : null,
     has(qual.category) ? attempt(() => reader.groups(t.table, q(sinceOpened), [qual.category]), t.table) : null,
     has(qual.ci) ? attempt(() => reader.groups(t.table, q(sinceOpened), [qual.ci]), t.table) : null,
-    has(qual.caller) ? attempt(() => reader.groups(t.table, q(buildQuery([{ op: 'since', field: 'opened_at', ms: now - LIMITS.repeatCallerDays * DAY }])), [qual.caller]), t.table) : null,
+    // One group per caller could be thousands of groups on a big queue: the instance is asked for the repeat callers only.
+    has(qual.caller) ? attempt(() => reader.groups(t.table, q(buildQuery([{ op: 'since', field: 'opened_at', ms: now - LIMITS.repeatCallerDays * DAY }])), [qual.caller], { minCount: LIMITS.repeatCallerMin }), t.table) : null,
   ]);
 
   // Bucket the dates that were read.
@@ -158,7 +159,6 @@ export async function qualitySection(ctx) {
   const multiN = reassignParts.filter((p) => p.multiReassigned?.ok).reduce((n, p) => n + p.multiReassigned.value, 0);
 
   const callerPart = parts.find((p) => p.callers);
-  const callerRows = callerPart?.callers?.ok ? namedCounts(callerPart.callers.value) : [];
   const repeat = callerPart?.callers?.ok ? repeatCallers(callerPart.callers.value) : [];
 
   const cat = parts.filter((p) => p.categories?.ok).map((p) => namedCounts(p.categories.value));
@@ -187,7 +187,8 @@ export async function qualitySection(ctx) {
     reassign: reassignParts.length ? { average: reassignAvg, multi: multiN, of: reassignBase, multiPercent: reassignBase ? (multiN / reassignBase) * 100 : 0, threshold: LIMITS.pingPongMin } : null,
     categories: mergeTop(cat, 8),
     cis: mergeTop(ci, 8),
-    repeatCallers: callerPart?.callers?.ok ? { items: repeat.slice(0, 10), total: repeat.length, callers: callerRows.length, days: LIMITS.repeatCallerDays, min: LIMITS.repeatCallerMin, table: callerPart.t.meta.label } : null,
+    // How many callers there were in all is not known (the instance sends only the repeat callers), so it is not claimed.
+    repeatCallers: callerPart?.callers?.ok ? { items: repeat.slice(0, 10), total: repeat.length, days: LIMITS.repeatCallerDays, min: LIMITS.repeatCallerMin, table: callerPart.t.meta.label } : null,
     perTable: parts.map((p) => ({
       table: p.t.table,
       label: p.t.meta.label,

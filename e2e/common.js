@@ -58,7 +58,9 @@ const loadingElements = (page) =>
   page.evaluate(
     () =>
       [...document.querySelectorAll('img, picture, svg image, a[href], iframe, object, embed, video, audio, script:not([src])')].filter(
-        (el) => !(el.matches('a[data-ab-link="record"]') && !el.closest('.ab-output, .ab-dialog'))
+        // A ticket link or a list link the panel itself draws (never inside model output or the preview), to a page of the same
+        // ServiceNow site: an <a href> loads nothing until it is clicked. Anything else counts.
+        (el) => !(el.matches('a[data-ab-link="record"], a[data-ab-link="list"]') && !el.closest('.ab-output, .ab-dialog') && el.origin === (document.querySelector('a[data-ab-link]')?.origin || el.origin) && /^https?:$/.test(el.protocol))
       ).length
   );
 
@@ -70,6 +72,11 @@ const loadingElements = (page) =>
  *   - neither the preview nor the request carries any seeded personal data (names, emails, phones, cards, passwords)
  * `ran` is what runFeature() returned; `before` the number of AI requests before the run.
  */
+// A password, card, IBAN or ID number is never put back into an answer (src/pii/firewall.js NEVER_REHYDRATE): its marker stays.
+// Any OTHER placeholder left in an answer means a real value was not put back.
+const KEPT_MARKER = /^\[(?:SECRET|CARD|IBAN|ID)_\d+\]$/;
+const leftoverPlaceholders = (text) => (String(text || '').match(/\[[A-Z_]{2,20}_\d+\]/g) || []).filter((m) => !KEPT_MARKER.test(m));
+
 async function checkAiRun(t, ctx, panelPage, label, ran, { before, system, userHas = [], userLacks = [], wrapped = true, placeholders = 'none' } = {}) {
   const { ai, data } = ctx;
   t.check(`${label}: a result is shown (no error)`, ran.result !== null && ran.result !== undefined, ran.error || '');
@@ -107,7 +114,7 @@ async function checkAiRun(t, ctx, panelPage, label, ran, { before, system, userH
   if (ran.result !== null && ran.result !== undefined) {
     t.check(`${label}: the answer is shown as plain text (nothing in the panel loads or runs)`, (await loadingElements(panelPage)) === 0);
     // A feature whose text gets published (keepMasked) must keep its placeholders; any other answer has the real values put back.
-    if (placeholders === 'none') t.check(`${label}: no placeholder is left in the answer (the real values were put back locally)`, !/\[[A-Z_]{2,20}_\d+\]/.test(ran.result), ran.result.slice(0, 80));
+    if (placeholders === 'none') t.check(`${label}: no placeholder is left in the answer (the real values were put back locally; only a password, card or ID marker stays)`, leftoverPlaceholders(ran.result).length === 0, ran.result.slice(0, 80));
   }
   return req;
 }
@@ -115,7 +122,7 @@ async function checkAiRun(t, ctx, panelPage, label, ran, { before, system, userH
 /** Wait for the panel to show a record's number (the instance tab must be the active one). */
 const panelShows = (panel, text, timeout = 20000) => waitForText(panel.page, text, { timeout });
 
-module.exports = { prepare, errorMark, errorsSince, describeErrors, clickTab, tabsOf, loadingElements, checkAiRun, panelShows, escapeRe, clickButton, waitForText, textOf };
+module.exports = { prepare, errorMark, errorsSince, describeErrors, clickTab, tabsOf, loadingElements, checkAiRun, panelShows, escapeRe, clickButton, waitForText, textOf, leftoverPlaceholders };
 
 /** Like runFeature() in ui.js, but the first click is made by `act` (for buttons that share one label, such as several "Draft"s). */
 async function runAfter(page, act) {

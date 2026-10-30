@@ -130,9 +130,32 @@ function codeCheck(pack, form) {
 
 // ---- did the customer answer? -------------------------------------------------------------------------------------
 
-function customerNames(pack) {
-  return new Set((pack?.people || []).filter((p) => CUSTOMER_ROLES.has(p.role) && text(p.name)).map((p) => fold(p.name)));
+// A name or login as a key: no accents, no case, letters and digits only, words sorted, so "Tuter, Abel", "Abel Tuter" and the
+// login "abel.tuter" all read the same. (Combining accents U+0300 to U+036F, written as codes so this file stays plain ASCII.)
+const ACCENTS = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
+const personKey = (s) =>
+  text(s).normalize('NFD').replace(ACCENTS, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).sort().join(' ');
+
+/**
+ * Every way the customer can appear as a note author: their name, their email, the front of their email (a login often is),
+ * and first plus last name. An author is still a login when the person's user could not read sys_user (src/context/journal.js).
+ */
+function customerKeys(pack) {
+  const keys = new Set();
+  for (const p of pack?.people || []) {
+    if (!CUSTOMER_ROLES.has(p?.role)) continue;
+    const email = text(p.email).toLowerCase();
+    for (const value of [p.name, email, email.split('@')[0], `${text(p.firstName)} ${text(p.lastName)}`]) {
+      const key = personKey(value);
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
 }
+
+// A display name has a space ("Beth Anglin"); a bare login ("beth.anglin", "x123456") does not, and one that matches no customer
+// may still be the customer's (a login that is not their email): it is not proof that an agent wrote it.
+const looksLikeLogin = (by) => Boolean(text(by)) && !/\s/.test(text(by)) && !text(by).includes(',');
 
 function customerCheck(pack, now, waitDays) {
   const unreadable = unreadableNotes(pack);
@@ -144,13 +167,16 @@ function customerCheck(pack, now, waitDays) {
   if (!visible.length) {
     return check('customer', 'info', 'No messages to or from the customer on this ticket', 'If you confirmed the fix by phone or in person, say so in the resolution notes.');
   }
-  const customers = customerNames(pack);
+  const customers = customerKeys(pack);
   if (!customers.size) {
     return check('customer', 'info', 'Could not tell which messages are the customer\'s', 'Check by eye that the customer confirmed the fix or had a chance to answer.');
   }
   const last = visible[visible.length - 1];
-  if (customers.has(fold(last.by))) {
+  if (customers.has(personKey(last.by))) {
     return check('customer', 'ok', 'The customer wrote the last message', 'Read it once more and make sure it confirms the fix.');
+  }
+  if (!text(last.by) || looksLikeLogin(last.by)) {
+    return check('customer', 'info', 'Could not tell who wrote the last message', 'Its author is shown only as a user name. Read it and check whether the customer confirmed the fix.');
   }
   const days = daysSince(last.when, now);
   if (Number.isFinite(days) && days >= waitDays) {

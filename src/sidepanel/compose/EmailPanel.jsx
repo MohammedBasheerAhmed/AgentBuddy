@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import AiKeyNote from '../AiKeyNote.jsx';
+import ErrorNote from '../ErrorNote.jsx';
 import { read } from '../ask.js';
 import { contextFor } from '../../features/registry.js';
 import { useRun } from '../useRun.js';
@@ -8,7 +10,7 @@ import { parseSafeText, toPlainText } from '../../render/safeText.js';
 import { recommendEmails, parseEmailDraft, emailFormUrl, EMAIL_TYPES } from '../../compose/emailRecommend.js';
 import { internalTextsOf } from '../../safeSend/review.js';
 import { currentFromPage, emailClientTarget, matchesExpect } from '../../lib/fillable.js';
-import { FillFeedback, ReviewHints, aiNotReadyText, featureState, hintsFor, isAiReady, useFill } from './shared.js';
+import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, useFill } from './shared.js';
 
 const isEmailFeature = (feature) => Boolean(feature?.id) && EMAIL_TYPES.some((t) => t.featureId === feature.id);
 
@@ -167,7 +169,7 @@ export default function EmailPanel({ page, eff, active }) {
         <p className="ab-note">Open a ticket (an incident, request, case or similar) to get email suggestions that fit it. Agent Buddy reads it with your own session.</p>
       )}
 
-      {record && !aiReady && <p className="ab-note ab-note-warn">{aiNotReadyText(eff)}</p>}
+      {record && <AiKeyNote eff={eff} what="this" />}
 
       {record && idle && (
         <section className="ab-card" aria-label="Suggested emails">
@@ -179,7 +181,7 @@ export default function EmailPanel({ page, eff, active }) {
             </button>
           </div>
           {recs.state === 'loading' && <p className="ab-note" role="status">Reading the ticket with your session…</p>}
-          {recs.state === 'error' && <p className="ab-note ab-note-danger" role="alert">{recs.error}</p>}
+          {recs.state === 'error' && <ErrorNote error={recs.error} onRetry={load} />}
           {ready && (
             <>
               {ready.facts.length > 0 && (

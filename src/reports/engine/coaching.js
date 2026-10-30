@@ -32,15 +32,15 @@ const failureText = (read, what) => (read.status === 'denied' ? `${what} not ava
 
 /**
  * @param {ReturnType<import('../ai/coaching.js').normalizeCoachingRequest>} request already checked
- * @param {{ deps: {queryTable: Function, aggregate: Function}, userId: string, blocked?: string[], now?: number }} env
+ * @param {{ deps: {queryTable: Function, aggregate: Function}, userId: string, blocked?: string[], isBlocked?: (table: string) => boolean, now?: number }} env
  */
-export async function readCoachingSample(request, { deps, userId, blocked = [], now = Date.now() }) {
+export async function readCoachingSample(request, { deps, userId, blocked = [], isBlocked = null, now = Date.now() }) {
   if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
   if (request.tables.some(isSensitiveTable)) throw new Error('HR case tables are never used for coaching.');
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LIMITS.sectionTimeoutMs);
-  const reader = createReader({ deps, cache: createCache({ ttlMs: 30000 }), limiter: createLimiter(3), prefix: userId, blocked, signal: controller.signal });
+  const reader = createReader({ deps, cache: createCache({ ttlMs: 30000 }), limiter: createLimiter(3), prefix: userId, blocked, isBlocked, signal: controller.signal });
   const access = [];
   const notes = [];
 

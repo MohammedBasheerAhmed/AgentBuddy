@@ -311,7 +311,7 @@ test('sentimentParts: the record, then the signals, then the notes with the cust
   const fields = parts.filter((p) => !['signals', 'comments', 'work_notes'].includes(p.field)).map((p) => p.field);
   assert.ok(fields.includes('short_description') && fields.includes('priority'));
   const signalsIndex = parts.findIndex((p) => p.field === 'signals');
-  assert.equal(parts[signalsIndex].label, 'Signals counted by Agent Buddy');
+  assert.equal(parts[signalsIndex].label, 'Signals counted by simple rules');
   assert.ok(signalsIndex > parts.findIndex((p) => p.field === 'short_description'));
   const notes = parts.slice(signalsIndex + 1);
   assert.equal(notes.length, 6);

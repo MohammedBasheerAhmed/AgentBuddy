@@ -4,7 +4,7 @@
 // instance returns anyway never reaches the pack. Reads run with the signed-in user's own session; whatever is refused or
 // ambiguous is reported in `access` and the pack carries the rest.
 
-import { FEATURES, FEATURE_JOURNAL, HR_HIDDEN, LIMITS, allowedFields, fieldLimit, maskOnlyFields, withheldFields } from './allowlists.js';
+import { FEATURES, FEATURE_JOURNAL, FEATURE_TIMES, HR_HIDDEN, LIMITS, allowedFields, fieldLimit, maskOnlyFields, withheldFields } from './allowlists.js';
 import { STATUS, entry as accessEntry, isBlockedTable } from './access.js';
 import { assignSides, readChatMessages } from './chat.js';
 import { JOURNAL_RECORD_FIELDS, applyAuthorNames, readJournal } from './journal.js';
@@ -27,13 +27,16 @@ const TIME_COLUMNS = new Set(['valid_to', 'published', 'sys_updated_on', 'opened
 // Per-kind plain data for pack.related, all strings (docs/contracts.md):
 //   knowledge: { article: counts from the HTML (headings, lists, full text length...), times: stored dates (UTC) }
 //   chat:      { times: stored dates (UTC) }
-function kindExtras(kind, row, names) {
-  if (kind !== 'knowledge' && kind !== 'chat') return {};
+//   any kind, for a feature whose spec names `times` (FEATURE_TIMES): { times: those dates as stored (UTC) }
+function kindExtras(kind, row, names, feature) {
+  const timed = FEATURE_TIMES[feature] || [];
+  if (kind !== 'knowledge' && kind !== 'chat' && !timed.length) return {};
   const extras = {};
   if (kind === 'knowledge' && names.includes('text')) extras.article = statsToStrings(articleHtmlStats(disp(row.text)));
   const times = {};
   for (const name of names) {
-    const stored = TIME_COLUMNS.has(name) ? raw(row[name]) : '';
+    const wanted = kind === 'knowledge' || kind === 'chat' ? TIME_COLUMNS.has(name) : timed.includes(name);
+    const stored = wanted ? raw(row[name]) : '';
     if (stored) times[name] = stored;
   }
   if (Object.keys(times).length) extras.times = times;
@@ -216,7 +219,7 @@ export async function readContextPack(ref, deps, options = {}) {
     fields,
     people: finalPeople,
     journal,
-    related: { ...relatedResult.related, ...kindExtras(kind, row, names) },
+    related: { ...relatedResult.related, ...kindExtras(kind, row, names, feature) },
     access,
     // The class of a record opened through `task` could not be looked up: the run is gated like an HR case (src/lib/pipeline.js).
     ...(unresolved ? { sensitive: true } : {}),

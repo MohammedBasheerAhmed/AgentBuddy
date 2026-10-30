@@ -37,12 +37,22 @@ export function blockedError(table) {
   return err;
 }
 
-/** The raw managed policy: `chrome.storage.managed` in the extension. { known: false } when it cannot be read from here. */
-async function readManaged() {
+// The only policy keys a read needs. The content script runs inside the ServiceNow page's process, so it asks the browser for these
+// and nothing else: an AI key the organisation supplies (`providedApiKey`), the AI address and the other settings never enter it.
+export const READ_POLICY_KEYS = Object.freeze(['blockedTables', 'sensitiveTablePrefixes', 'allowHrContent']);
+
+/**
+ * The raw managed policy, as far as reads need it: `chrome.storage.managed` in the extension. { known: false } when it cannot be read
+ * from here. `area` is for tests.
+ */
+export async function readManaged(area = typeof chrome !== 'undefined' ? chrome.storage?.managed : undefined) {
   try {
-    const area = typeof chrome !== 'undefined' ? chrome.storage?.managed : undefined;
     if (!area || typeof area.get !== 'function') return { known: false, raw: {} };
-    return { known: true, raw: (await area.get(null)) || {} };
+    const got = (await area.get([...READ_POLICY_KEYS])) || {};
+    // (a browser that answers with more than was asked for still hands over only these)
+    const raw = {};
+    for (const key of READ_POLICY_KEYS) if (Object.prototype.hasOwnProperty.call(got, key)) raw[key] = got[key];
+    return { known: true, raw };
   } catch {
     // Not readable from here (or the browser has no managed storage): the guard blocks nothing; see the header comment.
     return { known: false, raw: {} };

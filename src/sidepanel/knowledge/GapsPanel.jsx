@@ -4,10 +4,12 @@ import RecordLink from '../RecordLink.jsx';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { gapPack } from '../../knowledge/parts.js';
 import Notes from './Notes.jsx';
+import ErrorNote from '../ErrorNote.jsx';
 
 // C7: "articles to write". Recently resolved incidents (and cases) are grouped by what they are about, the ones that already
 // have a knowledge article are left out when that can be read, and the groups are ranked by how many tickets they hold. An
 // outline for one group can be drafted with AI; only the topic words, counts, category and CI are sent, never the tickets.
+// While a search reads, its choices are locked (the answer is for what was chosen when it started) and it can be stopped.
 
 const DAYS = [30, 60, 90];
 
@@ -19,6 +21,7 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
   const token = useRef(0);
   const feature = featureById('kb-gap-outline');
   const available = isFeatureAvailable(feature, eff.policy);
+  const loading = state?.phase === 'loading';
 
   async function find() {
     token.current += 1;
@@ -28,10 +31,17 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
     const tables = [incidents && 'incident', cases && 'sn_customerservice_case'].filter(Boolean);
     try {
       const data = await read(page.tabId, 'kbGaps', { days, tables });
-      if (mine === token.current) setState({ phase: 'ready', data, error: '' });
+      // (the answer comes from the page: a list that is missing is an empty one, never a crash)
+      const clean = { ...data, scanned: Number(data?.scanned) || 0, clusters: Array.isArray(data?.clusters) ? data.clusters : [], access: Array.isArray(data?.access) ? data.access : [], link: data?.link || {} };
+      if (mine === token.current) setState({ phase: 'ready', data: clean, error: '' });
     } catch (err) {
       if (mine === token.current) setState({ phase: 'error', data: null, error: err?.message || 'The tickets could not be read.' });
     }
+  }
+
+  function stop() {
+    token.current += 1;
+    setState(null);
   }
 
   const data = state?.data;
@@ -43,21 +53,27 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
         <p className="ab-sub">Finds topics that keep coming up in recently resolved tickets. Only short descriptions, categories and configuration items are looked at, and nothing is sent to an AI.</p>
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-gap-days">Resolved in the last</label>
-          <select id="ab-gap-days" className="ab-select" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+          <select id="ab-gap-days" className="ab-select" value={days} disabled={loading} onChange={(e) => setDays(Number(e.target.value))}>
             {DAYS.map((d) => <option key={d} value={d}>{d} days</option>)}
           </select>
         </div>
-        <div className="ab-field">
-          <label className="ab-check"><input type="checkbox" checked={incidents} onChange={(e) => setIncidents(e.target.checked)} /> Incidents</label>
-          <label className="ab-check"><input type="checkbox" checked={cases} onChange={(e) => setCases(e.target.checked)} /> Customer service cases</label>
-        </div>
+        <fieldset className="ab-field ab-fieldset">
+          <legend className="ab-label">Tickets to look at</legend>
+          <label className="ab-check"><input type="checkbox" checked={incidents} disabled={loading} onChange={(e) => setIncidents(e.target.checked)} /> Incidents</label>
+          <label className="ab-check"><input type="checkbox" checked={cases} disabled={loading} onChange={(e) => setCases(e.target.checked)} /> Customer service cases</label>
+        </fieldset>
         <div className="ab-row">
-          <button type="button" className="ab-btn ab-btn-primary" disabled={(!incidents && !cases) || state?.phase === 'loading'} onClick={find}>Find topics</button>
+          <button type="button" className="ab-btn ab-btn-primary" disabled={(!incidents && !cases) || loading} onClick={find}>Find topics</button>
         </div>
       </section>
 
-      {state?.phase === 'loading' && <p className="ab-note" role="status">Reading resolved tickets…</p>}
-      {state?.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{state.error}</p>}
+      {loading && (
+        <p className="ab-note" role="status">
+          Reading resolved tickets…{' '}
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>Stop</button>
+        </p>
+      )}
+      {state?.phase === 'error' && <ErrorNote error={state.error} onRetry={find} />}
 
       {data && (
         <section className="ab-card" aria-label="Topics without an article">

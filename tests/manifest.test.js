@@ -39,6 +39,22 @@ test('extension-page CSP is locked down', () => {
   assert.match(csp, /img-src 'self' data:/);
 });
 
+test('the normal build connects only to https, or to a model on this computer; the enterprise build narrows it (tests/policy-enterprise.test.js)', () => {
+  const csp = manifest.content_security_policy.extension_pages;
+  const connect = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('connect-src'));
+  assert.equal(connect, 'connect-src https: http://localhost:* http://127.0.0.1:*');
+  assert.equal(manifest.content_security_policy.sandbox, undefined);
+  assert.match(csp, /form-action 'none'/);
+  assert.match(csp, /style-src 'self'(;|$)/);
+});
+
+test('the repository manifest is the normal build: no update address, no fixed key, no version name, no static hosts', () => {
+  for (const key of ['update_url', 'key', 'version_name', 'host_permissions', 'content_scripts', 'oauth2', 'chrome_url_overrides', 'devtools_page', 'declarative_net_request']) {
+    assert.equal(manifest[key], undefined, key);
+  }
+  assert.equal(manifest.manifest_version, 3);
+});
+
 test('managed policy schema is declared and valid JSON', () => {
   assert.equal(manifest.storage.managed_schema, 'managed_schema.json');
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'managed_schema.json'), 'utf8'));

@@ -138,7 +138,7 @@ function qualityLines(d) {
   if ((d.categories || []).length) lines.push(`- Top categories: ${d.categories.slice(0, 5).map((c) => `${c.name} ${c.count}`).join('; ')}`);
   if ((d.cis || []).length) lines.push(`- Top configuration items: ${d.cis.slice(0, 5).map((c) => `${c.name} ${c.count}`).join('; ')}`);
   // Callers are people: only the counts are sent.
-  if (d.repeatCallers) lines.push(`- Callers with ${d.repeatCallers.min}+ tickets in ${d.repeatCallers.days} days: ${d.repeatCallers.total} of ${d.repeatCallers.callers} callers (names are not included)`);
+  if (d.repeatCallers) lines.push(`- Callers with ${d.repeatCallers.min}+ tickets in ${d.repeatCallers.days} days: ${d.repeatCallers.total} (names are not included)`);
   return { lines, names: [] };
 }
 

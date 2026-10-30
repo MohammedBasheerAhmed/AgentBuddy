@@ -3,22 +3,29 @@
   "properties": {
     "allowedInstances": {
       "title": "Approved ServiceNow instances",
-      "description": "Only these instances can be enabled. Exact origins (https://acme.service-now.com) or wildcards (*.corp.example.com). Leave unset to let people enable their own instance.",
+      "description": "Only these instances can be enabled. Exact https origins (https://acme.service-now.com) or wildcards with at least two names after *. (*.corp.example.com matches its sub-domains, not corp.example.com itself). An entry that is neither is ignored; a list with no usable entry allows no site. Leave unset to let people enable their own instance.",
       "type": "array",
       "items": { "type": "string" }
     },
     "aiProvider": {
       "title": "Required AI provider",
-      "description": "anthropic, openai (also Azure OpenAI and internal gateways), gemini, mistral, groq, deepseek, openrouter, ollama or custom.",
+      "description": "anthropic, openai (OpenAI or a company gateway), azure (Azure OpenAI: aiBaseUrl is the resource address https://<name>.openai.azure.com, allowedModels are deployment names), gemini, mistral, groq, deepseek, openrouter, ollama or custom. Not case-sensitive; a name Agent Buddy does not know allows no provider.",
       "type": "string"
     },
     "aiBaseUrl": {
       "title": "Required AI endpoint",
-      "description": "Address of the organisation's AI gateway, for example https://ai-gateway.corp.example/v1.",
+      "description": "Address of the organisation's AI gateway, for example https://ai-gateway.corp.example/v1. https only (http only for localhost or 127.0.0.1), no user name or password, no ?query or #fragment; compared without a trailing slash or :443. An address that is not valid blocks every AI call.",
       "type": "string"
+    },
+    "allowedProviders": {
+      "title": "Allowed AI providers",
+      "description": "Provider ids people may choose from, for example [\"openai\", \"azure\"] to rule out every other vendor (such as deepseek). Not case-sensitive. An empty list allows no provider. aiProvider, when set, must be on this list.",
+      "type": "array",
+      "items": { "type": "string" }
     },
     "allowedModels": {
       "title": "Allowed models",
+      "description": "Model ids (for Azure OpenAI: deployment names) people may use; the first is the default. Exact and case-sensitive.",
       "type": "array",
       "items": { "type": "string" }
     },
@@ -26,23 +33,35 @@
       "title": "Minimum personal-data protection",
       "description": "standard masks detected personal data; strict also refuses sensitive fields and HR free text; local-only refuses any AI endpoint that is not on this computer. People can choose a stricter mode, never a looser one.",
       "type": "string",
-      "enum": ["standard", "strict", "local-only"]
+      "enum": [
+        "standard",
+        "strict",
+        "local-only"
+      ]
     },
     "previewMode": {
       "title": "Show what will be sent",
-      "description": "always shows the exact outgoing text before every AI call; first shows it the first time per feature (and every time when the request carries text from other tickets or articles); never skips it.",
+      "description": "always shows the exact outgoing text before every AI call; first shows it the first time per feature (and every time when the request carries text from other tickets or articles); never skips it. A minimum: people can choose to see it more often, never less.",
       "type": "string",
-      "enum": ["always", "first", "never"]
+      "enum": [
+        "always",
+        "first",
+        "never"
+      ]
     },
     "keyStorage": {
       "title": "Where the AI key is kept",
-      "description": "local = browser storage; session = memory only, cleared when the browser closes; encrypted = passphrase-protected.",
+      "description": "local = Agent Buddy's own database in this browser (an IndexedDB vault of the extension, which ServiceNow pages cannot open); session = memory only (chrome.storage.session, closed to content scripts), cleared when the browser closes; encrypted = the vault holds the key encrypted with a passphrase. Applied exactly.",
       "type": "string",
-      "enum": ["local", "session", "encrypted"]
+      "enum": [
+        "local",
+        "session",
+        "encrypted"
+      ]
     },
     "providedApiKey": {
       "title": "AI key supplied by the organisation",
-      "description": "Optional. When set, people never enter a key. Visible to the browser's policy store; prefer a gateway that authenticates by other means where possible.",
+      "description": "Optional. When set, people never enter a key. Used only when this policy also pins aiProvider or aiBaseUrl, so the key never goes to a provider a person picks. Visible to the browser's policy store; prefer a gateway that authenticates by other means where possible.",
       "type": "string"
     },
     "disabledFeatures": {
@@ -82,6 +101,7 @@
     },
     "auditExport": {
       "title": "Allow audit log export",
+      "description": "true (the default) lets people export the local activity log as CSV; false hides the export.",
       "type": "boolean"
     },
     "coachingEnabled": {

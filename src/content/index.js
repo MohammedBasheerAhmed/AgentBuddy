@@ -19,7 +19,7 @@ import { parseRecordRef, kindForTable } from '../context/kinds.js';
 import { SYS_ID_RE, TABLE_RE, disp } from '../context/util.js';
 import { handleRead } from './reads.js';
 import { portalInfo, surfaceOf } from '../context/surface.js';
-import { isFromExtensionPage } from '../lib/senderCheck.js';
+import { contentMessageAction } from '../lib/senderCheck.js';
 import { handleFillField } from './fill.js';
 import { policyGuard } from './policyGuard.js';
 import { startBar } from './bar.js';
@@ -33,6 +33,25 @@ if (!window.__abContentInstalled) {
   const numberCache = new Map();
   const numberMisses = new Map();
   const MISS_MS = 30000;
+  const MAX_REMEMBERED = 200; // a portal tab open all week does not grow the cache without end
+
+  const remember = (map, key, value) => {
+    if (map.size >= MAX_REMEMBERED) map.delete(map.keys().next().value);
+    map.set(key, value);
+  };
+
+  // Once the site is turned off (the service worker says so) this script does nothing more until the page is reloaded: the bar goes,
+  // the panel gets no answers, nothing is read. Turning the site on again injects a fresh script.
+  let retired = false;
+  let bar = null;
+  function retire() {
+    if (retired) return;
+    retired = true;
+    window.__abContentInstalled = false;
+    numberCache.clear();
+    numberMisses.clear();
+    bar?.stop();
+  }
 
   async function resolveRecord(href) {
     // 1) The classic form knows exactly which record it shows.
@@ -50,8 +69,8 @@ if (!window.__abContentInstalled) {
         // (through the policy guard: a blocked table is not looked up)
         const guarded = await policyGuard.deps({ queryTable });
         const rows = await guarded.queryTable(ref.table, `number=${number}`, ['sys_id', 'number'], { limit: 1 }).catch(() => []);
-        if (rows[0]?.sys_id) numberCache.set(cacheKey, rows[0].sys_id);
-        else numberMisses.set(cacheKey, Date.now());
+        if (rows[0]?.sys_id) remember(numberCache, cacheKey, rows[0].sys_id);
+        else remember(numberMisses, cacheKey, Date.now());
       }
       sysId = numberCache.get(cacheKey) || '';
     }
@@ -69,7 +88,9 @@ if (!window.__abContentInstalled) {
     // The address is read ONCE per request and used for the record, the surface and the portal alike: a portal changes it
     // with history.pushState and no reload, so nothing here may remember an earlier one.
     const href = location.href;
-    const [record, session, newRecord] = await Promise.all([resolveRecord(href).catch(() => null), getSessionUser({ queryTable }).catch(() => null), newRecordState().catch(() => null)]);
+    // (the one read here, "who is Me" in sys_user, goes through the policy guard like every other read)
+    const guarded = await policyGuard.deps({ queryTable }).catch(() => null);
+    const [record, session, newRecord] = await Promise.all([resolveRecord(href).catch(() => null), guarded ? getSessionUser(guarded).catch(() => null) : null, newRecordState().catch(() => null)]);
     const surface = surfaceOf(href);
     const portal = surface === 'portal' ? portalInfo(href) : null;
     return {
@@ -98,8 +119,15 @@ if (!window.__abContentInstalled) {
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Only this extension's own pages (the side panel, the full-page dashboard) can ask. chrome.runtime.onMessage never delivers
-    // web-page messages; the sender's origin (not "is it in a tab") tells an extension page from a content script.
-    if (!isFromExtensionPage(sender, chrome.runtime.id)) return false;
+    // web-page messages; the sender's origin (not "is it in a tab") tells an extension page from a content script. The service
+    // worker may say the site was turned off, after which nothing is answered (src/lib/senderCheck.js contentMessageAction).
+    const action = contentMessageAction(message, sender, chrome.runtime.id, retired);
+    if (action === 'retire') {
+      retire();
+      sendResponse({ ok: true });
+      return false;
+    }
+    if (action !== 'answer') return false;
     (async () => {
       switch (message?.type) {
         case MSG.PING:
@@ -121,6 +149,7 @@ if (!window.__abContentInstalled) {
   });
 
   // The bar of main actions. It follows the record that is open (the same detection the side panel uses) and hides itself when the
-  // service worker says it may not show (switched off in Settings, a blocked table, a site that is not turned on).
-  startBar({ resolveRecord: () => resolveRecord(location.href) });
+  // service worker says it may not show (switched off in Settings, a blocked table). While it is switched off it does not look at the
+  // page at all; when the service worker says the site is no longer turned on, this whole script retires.
+  bar = startBar({ resolveRecord: () => resolveRecord(location.href), onSiteOff: retire });
 }

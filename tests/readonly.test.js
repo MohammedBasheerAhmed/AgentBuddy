@@ -70,7 +70,8 @@ test('the page bridge has no save, no REST and no eval', () => {
 
 test('only the provider layer may use fetch with a body, and only extension pages import it', () => {
   const fetchers = sourceFiles.filter((p) => /\bfetch\(/.test(fs.readFileSync(p, 'utf8'))).map(rel).sort();
-  const allowed = ['src/content/tableApi.js', 'src/providers/anthropic.js', 'src/providers/openai.js'];
+  // src/providers/http.js: the one place the provider adapters (openai.js, anthropic.js) and the model list send their requests.
+  const allowed = ['src/content/tableApi.js', 'src/providers/anthropic.js', 'src/providers/openai.js', 'src/providers/http.js'];
   fetchers.forEach((f) => assert.ok(allowed.includes(f), `${f} calls fetch() but is not on the approved list`));
   // Content scripts must never import the provider layer (that is where the AI key is used).
   sourceFiles
@@ -87,4 +88,54 @@ test('no innerHTML, dangerouslySetInnerHTML, eval or remote script anywhere in s
     if (/createElement\(['"]script['"]\)/.test(text)) offenders.push(`${rel(p)}: script element`);
   });
   assert.deepEqual(offenders, []);
+});
+
+// ---- security audit 2 ----------------------------------------------------------------------------------------------
+
+test('a table name that is not a plain identifier never becomes part of a request address (AB2-07)', async () => {
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, status: 200, headers: { get: () => null }, redirected: false, url: String(url), text: async () => JSON.stringify({ result: [] }) };
+  };
+  for (const table of ['..', '.', 'a/../b', 'incident?x=1', 'Incident', '', 'x'.repeat(81), null, 5]) {
+    // eslint-disable-next-line no-await-in-loop
+    await assert.rejects(() => queryTable(table, 'active=true', ['number']), /valid table/, String(table));
+    // eslint-disable-next-line no-await-in-loop
+    await assert.rejects(() => countRecords(table, 'active=true'), /valid table/, String(table));
+  }
+  assert.deepEqual(calls, []);
+});
+
+test('the row limit is always between 1 and 1000: a negative, zero or odd limit is never "no limit" (AB2-07)', async () => {
+  const { clampLimit } = await import('../src/content/tableApi.js');
+  assert.equal(clampLimit(-1), 1);
+  assert.equal(clampLimit(0), 1);
+  assert.equal(clampLimit('abc'), 1);
+  assert.equal(clampLimit(NaN), 1);
+  assert.equal(clampLimit(2.7), 2);
+  assert.equal(clampLimit(5000), 1000);
+  assert.equal(clampLimit(Infinity), 1000);
+  assert.equal(clampLimit('20'), 20);
+});
+
+test('the page bridge and the content script never press, submit or navigate the page (AB2-08)', () => {
+  const files = [path.join(SRC, 'page', 'bridge.js'), ...sourceFiles.filter((p) => /src[\/]content[\/]/.test(p))];
+  const offenders = [];
+  for (const file of files) {
+    const text = fs.readFileSync(file, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    if (/\.click\(\)|\.requestSubmit\(|\.submit\(|new\s+\w*\.?SubmitEvent|['"]submit['"]/.test(text)) offenders.push(`${rel(file)}: click or submit`);
+    if (/\blocation\.(assign|replace|reload)\(|\blocation\.href\s*=|\blocation\s*=|window\.open\(|history\.(pushState|replaceState|back|go)\(/.test(text)) offenders.push(`${rel(file)}: navigation`);
+    if (/\.showModal\(|\.focus\(\)\s*;\s*\w+\.click|KeyboardEvent\(|MouseEvent\(|PointerEvent\(/.test(text)) offenders.push(`${rel(file)}: synthetic input`);
+    // the only editing command is "type this text" into the chosen box
+    for (const m of text.matchAll(/execCommand\(\s*([^,)]+)/g)) if (m[1].trim() !== "'insertText'") offenders.push(`${rel(file)}: execCommand ${m[1]}`);
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('the events the bridge fires on a form control are only the ones typing fires (AB2-08)', () => {
+  const text = fs.readFileSync(path.join(SRC, 'page', 'bridge.js'), 'utf8');
+  const fired = [...text.matchAll(/fireEvent\(\s*\w+\s*,\s*'([a-z]+)'/g)].map((m) => m[1]);
+  assert.ok(fired.length > 0);
+  assert.deepEqual([...new Set(fired)].sort(), ['blur', 'change', 'focusout', 'input']);
 });

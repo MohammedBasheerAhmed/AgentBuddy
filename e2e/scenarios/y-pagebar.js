@@ -8,7 +8,8 @@ const hostFacts = (page) =>
     const host = [...document.documentElement.children].find((e) => e.tagName === 'DIV' && /z-index/.test(e.getAttribute('style') || ''));
     if (!host) return null;
     const rect = host.getBoundingClientRect();
-    return { shadowRoot: host.shadowRoot, children: host.children.length, text: host.textContent, attrs: host.getAttributeNames().sort(), left: rect.left, right: rect.right, width: window.innerWidth, position: getComputedStyle(host).position };
+    // width: the page's own width (documentElement.clientWidth); a visible scrollbar, as in headed Chrome, is not part of it.
+    return { shadowRoot: host.shadowRoot, children: host.children.length, text: host.textContent, attrs: host.getAttributeNames().sort(), left: rect.left, right: rect.right, width: document.documentElement.clientWidth, position: getComputedStyle(host).position };
   });
 const prefs = (page) => page.evaluate(() => localStorage.getItem('agentbuddy-bar'));
 

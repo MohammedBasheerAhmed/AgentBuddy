@@ -114,3 +114,37 @@ a.ab-btn { text-decoration: none; }
 .ab-pane[hidden] { display: none; }
 .ab-boundary-text { margin: 0 0 6px; }
 .ab-backdrop:focus { outline: none; }
+
+/* ---- narrow panel (320px) and the header ---- */
+/* Brand, provider, model and Settings wrap onto a second line instead of pushing the panel sideways. */
+.ab-header { flex-wrap: wrap; row-gap: 6px; }
+.ab-select-sm { min-width: 0; flex: 0 1 auto; }
+@media (max-width: 360px) {
+  .ab-main { padding: 10px; }
+  .ab-nav { padding: 6px 10px 0; gap: 4px; }
+  .ab-nav .ab-btn { padding: 3px 6px; }
+}
+
+/* ---- a note with its next step: the text and the button wrap at 320px ---- */
+.ab-keynote, .ab-errnote { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ab-keynote-text, .ab-errnote-text { margin: 0; flex: 1 1 14em; min-width: 0; overflow-wrap: anywhere; }
+
+/* ---- a group of check boxes with a label (a fieldset that looks like a field) ---- */
+.ab-fieldset { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
+.ab-fieldset legend { padding: 0; margin-bottom: 4px; }
+
+/* ---- the result card: which ticket it was written for ---- */
+.ab-result-for { margin: 0 0 6px; }
+.ab-result .ab-h:focus { outline: none; }
+.ab-result .ab-h:focus-visible { box-shadow: var(--ab-ring); }
+
+/* ---- first run: three numbered steps, each one says Done / Next / Later in words ---- */
+.ab-firstrun-steps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ab-firstrun-step { display: flex; gap: 8px; align-items: flex-start; }
+.ab-firstrun-num { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: var(--ab-text-sm); font-weight: 650; border: 1px solid var(--ab-border-strong); color: var(--ab-fg-soft); background: var(--ab-bg-sunken); }
+.ab-firstrun-next .ab-firstrun-num { background: var(--ab-accent); color: var(--ab-accent-fg); border-color: var(--ab-accent); }
+.ab-firstrun-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ab-firstrun-label { font-weight: 600; overflow-wrap: anywhere; }
+.ab-firstrun-done .ab-firstrun-label { color: var(--ab-fg-muted); font-weight: 500; }
+.ab-firstrun-tag-done { background: var(--ab-ok-soft); color: var(--ab-ok); border-color: var(--ab-ok-line); }
+.ab-firstrun-tag-next { background: var(--ab-accent-soft); color: var(--ab-accent); border-color: var(--ab-accent-line); }

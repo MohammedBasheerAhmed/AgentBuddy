@@ -1,5 +1,6 @@
 import React from 'react';
 import { describeTile, formatNumber, toneClass } from './geometry.js';
+import DrillLink from './DrillLink.jsx';
 
 const ARROW = { up: '▲', down: '▼', flat: '▬' };
 const WORD = { up: 'Up', down: 'Down', flat: 'No change' };
@@ -12,8 +13,12 @@ const WORD = { up: 'Up', down: 'Down', flat: 'No change' };
  *   loading      a calm placeholder while the read is running
  *   delta        { text, direction: 'up'|'down'|'flat', good: true|false|null }: an arrow and a word as well as a colour
  *   onOpen       makes the whole tile a button (drill down); its name is "label: value, hint"
+ *   href         with onOpen: the address of the list the tile opens. The tile is then a real link (a click opens the list in the
+ *                ServiceNow tab through onOpen, Ctrl/middle-click or the right-click menu use a new tab). Without it, a button
+ *                (for a tile that opens a choice rather than one list).
+ *   expanded     for such a button: whether the choice it opens is showing (aria-expanded)
  */
-export default function Tile({ label, value, hint, delta, tone = 'neutral', onOpen, unavailable = false, loading = false }) {
+export default function Tile({ label, value, hint, delta, tone = 'neutral', onOpen, href = '', expanded, unavailable = false, loading = false }) {
   const busy = Boolean(loading) && !unavailable;
   const missing = Boolean(unavailable);
   const shown = typeof value === 'number' ? formatNumber(value) : String(value ?? '');
@@ -45,9 +50,16 @@ export default function Tile({ label, value, hint, delta, tone = 'neutral', onOp
   );
 
   const className = `ab-tile ${toneClass(missing ? 'neutral' : tone)}${missing ? ' ab-tile-missing' : ''}`;
+  if (onOpen && href && !missing && !busy) {
+    return (
+      <DrillLink className={`${className} ab-tile-button ab-tile-link`} href={href} onOpen={onOpen} label={`${describeTile({ label, value: shown, hint, delta })} Open the list.`}>
+        {body}
+      </DrillLink>
+    );
+  }
   if (onOpen && !missing && !busy) {
     return (
-      <button type="button" className={`${className} ab-tile-button`} aria-label={describeTile({ label, value: shown, hint, delta })} onClick={onOpen}>
+      <button type="button" className={`${className} ab-tile-button`} aria-label={describeTile({ label, value: shown, hint, delta })} aria-expanded={typeof expanded === 'boolean' ? expanded : undefined} onClick={onOpen}>
         {body}
       </button>
     );

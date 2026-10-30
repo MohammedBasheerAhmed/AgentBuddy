@@ -91,14 +91,19 @@ const eff = (over = {}) => ({
 });
 const page = (kind, table) => ({ status: 'record', tabId: 1, href: 'https://acme.service-now.com/x', surface: 'classic', record: { table, sysId: 'a'.repeat(32), number: 'X1', kind }, newRecord: null, user: null });
 
-test('a record view has one labelled tab list and one panel those tabs control', () => {
+// Changed in the usability pass: a record's tabs keep what was found or chosen in them while another tab is on show, so each tab has
+// its own panel (hidden when another one shows) instead of one panel whose content is swapped.
+test('a record view has one labelled tab list and a panel for each tab, each pointing at the other', () => {
   const markup = renderToStaticMarkup(<RecordView page={page('incident', 'incident')} eff={eff()} />);
   assert.match(markup, /aria-label="Record tools"/);
   assert.ok(!markup.includes('Panel sections'));
   for (const label of ['Actions', 'Related', 'Check']) assert.ok(markup.includes(`>${label}</button>`), label);
-  assert.equal((markup.match(/aria-controls="ab-rec-panel"/g) || []).length, 3);
-  assert.match(markup, /<div id="ab-rec-panel" role="tabpanel" aria-labelledby="ab-rec-tab-actions"/);
-  assert.equal((markup.match(/tabindex="0"/g) || []).length, 1);
+  for (const id of ['actions', 'related', 'check']) {
+    assert.ok(markup.includes(`aria-controls="ab-rec-panel-${id}"`), id);
+    assert.match(markup, new RegExp(`<div id="ab-rec-panel-${id}" role="tabpanel" aria-labelledby="ab-rec-tab-${id}"`), id);
+  }
+  assert.match(markup, /<div id="ab-rec-panel-related" role="tabpanel" aria-labelledby="ab-rec-tab-related" class="ab-pane" hidden="">/, 'only the chosen one is on show');
+  assert.equal((markup.match(/tabindex="0"/g) || []).length, 1, 'one tab stop in the tab list');
 });
 
 test('the tabs of a record view follow its kind', () => {

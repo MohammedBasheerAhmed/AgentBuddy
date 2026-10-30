@@ -1,7 +1,7 @@
 // Request fulfilment: requested items and catalog tasks by state, approvals waiting, and the oldest open items.
 import { LIMITS, TICKET_FIELDS } from './constants.js';
 import { attempt } from './reader.js';
-import { andQuery, byCountDesc, raw, disp, sectionResult, stateClass, usableTables } from './common.js';
+import { andQuery, byCountDesc, raw, disp, sectionResult, stateClass, sumResults, usableTables, verifiedCount } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { daysBetween, timeOf } from './time.js';
 
@@ -67,16 +67,12 @@ export async function fulfilmentSection(ctx) {
   });
 
   // Approvals: the ones waiting for me, and (for a team) the ones holding up the team's requested items.
-  const mine = await attempt(() => reader.count('sysapproval_approver', `approver=${scope.userId}^state=requested`), 'sysapproval_approver');
-  const team =
-    scope.kind !== 'mine' && !scope.empty && tables.some((t) => t.table === 'sc_req_item')
-      ? await attempt(() => reader.count('sysapproval_approver', andQuery('state=requested', 'sysapproval.sys_class_name=sc_req_item', `sysapproval.${scope.query}`)), 'sysapproval_approver')
-      : null;
+  const { mine, team } = await readApprovals(ctx, tables);
   [mine, team].forEach((r) => {
-    if (r && !r.ok) ctx.access.push({ source: 'sysapproval_approver', status: r.status, note: r.status === 'denied' ? 'Approvals are not available to you.' : r.note });
+    if (r && !r.ok) ctx.access.push({ source: 'sysapproval_approver', status: r.status, note: approvalNote(r) });
   });
 
-  const okParts = parts.filter((p) => p.states.ok);
+  const openSum = sumResults(parts.map((p) => p.openN));
   return sectionResult('fulfilment', 'Request fulfilment', ctx, {
     available: true,
     byTable: parts.map((p) => ({
@@ -96,8 +92,27 @@ export async function fulfilmentSection(ctx) {
       parts.filter((p) => p.oldest.ok).map((p) => ({ table: p.t.table, label: p.t.meta.label, rows: p.oldest.value })),
       ctx.now
     ),
-    open: okParts.length ? parts.reduce((n, p) => n + (p.openN.ok ? p.openN.value : 0), 0) : null,
+    // A table whose count failed is not added as 0: the total is then flagged as partial (the tile says so).
+    open: openSum.value,
+    openPartial: openSum.partial,
   });
+}
+
+export const APPROVALS_UNSEEN = 'You can see no approval records at all, so a count of 0 would prove nothing.';
+const approvalNote = (r) => (r.status === 'denied' ? 'Approvals are not available to you.' : r.note);
+
+/**
+ * Approvals waiting: for the person, and (for a team scope) on the requested items in scope. Shared with the hand-over page.
+ * A 0 is believed only when the person can see approval records at all (verifiedCount).
+ */
+export async function readApprovals(ctx, tables) {
+  const { reader, scope } = ctx;
+  const mine = await verifiedCount(reader, 'sysapproval_approver', `approver=${scope.userId}^state=requested`, { unseen: APPROVALS_UNSEEN });
+  const team =
+    scope.kind !== 'mine' && !scope.empty && tables.some((t) => t.table === 'sc_req_item')
+      ? await verifiedCount(reader, 'sysapproval_approver', andQuery('state=requested', 'sysapproval.sys_class_name=sc_req_item', `sysapproval.${scope.query}`), { unseen: APPROVALS_UNSEEN })
+      : null;
+  return { mine, team };
 }
 
 export function fulfilmentTables(result) {

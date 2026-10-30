@@ -96,10 +96,18 @@ test('problem link: not asked for other tables, "unknown" when the incident cann
 test('knowledge link: the kb_use table counts too; a table that ignores the filter is not believed', async () => {
   const viaUse = await facts({ incident: [{ sys_id: v(INC) }], m2m_kb_task: [{ sys_id: v('m1'), task: v('f'.repeat(32)) }], kb_use: [{ sys_id: v('u1'), task_id: v(INC), article: v('kb1') }] });
   assert.equal(viaUse.links.knowledge.status, 'yes');
-  // kb_use has no task_id column: ServiceNow ignores the condition and answers with every row.
+  // kb_use has neither a task_id nor a task column: the one-row probe shows it, so no query is built on a missing column (which
+  // ServiceNow would ignore and answer with every row) and nothing is believed.
   const leaky = await facts({ incident: [{ sys_id: v(INC) }], m2m_kb_task: [], kb_use: [{ sys_id: v('u1'), other: v('x') }] });
   assert.equal(leaky.links.knowledge.status, 'unknown');
-  assert.match(leaky.links.knowledge.note, /did not apply the filter/);
+  assert.match(leaky.links.knowledge.note, /kb_use has neither a task_id nor a task column/);
+  // A table that has the column but ignores the condition anyway (answers with another ticket's row) is not believed either.
+  const INC2 = 'f'.repeat(32);
+  const ignoring = fakeDeps({ incident: [{ sys_id: v(INC) }], m2m_kb_task: [], kb_use: [{ sys_id: v('u1'), task_id: v(INC2) }] });
+  const answering = { ...ignoring, queryTable: (table, query, ...rest) => ignoring.queryTable(table, table === 'kb_use' ? '' : query, ...rest) };
+  const wrong = await makeChecksOps({ callPage: bridge({ meta: null }).callPage }).resolutionFacts({ ...rec }, ctx(answering));
+  assert.equal(wrong.links.knowledge.status, 'unknown');
+  assert.match(wrong.links.knowledge.note, /did not apply the filter/);
 });
 
 test('knowledge link: "none" only when the user can see rows of the table at all', async () => {

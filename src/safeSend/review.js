@@ -12,6 +12,7 @@
 //   - personal data and secrets (checkOutgoing, the same detectors the firewall uses), and what the firewall hid on the way out
 //     and the model brought back (its own memory: `scan`)
 //   - markup: a tag, [code], or a script link. A journal field shows [code] as HTML, and an article body is HTML
+//   - links, as a "Worth a look" hint naming the site (a requester can plant a link in the ticket and ask for it in the reply)
 //   - a placeholder that was never replaced, such as [PERSON_1]
 //   - words copied from an internal work note of the same record (6 or more in a row)
 //
@@ -28,6 +29,9 @@ const NEVER_BACK_ADVICE = 'This is a password, key, card number or ID that was h
 
 const MARKUP_ADVICE = 'This has markup in it (a tag, [code] or a script link). A form field can show it as live HTML. Remove it, or say it in words.';
 const PLACEHOLDER_ADVICE = 'A hidden-name marker such as [PERSON_1] is still in the text, where a real value belongs. Replace it before you use the text.';
+// A password, card or ID number is never put back into an answer (src/pii/firewall.js NEVER_REHYDRATE), so its marker stays.
+const KEPT_PLACEHOLDER = /^\[(?:SECRET|CARD|IBAN|ID)_\d+\]$/;
+const KEPT_PLACEHOLDER_ADVICE = 'A password, card or ID number stays hidden as a marker such as [CARD_1]. Remove the marker, or type the value yourself only if it really belongs here.';
 const OVERLAP_ADVICE = 'These words are also in an internal work note on this ticket. Check you may share them with the customer.';
 
 // ---- Markup ---------------------------------------------------------------------------------------------------------
@@ -53,6 +57,36 @@ export function markupFindings(text) {
   return out.sort((a, b) => a.start - b.start);
 }
 
+// ---- Links ----------------------------------------------------------------------------------------------------------
+
+// A link in a customer reply may have come from the ticket itself (a requester can write anything there and ask the model to repeat
+// it). It is not blocked, links are normal, but it is named so the person sees where it points before the customer clicks it.
+const LINK = /\b(?:https?:\/\/|www\.)[^\s<>"'`)\]]+/gi;
+const LINK_ADVICE = 'This draft has a link in it. Check it goes where you mean before the customer reads it. It points to';
+
+/** Links (http, https, www.) as low hints, one per site, at most three. The excerpt is the site's name only, never the path. */
+export function linkFindings(text) {
+  const plain = String(text ?? '');
+  const out = [];
+  const hosts = new Set();
+  LINK.lastIndex = 0;
+  let m;
+  while ((m = LINK.exec(plain)) !== null && out.length < 3) {
+    let host = '';
+    try {
+      // (the URL parser writes an international name in its xn-- form, so a look-alike name shows as what it is)
+      host = new URL(/^www\./i.test(m[0]) ? `https://${m[0]}` : m[0]).hostname;
+    } catch {
+      host = '';
+    }
+    host = host.slice(0, 80) || 'an address that could not be read';
+    if (hosts.has(host)) continue; // eslint-disable-line no-continue
+    hosts.add(host);
+    out.push({ kind: 'LINK', severity: 'low', start: m.index, end: m.index + m[0].length, excerpt: host, advice: LINK_ADVICE });
+  }
+  return out;
+}
+
 // ---- Placeholders ---------------------------------------------------------------------------------------------------
 
 const PLACEHOLDER = /\[[A-Z][A-Z_]*_\d+\]/g;
@@ -64,7 +98,7 @@ export function placeholderFindings(text, severity = 'medium') {
   PLACEHOLDER.lastIndex = 0;
   let m;
   while ((m = PLACEHOLDER.exec(plain)) !== null && out.length < 3) {
-    out.push({ kind: 'PLACEHOLDER', severity, start: m.index, end: m.index + m[0].length, excerpt: m[0], advice: PLACEHOLDER_ADVICE });
+    out.push({ kind: 'PLACEHOLDER', severity, start: m.index, end: m.index + m[0].length, excerpt: m[0], advice: KEPT_PLACEHOLDER.test(m[0]) ? KEPT_PLACEHOLDER_ADVICE : PLACEHOLDER_ADVICE });
   }
   return out;
 }
@@ -151,6 +185,7 @@ export function reviewForCustomer(text, { people = [], scan = null, internalText
     ...base,
     ...rememberedFindings(plain, scan, seriousBase),
     ...markupFindings(plain),
+    ...linkFindings(plain),
     ...placeholderFindings(plain, 'medium'),
     ...overlapFindings(plain, internalTexts),
   ].sort(byPosition);

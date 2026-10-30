@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { internalTextsOf, isCustomerVisible, markupFindings, overlapFindings, placeholderFindings, reviewForCustomer, reviewForInsert } from '../src/safeSend/review.js';
+import { internalTextsOf, isCustomerVisible, linkFindings, markupFindings, overlapFindings, placeholderFindings, reviewForCustomer, reviewForInsert } from '../src/safeSend/review.js';
 import { seriousFindings } from '../src/compose/sendCheck.js';
 import { checkOutgoing } from '../src/safeSend/index.js';
 
@@ -170,4 +170,29 @@ test('the work notes of a pack are the journal entries of type work_note, newest
   assert.deepEqual(internalTextsOf(pack), ['internal one', 'internal two']);
   assert.deepEqual(internalTextsOf({}), []);
   assert.deepEqual(internalTextsOf(null), []);
+});
+
+// ---- links in a customer reply (security audit 2, AB2-09) ------------------------------------------------------------
+
+test('a link in a customer-visible draft is a "Worth a look" hint naming the site, never blocking, never the path', () => {
+  const draft = 'Please reset it here: https://login-micros0ft.example/reset?u=abel.tuter&t=123 and read www.example.org/help.';
+  const review = reviewForInsert('comments', draft, { people });
+  const links = review.hints.filter((f) => f.kind === 'LINK');
+  assert.deepEqual(links.map((f) => f.excerpt), ['login-micros0ft.example', 'www.example.org']);
+  assert.ok(!review.serious.some((f) => f.kind === 'LINK'), 'a link alone does not stop the insert');
+  for (const f of links) {
+    assert.ok(!/reset|abel|123/.test(f.excerpt), 'the path and query are never shown');
+    assert.match(f.advice, /link/i);
+  }
+});
+
+test('one hint per site, at most three, and an international look-alike name shows in its xn-- form', () => {
+  const many = 'https://a.example/1 https://a.example/2 https://b.example https://c.example https://d.example';
+  assert.deepEqual(linkFindings(many).map((f) => f.excerpt), ['a.example', 'b.example', 'c.example']);
+  assert.match(linkFindings('Go to https://pаypal.example/login')[0].excerpt, /^xn--/, 'a Cyrillic "а" is not hidden');
+});
+
+test('a work note gets no link hint (only customer-visible text is looked at for links), and plain text has none', () => {
+  assert.deepEqual(reviewForInsert('work_notes', 'See https://wiki.corp.example/runbook', { people }), { serious: [], hints: [] });
+  assert.deepEqual(linkFindings('No link here, just a dot.com mention and http without a colon'), []);
 });

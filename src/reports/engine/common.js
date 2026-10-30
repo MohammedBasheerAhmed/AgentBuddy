@@ -3,6 +3,7 @@
 import { raw, disp } from '../../context/util.js';
 import { REPORT_TABLES, LIMITS } from './constants.js';
 import { andQuery } from './queryBuilder.js';
+import { attempt } from './reader.js';
 
 export { raw, disp, andQuery };
 
@@ -88,6 +89,21 @@ function statusNote(table, label, vis) {
 
 // ---- Numbers -------------------------------------------------------------------------------------------------------
 
+/**
+ * A count from a table that is NOT one of the probed ticket tables (task_sla, sysapproval_approver): attempt()'s shape, but a zero
+ * is only believed when the person can see at least one row of the table. An access rule that hides every row answers 200 with
+ * nothing, and the Aggregate API then says 0: shown as "0 breached" that would be a guess (rule 9). Costs one extra one-row read,
+ * and only when the count is 0. `unseen` is the sentence for that case.
+ */
+export async function verifiedCount(reader, table, query, { unseen } = {}) {
+  const counted = await attempt(() => reader.count(table, query), table);
+  if (!counted.ok || counted.value !== 0) return counted;
+  const vis = await reader.visibility(table);
+  if (vis.status === 'ok') return counted;
+  if (vis.status === 'hidden') return { ok: false, status: 'hidden', note: unseen || vis.note };
+  return { ok: false, status: vis.status, note: vis.note };
+}
+
 /** Sum the successful counts. { value, partial, failed }: `partial` when some tables could not be read, `value` null when none could. */
 export function sumResults(results) {
   const ok = results.filter((r) => r && r.ok);
@@ -116,6 +132,17 @@ export function capNote(source, read) {
   };
 }
 
+/** The same entry once: a section that builds on another (the hand-over calls the Overview) must not say a thing twice. */
+export function uniqueBy(list, keyOf) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : []).filter((x) => {
+    const key = keyOf(x);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Standard result wrapper every section returns, so the panel and later add-ons read one shape. */
 export function sectionResult(id, title, ctx, data, extra = {}) {
   return {
@@ -125,9 +152,9 @@ export function sectionResult(id, title, ctx, data, extra = {}) {
     readAt: ctx.reader.readAt || ctx.generatedAt,
     scope: { kind: ctx.scope.kind, label: ctx.scope.label, groups: ctx.scope.groups, inferred: ctx.scope.inferred, note: ctx.scope.note },
     tables: tableAccess(ctx.tables),
-    access: ctx.access,
-    notes: ctx.notes,
-    caps: ctx.caps,
+    access: uniqueBy(ctx.access, (a) => `${a.source}|${a.note}`),
+    notes: uniqueBy(ctx.notes, (n) => n),
+    caps: uniqueBy(ctx.caps, (c) => `${c.source}|${c.note}`),
     data,
     ...extra,
   };

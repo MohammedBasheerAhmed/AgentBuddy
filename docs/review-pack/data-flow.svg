@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 700" width="960" height="700" role="img" aria-labelledby="title desc">
+  <title id="title">Agent Buddy: data flow</title>
+  <desc id="desc">The ServiceNow tab and the Agent Buddy extension run on the person's computer. The content script reads the ServiceNow instance with GET requests and the person's own session. The side panel masks personal data in the PII firewall and sends the masked text to the AI endpoint the organisation chose. The answer is shown as plain text and can be inserted into one form field. The organisation's policy is read from the browser. Nothing else is contacted.</desc>
+  <style>
+    .bg { fill: #ffffff; }
+    .t { fill: #1f2328; font: 600 14px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .s { fill: #1f2328; font: 13px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .m { fill: #57606a; font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .h { fill: #1f2328; font: 700 20px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .box { fill: #f6f8fa; stroke: #8c959f; stroke-width: 1.2; }
+    .grp { fill: none; stroke: #8c959f; stroke-width: 1.2; }
+    .ext { fill: #fff8c5; stroke: #9a6700; stroke-width: 1.2; }
+    .bound { fill: none; stroke: #cf222e; stroke-width: 1.6; stroke-dasharray: 7 5; }
+    .bl { fill: #cf222e; font: 600 12px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .flow { fill: none; stroke: #0969da; stroke-width: 2; }
+    .head { fill: #0969da; }
+    .fl { fill: #0969da; font: 600 12px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .t, .s, .h { fill: #e6edf3; }
+      .m { fill: #9198a1; }
+      .box { fill: #161b22; stroke: #6e7681; }
+      .grp { stroke: #6e7681; }
+      .ext { fill: #2b2611; stroke: #d29922; }
+      .bound { stroke: #f85149; }
+      .bl { fill: #f85149; }
+      .flow { stroke: #4493f8; }
+      .head { fill: #4493f8; }
+      .fl { fill: #4493f8; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="head" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="700"/>
+  <text class="h" x="24" y="36">Agent Buddy: where data goes</text>
+  <text class="m" x="24" y="58">Blue arrows carry data. Red dashed line: this computer. Only two destinations are outside it: the ServiceNow instance and the AI endpoint.</text>
+
+  <!-- Trust boundary: the person's computer -->
+  <rect class="bound" x="16" y="76" width="644" height="464" rx="10"/>
+  <text class="bl" x="28" y="96">This computer: the person's browser profile</text>
+
+  <!-- The ServiceNow tab -->
+  <rect class="grp" x="36" y="108" width="284" height="328" rx="8"/>
+  <text class="t" x="50" y="128">ServiceNow tab</text>
+  <rect class="box" x="52" y="140" width="252" height="54" rx="6"/>
+  <text class="s" x="64" y="162">ServiceNow's own page scripts</text>
+  <text class="m" x="64" y="180">not trusted: they can see the page</text>
+  <rect class="box" x="52" y="224" width="252" height="70" rx="6"/>
+  <text class="s" x="64" y="246">Page bridge (page world)</text>
+  <text class="m" x="64" y="264">reads the open form; fills ONE field;</text>
+  <text class="m" x="64" y="280">never saves, never sends anything</text>
+  <rect class="box" x="52" y="326" width="252" height="92" rx="6"/>
+  <text class="s" x="64" y="348">Content script (isolated world)</text>
+  <text class="m" x="64" y="366">GET-only reads, the person's own</text>
+  <text class="m" x="64" y="382">session; field allowlists; blocked</text>
+  <text class="m" x="64" y="398">tables refused before any request</text>
+
+  <!-- The extension -->
+  <rect class="grp" x="340" y="108" width="300" height="412" rx="8"/>
+  <text class="t" x="354" y="128">Agent Buddy extension</text>
+  <rect class="box" x="356" y="140" width="252" height="62" rx="6"/>
+  <text class="s" x="368" y="162">Side panel, Settings, Team dashboard</text>
+  <text class="m" x="368" y="180">every action runs and every answer</text>
+  <text class="m" x="368" y="195">is shown here, as plain text</text>
+  <rect class="box" x="356" y="222" width="252" height="74" rx="6"/>
+  <text class="s" x="368" y="244">PII firewall</text>
+  <text class="m" x="368" y="262">masks names, emails, numbers, secrets;</text>
+  <text class="m" x="368" y="278">seals the request; preview of the text</text>
+  <rect class="box" x="356" y="316" width="252" height="70" rx="6"/>
+  <text class="s" x="368" y="338">Service worker</text>
+  <text class="m" x="368" y="356">registers the scripts on the sites the</text>
+  <text class="m" x="368" y="372">person turned on; makes no request</text>
+  <rect class="box" x="356" y="406" width="252" height="96" rx="6"/>
+  <text class="s" x="368" y="428">Browser storage</text>
+  <text class="m" x="368" y="446">settings, the AI key (per chosen mode),</text>
+  <text class="m" x="368" y="462">usage and audit logs without ticket</text>
+  <text class="m" x="368" y="478">text; only extension pages use it</text>
+
+  <!-- Outside: AI endpoint, organisation policy, ServiceNow instance -->
+  <rect class="ext" x="690" y="140" width="254" height="112" rx="8"/>
+  <text class="t" x="704" y="162">AI endpoint</text>
+  <text class="m" x="704" y="182">the one the organisation chose:</text>
+  <text class="m" x="704" y="198">a gateway, Azure OpenAI, a vendor</text>
+  <text class="m" x="704" y="214">API, or a model on this computer.</text>
+  <text class="m" x="704" y="236">Sees masked text only.</text>
+
+  <rect class="ext" x="690" y="388" width="254" height="112" rx="8"/>
+  <text class="t" x="704" y="410">Organisation IT</text>
+  <text class="m" x="704" y="430">browser policy: allowed sites, AI</text>
+  <text class="m" x="704" y="446">endpoint and models, privacy floor,</text>
+  <text class="m" x="704" y="462">blocked tables. An enterprise build</text>
+  <text class="m" x="704" y="478">also has it compiled in.</text>
+
+  <rect class="ext" x="36" y="588" width="284" height="86" rx="8"/>
+  <text class="t" x="50" y="610">ServiceNow instance</text>
+  <text class="m" x="50" y="630">the organisation's own instance;</text>
+  <text class="m" x="50" y="646">ACLs, business rules and the audit</text>
+  <text class="m" x="50" y="662">trail apply as for the person</text>
+
+  <!-- Flows -->
+  <!-- page scripts <-> bridge: the same page -->
+  <path class="flow" d="M178,197 L178,221" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <!-- bridge <-> content script: CustomEvent on the page -->
+  <path class="flow" d="M178,297 L178,323" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="fl" x="188" y="314">page event</text>
+  <!-- content script <-> ServiceNow instance -->
+  <path class="flow" d="M178,421 L178,586" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="fl" x="188" y="476">HTTPS GET only,</text>
+  <text class="fl" x="188" y="492">the person's session</text>
+  <!-- content script <-> side panel: runtime messages -->
+  <path class="flow" d="M306,350 L326,350 L326,171 L354,171" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <!-- service worker -> content script: registration -->
+  <path class="flow" d="M354,351 L306,396" marker-end="url(#arrow)"/>
+  <!-- side panel -> firewall -->
+  <path class="flow" d="M482,204 L482,220" marker-end="url(#arrow)"/>
+  <!-- firewall -> AI endpoint -->
+  <path class="flow" d="M610,259 L650,259 L650,232 L688,232" marker-end="url(#arrow)"/>
+  <text class="fl" x="700" y="280">HTTPS POST: the masked,</text>
+  <text class="fl" x="700" y="296">sealed text and the AI key</text>
+  <!-- AI endpoint -> side panel: the answer -->
+  <path class="flow" d="M688,160 L610,160" marker-end="url(#arrow)"/>
+  <text class="fl" x="614" y="152">answer</text>
+  <!-- organisation policy -> extension (read only) -->
+  <path class="flow" d="M688,444 L642,444" marker-end="url(#arrow)"/>
+  <text class="fl" x="700" y="522">read only by the extension</text>
+
+  <!-- Key to the flows -->
+  <text class="s" x="356" y="572">Messages between the page and the extension:</text>
+  <text class="m" x="356" y="592">READ asks the content script for ticket data; the answer comes back to the panel.</text>
+  <text class="m" x="356" y="610">FILL_FIELD carries the text the person chose to insert, for the record it was written for.</text>
+  <text class="m" x="356" y="628">The bar on the page sends only "show actions" and "open the panel for this action".</text>
+  <text class="s" x="356" y="656">No Agent Buddy server exists. No analytics. No other destination.</text>
+  <text class="m" x="356" y="676">Details: docs/security.md sections 2 to 5; docs/review-pack/stride.md.</text>
+</svg>

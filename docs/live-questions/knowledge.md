@@ -78,10 +78,17 @@ Where to look: `src/context/chat.js` (chat), `src/context/knowledge.js` (article
 ## Knowledge gaps (C7)
 
 21. **Where the link between a ticket and an article lives.** Assumed: `m2m_kb_task` (columns `task`, `kb_knowledge`; the "Attached Knowledge"
-    list) and `kb_use` (column `task_id`; articles viewed or used from a task; the Check tab asks the same two tables with the same column names, see
-    `docs/live-questions/checks.md` question 11). Check: both tables as a fulfiller and which columns they have. If `kb_use` turns out to use
-    `task`, change it in both `LINK_SOURCES` and `KB_SOURCES`. If neither can be read, or the filter is not applied, the radar says "could not tell which tickets had an article" and counts
-    every recent resolved ticket. A `kb_use` row (a view) counts as "has an article". Wrong: edit `LINK_SOURCES`.
+    list) and `kb_use` (articles viewed or used from a task). Which column of `kb_use` points at the ticket is NOT assumed any more
+    (2026-10-30): `LINK_SOURCES` in `src/context/knowledge.js` lists `task_id` and `task`, and `detectLinkColumn` asks `kb_use` ONCE, with no
+    filter, for one row and both column names. The Table API leaves out a column the table does not have, so that row says which one exists;
+    the links are then read by that column. The probe is the same one-row read that "is this table empty or hidden?" needed anyway, so the
+    number of reads stays the same when nothing is linked (one more when something is). The Check tab uses the same list and probe
+    (`docs/live-questions/checks.md` question 11). Check as a fulfiller: (a) `GET /api/now/table/kb_use?sysparm_limit=1&sysparm_fields=sys_id,task_id,task`
+    returns a row with exactly one of the two names (if it returns both keys, `task_id` is used: tell us which holds the ticket); (b) a column
+    you cannot read because of a field ACL comes back as an empty value, not as a missing key (then "none" may be wrong for that table). If
+    neither column exists, the radar and the Check tab say so and do not use `kb_use`. If neither table can be read, or a filter is not applied,
+    the radar says "could not tell which tickets had an article" and counts every recent resolved ticket. A `kb_use` row (a view) counts as
+    "has an article". Wrong column names: edit `LINK_SOURCES` only.
 22. **`resolved_at` on `incident` and `sn_customerservice_case`**, and that `resolved_at>=YYYY-MM-DD HH:MM:SS` works as a condition for a fulfiller.
     The window is applied again locally against the stored time, so a condition the instance ignores is harmless.
 23. **Who raised a ticket** is read from `caller_id` (incident) and `contact` / `consumer` (case) only so that their names stay out of the topic words and the

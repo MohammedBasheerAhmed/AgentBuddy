@@ -6,11 +6,17 @@ import { resolveProviderConfig } from '../../providers/config.js';
 import { logAudit } from '../../lib/storage.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { aiNeedsText, isAiReady } from '../aiReady.js';
+import AiKeyNote from '../AiKeyNote.jsx';
 
 export { isAiReady };
 
 /** The sentence for a section that cannot use the AI yet (no key, or the key is locked). */
 export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this') || 'Add an AI key in Settings to use this.';
+
+/** That sentence as the panel's shared note, with the way there ("Open Settings"). Nothing when the AI can be used. */
+export function AiKeyLine({ eff }) {
+  return <AiKeyNote eff={eff} what="this" />;
+}
 
 /** A feature by id, and whether the organisation's policy lets it run. */
 export function featureState(id, policy) {

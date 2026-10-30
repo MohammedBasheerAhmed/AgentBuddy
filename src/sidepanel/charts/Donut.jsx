@@ -1,6 +1,7 @@
 import React from 'react';
 import ChartFrame, { PatternDefs, Swatch, patternId, useUid } from './ChartFrame.jsx';
 import { donutArcs, formatNumber, itemsToTable, percent, summarizeItems, toneClass, toneForIndex } from './geometry.js';
+import DrillLink, { hrefOf } from './DrillLink.jsx';
 
 const RADIUS = 52;
 
@@ -11,8 +12,9 @@ const RADIUS = 52;
  *   items        [{ key, label, value, tone }]
  *   centerLabel  small text under the total, for example "open"
  *   onDrill(item)
+ *   hrefFor(item) with onDrill: the address of the list a legend row opens; the row is then a real link (see DrillLink.jsx)
  */
-export default function Donut({ title, items, centerLabel = '', onDrill, emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
+export default function Donut({ title, items, centerLabel = '', onDrill, hrefFor, emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
   const uid = useUid();
   const list = (Array.isArray(items) ? items : []).filter((it) => it && typeof it === 'object').map((it, i) => ({ ...it, tone: it.tone || toneForIndex(i) }));
   const ring = donutArcs(list, { radius: RADIUS, thickness: 20 });
@@ -33,10 +35,16 @@ export default function Donut({ title, items, centerLabel = '', onDrill, emptyTe
             <span className="ab-legend-pct">{ring.total > 0 ? `${pct}%` : '-'}</span>
           </>
         );
+        const name = `${arc.label}: ${formatNumber(arc.value)}${ring.total > 0 ? `, ${pct}%` : ''}. Open the list.`;
+        const href = onDrill && hrefFor ? hrefOf(hrefFor, item) : '';
         return (
           <li key={arc.key}>
-            {onDrill ? (
-              <button type="button" className="ab-legend-item" aria-label={`${arc.label}: ${formatNumber(arc.value)}${ring.total > 0 ? `, ${pct}%` : ''}. Open the list.`} onClick={() => onDrill(item)}>
+            {href ? (
+              <DrillLink className="ab-legend-item" href={href} onOpen={() => onDrill(item)} label={name}>
+                {inner}
+              </DrillLink>
+            ) : onDrill && !hrefFor ? (
+              <button type="button" className="ab-legend-item" aria-label={name} onClick={() => onDrill(item)}>
                 {inner}
               </button>
             ) : (

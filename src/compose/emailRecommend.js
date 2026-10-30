@@ -46,6 +46,20 @@ function ms(when) {
   return Number.isFinite(t) ? t : null;
 }
 
+// Which clock the notes' times are on. Read from sys_journal_field they are stored UTC; read from the record's own comments and
+// work notes columns (the fallback, src/context/journal.js) they are in the reader's time zone, like every field value.
+const notesAreLocal = (pack) => (Array.isArray(pack.access) ? pack.access : []).some((a) => a && a.source === 'journal' && a.strategy === 'record-fields');
+
+/**
+ * A date of the record on the same clock as the notes and the clock of this computer: the stored UTC value the pack carries
+ * (related.times, the 'email-compose' spec asks for it) unless the notes are in local time, then the display value.
+ * Comparing a UTC note time with a display value was off by the reader's UTC offset ("told after it was resolved" or not).
+ */
+function dateOf(pack, name) {
+  const stored = pack.related?.times && typeof pack.related.times === 'object' ? text(pack.related.times[name]) : '';
+  return stored && !notesAreLocal(pack) ? ms(stored) : ms(pack.fields?.[name]);
+}
+
 /** "3 hours", "2 days" - rough on purpose. */
 export function ago(milliseconds) {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return '';
@@ -126,8 +140,8 @@ export function readSignals(pack, now = Date.now()) {
   const onHold = !closed && !resolved && (/\bhold\b|pending|awaiting|waiting/i.test(state) || Boolean(hold));
   const waitingOnCustomer = onHold && /(caller|customer|\buser\b|requester|requestor|requested for|\binfo(rmation)?\b)/i.test(`${state} ${hold}`);
 
-  const resolvedAt = ms(f.resolved_at) ?? ms(f.closed_at);
-  const openedAt = ms(f.opened_at);
+  const resolvedAt = dateOf(p, 'resolved_at') ?? dateOf(p, 'closed_at');
+  const openedAt = dateOf(p, 'opened_at');
   const message = lastMessage(p, now);
   return {
     kind: text(p.kind),

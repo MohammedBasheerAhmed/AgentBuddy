@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { read } from '../ask.js';
+import ErrorNote from '../ErrorNote.jsx';
 import { useRun } from '../useRun.js';
 import { COACHING_LIMITS, COACHING_REMINDER, buildCoachingPack, checkCoachingAnswer, coachingBlockedBy, formatDay, rangeFromDays } from '../../reports/ai/coaching.js';
 import { PER_PERSON_NOTE, flagPerPersonScoring } from '../../reports/ai/scoring.js';
-import { AiBlocked, AiResult, AiShell, RunProgress, aiNotReadyText, featureState, isAiReady } from './aiShared.jsx';
+import { AiBlocked, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { plural } from './format.js';
 
 const FEATURE_ID = 'coaching-snapshot';
@@ -227,9 +228,9 @@ function CoachingTool({ env, eff, needs }) {
           Write the coaching snapshot
         </button>
       </div>
-      {!aiReady && <p className="ab-note ab-note-warn">{aiNotReadyText(eff)}</p>}
+      {!aiReady && <AiKeyLine eff={eff} />}
       {sample.phase === 'reading' && <p className="ab-note" role="status">Reading the sample with your session…</p>}
-      {sample.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{sample.error}</p>}
+      {sample.phase === 'error' && <ErrorNote error={sample.error} onRetry={pick} />}
       <CoachingSample result={sample.result} dayLabel={dayLabel} />
 
       <RunProgress run={run} eff={eff} page={env.page} readingText="Getting ready…" />

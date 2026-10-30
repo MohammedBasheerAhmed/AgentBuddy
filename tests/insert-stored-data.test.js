@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { KEY_PREFIX, STORED_DATA, clearAllStored, describeKey, summarizeStored } from '../src/lib/storedData.js';
+import { AREAS, KEY_PREFIX, STORED_DATA, clearAllStored, describeKey, summarizeStored } from '../src/lib/storedData.js';
 import { SETTINGS_KEY, SNIPPETS_KEY } from '../src/lib/storage.js';
 import { AUDIT_KEY, AUDIT_SALT_KEY } from '../src/audit/auditLog.js';
 import { CHECKLIST_KEY } from '../src/checks/checklistStore.js';
@@ -100,7 +100,7 @@ test('every item is described in plain words and the area is named', () => {
     assert.ok(!ids.has(item.id), item.id);
     ids.add(item.id);
     assert.ok(item.title.length > 3 && item.detail.length > 20, item.id);
-    assert.ok(['local', 'session', 'local and session'].includes(item.area), item.id);
+    assert.ok(AREAS.includes(item.area), item.id);
     for (const key of item.keys || []) assert.ok(key.startsWith(KEY_PREFIX), key);
     for (const prefix of item.prefixes || []) assert.ok(prefix.startsWith(KEY_PREFIX), prefix);
     assert.ok((item.keys || []).length + (item.prefixes || []).length > 0, item.id);
@@ -128,5 +128,32 @@ test('Settings has the section, a confirmation and the button text the person as
   assert.match(source, /Stored data/);
   assert.match(source, /Clear everything stored by Agent Buddy/);
   assert.match(source, /Yes, remove everything/);
-  assert.match(source, /clearAllStored\(\{ local: chrome\.storage\.local, session: chrome\.storage\.session \}\)/);
+  // Every place something is kept: browser storage, memory, and the key vault (IndexedDB).
+  assert.match(source, /clearAllStored\(\s*\{ local: chrome\.storage\.local, session: chrome\.storage\.session, vault: keyVault\(\) \}/);
+});
+
+test('the key vault (IndexedDB) is emptied too; the stamp in local storage goes with the rest', async () => {
+  const local = fakeArea({ [SETTINGS_KEY]: 1, agentbuddy_keyvault_stamp: 123 });
+  const session = fakeArea({ agentbuddy_key_openai: 'sk-1' });
+  const vault = fakeArea({ agentbuddy_key_anthropic: 'sk-ant-1', agentbuddy_keyenc_openai: { ct: 'x' } });
+  const result = await clearAllStored({ local, session, vault });
+  assert.deepEqual(vault.data, {});
+  assert.deepEqual(local.data, {});
+  assert.deepEqual(result, { removed: { local: 2, session: 1, vault: 2 }, remaining: [] });
+  const leftover = await clearAllStored({ local: fakeArea(), vault: fakeArea({ agentbuddy_key_x: 1 }, { stubborn: ['agentbuddy_key_x'] }) });
+  assert.deepEqual(leftover.remaining, ['vault:agentbuddy_key_x'], 'a key that would not go is reported');
+});
+
+test('keep: the usage log stays while the organisation counts a daily token budget from it; it is not reported as left over', async () => {
+  const local = fakeArea({ [SETTINGS_KEY]: 1, [USAGE_KEY]: [{ time: 't' }], [CAPS_KEY]: {} });
+  const result = await clearAllStored({ local }, { keep: [USAGE_KEY] });
+  assert.deepEqual(Object.keys(local.data), [USAGE_KEY]);
+  assert.deepEqual(result, { removed: { local: 2, session: 0 }, remaining: [], kept: [`local:${USAGE_KEY}`] });
+});
+
+test('the Settings list counts a key kept in the vault as saved; the time stamp alone is not a key', () => {
+  const summary = summarizeStored([], [], ['agentbuddy_keyenc_openai']);
+  assert.equal(summary.find((i) => i.id === 'key').present, true);
+  assert.equal(summarizeStored(['agentbuddy_keyvault_stamp']).find((i) => i.id === 'key').present, false);
+  assert.equal(describeKey('agentbuddy_vault').id, 'key');
 });

@@ -2,18 +2,26 @@
 // within a few hours; grouped by owner and by group, with the ten closest to breaking. It reads task_sla (active SLAs of the
 // tickets in scope, narrowed to the worrying ones) and then looks the tickets up in the task table.
 // The risk line (75 % of the time used) is the one My Day draws: src/reports/myDay.js.
-import { worstSla, riskOf } from '../myDay.js';
+import { worstSla, riskOf, isPaused, SLA_COLUMNS } from '../myDay.js';
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS } from './constants.js';
 import { attempt } from './reader.js';
-import { andQuery, raw, disp, capNote, sectionResult, usableTables, byCountDesc, clampInt } from './common.js';
+import { andQuery, raw, disp, capNote, sectionResult, usableTables, byCountDesc, clampInt, verifiedCount } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { HOUR, snLiteral, timeOf } from './time.js';
 
-const SLA_FIELDS = ['task', 'sla', 'stage', 'has_breached', 'percentage', 'planned_end_time'];
+const SLA_FIELDS = [...SLA_COLUMNS];
 const TASK_FIELDS = ['sys_id', 'number', 'short_description', 'priority', 'state', 'assigned_to', 'assignment_group', 'sys_class_name'];
+export const SLA_UNSEEN = 'You can see no SLA records at all, so SLA numbers would prove nothing: there may be none, or an access rule may hide them.';
 
 const isTrue = (v) => ['true', '1', 'yes'].includes(raw(v).toLowerCase());
+
+/**
+ * The task_sla condition for "worth a look": breached, or at least `pct` % used, or ending by `untilMs`. Both percentages are asked
+ * for (the business one decides, see slaPercent in ../myDay.js; the plain one covers an SLA row that has no business figure), so
+ * the read is a little wider than the risk and the rows are judged here.
+ */
+export const worryingQuery = (pct, untilMs) => `has_breached=true^ORbusiness_percentage>=${pct}^ORpercentage>=${pct}^ORplanned_end_time<=${snLiteral(untilMs)}`;
 
 /** Collapse SLA rows to one entry per ticket: the worst SLA, and whether any SLA is due within `dueMs`. Pure. */
 export function groupSlaByTicket(slaRows, { now, dueMs = LIMITS.dueSoonHours * HOUR, atRiskPercent = LIMITS.slaAtRiskPercent } = {}) {
@@ -29,9 +37,10 @@ export function groupSlaByTicket(slaRows, { now, dueMs = LIMITS.dueSoonHours * H
     const worst = worstSla(rows);
     const risk = riskOf(worst);
     // The soonest end of any SLA that has not breached: "due soon" even when its percentage is still low (a long pause ended).
+    // A paused SLA is left out: its clock is stopped and its planned end moves when it resumes (it may even lie in the past).
     let soonest = Infinity;
     rows.forEach((r) => {
-      if (isTrue(r.has_breached)) return;
+      if (isTrue(r.has_breached) || isPaused(r)) return;
       const end = timeOf(raw(r.planned_end_time));
       if (Number.isFinite(end) && end < soonest) soonest = end;
     });
@@ -80,9 +89,10 @@ export async function readSlaSnapshot(ctx) {
     if (!usable.length) return { ok: false, status: 'error', note: 'No ticket table can be read.' };
     const dueUntil = now + LIMITS.dueSoonHours * HOUR;
     const base = andQuery('active=true', `task.sys_class_nameIN${usable.join(',')}`, scope.taskQuery);
-    const worrying = `has_breached=true^ORpercentage>=${LIMITS.slaAtRiskPercent}^ORplanned_end_time<=${snLiteral(dueUntil)}`;
+    const worrying = worryingQuery(LIMITS.slaAtRiskPercent, dueUntil);
 
-    const total = await attempt(() => reader.count('task_sla', base), 'task_sla');
+    // "0 breached" is only said when this person can see SLA records at all.
+    const total = await verifiedCount(reader, 'task_sla', base, { unseen: SLA_UNSEEN });
     if (!total.ok) return { ok: false, status: total.status, note: total.status === 'denied' ? 'SLA information is not available to you.' : total.note };
     const read = await attempt(
       () => reader.pages('task_sla', `${base}^${worrying}^ORDERBYDESChas_breached^ORDERBYDESCpercentage`, SLA_FIELDS, { max: LIMITS.slaRowsMax, pageSize: 500, displayValue: true }),

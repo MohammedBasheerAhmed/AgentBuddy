@@ -37,10 +37,27 @@ export function createRuntime({ ttlMs = LIMITS.cacheTtlMs, concurrency = LIMITS.
   return { cache: createCache({ ttlMs, max: LIMITS.cacheEntries, ...(now ? { now } : {}) }), limiter: createLimiter(concurrency) };
 }
 
+// How old the dashboard's "as of" instant may be and still be used (see asOfFor).
+export const AS_OF_MAX_AGE_MS = 10 * 60 * 1000;
+
+/**
+ * The instant a report counts "now" from. A dashboard passes one `params.asOf` for all its widgets of one load, so they ask the
+ * SAME questions ("no update since <date>", "due before <date>"): the second widget's reads are then cache hits instead of new
+ * requests one minute later, and two widgets never disagree about the same number. Anything that is not a recent instant (in the
+ * future, older than ten minutes, not a number) is ignored and the real time is used.
+ */
+export function asOfFor(params, realNow) {
+  const asOf = Number(params?.asOf);
+  if (!Number.isFinite(asOf) || asOf > realNow + 60000 || asOf < realNow - AS_OF_MAX_AGE_MS) return realNow;
+  return Math.min(asOf, realNow);
+}
+
 /**
  * @param {{ kind?: 'section'|'builder', section?: string, scope?: object, tables?: string[], params?: object, config?: object }} request
  * @param {{ deps: {queryTable: Function, aggregate: Function}, userId: string, runtime: ReturnType<typeof createRuntime>,
- *   now?: number, offsetMin?: number, blocked?: string[], timeoutMs?: number }} env
+ *   now?: number, offsetMin?: number | ((ms: number) => number), blocked?: string[], isBlocked?: (table: string) => boolean,
+ *   timeoutMs?: number }} env
+ *   offsetMin: the time zone (minutes west of UTC, or a function of the instant; default the browser's zone, summer time included)
  */
 export async function runReport(request, env) {
   const realNow = env.now ?? Date.now();
@@ -53,13 +70,13 @@ export async function runReport(request, env) {
   });
   hardStop.catch(() => {});
 
-  const reader = createReader({ deps: env.deps, cache: env.runtime.cache, limiter: env.runtime.limiter, prefix: env.userId || '', blocked: env.blocked || [], signal: controller.signal });
+  const reader = createReader({ deps: env.deps, cache: env.runtime.cache, limiter: env.runtime.limiter, prefix: env.userId || '', blocked: env.blocked || [], isBlocked: env.isBlocked, signal: controller.signal });
   const ctx = {
     reader,
     userId: env.userId || '',
-    now: quantize(realNow),
+    now: quantize(asOfFor(request.params, realNow)),
     generatedAt: realNow,
-    offsetMin: env.offsetMin ?? localOffset(realNow),
+    offsetMin: env.offsetMin ?? localOffset,
     params: request.params && typeof request.params === 'object' ? request.params : {},
     tables: [],
     scope: null,
@@ -83,7 +100,11 @@ export async function runReport(request, env) {
     const working = work();
     working.catch(() => {}); // if the hard stop wins, a late failure is not reported twice
     const result = await Promise.race([working, hardStop]);
-    if (controller.signal.aborted) ctx.notes.push('Some numbers took too long to read and are missing.');
+    if (controller.signal.aborted) {
+      // The result already holds its own copy of the notes (sectionResult removes repeats), so the note goes there.
+      const note = 'Some numbers took too long to read and are missing.';
+      if (Array.isArray(result?.notes) && !result.notes.includes(note)) result.notes.push(note);
+    }
     return result;
   } finally {
     clearTimeout(timer);

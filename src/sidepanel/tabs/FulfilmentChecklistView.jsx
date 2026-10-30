@@ -18,7 +18,7 @@ import { useLoader } from '../checks/useLoader.js';
 
 const feature = featureById('fulfilment-checklist');
 
-export default function FulfilmentChecklistView({ page, eff, record, run, aiReady }) {
+export default function FulfilmentChecklistView({ page, eff, record, run, aiReady, active = true }) {
   const allowSensitive = Boolean(eff.policy?.allowHrContent);
   const store = useMemo(() => panelChecklistStore(), []);
   const readPack = (target) => read(page.tabId, 'pack', { table: target.table, sysId: target.sysId, feature: 'fulfilment-checklist', allowSensitive });
@@ -35,7 +35,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
     }
     const done = await store.load(record.sysId).catch(() => []);
     return { own, parent, note, done };
-  }, [page.tabId, record.table, record.sysId, record.kind, allowSensitive]);
+  }, [page.tabId, record.table, record.sysId, record.kind, allowSensitive], { active });
 
   const data = state.data;
   // The ticks come from storage with the data; a tick the agent makes replaces them. (RecordView gives each record its own
@@ -95,7 +95,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
         {data?.note && <p className="ab-note ab-note-warn" role="note">{data.note}</p>}
       </section>
 
-      <LoadNotes state={state} />
+      <LoadNotes state={state} onRetry={reload} />
 
       {data && (
         <section className="ab-card" aria-label="Checklist">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { read } from '../ask.js';
+import { retryDelay } from './useReport.js';
 import { DASHBOARDS_KEY, chromeLocalStorage, createDashboardStore, sanitizeState } from '../../reports/dashboards.js';
 
 /** Which report tables the person can read, who they are, and their groups. Re-read when `refreshKey` changes. */
@@ -9,9 +10,26 @@ export function useReportContext({ tabId, blocked, refreshKey }) {
   useEffect(() => {
     let alive = true;
     setState((s) => ({ ...s, phase: s.data ? 'ready' : 'loading', error: '' }));
-    read(tabId, 'reportContext', { blocked: JSON.parse(key) })
-      .then((data) => alive && setState({ phase: 'ready', data, error: '' }))
-      .catch((err) => alive && setState((s) => ({ phase: 'error', data: s.data, error: err.code === 'SESSION_EXPIRED' ? 'Your ServiceNow session has expired. Log in again, then press Refresh.' : err.message })));
+    (async () => {
+      for (let attempt = 0; alive; attempt += 1) {
+        try {
+          // eslint-disable-next-line no-await-in-loop -- one try at a time
+          const data = await read(tabId, 'reportContext', { blocked: JSON.parse(key) });
+          if (alive) setState({ phase: 'ready', data, error: '' });
+          return;
+        } catch (err) {
+          // The ServiceNow page was being replaced: wait for the new one and ask again (see useReport.js).
+          const wait = retryDelay(err, attempt);
+          if (wait !== null) {
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((resolve) => setTimeout(resolve, wait));
+            continue;
+          }
+          if (alive) setState((s) => ({ phase: 'error', data: s.data, error: err.code === 'SESSION_EXPIRED' ? 'Your ServiceNow session has expired. Log in again, then press Refresh.' : err.message }));
+          return;
+        }
+      }
+    })();
     return () => {
       alive = false;
     };

@@ -1,0 +1,38 @@
+Windows Registry Editor Version 5.00
+
+; Agent Buddy: recommended locked-down policy for Google Chrome on Windows.
+; 1. Replace EXTENSION_ID (everywhere) with the id of your build, from the extensions page of the browser.
+; 2. Replace the example addresses, the model and the HR table prefix with your own.
+; 3. Deploy through Group Policy Preferences, Intune or your usual tool, then open the browser's policy page
+;    (chrome://policy) and check that every Agent Buddy key shows Status OK.
+; Check this file first: node scripts/check-policy.js <this file>
+; Lists are subkeys with values "1", "2", ...; true/false and numbers are REG_DWORD.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\3rdparty\extensions\EXTENSION_ID\policy]
+"aiProvider"="openai"
+"aiBaseUrl"="https://ai-gateway.corp.example/v1"
+"piiMode"="strict"
+"previewMode"="always"
+"keyStorage"="session"
+"allowHrContent"=dword:00000000
+"tokenBudgetPerDay"=dword:00030d40
+"auditExport"=dword:00000001
+"coachingEnabled"=dword:00000000
+"disablePageBar"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\3rdparty\extensions\EXTENSION_ID\policy\allowedInstances]
+"1"="https://acme.service-now.com"
+"2"="https://acme-test.service-now.com"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\3rdparty\extensions\EXTENSION_ID\policy\allowedModels]
+"1"="gpt-5-mini"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\3rdparty\extensions\EXTENSION_ID\policy\sensitiveTablePrefixes]
+"1"="x_acme_hr_"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\3rdparty\extensions\EXTENSION_ID\policy\disabledFeatures]
+"1"="coaching-snapshot"
+
+; Install Agent Buddy for everyone, from your own update server. For a store listing use the store's update URL instead.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist]
+"1"="EXTENSION_ID;https://extensions.corp.example/agentbuddy/update.xml"

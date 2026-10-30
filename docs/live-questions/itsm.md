@@ -92,6 +92,31 @@ CSM/catalog roles where the kind needs them). For each: what was assumed, how to
     comments, and the requester usually reads the requested item; the Request tab says where the message goes. Check which comments a
     requester of a catalog task sees.
 
+## Added 2026-10-30 (features walk)
+
+17. **Open duplicates are compared by sys_id, not by name** (`src/context/similar.js` findOpenDuplicates). The finder first reads the
+    record's own stored `cmdb_ci` and `business_service` (one GET, `sysparm_fields=sys_id,cmdb_ci,business_service`, no display values),
+    then asks `cmdb_ci=<id>^active=true^sys_id!=<record>` and the same for the service. Before, it asked `cmdb_ci.name=<display name>`:
+    two CIs with the same name were "the same outage", and a CI whose display value is not its name was never found. Check as a
+    fulfiller: the Related tab's "other open tickets on the same service" line on an incident whose CI shares its name with another CI.
+    The window the panel asks for is kept between 1 hour and 7 days.
+18. **Language of the answers.** Every prompt now says which language to write in (src/prompts/rules.js): notes and briefs in the
+    language most of the ticket is written in, customer-facing text in the language of the customer's latest message, published text
+    (articles) in the language of the source, and every label and heading ALWAYS in English, because the panel reads some answers back by
+    their labels (article title and body, problem sections, email subject, ticket proposal, chat notes). Check with a real model on a
+    ticket written in another language (Spanish, German): the content follows the ticket and the labels stay English. If a model
+    translates the labels, Insert of the parts that are picked by label says "nothing to insert" and offers Copy.
+19. **Two inserts now leave out a line meant for the agent.** "What is missing?" inserts only the questions (and their one-line
+    lead-in) into the customer comment, not the "Missing: ..." line; "Write resolution notes" inserts Cause / Fix / Verification without
+    the "Suggested close code" line (the code has its own field). Both are picked by label (src/features/picks.js). Check with a real
+    model that it writes those lines as asked; when it does not, the whole answer (missing-info: only if it has a question) is inserted.
+20. **Caller history of a customer service case asks `contact` OR `consumer`** (`contact=<id>^ORconsumer=<id>`) in one read, and every
+    row is checked against the person in either column. Before, a private customer's (consumer's) cases came back as a confirmed "none".
+    Assumed: the case table has a `consumer` column wherever it has `contact` (base CSM data model). Check on an instance where only
+    business customers are used: the Related tab still lists the contact's earlier cases. If the instance answers an OR on a missing
+    column with no rows at all (property `glide.invalid_query.returns_no_rows`), remove `anyOf` in `HISTORY_SOURCES`
+    (`src/context/history.js`).
+
 ## Not checked at all
 
 - A real model's behaviour with these prompts: the output structure (four lines, `- [ ]` steps, labelled sections, the first line about a similar

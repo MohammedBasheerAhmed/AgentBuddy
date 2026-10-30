@@ -201,3 +201,60 @@ may assume `g_form` or `g_user` exists.
 **Part columns** (`src/features/partColumns.js`)
 - Every derived part `field` (linked_incidents, child_tasks, account_cases, ...) is mapped to the ServiceNow columns it carries, so
   `blockedFields` refuses a part that carries a blocked column. A test fails when a part field exists that is not in the map.
+
+## Additions from the second round (2026-10-30)
+
+**Firewall and pipeline**
+- `fw.buildRequest({ ..., mask: string[] })`: extra literals the person chose in the preview ("Mask this too"); every occurrence in every
+  part gets a placeholder (`[PERSON_n]` when it looks like a name, otherwise `[MASKED_n]`). It can only add masking. `stats.counts.MANUAL`
+  counts those places (a number only, for the audit).
+- Prose names are found by `src/pii/names.js` (`detectProseNames`): a cue before the name in Standard mode, also capitalised full
+  names with no cue in Strict and Local-only. The fixed prompt text is never searched for names.
+- `fw.rehydrate(text, { keep })` leaves the placeholder kinds in `keep` as they are; the pipeline passes `NEVER_REHYDRATE` (exported
+  from `src/pii/firewall.js`: SECRET, CARD, IBAN, ID), so a password the model repeats never comes back into an answer.
+- `prepareRun(...)` also returns `input` (what it was built from); `maskMore(prepared, text)` builds and seals again with one more
+  literal and returns a new prepared run (the old one stands if that fails).
+- `executeRun({ ..., signal })` passes the signal to the provider and returns `{ text, usage, truncated, notice }`; `notice` is the
+  plain sentence for a cut-short answer. A cancelled request is audited as `cancelled`; other errors with their code.
+
+**Providers** (`src/providers/http.js`)
+- Every call goes through `requestJson`: time limit, at most 3 tries on 429/503/529 only, `AbortSignal`, and fixed fetch settings
+  (`redirect: 'error'`, `credentials: 'omit'`, `referrerPolicy: 'no-referrer'`, `cache: 'no-store'`) that a caller cannot loosen.
+- Errors are `AiError` with a `code` (BAD_KEY, RATE_LIMIT, BUSY, TIMEOUT, CANCELLED, NO_CREDIT, CONTENT_FILTER, ...) and a short plain
+  message; the audit records the code, never the message. Replies may carry `truncated: true`.
+- Provider `azure`: resource address, API form (`v1` or classic with `api-version`) and deployment name; key in the `api-key` header.
+
+**Features and prompts**
+- `src/prompts/rules.js`: one wording per rule (untrusted data, language, customer-safe, only the asked-for text); `rulesFor(audience)`
+  builds them into each prompt. Labels the parsers read stay in English. `tests/prompts-contract.test.js` pins each prompt to its parser.
+- `insert.pick` on core features: `src/features/picks.js` (`pickRequesterQuestions`, `pickResolutionNotes`) so an agent-facing line
+  ("Missing: ...", "Suggested close code: ...") is never inserted into a customer or close-notes field.
+- Context spec key `times: { feature: [date columns] }`: the pack also carries those columns' STORED (UTC) values in
+  `pack.related.times`, for a feature that compares them with note times or the clock (the email recommender).
+- `SNIPPET_FEATURE` (`src/snippets/preview.js`) names the small `snippet-fill` spec used to fill snippet variables.
+
+**Panel**
+- Record tabs also receive `active` (true while shown), stay mounted per record (hidden when not shown) and each has its own error
+  boundary. The Knowledge tools each have their own run.
+- `ErrorNote` (`{ error, onRetry }`: plain text plus "Try again") and `AiKeyNote` (`{ eff, what }`: the no-key note plus "Open
+  Settings") are the shared next-step components; use them instead of showing `err.message`.
+- Tests that drive real views: `tests/fixtures/panel-dom-env.js` and `panel-dom.js` (a small DOM, a fake `chrome`, reads that can be
+  held back, a fake AI fetch). AI actions in those tests go through the real `useRun` flow.
+
+**Reports**
+- The dashboard env carries `asOf` (one instant per load, so widgets ask identical, cacheable questions) and `maskMode` (the person's
+  privacy mode). `maskTables(tables, { mode })` also masks names it finds in free-text cells.
+- `aggregate(table, { ..., having })`: `having` is a count-only group filter (`count^<column>^<op>^<n>`), checked before any request.
+- Report reads go through the content script's policy-guarded reads; Aggregate reads are checked with `isBlocked`, including
+  dot-walked group-by columns.
+
+**Policy and build**
+- `effectiveSettings` returns `floors` (`piiMode`, `previewMode`): the person may choose stricter, never looser.
+- `allowedProviders` (case-insensitive ids). `providedApiKey` is used only when `aiProvider` or `aiBaseUrl` is also pinned.
+- `src/policy/baked.js` exports `BAKED_POLICY` (null in the normal build). The enterprise build replaces it with the config's policy,
+  which `normalizePolicy` merges with the managed policy keeping the stricter side of each setting.
+- The AI key lives in the IndexedDB vault `agentbuddy_vault` (store `keys`) on the extension's origin, not in `chrome.storage.local`.
+
+**Content script**
+- `src/content/barSync.js`: the bar asks the worker every 30 seconds whether it is on; a content script whose site was turned off
+  retires (no bar, no answers to the panel).

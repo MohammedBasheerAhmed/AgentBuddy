@@ -6,6 +6,7 @@
 //      internal work-notes box where the portal shows one; it refuses when the box is missing, locked or ambiguous (and the panel
 //      then copies instead); it never presses the page's Send button
 const { clickButton, waitForText, textOf, runFeature, waitForRecord } = require('../ui.js');
+const { leftoverPlaceholders } = require('../common.js');
 
 module.exports = {
   id: 'l',
@@ -107,7 +108,7 @@ module.exports = {
     const after = await boxes(sp);
     t.check('what the agent typed is kept and the AI text is APPENDED below it', after.comment.startsWith('Hi, thanks for waiting.\n\n') && after.comment.includes('Issue:'), after.comment.replace(/\n/g, '\\n').slice(0, 100));
     t.check("the page's own model followed (input and change events were delivered, like typing)", after.model.comment === after.comment && inputsOf(after, 'comment') >= 1 && (after.events.comment?.change || 0) >= 1, JSON.stringify(after.events.comment));
-    t.check('inserted text contains the REAL name (rehydrated), no placeholders', after.comment.includes(data.SEED.callerName) && !/\[[A-Z_]{2,20}_\d+\]/.test(after.comment));
+    t.check('inserted text contains the REAL name (rehydrated); only a card or password marker stays', after.comment.includes(data.SEED.callerName) && leftoverPlaceholders(after.comment).length === 0 && !after.comment.includes(data.SEED.card) && !after.comment.includes(data.SEED.password));
     t.check('the hidden template box and the search box were not touched', after.hidden === '' && inputsOf(after, 'hiddenComment') === 0 && after.search === '');
     t.check("the page's own Send button was never pressed and the form never submitted", after.sends.length === 0, after.sends.join(','));
 

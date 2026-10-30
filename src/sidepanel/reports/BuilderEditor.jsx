@@ -4,13 +4,14 @@ import { GROUP_BY, METRICS, CHARTS, normalizeBuilderConfig } from '../../reports
 import { REPORT_TABLES } from '../../reports/engine/constants.js';
 import { BuilderChart } from './BuilderView.jsx';
 import { useReport } from './useReport.js';
+import ErrorNote from '../ErrorNote.jsx';
 
 const WINDOW = ['last_7', 'last_30', 'last_90'];
 
 function Preview({ config, env }) {
   const state = useReport({ tabId: env.page.tabId, request: { kind: 'builder', config, blocked: env.blocked }, refreshKey: env.refreshKey });
   const d = state.result?.data;
-  if (state.phase === 'error') return <p className="ab-note ab-note-danger" role="alert">{state.error}</p>;
+  if (state.phase === 'error') return <ErrorNote error={state.error} onRetry={state.reload} />;
   if (!d) return <p className="ab-note" role="status">Reading the numbers…</p>;
   if (d.available === false) return <p className="ab-note ab-note-warn">{d.reason}</p>;
   return (

@@ -82,10 +82,20 @@ test('user settings are used when no policy applies; defaults fill the gaps', ()
   assert.deepEqual(r.locked, {});
 });
 
-test('a provided key wins and is flagged', () => {
-  const r = effectiveSettings({}, { providedApiKey: ' sk-org ' });
+test('a provided key wins and is flagged when the policy pins where it goes', () => {
+  const r = effectiveSettings({}, { providedApiKey: ' sk-org ', aiProvider: 'openai' });
   assert.equal(r.values.providedApiKey, 'sk-org');
   assert.ok(r.locked.apiKey);
+  const byAddress = effectiveSettings({}, { providedApiKey: 'sk-org', aiBaseUrl: 'https://gw.corp.example/v1' });
+  assert.equal(byAddress.values.providedApiKey, 'sk-org');
+});
+
+test('an organisation key is never used with a provider the person picks: no pin, no key', () => {
+  for (const policy of [{ providedApiKey: 'sk-org' }, { providedApiKey: 'sk-org', allowedProviders: ['openai'] }, { providedApiKey: 'sk-org', aiProvider: '  ' }]) {
+    const r = effectiveSettings({ provider: 'deepseek' }, policy);
+    assert.equal(r.values.providedApiKey, '', JSON.stringify(policy));
+    assert.equal(r.locked.apiKey, undefined, JSON.stringify(policy));
+  }
 });
 
 test('user-enabled instances outside the allow-list are dropped', () => {

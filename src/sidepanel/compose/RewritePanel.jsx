@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import AiKeyNote from '../AiKeyNote.jsx';
 import { read } from '../ask.js';
 import { useRun } from '../useRun.js';
 import RunPanel from '../RunPanel.jsx';
@@ -6,7 +7,7 @@ import { parseSafeText, toPlainText } from '../../render/safeText.js';
 import { FORM_FIELDS, MAX_FORM_TEXT, formFieldByName } from '../../compose/formFields.js';
 import { LANGUAGES, REWRITE_PRESETS, buildComposePack, formReadRefusal, mergePeople, pageTable, peopleFromNames, withLanguage } from '../../compose/rewrite.js';
 import { currentFromPage, expectFromPage, matchesExpect, wrongRecordText } from '../../lib/fillable.js';
-import { FillFeedback, ReviewHints, aiNotReadyText, featureState, hintsFor, isAiReady, readRecordPeople, useFill } from './shared.js';
+import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, readRecordPeople, useFill } from './shared.js';
 
 const isRewriteFeature = (feature) => Boolean(feature?.id) && REWRITE_PRESETS.some((p) => p.featureId === feature.id);
 const SIMPLE = REWRITE_PRESETS.filter((p) => !p.needsLanguage);
@@ -16,6 +17,7 @@ export default function RewritePanel({ page, eff }) {
   const run = useRun({ page, eff, record: page.record });
   const fill = useFill({ page, eff, run });
   const [text, setText] = useState('');
+  const textBox = useRef(null); // "Use as my text" puts the focus back in the box the text went into
   const [target, setTarget] = useState('comments'); // the form field the text is read from and put back into
   const [language, setLanguage] = useState('es');
   const [names, setNames] = useState('');
@@ -103,13 +105,14 @@ export default function RewritePanel({ page, eff }) {
 
   return (
     <div className="ab-compose-stack">
-      {!aiReady && <p className="ab-note ab-note-warn">{aiNotReadyText(eff)}</p>}
+      <AiKeyNote eff={eff} what="this" />
 
       <section className="ab-card" aria-label="Text to rewrite">
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-rewrite-text">Text to rewrite</label>
           <textarea
             id="ab-rewrite-text"
+            ref={textBox}
             className="ab-textarea ab-compose-text"
             value={text}
             maxLength={MAX_FORM_TEXT}
@@ -173,6 +176,7 @@ export default function RewritePanel({ page, eff }) {
           onPut={put}
           onUseAsText={() => {
             setText(plain.slice(0, MAX_FORM_TEXT));
+            textBox.current?.focus();
             run.reset();
             fill.clear();
           }}

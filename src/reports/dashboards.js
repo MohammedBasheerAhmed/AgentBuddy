@@ -39,7 +39,24 @@ export const PRESETS = Object.freeze([
     name: 'Team overview',
     scope: { kind: 'groups' },
     tables: null,
-    widgets: [{ type: 'section', section: 'overview' }, { type: 'section', section: 'workload' }, { type: 'section', section: 'sla' }, { type: 'section', section: 'quality' }, { type: 'section', section: 'fulfilment' }],
+    // "Explain this dashboard" last: it explains the numbers of the sections above it (nothing runs until it is pressed). Where the
+    // organisation's policy turns it off, the dashboard leaves it out and says so in one line (dashboardEnv.js visibleWidgets).
+    widgets: [
+      { type: 'section', section: 'overview' },
+      { type: 'section', section: 'workload' },
+      { type: 'section', section: 'sla' },
+      { type: 'section', section: 'quality' },
+      { type: 'section', section: 'fulfilment' },
+      { type: 'section', section: 'insights' },
+    ],
+  },
+  {
+    id: 'preset-handover',
+    name: 'Shift handover',
+    scope: { kind: 'groups' },
+    tables: null,
+    // The hand-over page works without AI (its note is an extra button); the explainer reads the same numbers.
+    widgets: [{ type: 'section', section: 'handover' }, { type: 'section', section: 'insights' }],
   },
 ]);
 

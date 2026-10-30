@@ -3,7 +3,44 @@
 Plan: `C:\Users\bashe\.claude\plans\we-need-to-create-stateful-dawn.md` (approved 2026-10-26). Contracts between modules: `docs/contracts.md`.
 Rules every change follows: `docs/build-rules.md`.
 
-## RESUME HERE (2026-10-27)
+## RESUME HERE (2026-10-30): second round, "improve it to the core", security approval
+
+Asked: every function working, nothing a security team would refuse. Done by seven parallel engineers with fixed file ownership
+(`docs/build-rules.md`), then integrated and checked end to end by the lead. NOT committed yet.
+
+| Check (2026-10-30) | Result |
+|---|---|
+| `node tests/run.js` (unit) | **2291 pass, 0 fail** (was 1914) |
+| `E2E_HEADED=1 node e2e/run.js` (visible desktop Chrome) | 890 pass; the 2 fails were harness-only and are fixed or pass alone (a hidden window stops repainting; a visible scrollbar). A click on the page bar opened Chrome's real side panel. |
+| `node scripts/check-compile.js` | all ok |
+| `npm run e2e` (real Chrome, fake ServiceNow, stub AI; scenarios a-z) | **894 pass, 0 fail, 0 warnings** (was 889 pass, 2 warnings; both warnings were unmasked names, now masked) |
+| `npm run traceability -- --check` | 53 controls and threats, every named test exists |
+
+What changed (details in `docs/security.md`, `docs/contracts.md` "Additions from the second round", the reports below):
+
+- **Security approval.** Second independent audit, `docs/review/security-audit-2.md` (no Critical/High; 3 Medium fixed: a turned-off
+  site kept working in open tabs, the switched-off bar still looked at the page, `chrome.storage.local` open to content scripts).
+  Review pack `docs/review-pack/`: reviewer guide, data-flow diagram, STRIDE (26 threats with owners), DPIA template, Chrome/Edge
+  policy samples (Windows, macOS, Linux, Admin console), CycloneDX SBOM, control-to-test traceability. **Enterprise build**
+  (`npm run build:enterprise -- enterprise/<cfg>.json`): exact host permissions and `connect-src`, policy compiled in as a floor.
+  Reproducible build (`npm run repro`), exact dependency pins, `npm audit --omit=dev` clean.
+- **Personal data.** Names inside sentences are now masked when the words around them mark a name (salutations, sign-offs, Dr/Mr,
+  "manager is", "spoke with", cc, @mentions; Strict also masks capitalised full names). "Mask this too" in the preview. Masked CSV
+  finds names in titles. Passwords, card and ID numbers are never put back into answers (a notice says so). Both old e2e warnings gone.
+- **AI key.** Moved out of `chrome.storage.local` into an IndexedDB vault content scripts cannot open; PBKDF2 600k; policy key
+  storage enforced on keys saved earlier. Provider calls: time limits, bounded retries, cancel, no redirects, no cookies, plain errors.
+  **Azure OpenAI** is a provider (v1 and classic api-version forms, `api-key` header).
+- **Policy.** `allowedProviders`; organisation key only with a pinned provider; preview and privacy modes are floors; wildcard
+  instance addresses refused; `aiBaseUrl` compared canonically; unknown keys reported.
+- **Features.** Every feature walked; 9 bugs fixed (duplicate finder matched CIs by display name, "Missing:" line inserted into the
+  customer comment, close-code line in close notes, snippet {{priority}}, consumer callers, UTC vs local times in email suggestions,
+  ...). Prompts rewritten around shared rules (`src/prompts/rules.js`) with a contract test per parser. `kb_use` column detected.
+- **Side panel.** First-run steps, "Open Settings" and "Try again" everywhere, record tabs keep their state, per-tab error
+  boundaries, focus and screen-reader fixes, stale/race bugs fixed (7, each with a test), a DOM harness that drives real views.
+- **Team reports.** No restart on navigation, real links on charts, 14 bugs (summer time, business-time SLA, paused SLAs, "cannot see"
+  shown as 0, cache races, policy guard bypass in reports), one "as of" per load, per-widget error boundary.
+
+## Round 1 state (2026-10-27 to 2026-10-29)
 
 **Everything in the plan is built (waves 1, 2 and 3), plus portals and reports/dashboards (asked for later). Next step is a person
 testing it on a real instance and improving it.** Nothing here has run against a real ServiceNow instance or a real AI model yet; the
@@ -48,7 +85,7 @@ The two e2e warnings are documented limits: a person named only inside a sentenc
 - **Company gateway and models:** "OpenAI / Azure OpenAI / company gateway" takes the company address and any model name
   (for example `gpt-5-mini-preprod`). "Load models from the server" (`GET <address>/models`, only the key) fills a list; Settings and a
   selector in the panel header switch the model; policy `allowedModels` limits the list. Azure-style addresses (`?api-version`,
-  `api-key` header) are NOT supported yet. Questions: `docs/live-questions/ai-provider.md`.
+  `api-key` header) were not supported then; round 2 added the Azure OpenAI provider. Questions: `docs/live-questions/ai-provider.md`.
 - **Links:** tickets and articles in lists are real links (see "Small things left").
 
 ### Added after user feedback (2026-10-29): "good in functionality, ease of use is not great"
@@ -76,10 +113,14 @@ The Actions list was 9 to 12 equal buttons per ticket. Now the main ones are one
 
 ### Decisions taken without the user (change if you disagree)
 
-- AI key default storage is plain local (the user's choice, like NowBuddy); `session` and passphrase-encrypted modes exist and
-  `docs/deployment.md` recommends `session` through policy for the security-approved rollout.
-- `kb_use` is read through the column `task_id` in both places (`src/context/knowledge.js` LINK_SOURCES and `src/content/ops/checks.js`
-  KB_SOURCES). Unverified: if the real column is `task`, change both (`docs/live-questions/knowledge.md` question 21).
+- AI key default storage is "This browser" (the user's choice, like NowBuddy), now in the extension's own IndexedDB vault rather than
+  `chrome.storage.local`; `session` and passphrase-encrypted modes exist and `docs/deployment.md` recommends `session` through
+  policy for the security-approved rollout.
+- `kb_use`: the link column (`task_id` or `task`) is now detected with one GET (`detectLinkColumn`, `src/context/knowledge.js`),
+  shared by the gap radar and the Check tab (`docs/live-questions/knowledge.md` question 21).
+- Passwords, card, IBAN and ID numbers are never put back into an answer (round 2). The answer says so and the check before Insert
+  explains the marker. Change `NEVER_REHYDRATE` in `src/pii/firewall.js` if the organisation wants them back.
+- `reply-draft` and `missing-info` are still offered on problem records (no requester); the quick-actions defaults rely on it.
 - Coaching snapshot stays off unless the organisation sets `coachingEnabled` (needs HR / works-council sign-off).
 
 ### NOT verified (needs a person on a real instance)
@@ -101,21 +142,19 @@ reports 20, reports-ai 21, quickbar 10). Each says what was assumed, how to chec
 
 ### Known limits (documented in `docs/security.md`)
 
-Names only inside prose are not masked; an internal-notes paraphrase can reach a customer draft (the safe-to-send review is the
-control); the portal box is not confined to the ticket widget; HR families are detected by table name prefix.
+A name with no cue around it passes in Standard mode; an internal-notes paraphrase can reach a customer draft (the safe-to-send review
+is the control); the portal box is not confined to the ticket widget; HR families are detected by table name prefix; closing
+`chrome.storage.local` to content scripts depends on the browser (limit 17).
 
 ### Small things left
 
-- While the Team tab is on screen, every navigation of the ServiceNow tab restarts all widgets (`page.href` is in the env deps of
-  `ReportsDashboard.jsx`).
-- Pressing Escape in the preview before it has taken focus does nothing.
-- Options page could show the effective daily token cap and list unknown ids in `disabledFeatures`.
-- The `dashboards` preset does not include hand-over or insights.
 - The e2e coverage check (scenario e) once saw one browser request the instance never recorded (a read cancelled in flight). It now
   tolerates and reports such extras, and still fails if the instance saw a read the browser log missed.
 - Tickets and articles in Related, My day, Knowledge (duplicates, gaps) and the Team ticket tables are real links (click = this tab,
-  Ctrl/middle-click = new tab). Chart segments, legend rows and tiles that open a LIST are still buttons that open in the same tab.
-- Backlog ideas: select text in the preview and "Mask this too"; an enterprise build with baked-in instance hosts.
+  Ctrl/middle-click = new tab), and so are chart segments, legend rows and tiles that open a list (round 2).
+- The engine assumes the browser's time zone is the person's ServiceNow time zone (`docs/live-questions/reports.md` question 3).
+- esbuild has one moderate advisory in its dev server, which this project never runs; upgrading changes the bundle bytes, so it is a
+  separate change.
 
 ## How to test it yourself
 

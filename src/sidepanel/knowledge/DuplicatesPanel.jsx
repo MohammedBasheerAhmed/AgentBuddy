@@ -4,6 +4,7 @@ import RecordLink from '../RecordLink.jsx';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { MERGE_MAX_ARTICLES, mergePack } from '../../knowledge/parts.js';
 import Notes from './Notes.jsx';
+import ErrorNote from '../ErrorNote.jsx';
 import { plainNote } from '../plainAccess.js';
 import { compareLocked, compareStillCurrent, selectionKey } from './duplicatesState.js';
 
@@ -26,15 +27,22 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
   const feature = featureById('kb-merge-draft');
   const available = isFeatureAvailable(feature, eff.policy);
 
-  useEffect(() => {
-    let cancelled = false;
+  const scopeToken = useRef(0);
+  const loadScopes = useCallback(() => {
+    scopeToken.current += 1;
+    const mine = scopeToken.current;
+    setScopes({ phase: 'loading', items: [], access: [], error: '' });
     read(page.tabId, 'kbScopes', {})
-      .then((out) => !cancelled && setScopes({ phase: 'ready', items: out.items || [], access: out.access || [], error: '' }))
-      .catch((err) => !cancelled && setScopes({ phase: 'error', items: [], access: [], error: err?.message || 'The knowledge bases could not be listed.' }));
-    return () => {
-      cancelled = true;
-    };
+      .then((out) => mine === scopeToken.current && setScopes({ phase: 'ready', items: out.items || [], access: out.access || [], error: '' }))
+      .catch((err) => mine === scopeToken.current && setScopes({ phase: 'error', items: [], access: [], error: err?.message || 'The knowledge bases could not be listed.' }));
   }, [page.tabId]);
+
+  useEffect(() => {
+    loadScopes();
+    return () => {
+      scopeToken.current += 1;
+    };
+  }, [loadScopes]);
 
   // Opening the compare card moves focus to it, so a keyboard or screen reader user lands where the new controls are.
   const pickedId = picked?.cluster.id;
@@ -60,6 +68,21 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
     [page.tabId]
   );
 
+  // Another category: what was found (or is being found) was for the old scope, so it is dropped, also when it is still on its way.
+  function chooseCategory(id) {
+    token.current += 1;
+    compareToken.current += 1;
+    setCategory(id);
+    setFound(null);
+    setPicked(null);
+  }
+
+  // "Stop" while titles are compared: the answer, when it comes, is dropped.
+  function stop() {
+    token.current += 1;
+    setFound(null);
+  }
+
   async function find() {
     token.current += 1;
     compareToken.current += 1;
@@ -69,7 +92,8 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
     setFound({ phase: 'loading', data: null, error: '' });
     try {
       const data = await read(page.tabId, 'kbDuplicates', { knowledgeBase: kb, category });
-      if (mine === token.current) setFound({ phase: 'ready', data, error: '' });
+      // (the answer comes from the page: a list that is missing is an empty one, never a crash)
+      if (mine === token.current) setFound({ phase: 'ready', data: { ...data, scanned: Number(data?.scanned) || 0, clusters: Array.isArray(data?.clusters) ? data.clusters : [], access: Array.isArray(data?.access) ? data.access : [] }, error: '' });
     } catch (err) {
       if (mine === token.current) setFound({ phase: 'error', data: null, error: err?.message || 'The articles could not be compared.' });
     }
@@ -125,7 +149,7 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
         <h2 className="ab-h">Find near-duplicate articles</h2>
         <p className="ab-sub">Compares the titles of published articles in one knowledge base. Nothing is sent to an AI until you ask for a merged draft.</p>
         {scopes.phase === 'loading' && <p className="ab-note" role="status">Looking for knowledge bases…</p>}
-        {scopes.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{scopes.error}</p>}
+        {scopes.phase === 'error' && <ErrorNote error={scopes.error} onRetry={loadScopes} />}
         {scopes.phase === 'ready' && scopes.items.length === 0 && <p className="ab-note ab-note-warn">No published articles are available to you.</p>}
         <Notes access={scopes.access} />
         {scopes.items.length > 0 && (
@@ -142,7 +166,7 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
             {categories.length > 0 && (
               <div className="ab-field">
                 <label className="ab-label" htmlFor="ab-kb-category">Category (optional)</label>
-                <select id="ab-kb-category" className="ab-select" value={category} onChange={(e) => { setCategory(e.target.value); setFound(null); setPicked(null); }}>
+                <select id="ab-kb-category" className="ab-select" value={category} onChange={(e) => chooseCategory(e.target.value)}>
                   <option value="">All categories</option>
                   {categories.map((s) => (
                     <option key={s.id} value={s.id}>{s.name} ({s.count})</option>
@@ -157,8 +181,13 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
         )}
       </section>
 
-      {found?.phase === 'loading' && <p className="ab-note" role="status">Comparing titles…</p>}
-      {found?.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{found.error}</p>}
+      {found?.phase === 'loading' && (
+        <p className="ab-note" role="status">
+          Comparing titles…{' '}
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>Stop</button>
+        </p>
+      )}
+      {found?.phase === 'error' && <ErrorNote error={found.error} onRetry={find} />}
 
       {data && (
         <section className="ab-card" aria-label="Duplicate groups">
@@ -207,7 +236,7 @@ export default function DuplicatesPanel({ page, eff, run, aiReady }) {
               </li>
             ))}
           </ul>
-          {picked.error && <p className="ab-note ab-note-danger" role="alert">{picked.error}</p>}
+          {picked.error && <ErrorNote error={picked.error} onRetry={compare} />}
           <div className="ab-row">
             <button type="button" className="ab-btn" disabled={sel < 2 || picked.phase === 'loading'} onClick={compare}>
               {picked.phase === 'loading' ? 'Reading…' : 'Compare their text'}

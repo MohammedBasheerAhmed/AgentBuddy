@@ -30,8 +30,8 @@ export function fold(s) {
   return s.normalize('NFD').replace(COMBINING, '').normalize('NFC').toLowerCase().split(CURLY_APOS).join("'");
 }
 
-// Lowercase text while keeping every index aligned with the original (a few characters change length when lowercased).
-function alignedLower(text) {
+/** Lowercase text while keeping every index aligned with the original (a few characters change length when lowercased). */
+export function alignedLower(text) {
   const lower = text.toLowerCase();
   if (lower.length === text.length) return lower;
   let out = '';
@@ -114,7 +114,9 @@ function nameTokens(name) {
 }
 
 /**
- * @param {{role?: string, name?: string, email?: string, sysId?: string}[]} people ContextPack.people
+ * @param {{role?: string, name?: string, email?: string, sysId?: string, prose?: boolean}[]} people ContextPack.people. An entry
+ *   with `prose: true` is a name the firewall found written in the text itself (src/pii/names.js), not one the record lists: it
+ *   is matched only where its first word is capitalised ("Tom", not "tom"), so a wrong guess cannot mask an ordinary word everywhere.
  */
 export function createDictionary(people = []) {
   const root = newNode();
@@ -138,9 +140,10 @@ export function createDictionary(people = []) {
     if (!keys.length) continue;
     let identity = keys.map((k) => identities.get(k)).find(Boolean);
     if (!identity) {
-      identity = { id: `p${byId.length + 1}`, canonical: '', names: [], emails: new Set() };
+      identity = { id: `p${byId.length + 1}`, canonical: '', names: [], emails: new Set(), prose: p.prose === true };
       byId.push(identity);
     }
+    if (p.prose !== true) identity.prose = false; // the record lists them too: matched as a record person
     for (const k of keys) identities.set(k, identity);
     if (name && !NOT_A_PERSON.has(fold(name))) {
       identity.names.push(name);
@@ -152,17 +155,19 @@ export function createDictionary(people = []) {
     }
   }
 
-  // 2. Terms.
+  // 2. Terms. `capOnly`: matched only where the first word is capitalised (names found in prose).
   function addSequence(tokens, identity, confidence, conditional) {
+    const capOnly = identity.prose === true;
     let node = root;
     for (const t of tokens) {
       const key = fold(t);
       if (!node.kids.has(key)) node.kids.set(key, newNode());
       node = node.kids.get(key);
     }
-    if (!node.hit) node.hit = { ids: new Set(), conditional, confidence };
+    if (!node.hit) node.hit = { ids: new Set(), conditional, confidence, capOnly };
     node.hit.ids.add(identity.id);
     node.hit.conditional = node.hit.conditional && conditional;
+    node.hit.capOnly = node.hit.capOnly && capOnly; // a record person with the same words makes them unconditional again
     node.hit.confidence = Math.max(node.hit.confidence, confidence);
   }
 
@@ -273,6 +278,9 @@ export function createDictionary(people = []) {
       if (single && best.hit.conditional) {
         // A common word that is also this person's name: only when capitalised, and not just starting a sentence.
         if (unconditionalOnly || !isUpperFirst(text.slice(tokens[i].start, tokens[i].end)) || sentenceStart(text, tokens[i].start)) continue;
+      } else if (best.hit.capOnly && !isUpperFirst(text.slice(tokens[i].start, tokens[i].end))) {
+        // A name found in prose: wherever it is capitalised, also at the start of a sentence; never as a lowercase word.
+        continue;
       }
       const { entity, ambiguous } = resolveEntity(best.hit, best.folded);
       found.push({

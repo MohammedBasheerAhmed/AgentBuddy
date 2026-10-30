@@ -26,4 +26,7 @@ export const EXTRA = Object.freeze({
   fieldsByKind: merge('fieldsByKind'),
   extendFields: mergeExtend(),
   limits: merge('limits'), // { columnName: maxCharacters } for a text column longer than the default
+  // { feature: [date columns] }: the pack also carries their STORED (UTC) values in related.times, for a feature that compares
+  // them with note times (stored UTC) or with the clock. Field values are display values in the reader's time zone.
+  times: merge('times'),
 });

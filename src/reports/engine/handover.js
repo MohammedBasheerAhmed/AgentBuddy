@@ -12,11 +12,13 @@
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS, TICKET_FIELDS } from './constants.js';
 import { attempt } from './reader.js';
-import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn } from './common.js';
+import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn, verifiedCount } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { HOUR, daysBetween, timeOf } from './time.js';
 import { overviewSection, waitingStates } from './overview.js';
-import { groupSlaByTicket, rankSlaTickets, readSlaSnapshot } from './sla.js';
+import { groupSlaByTicket, rankSlaTickets, readSlaSnapshot, SLA_UNSEEN } from './sla.js';
+import { readApprovals } from './fulfilment.js';
+import { SLA_COLUMNS } from '../myDay.js';
 
 export const HANDOVER_HOURS = Object.freeze([8, 12, 24]);
 export const HANDOVER_DEFAULT_HOURS = 12;
@@ -24,7 +26,7 @@ export const HANDOVER_LIMITS = Object.freeze({ list: 8, slaTop: 8, waitingOldest
 
 // ServiceNow priorities 1 (critical) and 2 (high) are the "urgent" ones.
 const URGENT = ['1', '2'];
-const SLA_FIELDS = ['task', 'sla', 'stage', 'has_breached', 'percentage', 'planned_end_time'];
+const SLA_FIELDS = [...SLA_COLUMNS];
 // A requester's name is read only so the AI note can mask it where a ticket title mentions the person; it is never shown or exported.
 const LOOKUP_FIELDS = [...TICKET_FIELDS, 'opened_by'];
 
@@ -160,23 +162,12 @@ async function lookUp(ctx, sysIds) {
 async function readBreaches(ctx, tables, since) {
   const { reader, scope, now } = ctx;
   const base = andQuery('has_breached=true', `task.sys_class_nameIN${tables.map((t) => t.table).join(',')}`, scope.taskQuery, buildQuery([{ op: 'since', field: 'planned_end_time', ms: since }, { op: 'until', field: 'planned_end_time', ms: now }]));
-  const total = await attempt(() => reader.count('task_sla', base), 'task_sla');
+  const total = await verifiedCount(reader, 'task_sla', base, { unseen: SLA_UNSEEN });
   if (!total.ok) return { ok: false, status: total.status, note: total.status === 'denied' ? 'SLA information is not available to you, so breaches in this period are not shown.' : total.note };
   if (!total.value) return { ok: true, total: 0, tickets: [] };
   const rows = await attempt(() => reader.rows('task_sla', `${base}^ORDERBYDESCplanned_end_time`, SLA_FIELDS, { limit: HANDOVER_LIMITS.breachRows, displayValue: true }), 'task_sla');
   if (!rows.ok) return { ok: true, total: total.value, tickets: [], note: rows.note };
   return { ok: true, total: total.value, tickets: rankSlaTickets(groupSlaByTicket(rows.value, { now })).slice(0, HANDOVER_LIMITS.list) };
-}
-
-/** Approvals waiting: for the person, and (for a team scope) on the requested items in scope. Same reads as the Fulfilment section. */
-async function readApprovals(ctx, tables) {
-  const { reader, scope } = ctx;
-  const mine = await attempt(() => reader.count('sysapproval_approver', `approver=${scope.userId}^state=requested`), 'sysapproval_approver');
-  const team =
-    scope.kind !== 'mine' && !scope.empty && tables.some((t) => t.table === 'sc_req_item')
-      ? await attempt(() => reader.count('sysapproval_approver', andQuery('state=requested', 'sysapproval.sys_class_name=sc_req_item', `sysapproval.${scope.query}`)), 'sysapproval_approver')
-      : null;
-  return { mine, team };
 }
 
 const kindOf = (t) => ({ table: t.table, kind: t.meta.singular });

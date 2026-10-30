@@ -49,7 +49,9 @@ user, plus csm / approval roles where it matters). "If wrong" says what to chang
 15. **The sample rule** (sort by resolution time, then evenly spaced positions) is simple and cannot see names. HR may prefer random
     sampling with a recorded seed; that would change `pickSample` only.
 16. **Managed policy `coachingEnabled`** must reach the panel as `true`. Test with a policy that sets it and one that does not: the
-    section appears in Customize only with it, and a saved coaching widget shows "Your organisation has not switched coaching on" without.
+    section appears in Customize only with it. Without it, a saved coaching (or "Explain this dashboard") widget is left out of the
+    dashboard with one line, "Turned off by your organisation, so not shown: ...", and in Customize it still shows its calm line so it can
+    be removed.
 17. **How well the output check catches per-person language.** `flagPerPersonScoring` looks for ranking words, labels like "Agent A",
     leftover [PERSON_n], and the group's own people next to rating words. It cannot know a name it was not given. Try the real model
     with tempting prompts ("who is best?") and see whether the answer is held back. Tune the word lists, not the principle.

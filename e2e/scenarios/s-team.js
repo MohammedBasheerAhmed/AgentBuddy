@@ -106,11 +106,13 @@ module.exports = {
     t.check('no read of the Team tab failed (no 4xx/5xx from the instance)', reads.every((r) => r.status === 0 || r.status < 400), reads.filter((r) => r.status >= 400).map((r) => `${r.status} ${r.path}`).join(' | '));
 
     // ============================== DRILL DOWN ====================================================================================
+    const drillHrefs = await p.$$eval('a[data-ab-link]', (as) => as.map((a) => a.href));
+    t.check('every ticket and list link the Team tab draws is a real link to the ServiceNow site itself, and nowhere else', drillHrefs.length > 0 && drillHrefs.every((h) => h.startsWith(`${inst.origin}/`)), `${drillHrefs.length} links; ${drillHrefs.filter((h) => !h.startsWith(`${inst.origin}/`)).slice(0, 2).join(' | ')}`);
     await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-tile-button')).find((b) => b.querySelector('.ab-tile-label')?.innerText.trim() === 'Open').click());
     await p.waitForSelector('.ab-pick [class*="ab-btn"]', { timeout: 8000 });
-    const picks = await p.$$eval('.ab-pick button', (bs) => bs.map((b) => b.innerText.trim()));
+    const picks = await p.$$eval('.ab-pick a', (bs) => bs.map((b) => b.innerText.trim()));
     t.check('a number with several tables behind it offers them by name ("Open in ServiceNow": Incidents, Requested items, ...)', picks.some((x) => /^Incidents \(\d+\)$/.test(x)) && picks.length >= 3, picks.join(' | '));
-    await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-pick button')).find((b) => /^Incidents/.test(b.innerText.trim())).click());
+    await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-pick a')).find((b) => /^Incidents/.test(b.innerText.trim())).click());
     await ctx.waitUntil('the tab to open the incident list', async () => source.url().includes('nav_to.do'), { timeout: 10000 });
     const listUrl = new URL(source.url());
     const inner = decodeURIComponent(listUrl.searchParams.get('uri') || '');
@@ -199,8 +201,8 @@ module.exports = {
     await ctx.waitUntil('the masked CSV', async () => (await p.evaluate(() => window.__csv.length)) >= 2, { timeout: 8000 });
     const masked = (await p.evaluate(() => window.__csv))[1];
     t.check('"Mask names and emails": the next file has Person 1 instead of the name in the people column', /,Person 1,/.test(masked.body) && !/Beth Anglin/.test(masked.body), masked.body.slice(0, 160).replace(/\n/g, '|'));
-    // The panel itself says this limit out loud next to the switch: a name that only appears INSIDE a ticket title is not found.
-    if (/Charlie Whitherspoon/.test(masked.body)) t.warning('masked CSV still shows a person named inside a ticket title ("Standard Laptop for Charlie Whitherspoon")', 'documented limit, shown next to the Mask switch');
+    // A name inside a ticket title, introduced by the words around it ("Standard Laptop for Charlie Whitherspoon"), is masked too.
+    t.check('"Mask names and emails": a person named inside a ticket title ("... for Charlie Whitherspoon") is masked as well', !/Charlie|Whitherspoon/.test(masked.body), masked.body.split('\n').filter((l) => /Laptop/.test(l)).join(' | '));
     await p.evaluate((sel) => [...document.querySelector(sel).querySelectorAll('input[type="checkbox"]')].find((i) => i.closest('label')?.innerText.includes('Mask names and emails')).click(), widget('Request fulfilment'));
     t.check('nothing in the Team tab used the AI', ai.requests.length === 0);
 

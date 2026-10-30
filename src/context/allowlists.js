@@ -256,6 +256,9 @@ export const FEATURE_RELATED = Object.freeze({
 
 const FEATURE_SPEC = { ...BASE_SPEC, ...EXTRA.spec };
 
+/** FEATURE_TIMES[feature] -> date columns whose stored UTC value the pack also carries (pack.related.times). */
+export const FEATURE_TIMES = Object.freeze({ ...EXTRA.times });
+
 // The columns that hold a PERSON. A person who is not on the pack's people list is not masked by name wherever the text mentions
 // them ("VPN fails for Abel Tuter" in a title, a note or a close note), so every feature that sends text to an AI reads ALL the
 // person columns of the kind's ceiling, even when it shows none of them. They are read to be masked, not to be sent: the pack's

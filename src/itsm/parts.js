@@ -169,7 +169,7 @@ export function referenceParts(pack, { routing = false } = {}) {
 export function sentimentParts(pack, { depth = 20, now = Date.now() } = {}) {
   return [
     ...fieldParts(pack),
-    { label: 'Signals counted by Agent Buddy', field: 'signals', text: signalsText(computeSignals(pack, { now, depth })) },
+    { label: 'Signals counted by simple rules', field: 'signals', text: signalsText(computeSignals(pack, { now, depth })) },
     ...journalParts(pack, { depth, roles: true }),
   ];
 }

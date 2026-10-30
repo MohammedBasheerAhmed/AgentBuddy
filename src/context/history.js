@@ -13,10 +13,12 @@ import { SYS_ID_RE, cleanText, disp, oneLine, parseSnTime, raw } from './util.js
 const DAY = 86400000;
 
 // `links`: columns that can hold the caller, tried in order until one answers with rows that really are the caller's.
+// `anyOf`: columns of which ANY may hold the caller, asked in one read (an OR). A customer service case names a business
+// customer in `contact` and a private customer in `consumer`; asking only `contact` reported a consumer's cases as "none".
 export const HISTORY_SOURCES = Object.freeze([
   { table: 'incident', links: ['caller_id'] },
   { table: 'sc_req_item', links: ['requested_for', 'request.requested_for'] },
-  { table: 'sn_customerservice_case', links: ['contact'] },
+  { table: 'sn_customerservice_case', links: ['contact'], anyOf: ['contact', 'consumer'] },
   { table: 'sn_hr_core_case', links: ['opened_for'], sensitive: true },
 ]);
 
@@ -149,13 +151,17 @@ export function historySignals(items, { now = Date.now(), current } = {}) {
 
 // ---- Reading ----------------------------------------------------------------------------------------------
 
+// The ways to ask a source for the caller: one column per attempt, or one attempt that ORs several (`anyOf`).
+const attemptsOf = (source) => (source.anyOf ? [source.anyOf] : source.links.map((link) => [link]));
+
 async function readSource(source, callerSysId, excludeSysId, deps, { limit, memo, knownVisible }) {
   const exclude = SYS_ID_RE.test(excludeSysId) ? `^sys_id!=${excludeSysId}` : '';
   let ignoredFilter = false;
-  for (const link of source.links) {
-    const query = `${link}=${callerSysId}${exclude}^ORDERBYDESCopened_at`;
+  for (const columns of attemptsOf(source)) {
+    const who = columns.map((column, i) => `${i ? 'OR' : ''}${column}=${callerSysId}`).join('^');
+    const query = `${who}${exclude}^ORDERBYDESCopened_at`;
     // eslint-disable-next-line no-await-in-loop -- a second link is only tried when the first was ignored.
-    const { rows, failure } = await softRead(deps, source.table, query, [...FIELDS, link], { limit, displayValue: true });
+    const { rows, failure } = await softRead(deps, source.table, query, [...FIELDS, ...columns], { limit, displayValue: true });
     if (failure) return { items: [], access: accessEntry(source.table, failure.status, failure.note) };
 
     if (!rows.length) {
@@ -164,7 +170,8 @@ async function readSource(source, callerSysId, excludeSysId, deps, { limit, memo
       const seen = await confirmEmptyIsReallyEmpty(source.table, deps, memo);
       return { items: [], access: accessEntry(source.table, seen.status, seen.status === STATUS.EMPTY ? '' : seen.note) };
     }
-    if (rows.every((row) => raw(row[link]).toLowerCase() === callerSysId)) {
+    // Every row must name the caller in one of the asked columns: an ignored condition answers with everyone's rows.
+    if (rows.every((row) => columns.some((column) => raw(row[column]).toLowerCase() === callerSysId))) {
       return { items: rows.map((row) => normaliseHistoryRow(row, source.table)), access: accessEntry(source.table, STATUS.OK) };
     }
     ignoredFilter = true;

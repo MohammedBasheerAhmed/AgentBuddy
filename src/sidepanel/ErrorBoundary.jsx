@@ -1,10 +1,11 @@
 import React, { Component } from 'react';
 
-export const BOUNDARY_TEXT = 'Something went wrong in this part of Agent Buddy. Reload the panel.';
+export const BOUNDARY_TEXT = 'Something went wrong in this part of Agent Buddy. Try again, or reload the panel.';
 
 /**
- * One small boundary around each section and around the whole panel: a view that throws while it draws no longer blanks everything.
- * The fallback says so in plain words and keeps a way out (Settings). Nothing is logged: the error text can hold ticket content.
+ * One small boundary around each section, each record tab and the whole panel: a view that throws while it draws no longer blanks
+ * everything around it. The fallback says so in plain words and offers the next steps: try that part again, reload the panel, or
+ * open Settings. Nothing is logged: the error text can hold ticket content.
  *
  * `resetKey`: when it changes (another record, another section) the view gets another chance.
  */
@@ -31,9 +32,17 @@ export default class ErrorBoundary extends Component {
     return (
       <div className="ab-note ab-note-danger" role="alert">
         <p className="ab-boundary-text">{BOUNDARY_TEXT}</p>
-        <button type="button" className="ab-btn ab-btn-sm" onClick={() => chrome.runtime.openOptionsPage()}>
-          Open Settings
-        </button>
+        <div className="ab-row">
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => this.setState({ failed: false })}>
+            Try again
+          </button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => window.location.reload()}>
+            Reload the panel
+          </button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => chrome.runtime.openOptionsPage()}>
+            Open Settings
+          </button>
+        </div>
       </div>
     );
   }

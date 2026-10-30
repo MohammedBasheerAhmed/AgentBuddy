@@ -4,6 +4,7 @@
 const { barDriver } = require('../barDriver.js');
 const { clickButton, textOf, waitForRecord } = require('../ui.js');
 
+const ARM_MS = 500; // src/content/barLogic.js: how long the actions must be on screen before a click counts
 const LAUNCH = 'ab:launch';
 const readLaunch = (ctx) => ctx.ext(async (k) => (await chrome.storage.session.get(k))[k] ?? null, LAUNCH);
 const writeLaunch = (ctx, value) => ctx.ext((k, v) => chrome.storage.session.set({ [k]: v }), LAUNCH, value);
@@ -48,6 +49,9 @@ module.exports = {
     });
     const targetsBefore = new Set(ctx.browser.targets());
     const actionButton = (await bar.elements()).find((e) => e.tag === 'button' && e.text === 'Summarise');
+    // A click counts only once the actions have been on screen for half a second (src/content/barLogic.js ARM_MS: a page cannot
+    // show the bar just under a click meant for something else). A person is never that fast; this test can be, so it waits.
+    await ctx.sleep(ARM_MS + 200);
     await bar.click(actionButton);
     await ctx.waitUntil('the request for the panel', async () => (await ctx.ext(() => window.__launchLog)).some((x) => x.set), { timeout: 8000 });
     const left = (await ctx.ext(() => window.__launchLog)).find((x) => x.set).set;

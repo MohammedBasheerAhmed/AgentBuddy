@@ -1,64 +1,118 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { read } from './ask.js';
 import RecordLink from './RecordLink.jsx';
+import ErrorNote from './ErrorNote.jsx';
 import { plainNote, plainSource } from './plainAccess.js';
+import { retryDelay } from './reports/useReport.js';
 
 const RISK_LABEL = { breached: 'SLA breached', 'at-risk': 'SLA at risk' };
 
+/** "updated 3h ago" for a number of hours. Pure. */
+export function idleText(hours) {
+  if (!Number.isFinite(hours) || hours < 1) return 'updated just now';
+  if (hours < 48) return `updated ${hours}h ago`;
+  return `updated ${Math.round(hours / 24)}d ago`;
+}
+
+/** One line on top of the list: how many, and how many need attention first. Pure. */
+export function summaryText(items) {
+  const n = items.length;
+  if (!n) return '';
+  const breached = items.filter((i) => i.risk === 'breached').length;
+  const atRisk = items.filter((i) => i.risk === 'at-risk').length;
+  const urgent = [breached ? `${breached} with a breached SLA` : '', atRisk ? `${atRisk} with an SLA at risk` : ''].filter(Boolean).join(' and ');
+  return `${n} open ticket${n === 1 ? '' : 's'}${urgent ? `: ${urgent}, listed first` : ''}.`;
+}
+
+/** The words for an empty list: only "nothing is assigned to you" when that is what the reads prove. Pure. */
+export function emptyText(empty) {
+  if (empty === 'unread') return 'None of your ticket queues could be read.';
+  if (empty === 'unseen') return 'Agent Buddy can see no tickets at all in these tables with your access, so it cannot tell whether anything is assigned to you.';
+  return 'Nothing is assigned to you right now.';
+}
+
+/** The access notes as one short paragraph: a denied queue gets a short line; the SLA table keeps its own note (why the order changed). */
+export function accessText(access) {
+  return access.map((a) => (a.status === 'denied' && a.source !== 'task_sla' ? `${plainSource(a.source)}: you cannot read this.` : plainNote(a.note))).filter(Boolean).join(' ');
+}
+
 // F1. The agent's own open tickets, most urgent first. No AI: just reads with the person's own session.
 export default function MyDayView({ page }) {
-  const [state, setState] = useState({ phase: 'loading', items: [], access: [], error: '' });
+  const [state, setState] = useState({ phase: 'loading', items: [], access: [], empty: null, error: '' });
+  const run = useRef(0);
 
   const load = useCallback(async () => {
+    run.current += 1;
+    const mine = run.current;
     setState((s) => ({ ...s, phase: 'loading', error: '' }));
-    try {
-      const answer = await read(page.tabId, 'myday', {});
-      setState({ phase: 'ready', items: answer.items || [], access: answer.access || [], error: '' });
-    } catch (err) {
-      setState({ phase: 'error', items: [], access: [], error: err.message });
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        // eslint-disable-next-line no-await-in-loop -- one try at a time
+        const answer = await read(page.tabId, 'myday', {});
+        if (mine === run.current) setState({ phase: 'ready', items: answer.items || [], access: answer.access || [], empty: answer.empty || null, error: '' });
+        return;
+      } catch (err) {
+        if (mine !== run.current) return;
+        // The ServiceNow page was being replaced while it read: wait for the new page and ask again (twice at most).
+        const wait = retryDelay(err, attempt);
+        if (wait !== null) {
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((resolve) => setTimeout(resolve, wait));
+          if (mine !== run.current) return;
+          continue;
+        }
+        setState({ phase: 'error', items: [], access: [], empty: null, error: err.message });
+        return;
+      }
     }
   }, [page.tabId]);
 
   useEffect(() => {
     load();
+    return () => {
+      run.current += 1; // a late answer for a closed view is dropped
+    };
   }, [load]);
 
+  const busy = state.phase === 'loading';
+  const hint = accessText(state.access);
+
   return (
-    <section className="ab-card" aria-label="My day">
-      <div className="ab-row" style={{ justifyContent: 'space-between' }}>
-        <h2 className="ab-h" style={{ margin: 0 }}>My day</h2>
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
+    <section className="ab-card" aria-label="My day" aria-busy={busy}>
+      <div className="ab-row ab-myday-head">
+        <h2 className="ab-h">My day</h2>
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={busy}>{busy ? 'Reading…' : 'Refresh'}</button>
       </div>
       <p className="ab-sub">Your open tickets, most urgent first. A click opens one in this tab; Ctrl+click or right-click opens a new tab.</p>
 
-      {state.phase === 'loading' && <p className="ab-note" role="status">Reading your queue…</p>}
-      {state.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{state.error}</p>}
-      {state.phase === 'ready' && state.items.length === 0 && <p className="ab-note ab-note-ok">Nothing is assigned to you right now.</p>}
-
-      {state.items.length > 0 && (
-        <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {state.items.map((item) => (
-            <li key={item.sysId}>
-              <RecordLink page={page} item={item} className="ab-feature">
-                <span className="ab-row">
-                  <span className="ab-record-number">{item.number}</span>
-                  {RISK_LABEL[item.risk] && <span className={`ab-tag ab-risk-${item.risk}`}>{RISK_LABEL[item.risk]}{item.sla ? ` ${item.sla.percentage}%` : ''}</span>}
-                </span>
-                <span className="ab-feature-title">{item.short_description}</span>
-                <span className="ab-feature-desc">
-                  {item.priority} · {item.state} · updated {item.idleHours < 1 ? 'just now' : item.idleHours < 48 ? `${item.idleHours}h ago` : `${Math.round(item.idleHours / 24)}d ago`}
-                </span>
-              </RecordLink>
-            </li>
-          ))}
-        </ul>
+      {busy && !state.items.length && <p className="ab-note" role="status">Reading your queue…</p>}
+      {state.phase === 'error' && <ErrorNote error={state.error} onRetry={load} />}
+      {state.phase === 'ready' && state.items.length === 0 && (
+        <p className={`ab-note ${state.empty === 'unseen' || state.empty === 'unread' ? 'ab-note-warn' : 'ab-note-ok'}`}>{emptyText(state.empty)}</p>
       )}
 
-      {state.access.length > 0 && (
-        <p className="ab-hint" style={{ marginTop: 8 }}>
-          {/* A denied queue gets a short line; a denied SLA table keeps its own note, which says why the order changed. */}
-          {state.access.map((a) => (a.status === 'denied' && a.source !== 'task_sla' ? `${plainSource(a.source)}: you cannot read this.` : plainNote(a.note))).filter(Boolean).join(' ')}
-        </p>
+      {hint && <p className="ab-hint ab-myday-access">{hint}</p>}
+
+      {state.items.length > 0 && (
+        <>
+          <p className="ab-myday-summary" role="status">{summaryText(state.items)}</p>
+          <ul className={`ab-myday-list${busy ? ' ab-is-busy' : ''}`}>
+            {state.items.map((item) => (
+              <li key={item.sysId}>
+                <RecordLink page={page} item={item} className="ab-feature">
+                  <span className="ab-row">
+                    <span className="ab-record-number">{item.number}</span>
+                    {RISK_LABEL[item.risk] && <span className={`ab-tag ab-risk-${item.risk}`}>{RISK_LABEL[item.risk]}{item.sla ? ` ${item.sla.percentage}%` : ''}</span>}
+                  </span>
+                  <span className="ab-feature-title">{item.short_description}</span>
+                  <span className="ab-feature-desc">
+                    {[item.priority, item.state, idleText(item.idleHours)].filter(Boolean).join(' · ')}
+                  </span>
+                </RecordLink>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   );

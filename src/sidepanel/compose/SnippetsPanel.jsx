@@ -4,7 +4,7 @@ import { SNIPPETS_KEY } from '../../lib/storage.js';
 import { LIMITS, addSnippet, exportSnippets, importSnippets, removeSnippet, searchSnippets, updateSnippet } from '../../snippets/store.js';
 import { BUILTIN_VARIABLES } from '../../snippets/render.js';
 import { changeSnippets, loadSnippets, starterSnippets } from '../../snippets/library.js';
-import { describeMissing, previewSnippet, unknownVariables } from '../../snippets/preview.js';
+import { SNIPPET_FEATURE, describeMissing, previewSnippet, unknownVariables } from '../../snippets/preview.js';
 import { FillFeedback, ReviewHints, hintsFor, useFill } from './shared.js';
 
 const area = () => chrome.storage.local;
@@ -47,6 +47,25 @@ export default function SnippetsPanel({ page, eff, active }) {
   const [packState, setPackState] = useState({ key: '', pack: null, state: 'none' }); // the open record, for the variables
   const [packNonce, setPackNonce] = useState(0);
   const bodyRef = useRef(null);
+  const box = useRef(null);
+  const titleRef = useRef(null);
+  // Opening the editor puts the focus in its first box; closing it puts the focus back on the snippet (or on "New snippet"), so a
+  // keyboard or screen reader user is never left at the top of the page.
+  const editorKey = editor ? editor.id || 'new' : '';
+  const lastEditor = useRef('');
+  useEffect(() => {
+    const before = lastEditor.current;
+    lastEditor.current = editorKey;
+    if (editorKey) {
+      titleRef.current?.focus();
+      return;
+    }
+    if (!before) return;
+    const target = (selectedId && box.current?.querySelector(`[data-snippet="${selectedId}"]`)) || box.current?.querySelector('[data-snippet-new]');
+    target?.focus();
+    // Only the opening and closing of the editor matter here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorKey]);
 
   const record = page.record;
   const key = record ? `${record.table}:${record.sysId}` : '';
@@ -86,7 +105,7 @@ export default function SnippetsPanel({ page, eff, active }) {
     }
     let cancelled = false;
     setPackState({ key, pack: null, state: 'loading' });
-    read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: 'reply-draft', allowSensitive: Boolean(eff.policy?.allowHrContent) })
+    read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: SNIPPET_FEATURE, allowSensitive: Boolean(eff.policy?.allowHrContent) })
       .then((pack) => !cancelled && setPackState({ key, pack, state: 'ready' }))
       .catch(() => !cancelled && setPackState({ key, pack: null, state: 'error' }));
     return () => {
@@ -230,12 +249,12 @@ export default function SnippetsPanel({ page, eff, active }) {
   if (editor) {
     const unknown = unknownVariables(editor.body);
     return (
-      <div className="ab-compose-stack">
+      <div className="ab-compose-stack" ref={box}>
         <section className="ab-card" aria-label={editor.id ? 'Edit snippet' : 'New snippet'}>
           <h3 className="ab-h">{editor.id ? 'Edit snippet' : 'New snippet'}</h3>
           <div className="ab-field">
             <label className="ab-label" htmlFor="ab-snip-title">Title</label>
-            <input id="ab-snip-title" className="ab-input" maxLength={LIMITS.title} value={editor.title} onChange={(e) => setEditor({ ...editor, title: e.target.value })} />
+            <input id="ab-snip-title" ref={titleRef} className="ab-input" maxLength={LIMITS.title} value={editor.title} onChange={(e) => setEditor({ ...editor, title: e.target.value })} />
           </div>
           <div className="ab-field">
             <label className="ab-label" htmlFor="ab-snip-shortcut">Shortcut (optional)</label>
@@ -294,12 +313,12 @@ export default function SnippetsPanel({ page, eff, active }) {
   const detail = selected ? shown(selected.body) : null;
   const realMissing = selected ? actual(selected.body).missing : [];
   return (
-    <div className="ab-compose-stack">
+    <div className="ab-compose-stack" ref={box}>
       <section className="ab-card" aria-label="Snippets">
         <div className="ab-row ab-compose-head">
           <h3 className="ab-h">Snippets</h3>
           <span className="ab-spacer" />
-          <button type="button" className="ab-btn ab-btn-primary ab-btn-sm" onClick={startNew}>New snippet</button>
+          <button type="button" className="ab-btn ab-btn-primary ab-btn-sm" data-snippet-new="" onClick={startNew}>New snippet</button>
         </div>
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-snip-search">Search</label>
@@ -322,6 +341,7 @@ export default function SnippetsPanel({ page, eff, active }) {
               <li key={s.id}>
                 <button
                   type="button"
+                  data-snippet={s.id}
                   className={`ab-feature ab-compose-pick${s.id === selectedId ? ' ab-compose-picked' : ''}`}
                   aria-pressed={s.id === selectedId}
                   onClick={() => {

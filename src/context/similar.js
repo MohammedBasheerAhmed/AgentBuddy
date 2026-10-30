@@ -3,10 +3,10 @@
 // Results are for local display: they carry sysId/table so the panel can link them, and are not ContextPack data.
 
 import { rankSimilar, similarKeywords, similarQuery } from '../lib/similar.js';
-import { LIMITS } from './allowlists.js';
+import { FIELDS_BY_KIND, LIMITS } from './allowlists.js';
 import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
-import { isSensitiveTable } from './kinds.js';
-import { SYS_ID_RE, cleanText, disp, oneLine, parseSnTime, queryValue, raw, stripHtml } from './util.js';
+import { isSensitiveTable, kindForTable } from './kinds.js';
+import { SYS_ID_RE, cleanText, disp, oneLine, parseSnTime, raw, stripHtml } from './util.js';
 
 const HOUR = 3600000;
 const SENSITIVE_NOTE = 'This record is in a sensitive table, so other records are not searched unless sensitive data is allowed.';
@@ -140,29 +140,52 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
 // ---- Open duplicates -----------------------------------------------------------------------------------
 
 const DUPLICATE_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'active', 'opened_at', 'assignment_group', 'cmdb_ci', 'business_service'];
+// What "the same thing" means for an outage, in the order they are checked.
+const DUPLICATE_KEYS = ['cmdb_ci', 'business_service'];
+const NO_KEYS_NOTE = 'The ticket has no configuration item or business service to compare.';
+
+/** The look-back window in hours: 1 hour to 7 days, 24 when the value is not a number. */
+export function duplicateWindowHours(value) {
+  const n = Number(value ?? 24);
+  return Number.isFinite(n) ? Math.min(168, Math.max(1, n)) : 24;
+}
 
 /**
  * Other open tickets on the same CI or business service opened within the window: the "is this part of a wider outage?"
  * check. The window is applied here against the stored UTC time, so no server-side date expression is needed.
+ *
+ * The CI and the service are compared by their sys_ids, read from the record itself (one small read of two columns). A name is
+ * neither unique (a CMDB holds many "Email" or same-hostname CIs, and those tickets are not one outage) nor always what the
+ * display value shows, and a sys_id needs no escaping: no text from the record ever goes into these queries.
  * @param {{ windowHours?: number, limit?: number, now?: number, allowSensitive?: boolean }} [options] now: milliseconds
  * @returns {Promise<{ hits: object[], windowHours: number, access: object[] }>}
  *   hit: { table, sysId, number, short_description, state, opened_at, assignment_group, same: ('cmdb_ci'|'business_service')[], hoursAgo }
  */
 export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit = 10, now = Date.now(), allowSensitive = false } = {}) {
   const table = pack.table;
-  if (isSensitiveTable(table, deps.sensitivePrefixes) && !allowSensitive) return { hits: [], windowHours, access: [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)] };
-  const keys = [
-    ['cmdb_ci', queryValue(pack.fields?.cmdb_ci)],
-    ['business_service', queryValue(pack.fields?.business_service)],
-  ].filter(([, name]) => name);
-  if (!keys.length) return { hits: [], windowHours, access: [accessEntry(table, STATUS.SKIPPED, 'The ticket has no configuration item or business service to compare.')] };
+  const hours = duplicateWindowHours(windowHours);
+  const result = (hits, access) => ({ hits, windowHours: hours, access });
+  if (isSensitiveTable(table, deps.sensitivePrefixes) && !allowSensitive) return result([], [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)]);
+  const sysId = String(pack.sysId || '').toLowerCase();
+  // Only the columns this kind of record has (its ceiling): a request has neither, a case has a CI but no service.
+  const ceiling = FIELDS_BY_KIND[kindForTable(table)] || [];
+  const columns = DUPLICATE_KEYS.filter((c) => ceiling.includes(c));
+  if (!SYS_ID_RE.test(sysId) || !columns.length) return result([], [accessEntry(table, STATUS.SKIPPED, NO_KEYS_NOTE)]);
 
-  const cutoff = now - windowHours * HOUR;
+  const ownRead = await softRead(deps, table, `sys_id=${sysId}`, ['sys_id', ...columns], { limit: 1, displayValue: false });
+  if (ownRead.failure) return result([], [accessEntry(table, ownRead.failure.status, ownRead.failure.note)]);
+  const record = ownRead.rows.find((row) => raw(row.sys_id).toLowerCase() === sysId);
+  if (!record) return result([], [accessEntry(table, STATUS.ERROR, `Could not read ${table} again to find its configuration item and service.`)]);
+  // Stored values only, and only when they ARE sys_ids: anything else stays out of the query.
+  const keys = columns.map((c) => [c, raw(record[c]).trim().toLowerCase()]).filter(([, id]) => SYS_ID_RE.test(id));
+  if (!keys.length) return result([], [accessEntry(table, STATUS.SKIPPED, NO_KEYS_NOTE)]);
+
+  const cutoff = now - hours * HOUR;
   const found = new Map();
   const failures = [];
   let read = false;
-  for (const [field, name] of keys) {
-    const query = `${field}.name=${name}^active=true^sys_id!=${pack.sysId}^ORDERBYDESCopened_at`;
+  for (const [field, id] of keys) {
+    const query = `${field}=${id}^active=true^sys_id!=${sysId}^ORDERBYDESCopened_at`;
     // eslint-disable-next-line no-await-in-loop -- two small reads at most, kept sequential.
     const { rows, failure } = await softRead(deps, table, query, DUPLICATE_FIELDS, { limit: 50, displayValue: true });
     if (failure) {
@@ -170,19 +193,19 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
       continue;
     }
     // A condition the instance ignored returns rows of other CIs; they are not duplicates of anything.
-    const own = rows.filter((row) => same(disp(row[field]), name));
-    if (own.length < rows.length) {
+    const matching = rows.filter((row) => raw(row[field]).trim().toLowerCase() === id);
+    if (matching.length < rows.length) {
       failures.push(accessEntry(table, STATUS.ERROR, `Could not check ${table} by ${field}: the instance did not apply the filter, so its rows were not used.`));
       continue;
     }
     read = true;
-    for (const row of own) {
+    for (const row of matching) {
+      const rowId = raw(row.sys_id).toLowerCase();
       const opened = parseSnTime(raw(row.opened_at));
-      if (!Number.isFinite(opened) || opened < cutoff) continue;
-      const id = raw(row.sys_id).toLowerCase();
-      const hit = found.get(id) || {
+      if (!SYS_ID_RE.test(rowId) || rowId === sysId || !Number.isFinite(opened) || opened < cutoff) continue;
+      const hit = found.get(rowId) || {
         table,
-        sysId: id,
+        sysId: rowId,
         number: oneLine(disp(row.number), 40),
         short_description: cleanText(disp(row.short_description), LIMITS.shortDescription),
         state: oneLine(disp(row.state), 40),
@@ -193,7 +216,7 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
         openedMs: opened,
       };
       hit.same.push(field);
-      found.set(id, hit);
+      found.set(rowId, hit);
     }
   }
   const hits = [...found.values()]
@@ -201,7 +224,7 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
     .slice(0, limit)
     .map(({ openedMs, ...hit }) => hit);
   // A read that worked is a fact (the record's own table is readable); otherwise say why not.
-  return { hits, windowHours, access: read ? [accessEntry(table, hits.length ? STATUS.OK : STATUS.EMPTY)] : failures };
+  return result(hits, read ? [accessEntry(table, hits.length ? STATUS.OK : STATUS.EMPTY)] : failures);
 }
 
 // ---- Knowledge -----------------------------------------------------------------------------------------

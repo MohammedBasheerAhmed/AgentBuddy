@@ -5,7 +5,7 @@ import { HANDOVER_HOURS, HANDOVER_DEFAULT_HOURS } from '../../reports/engine/han
 import { HANDOVER_MAX_WORDS, NOTABLE_MAX, buildHandoverPack, checkHandoverNote } from '../../reports/ai/handover.js';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
-import { AiBlocked, AiResult, RunProgress, aiNotReadyText, featureState, isAiReady } from './aiShared.jsx';
+import { AiBlocked, AiResult, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { plural } from './format.js';
 
 const FEATURE_ID = 'shift-handover';
@@ -166,7 +166,7 @@ export function HandoverAi({ result, page, eff, hours }) {
           <p className="ab-hint">
             The note is written from the figures above and up to {NOTABLE_MAX} notable tickets (number, type, priority, state, group, assignee and short description). The names of those assignees and of the people who raised those tickets are masked. A person named only inside a ticket title is not masked, so read the preview: it shows exactly what will be sent.
           </p>
-          {!aiReady && <p className="ab-note ab-note-warn">{aiNotReadyText(eff)}</p>}
+          {!aiReady && <AiKeyLine eff={eff} />}
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!aiReady || run.busy} onClick={go}>Write the hand-over note</button>
           </div>

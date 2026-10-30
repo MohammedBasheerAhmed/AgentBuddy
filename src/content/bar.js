@@ -7,21 +7,22 @@
 //   - a closed shadow root: the page cannot reach the buttons, and its styles cannot reach them; the styles are a constructed
 //     stylesheet, which a strict page CSP does not block (an inline <style> element would be blocked)
 //   - it acts only on real clicks and key presses (event.isTrusted): a script in the page that dispatches a click does nothing
+//   - a real click starts an action only when the bar is in plain view (barLogic.js clickVerdict): not covered by something that lets
+//     clicks through, not made transparent or moved by the page, and on screen for a moment (no click meant for something else)
+//   - while the bar is switched off it does not look at the page at all (barSync.js); when its site is turned off it removes itself
 //   - it adds nothing to the page's body, loads no image, font or script, and makes no request of its own to any server
 //   - it holds only a table, a sys_id and a few action ids; no ticket text
 import { MSG } from '../lib/messages.js';
 import themeCss from '../ui/theme.css';
 import barCss from './bar.css';
-import { POLL_MS, PREFS_KEY, isGone, launchNotice, needsAsk, parsePrefs, serializePrefs } from './barLogic.js';
+import { POLL_MS, PREFS_KEY, clickNotice, clickVerdict, isGone, launchNotice, nextSeen, parsePrefs, serializePrefs } from './barLogic.js';
+import { createBarSync } from './barSync.js';
 
 // theme.css is written for extension pages (:root); in the bar's shadow root the same tokens belong to :host.
 const TOKENS = themeCss
   .replace(/:root:not\(\[data-theme='light'\]\)/g, ':host')
   .replace(/:root\[data-theme='dark'\]/g, ":host([data-theme='dark'])")
   .replace(/:root/g, ':host');
-
-const ACTION_ID_RE = /^[a-z][a-z0-9-]{0,63}$/;
-const MAX_ACTIONS = 4;
 
 function h(doc, tag, attrs = {}, text = '') {
   const el = doc.createElement(tag);
@@ -33,21 +34,15 @@ function h(doc, tag, attrs = {}, text = '') {
   return el;
 }
 
-// The service worker's answer is checked anyway: it is text that ends up on the page.
-const cleanActions = (list) =>
-  (Array.isArray(list) ? list : [])
-    .filter((a) => a && ACTION_ID_RE.test(String(a.id || '')) && typeof a.label === 'string' && a.label.length > 0 && a.label.length <= 60)
-    .slice(0, MAX_ACTIONS)
-    .map((a) => ({ id: a.id, label: a.label }));
-
 /**
  * @param {object} deps
  *   resolveRecord()  -> { table, sysId, ... } | null   the record that is open (the content script's own detection)
  *   send(message)    -> Promise                         to the service worker (default chrome.runtime.sendMessage)
+ *   onSiteOff()                                         the service worker says this site is no longer turned on
  *   doc, win         the page's document and window     (tests may pass others)
  * @returns {{ stop(): void }}
  */
-export function startBar({ resolveRecord, send = (message) => chrome.runtime.sendMessage(message), doc = document, win = window }) {
+export function startBar({ resolveRecord, send = (message) => chrome.runtime.sendMessage(message), onSiteOff = () => {}, doc = document, win = window }) {
   const prefsBox = {
     read: () => {
       try {
@@ -65,10 +60,12 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     },
   };
   let prefs = parsePrefs(prefsBox.read());
-  const state = { record: null, actions: [], table: '', askedAt: NaN, busy: false, notice: '' };
+  const state = { record: null, actions: [], busy: false, notice: '' };
   let stopped = false;
   let refreshing = false;
   let shownActions = '';
+  let wasShown = false; // were the action buttons on screen at the last draw?
+  let armedAt = NaN; // when they last came on screen (or were rebuilt)
 
   // ---- the elements ----------------------------------------------------------------------------------------------
   const host = doc.createElement('div');
@@ -93,21 +90,50 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
   shadow.append(bar);
 
   // The page's own style rules can beat a :host rule, so what keeps the bar in place is set on the element itself (through the
-  // style object, which a page CSP allows, unlike a style attribute).
+  // style object, which a page CSP allows, unlike a style attribute). A page script CAN still rewrite that style object, so what was
+  // set is remembered and compared before a click is taken (intact()).
+  let pinnedCss = '';
   const pin = (name, value) => host.style.setProperty(name, value, 'important');
-  pin('all', 'initial');
-  pin('position', 'fixed');
-  pin('top', '38%');
-  pin('z-index', '2147483000');
-  pin('display', 'block');
+  function pinAll() {
+    pin('all', 'initial');
+    pin('position', 'fixed');
+    pin('top', '38%');
+    // The highest layer there is (and last in the document among equals), so nothing of the page's is drawn over it by accident.
+    pin('z-index', '2147483647');
+    pin('display', 'block');
+    pin(prefs.side === 'left' ? 'left' : 'right', '0');
+    pin(prefs.side === 'left' ? 'right' : 'left', 'auto');
+    pinnedCss = host.style.cssText;
+  }
+  const intact = () => host.parentNode === doc.documentElement && host.style.cssText === pinnedCss && !host.hasAttribute('inert');
+
+  // The browser's own visibility tracking (IntersectionObserver v2, trackVisibility): it reports a button as visible only when it is
+  // not covered by anything (also by an element that lets clicks through) and has no transparency, filter or odd transform on it.
+  // Where the browser cannot report it, clicks are judged by intact() and the time on screen alone.
+  const seen = new WeakMap();
+  let watcher = null;
+  try {
+    const Observer = win.IntersectionObserver;
+    const Entry = win.IntersectionObserverEntry;
+    if (typeof Observer === 'function' && Entry && 'isVisible' in Entry.prototype) {
+      watcher = new Observer(
+        (entries) => {
+          const at = Date.now();
+          for (const e of entries) seen.set(e.target, nextSeen(seen.get(e.target), { visible: e.isIntersecting === true && e.isVisible === true, at }));
+        },
+        { trackVisibility: true, delay: 100, threshold: [0, 1] }
+      );
+    }
+  } catch {
+    watcher = null;
+  }
 
   // ---- drawing ---------------------------------------------------------------------------------------------------
   function render() {
     const visible = Boolean(state.record) && state.actions.length > 0;
     bar.hidden = !visible;
     bar.setAttribute('data-side', prefs.side);
-    pin(prefs.side === 'left' ? 'left' : 'right', '0');
-    pin(prefs.side === 'left' ? 'right' : 'left', 'auto');
+    if (!intact()) pinAll();
 
     handle.hidden = prefs.open;
     card.hidden = !prefs.open;
@@ -117,17 +143,26 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
 
     // Rebuilt only when the actions change, so the focus stays where it is while the page is looked at again.
     const signature = state.actions.map((a) => `${a.id}:${a.label}`).join('|');
+    let rebuilt = false;
     if (signature !== shownActions) {
       shownActions = signature;
+      rebuilt = true;
+      watcher?.disconnect();
       list.replaceChildren(
         ...state.actions.map((action, i) => {
           const button = h(doc, 'button', { type: 'button', class: i === 0 ? 'act act-first' : 'act' }, action.label);
-          button.addEventListener('click', (e) => e.isTrusted && launch(action));
+          button.addEventListener('click', (e) => e.isTrusted && press(action, button));
+          watcher?.observe(button);
           return button;
         })
       );
     }
     for (const button of list.children) button.disabled = state.busy;
+
+    // The buttons count as "on screen" from the moment they appear (the card opened, or new actions were drawn).
+    const shownNow = visible && prefs.open;
+    if (shownNow && (!wasShown || rebuilt)) armedAt = Date.now();
+    wasShown = shownNow;
 
     notice.textContent = state.notice;
     notice.hidden = !state.notice;
@@ -141,10 +176,27 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
   }
 
   // ---- the person's clicks ---------------------------------------------------------------------------------------
+  // A click is taken only when the bar is in plain view (see clickVerdict); otherwise the person is told and nothing starts.
+  function press(action, button) {
+    if (state.busy || !state.record) return;
+    const verdict = clickVerdict({ now: Date.now(), armedAt, seen: seen.get(button) || null, intact: intact() });
+    if (verdict !== 'ok') {
+      if (verdict === 'moved') {
+        if (host.parentNode !== doc.documentElement) doc.documentElement.append(host);
+        host.removeAttribute('inert');
+        pinAll();
+        armedAt = Date.now();
+      }
+      state.notice = clickNotice(verdict);
+      render();
+      return;
+    }
+    launch(action);
+  }
+
   // (send() is called before this function first waits: the browser opens the side panel only for a request made while the click is
   // still being handled.)
   async function launch(action) {
-    if (state.busy || !state.record) return;
     const message = { type: MSG.BAR_LAUNCH, table: state.record.table, sysId: state.record.sysId, featureId: action.id };
     state.busy = true;
     state.notice = '';
@@ -170,6 +222,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     if (!e.isTrusted) return;
     prefs = { ...prefs, side: prefs.side === 'left' ? 'right' : 'left' };
     prefsBox.write(serializePrefs(prefs));
+    pinAll();
     render();
   });
   shadow.addEventListener('keydown', (e) => {
@@ -177,47 +230,41 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
   });
 
   // ---- following the page ----------------------------------------------------------------------------------------
+  const sync = createBarSync({ send, resolveRecord, onSiteOff: () => onSiteOff() });
+
   async function refresh() {
     if (stopped || refreshing || doc.hidden) return;
     refreshing = true;
+    let result = null;
     try {
-      // A page that rebuilt its document takes the bar with it: put it back.
-      if (!doc.documentElement.contains(host)) doc.documentElement.append(host);
-      const record = await resolveRecord();
-      if (!record) {
-        Object.assign(state, { record: null, actions: [], table: '', notice: '' });
-      } else {
-        if (state.record && state.record.sysId !== record.sysId) state.notice = '';
-        const now = Date.now();
-        if (needsAsk({ table: record.table, lastTable: state.table, lastAt: state.askedAt, now })) {
-          const answer = await send({ type: MSG.BAR_ACTIONS, table: record.table });
-          // An error answer (the site is not turned on, the bar is switched off, the table is blocked) means: show nothing.
-          state.actions = answer?.error ? [] : cleanActions(answer?.actions);
-          state.table = record.table;
-          state.askedAt = now;
-        }
-        state.record = { table: record.table, sysId: record.sysId };
-      }
-    } catch (err) {
-      if (isGone(err)) {
-        stop();
-        return;
-      }
-      Object.assign(state, { record: null, actions: [], table: '', askedAt: NaN });
+      // A page that rebuilt its document takes the bar with it, and a page script may have moved it: put it back.
+      if (host.parentNode !== doc.documentElement) doc.documentElement.append(host);
+      result = await sync.tick();
     } finally {
       refreshing = false;
     }
+    if (!result) return;
+    if (result.status === 'gone' || result.status === 'off') {
+      stop();
+      return;
+    }
+    if (!result.record || (state.record && state.record.sysId !== result.record.sysId)) state.notice = '';
+    state.record = result.record;
+    state.actions = result.actions;
     if (!stopped) render();
   }
 
   const timer = win.setInterval(refresh, POLL_MS);
   doc.documentElement.append(host);
+  pinAll();
   render();
   refresh();
 
   function stop() {
+    if (stopped) return;
     stopped = true;
     win.clearInterval(timer);
+    watcher?.disconnect();
     host.remove();
   }
 

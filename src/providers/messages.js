@@ -9,6 +9,7 @@
 // `raw` carries the vendor's own assistant blocks. Anthropic requires thinking
 // blocks to be sent back unchanged within a tool loop, so the adapter replays
 // `raw` when it came from the same provider instead of rebuilding the turn.
+import { AiError } from './http.js';
 
 function parseJsonObject(text) {
   if (text && typeof text === 'object') return text;
@@ -58,23 +59,49 @@ function openAIUsage(usage) {
   return { input: prompt - cached, output: usage?.completion_tokens || 0, cacheRead: cached, cacheWrite: 0 };
 }
 
-export function fromOpenAIResponse(data) {
+// Why an answer stopped, in the neutral words both adapters use. 'max_tokens' means the text was cut short by the output limit;
+// 'content_filter' means the provider's filter stopped it part-way (Azure OpenAI does this).
+const OPENAI_STOP = { length: 'max_tokens', content_filter: 'content_filter', tool_calls: 'tool_use', function_call: 'tool_use' };
+
+/** `who` names the provider in the messages ("Azure OpenAI could not..."); the neutral shape is the same for every provider. */
+export function fromOpenAIResponse(data, who = 'The AI service') {
   const choice = data?.choices?.[0];
   const message = choice?.message;
-  if (!message) throw new Error('OpenAI response did not include a message.');
+  if (!message) throw new AiError(`${who} sent an answer without a message. Check the address and the model in Settings.`, 'BAD_ANSWER');
   const toolCalls = (message.tool_calls || []).map((c) => ({
     id: c.id,
     name: c.function?.name,
     args: parseJsonObject(c.function?.arguments),
   }));
-  if (!message.content && !toolCalls.length) throw new Error('OpenAI response did not include any content.');
+  const content = typeof message.content === 'string' ? message.content : '';
+  const stopReason = OPENAI_STOP[choice.finish_reason] || (toolCalls.length ? 'tool_use' : 'end_turn');
+  if (!content && !toolCalls.length) {
+    if (stopReason === 'content_filter') throw new AiError(`${who} stopped the answer with its content filter. Change the text, or ask your administrator about the filter.`, 'CONTENT_FILTER');
+    // A reasoning model can spend the whole output limit thinking and return nothing.
+    if (stopReason === 'max_tokens') throw new AiError('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.', 'CUT_SHORT');
+    if (typeof message.refusal === 'string' && message.refusal) throw new AiError('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.', 'REFUSED');
+    throw new AiError(`${who} sent an empty answer. Try again.`, 'EMPTY_ANSWER');
+  }
   return {
-    content: message.content || '',
+    content,
     toolCalls,
-    stopReason: choice.finish_reason === 'length' ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end_turn',
+    stopReason,
+    // The text stops part-way: the person must be told the answer is incomplete.
+    truncated: stopReason === 'max_tokens' || stopReason === 'content_filter',
     usage: openAIUsage(data.usage),
   };
 }
+
+/**
+ * The sentence for an answer that stopped part-way ('' when it is whole), to show next to the answer: the person must not take a
+ * cut-off draft for a finished one. Pure, so the run pipeline (src/lib/pipeline.js) can use it without the network code.
+ */
+export const truncationNote = (reply) =>
+  reply?.truncated
+    ? reply.stopReason === 'content_filter'
+      ? "The answer stops part-way: the AI service's content filter cut it off. Check it carefully before you use it."
+      : 'The answer was cut short because it reached the length limit. Check the end before you use it, or try again with less text.'
+    : '';
 
 // ---- Anthropic ---------------------------------------------------------------
 
@@ -120,11 +147,17 @@ export function toAnthropicRequest(messages) {
   return { system: system.join('\n\n'), messages: out };
 }
 
+// Anthropic's stop reasons that mean the text ends before the model finished: the output limit, or the context window filling up.
+const ANTHROPIC_CUT = new Set(['max_tokens', 'model_context_window_exceeded']);
+
 export function fromAnthropicResponse(data) {
   if (data?.stop_reason === 'refusal') {
-    const category = data.stop_details?.category;
-    throw new Error(
-      `The model declined this request${category ? ` (${category})` : ''}. Rephrase it or try a different model in Agent Buddy settings.`
+    // stop_details is only filled for a refusal; its category is a short word such as "cyber" (never request text).
+    const raw = data.stop_details?.category;
+    const category = typeof raw === 'string' && /^[a-z_]{1,40}$/.test(raw) ? raw : '';
+    throw new AiError(
+      `The model declined this request${category ? ` (${category})` : ''}. Rephrase it or try a different model in Agent Buddy settings.`,
+      'REFUSED'
     );
   }
   const blocks = Array.isArray(data?.content) ? data.content : [];
@@ -135,12 +168,17 @@ export function fromAnthropicResponse(data) {
   const toolCalls = blocks
     .filter((b) => b.type === 'tool_use')
     .map((b) => ({ id: b.id, name: b.name, args: parseJsonObject(b.input) }));
-  if (!content && !toolCalls.length) throw new Error('The model returned no content.');
+  const cut = ANTHROPIC_CUT.has(data?.stop_reason);
+  if (!content && !toolCalls.length) {
+    if (cut) throw new AiError('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.', 'CUT_SHORT');
+    throw new AiError('The model returned no content. Try again.', 'EMPTY_ANSWER');
+  }
   return {
     content,
     toolCalls,
     raw: { provider: 'anthropic', blocks },
-    stopReason: data.stop_reason === 'max_tokens' ? 'max_tokens' : toolCalls.length ? 'tool_use' : 'end_turn',
+    stopReason: cut ? 'max_tokens' : data.stop_reason === 'tool_use' || toolCalls.length ? 'tool_use' : 'end_turn',
+    truncated: cut,
     // Anthropic reports cache reads and writes separately from input_tokens (which excludes both).
     usage: {
       input: data.usage?.input_tokens || 0,

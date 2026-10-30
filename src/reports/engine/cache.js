@@ -4,9 +4,13 @@
 /**
  * A cache whose entries expire after `ttlMs`. `load(key, loader)` returns { value, at }: a fresh entry, or the one that is
  * already being loaded (two widgets asking for the same number share one request), or runs `loader`. A failed load is not kept.
+ *
+ * `clear()` ("Refresh") starts a new generation: a load that was already on its way still answers the caller that asked for it,
+ * but its value is NOT stored, so numbers read before the refresh can never come back into the cache after it.
  */
 export function createCache({ ttlMs = 60000, max = 400, now = () => Date.now() } = {}) {
   const entries = new Map(); // key -> { value, at } | { promise }
+  let generation = 0;
 
   const fresh = (entry) => entry && entry.value !== undefined && now() - entry.at < ttlMs;
 
@@ -24,22 +28,28 @@ export function createCache({ ttlMs = 60000, max = 400, now = () => Date.now() }
       const hit = entries.get(key);
       if (fresh(hit)) return hit;
       if (hit?.promise) return hit.promise;
-      const promise = (async () => {
+      const started = generation;
+      const mine = {};
+      mine.promise = (async () => {
         try {
           const value = await loader();
           const entry = { value, at: now() };
-          entries.set(key, entry);
-          prune();
+          // Only the load this key is still waiting for may store its answer (not one from before a clear()).
+          if (started === generation && entries.get(key) === mine) {
+            entries.set(key, entry);
+            prune();
+          }
           return entry;
         } catch (err) {
-          entries.delete(key);
+          if (entries.get(key) === mine) entries.delete(key);
           throw err;
         }
       })();
-      entries.set(key, { promise });
-      return promise;
+      entries.set(key, mine);
+      return mine.promise;
     },
     clear() {
+      generation += 1;
       entries.clear();
     },
     get size() {

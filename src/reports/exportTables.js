@@ -3,21 +3,31 @@
 //
 // Masking: people's names become "Person 1", "Person 2"... in the order they first appear, the same name always getting the
 // same number within one export; group names are kept. Email addresses anywhere in a cell become "[email]", and a known
-// name that appears inside a longer text (a ticket title) is replaced too. A name that is written only in free text and is
-// not in a person column anywhere in the export cannot be known, so it stays: the export screen says so.
+// name that appears inside a longer text (a ticket title) is replaced too. A name written only in free text ("Laptop for
+// Anna Schmidt", "spoke with Dr. Priya Raman") is found by the firewall's prose-name detector (src/pii/names.js) and numbered
+// after the people of the person columns, in table, row and column order, so the numbering is the same every time. A name
+// with no cue around it ("Anna Schmidt laptop") can still be missed: the export screen says so.
 import { toCsv } from '../lib/export.js';
+import { detectProseNames } from '../pii/names.js';
+import { resolveOverlaps } from '../pii/detectors.js';
 
 const EMAIL_RE = /[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const KEEP = new Set(['', '(unassigned)', '(no group)', 'n/a', 'Unknown']);
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const text = (value) => (value === null || value === undefined ? '' : String(value));
+const nameKey = (name) => name.replace(/\s+/g, ' ').trim().toLowerCase();
 
-/** Mask people in a set of tables. Returns new tables; the input is not changed. */
-export function maskTables(tables) {
+/**
+ * Mask people in a set of tables. Returns new tables; the input is not changed.
+ * @param {object[]} tables
+ * @param {{ mode?: 'standard' | 'strict' | 'local-only' }} [options] the privacy mode: Strict also masks capitalised full
+ *   names with no cue in front of them (see src/pii/names.js).
+ */
+export function maskTables(tables, { mode = 'standard' } = {}) {
   const people = new Map(); // lower-cased trimmed name -> "Person N"
   const personOf = (name) => {
-    const key = name.trim().toLowerCase();
+    const key = nameKey(name);
     if (!people.has(key)) people.set(key, `Person ${people.size + 1}`);
     return people.get(key);
   };
@@ -32,11 +42,47 @@ export function maskTables(tables) {
       })
     )
   );
+
+  // A name found in prose that is one word of exactly one person-column name ("spoke with Ann" when "Ann Lee" is the owner)
+  // is that person; any other name found in prose is a person of its own.
+  const columnNames = [...people.keys()];
+  const known = (found) => {
+    const key = nameKey(found);
+    if (people.has(key)) return key;
+    if (/\s/.test(key)) return key;
+    const owners = columnNames.filter((n) => n.split(/[\s-]+/).includes(key));
+    return owners.length === 1 ? owners[0] : key;
+  };
+
+  // Second pass: names written in free-text cells, in table, row and column order.
+  const prose = new Map(); // row object -> { column key -> findings }
+  tables.forEach((t) =>
+    t.rows.forEach((row) =>
+      t.columns.forEach((c) => {
+        const value = row[c.key];
+        if (c.person || typeof value !== 'string' || !value) return;
+        const found = resolveOverlaps(detectProseNames(value, { mode }));
+        if (!found.length) return;
+        if (!prose.has(row)) prose.set(row, {});
+        prose.get(row)[c.key] = found;
+        found.forEach((f) => personOf(known(f.value)));
+      })
+    )
+  );
+
   const names = [...people.keys()].sort((a, b) => b.length - a.length); // longest first: "Ann Lee-Smith" before "Ann Lee"
   const nameRes = names.filter((n) => n.length >= 4).map((n) => ({ re: new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(n)}(?![\\p{L}\\p{N}])`, 'giu'), to: people.get(n) }));
 
-  const scrub = (value) => {
-    let out = text(value).replace(EMAIL_RE, '[email]');
+  const scrub = (value, found = []) => {
+    // The names found in this very cell first (by position, so a short name such as "Tom" is replaced where it was found), then
+    // emails, then every known name wherever else it is written.
+    let out = '';
+    let pos = 0;
+    for (const f of found) {
+      out += value.slice(pos, f.start) + people.get(known(f.value));
+      pos = f.end;
+    }
+    out = (out + value.slice(pos)).replace(EMAIL_RE, '[email]');
     nameRes.forEach(({ re, to }) => {
       out = out.replace(re, (_, lead) => `${lead}${to}`);
     });
@@ -52,7 +98,7 @@ export function maskTables(tables) {
         if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') return;
         const s = text(value);
         if (c.person) next[c.key] = KEEP.has(s.trim()) ? s : personOf(s);
-        else next[c.key] = scrub(s);
+        else next[c.key] = scrub(s, prose.get(row)?.[c.key]);
       });
       return next;
     }),

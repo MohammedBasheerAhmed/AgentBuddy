@@ -1,3 +1,5 @@
+import { plainError } from './ask.js';
+
 // "What could not be read", in words a fulfiller can act on. The context engine reports the table it tried (kb_use, m2m_kb_task,
 // task_sla...) and puts the same name inside its notes; nobody at a service desk knows those names, so they become plain phrases
 // here, at the last step before the screen. The data itself (access entries) is not changed.
@@ -67,4 +69,19 @@ export function describeAccess(access) {
   return (access || [])
     .filter((a) => a && SHOWN.has(a.status))
     .map((a) => (a.note ? `${plainSource(a.source)}: ${plainNote(a.note)}` : `${plainSource(a.source)}: not available to you.`));
+}
+
+/**
+ * A read that failed, said the way rule 9 asks: a refusal (403, a record the person cannot see) is "not available to you", the
+ * organisation's own block is said as such, and anything else is an error in plain words.
+ * @param {Error|{ message?: string, code?: string }} err as the panel's read() throws it (the content script's code travels along)
+ * @param {string} what the thing that could not be read, as a phrase that can start a sentence ("Earlier tickets from this person")
+ * @returns {{ kind: 'denied' | 'blocked' | 'error', text: string }}
+ */
+export function readFailure(err, what) {
+  const code = String(err?.code || '');
+  const thing = String(what || 'This');
+  if (code === 'ACCESS_DENIED' || code === 'NOT_FOUND') return { kind: 'denied', text: `${thing}: not available to you.` };
+  if (code === 'BLOCKED_TABLE') return { kind: 'blocked', text: `${thing}: your organisation does not let Agent Buddy read this.` };
+  return { kind: 'error', text: plainError(err, `${thing} could not be read.`) };
 }

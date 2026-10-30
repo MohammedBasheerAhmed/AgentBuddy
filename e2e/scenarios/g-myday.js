@@ -35,13 +35,15 @@ module.exports = {
     // (The shared fixtures also give this agent a breached customer-service case, so more than one row can be breached.)
     const breachedRow = list.find((x) => x.number === 'INC0010100');
     t.check('a breached ticket is FIRST in the list, and the seeded breached incident is labelled "SLA breached"', Boolean(list[0]?.breached) && Boolean(breachedRow?.breached), `${list[0]?.number}: ${list[0]?.text}`);
+    // INC0010001's SLA is 118% through on the clock but only 62% through its working hours (business_percentage): an 8-to-5 SLA
+    // is not at risk overnight, so it is NOT labelled, and ranks by priority after the critical ticket.
     const risk = list.find((x) => x.number === 'INC0010001');
-    t.check('the ticket whose SLA is used up (118%) is labelled "SLA at risk" and sits after every breached one', Boolean(risk?.atRisk) && list.indexOf(risk) > list.reduce((last, x, i) => (x.breached ? i : last), -1), risk?.text);
+    t.check('a ticket whose SLA has most of its WORKING time left (62%, though 118% on the clock) is not labelled "SLA at risk"', Boolean(risk) && !risk.atRisk && !risk.breached && list.indexOf(risk) > list.reduce((last, x, i) => (x.breached ? i : last), -1), risk?.text);
     t.check('breached tickets come before at-risk, at-risk before the rest', (() => {
       const order = list.map((x) => (x.breached ? 0 : x.atRisk ? 1 : 2));
       return order.every((v, i) => i === 0 || order[i - 1] <= v);
     })(), list.map((x) => `${x.number}:${x.breached ? 'B' : x.atRisk ? 'R' : '-'}`).join(' '));
-    t.check('the critical ticket without an SLA ranks after the SLA-risk ones', numbers.indexOf('INC0010101') > numbers.indexOf('INC0010001'));
+    t.check('with no SLA at risk between them, the critical ticket ranks before the high one', numbers.indexOf('INC0010101') < numbers.indexOf('INC0010001'), numbers.join(', '));
     t.check('no AI request was made for My Day', ai.requests.length === 0);
 
     // A table the user cannot read (a customer-service case queue they have no role for): a note, and the rest still shows.

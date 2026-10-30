@@ -23,11 +23,14 @@ const LABELS = Object.freeze({
   ADDRESS: 'ADDRESS',
   SECRET: 'SECRET',
   URL_CREDENTIALS: 'SECRET',
+  MANUAL: 'MASKED', // text the person masked by hand in the preview (when it does not look like a name, an email...)
 });
 
 export function labelFor(kind) {
   return LABELS[kind] || 'DATA';
 }
+
+const LABEL_RE = /^[A-Z]{2,12}$/;
 
 const PLACEHOLDER = /\[([A-Z]{2,12})_(\d{1,6})\]/g;
 
@@ -61,10 +64,11 @@ export function createTokenizer() {
     /**
      * The placeholder for a finding. A PERSON finding that carries an `entity` (the dictionary's person id) is keyed by it,
      * so "Abel", "Tuter" and "Abel Tuter" are all the same [PERSON_n], and rehydrates to the person's name from the record.
-     * @param {{kind: string, value: string, entity?: string, canonical?: string}} finding
+     * A finding may name its own `label` (text masked by hand that looks like a name is a [PERSON_n] like the others).
+     * @param {{kind: string, value: string, entity?: string, canonical?: string, label?: string}} finding
      */
     placeholderFor(finding) {
-      const label = labelFor(finding.kind);
+      const label = typeof finding.label === 'string' && LABEL_RE.test(finding.label) ? finding.label : labelFor(finding.kind);
       const key = `${label}|${finding.entity ? `entity:${finding.entity}` : normalise(label, finding.value)}`;
       const known = forward.get(key);
       if (known) return known;
@@ -84,11 +88,33 @@ export function createTokenizer() {
       return String(text).replace(PLACEHOLDER, '($1_$2)');
     },
 
-    /** Replace known placeholders with their real values. Unknown or malformed look-alikes are left untouched. */
-    rehydrate(text) {
+    /**
+     * Replace known placeholders with their real values. Unknown or malformed look-alikes are left untouched, and so are the
+     * labels in `keep` (a password the model repeats stays [SECRET_1]).
+     * @param {string} text
+     * @param {{ keep?: string[] }} [options]
+     */
+    rehydrate(text, options = {}) {
       if (typeof text !== 'string' || !reverse.size) return typeof text === 'string' ? text : '';
+      const keep = new Set(Array.isArray(options?.keep) ? options.keep : []);
       // A function replacement: the real value is inserted literally, never read as a "$&" pattern, and not re-scanned.
-      return text.replace(PLACEHOLDER, (token) => (reverse.has(token) ? reverse.get(token) : token));
+      return text.replace(PLACEHOLDER, (token, label) => (reverse.has(token) && !keep.has(label) ? reverse.get(token) : token));
+    },
+
+    /**
+     * Remember the current state; the function returned puts it back. The firewall uses it when a build fails: placeholders
+     * handed out for a request that was never sealed (or sent) are taken back, so they cannot be confused with real ones later.
+     */
+    checkpoint() {
+      const forwardKeys = new Set(forward.keys());
+      const reverseKeys = new Set(reverse.keys());
+      const counts = new Map(counters);
+      return () => {
+        for (const key of [...forward.keys()]) if (!forwardKeys.has(key)) forward.delete(key);
+        for (const key of [...reverse.keys()]) if (!reverseKeys.has(key)) reverse.delete(key);
+        counters.clear();
+        for (const [label, n] of counts) counters.set(label, n);
+      };
     },
 
     /** Original values handed out so far. For the firewall's own leak check only; never exposed by the firewall. */

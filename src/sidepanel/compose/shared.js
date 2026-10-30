@@ -7,14 +7,12 @@ import { reviewForInsert } from '../../safeSend/review.js';
 import { buildFillMessage, auditRefFromPage, fillReasonText, isCustomerVisible, sourceFromPack } from '../../lib/fillable.js';
 import { createGuard, performInsert } from '../insertFlow.js';
 import { resolveProviderConfig } from '../../providers/config.js';
-import { aiNeedsText } from '../aiReady.js';
 import ReviewHints from '../ReviewHints.jsx';
 
 export { ReviewHints };
 
 // One rule for "is the AI ready" everywhere (a key, a key the organisation provides, or a model that needs none): src/sidepanel/aiReady.js.
 export { isAiReady } from '../aiReady.js';
-export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this');
 
 /** A feature by id, and whether the organisation's policy lets it run. */
 export function featureState(id, policy) {

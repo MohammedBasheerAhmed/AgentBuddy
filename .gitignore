@@ -6,3 +6,4 @@ dist/
 .test-dist-*/
 .build-tmp/
 .build-tmp-*/
+dist-enterprise/

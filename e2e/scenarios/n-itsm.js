@@ -110,7 +110,7 @@ module.exports = {
 
     // sentiment-risk: counted signals + the newest notes; the answer names the customer (rehydrated) and offers work notes only
     let ran = await runFeature(p, new RegExp(`^${T.sentiment}`));
-    let req = await checkAiRun(t, ctx, p, 'sentiment-risk', ran, { before, system: /see early whether a customer is getting upset/, userHas: [/Signals counted by Agent Buddy/i] });
+    let req = await checkAiRun(t, ctx, p, 'sentiment-risk', ran, { before, system: /see early whether a customer is getting upset/, userHas: [/Signals counted by simple rules/i] });
     t.check('sentiment-risk: the answer shows the real caller name (put back locally) and the four lines', Boolean(ran.result) && ran.result.includes(data.SEED.callerName) && /Mood: frustrated/.test(ran.result) && /Escalation risk: High/.test(ran.result), (ran.result || '').replace(/\s+/g, ' ').slice(0, 120));
     t.check('sentiment-risk: offers "Add to work notes" (internal) and Copy, nothing to the customer', (await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card button')).map((b) => b.innerText.trim()))).includes('Add to work notes') && !(await panelText(p)).includes('Insert as customer comment'));
     await close();

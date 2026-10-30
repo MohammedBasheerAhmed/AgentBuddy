@@ -14,7 +14,7 @@ import { useLoader } from '../checks/useLoader.js';
 
 const improve = featureById('resolution-improve');
 
-export default function QualityGateView({ page, eff, record, run, aiReady }) {
+export default function QualityGateView({ page, eff, record, run, aiReady, active = true }) {
   const allowSensitive = Boolean(eff.policy?.allowHrContent);
   const ref = { table: record.table, sysId: record.sysId };
   // A failed facts read must not hide the checks: the saved ticket is still worth checking.
@@ -23,7 +23,7 @@ export default function QualityGateView({ page, eff, record, run, aiReady }) {
   const [state, reload] = useLoader(async () => {
     const [pack, facts] = await Promise.all([read(page.tabId, 'pack', { ...ref, feature: 'resolution-check', allowSensitive }), readFacts()]);
     return { pack, facts, at: Date.now() };
-  }, [page.tabId, record.table, record.sysId, allowSensitive]);
+  }, [page.tabId, record.table, record.sysId, allowSensitive], { active });
 
   const data = state.data;
   const view = useMemo(() => (data ? buildCheckView(data.pack, data.facts, { now: data.at }) : null), [data]);
@@ -52,7 +52,7 @@ export default function QualityGateView({ page, eff, record, run, aiReady }) {
         )}
       </section>
 
-      <LoadNotes state={state} />
+      <LoadNotes state={state} onRetry={reload} />
       {view && (
         <section className="ab-card" aria-label="Results">
           <CheckSummary summary={view.summary} />

@@ -8,6 +8,16 @@
 import { checkProviderAllowed, isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { partsFor, isFeatureAvailable } from '../features/registry.js';
 import { peopleFor } from '../features/parts.js';
+import { NEVER_REHYDRATE } from '../pii/firewall.js';
+import { truncationNote } from '../providers/messages.js';
+
+// A placeholder of a kind that is never put back (a password, a card, an IBAN, an ID number), as the tokenizer writes it.
+const KEPT_PLACEHOLDER = new RegExp(`\\[(?:${NEVER_REHYDRATE.join('|')})_\\d{1,6}\\]`);
+export const KEPT_NOTE =
+  'Passwords, card and ID numbers stay hidden in answers (shown as [SECRET_1], [CARD_1]...). Add the real value yourself only if it really belongs there.';
+
+/** The sentence shown above an answer that still carries a never-put-back placeholder; '' when it carries none. */
+export const keptNote = (text) => (KEPT_PLACEHOLDER.test(String(text || '')) ? KEPT_NOTE : '');
 
 // Privacy modes from least to most protective (see src/policy/policy.js).
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
@@ -98,7 +108,8 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey, 
 
 /**
  * Mask and seal the request for a feature. Returns what the preview shows; nothing has been sent yet.
- * @returns {{ request: object, firewall: object, preview: string, stats: object }}
+ * `input` is what the firewall was given, kept in memory only so "Mask this too" can have the same firewall build it again.
+ * @returns {{ request: object, firewall: object, preview: string, stats: object, input: object, feature: object, pack: object }}
  */
 export function prepareRun({ feature, pack, values, policy, config, hasKey = true, createFirewall, pageTable = '' }) {
   assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable });
@@ -113,21 +124,74 @@ export function prepareRun({ feature, pack, values, policy, config, hasKey = tru
     sensitivePrefixes: policy?.sensitiveTablePrefixes || [],
     sensitiveRecord: sensitive,
   });
-  const request = firewall.buildRequest({
+  const input = Object.freeze({
     feature: feature.id,
     table: pack.table,
     system: feature.system,
     userInstruction: feature.instruction,
-    parts: partsFor(feature, pack),
+    parts: Object.freeze(partsFor(feature, pack)),
   });
-  return { request, firewall, preview: request.preview, stats: request.stats, feature, pack };
+  const request = firewall.buildRequest(input);
+  return { request, firewall, preview: request.preview, stats: request.stats, input, feature, pack };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// "Mask this too": the person adds text to mask in the preview
+// ---------------------------------------------------------------------------------------------------------------
+
+const PLACEHOLDER_IN_TEXT = /[[(][A-Z]{2,12}_\d{1,6}[\])]/;
+const MASK_MIN = 2;
+const MASK_MAX = 200;
+
+// How often `literal` occurs in `text`, ignoring case (the firewall masks it the same way) and the placeholders themselves
+// ("masked" is not counted inside "[MASKED_1]").
+function occurrences(text, literal) {
+  const hay = String(text).replace(/\[[A-Z]{2,12}_\d{1,6}\]/g, ' ').toLowerCase();
+  const needle = literal.toLowerCase();
+  let n = 0;
+  for (let at = hay.indexOf(needle); at !== -1; at = hay.indexOf(needle, at + needle.length)) n++;
+  return n;
 }
 
 /**
- * Send a prepared (and, if required, confirmed) request. Always writes an audit entry, whatever happens.
- * @returns {{ text: string, usage: object }} text is re-hydrated: real names are back, locally only.
+ * Mask more text in a prepared run, before it is sent. The text is handed to the SAME firewall, which adds it to what it masks
+ * (every occurrence, in every part, with a placeholder like the others) and builds and seals the request again: the request
+ * is never edited outside the firewall, and masking can only be added, never taken away. The answer is rehydrated as usual.
+ *
+ * Returns `{ ok: true, masked, prepared }` with the new prepared run (its request, preview and stats replace the old ones; the
+ * stats count the hand-masked places as MANUAL, which the audit log keeps as a number), or `{ ok: false, problem }` with the
+ * old run unchanged. Problems: EMPTY, SHORT, LONG, PLACEHOLDER (the selection includes a placeholder), NOT_FOUND (not in what
+ * will be sent), NOT_DATA (only in Agent Buddy's own fixed wording), FAILED (the firewall refused; the old request stands).
+ * @param {object} prepared from prepareRun (or an earlier maskMore)
+ * @param {string} text what the person selected or typed
  */
-export async function executeRun({ prepared, config, values, host = '', previewShown = false, sendChat, logAudit, now = () => Date.now(), policy = null, tokensUsedToday = null }) {
+export function maskMore(prepared, text) {
+  const literal = typeof text === 'string' ? text.trim() : '';
+  if (!literal) return { ok: false, problem: 'EMPTY' };
+  if (literal.length > MASK_MAX) return { ok: false, problem: 'LONG' };
+  if (literal.length < MASK_MIN || !/[\p{L}\p{N}]/u.test(literal)) return { ok: false, problem: 'SHORT' };
+  if (PLACEHOLDER_IN_TEXT.test(literal)) return { ok: false, problem: 'PLACEHOLDER' };
+  if (!prepared?.request || !prepared.firewall || !prepared.input) return { ok: false, problem: 'FAILED' };
+  const before = occurrences(prepared.request.preview, literal);
+  if (!before) return { ok: false, problem: 'NOT_FOUND' };
+  let request;
+  try {
+    request = prepared.firewall.buildRequest({ ...prepared.input, mask: [literal] });
+  } catch {
+    return { ok: false, problem: 'FAILED' };
+  }
+  const masked = before - occurrences(request.preview, literal);
+  if (masked <= 0) return { ok: false, problem: 'NOT_DATA' };
+  return { ok: true, masked, prepared: { ...prepared, request, preview: request.preview, stats: request.stats, masks: (prepared.masks || 0) + 1 } };
+}
+
+/**
+ * Send a prepared (and, if required, confirmed) request. Always writes an audit entry, whatever happens: 'sent', 'error' with the
+ * provider's machine code (BAD_KEY, RATE_LIMIT, TIMEOUT...), or 'cancelled' when the person stopped it (`signal`, code CANCELLED).
+ * @returns {{ text: string, usage: object, truncated: boolean, notice: string }} text is re-hydrated: real names are back, locally
+ *   only. `notice` is what to tell the person when the answer was cut short ('' when it was not).
+ */
+export async function executeRun({ prepared, config, values, host = '', previewShown = false, sendChat, logAudit, now = () => Date.now(), policy = null, tokensUsedToday = null, signal }) {
   const { request, firewall, feature, pack } = prepared;
   // The organisation's daily token budget (policy.tokenBudgetPerDay), checked before anything is sent. The person's own cap in
   // Settings is checked by the provider layer (src/providers/budget.js), so the smaller of the two always wins.
@@ -145,13 +209,17 @@ export async function executeRun({ prepared, config, values, host = '', previewS
     stats: request.stats,
   };
   try {
-    const reply = await sendChat(config, request, { host });
+    const reply = await sendChat(config, request, { host, signal });
     // keepMasked: for text that will be published or shared (a knowledge article) the placeholders stay: real names never come back.
-    const text = feature.keepMasked ? String(reply.content || '') : firewall.rehydrate(reply.content || '');
+    // Otherwise names, emails and phone numbers come back, but never a password, a card or an ID number (NEVER_REHYDRATE): a
+    // model talked into repeating [SECRET_1] gets the placeholder, not the secret, into a draft that may be inserted.
+    const text = feature.keepMasked ? String(reply.content || '') : firewall.rehydrate(reply.content || '', { keep: NEVER_REHYDRATE });
     await logAudit({ ...base, usage: reply.usage, outcome: 'sent', ms: now() - started });
-    return { text, usage: reply.usage || {} };
+    const notice = [truncationNote(reply), feature.keepMasked ? '' : keptNote(text)].filter(Boolean).join(' ');
+    return { text, usage: reply.usage || {}, truncated: Boolean(reply.truncated), notice };
   } catch (err) {
-    await logAudit({ ...base, outcome: 'error', reason: errorReason(err), ms: now() - started });
+    // A request the person stopped is not a failure of the provider.
+    await logAudit({ ...base, outcome: err?.code === 'CANCELLED' ? 'cancelled' : 'error', reason: errorReason(err), ms: now() - started });
     throw err;
   }
 }

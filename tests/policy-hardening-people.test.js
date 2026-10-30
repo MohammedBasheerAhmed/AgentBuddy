@@ -127,9 +127,15 @@ test('SEC-11 end to end: a name that only the opener column knows is masked in t
   const text = outgoing(run('reply-draft', pack));
   assert.ok(!/Dana/.test(text) && !/Whitfield/.test(text), 'the opener\'s name is masked');
   assert.match(text, /\[PERSON_\d+\]/);
-  // and the same record read with only the old columns would have let it through
+  // The same record read with only the old columns: "please ask Dana Whitfield" names her with a cue, so it is found in prose
+  // (src/pii/names.js) and masked even then.
   const old = { ...pack, people: pack.people.filter((p) => p.name !== 'Dana Whitfield') };
-  assert.match(outgoing(run('reply-draft', old)), /Dana Whitfield/);
+  assert.doesNotMatch(outgoing(run('reply-draft', old)), /Dana|Whitfield/);
+  // Written with no cue, only the opener column masks it: the old columns would have let it through.
+  tables.incident[0].short_description = v('Printer broken, Dana Whitfield has the details');
+  const bare = await readContextPack({ table: 'incident', sysId: INCIDENT_ID }, fakeDeps(tables), { feature: 'reply-draft' });
+  assert.doesNotMatch(outgoing(run('reply-draft', bare)), /Dana|Whitfield/, 'masked through the opener column');
+  assert.match(outgoing(run('reply-draft', { ...bare, people: bare.people.filter((p) => p.name !== 'Dana Whitfield') })), /Dana Whitfield/);
 });
 
 test('SEC-11 end to end, HR: the subject of a case named in the title is masked in the reply draft (the audit\'s reproduction)', async () => {

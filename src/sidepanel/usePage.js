@@ -55,19 +55,32 @@ async function observeActivePage() {
 export function usePage() {
   const [state, setState] = useState(initialPageState);
   const busy = useRef(false);
+  const again = useRef(false); // something happened (a tab switch, a navigation) while a look was on its way: look once more after it
+  const alive = useRef(true);
 
+  // One look at a time, and none lost: a tab switch while a look waits for its answer used to be dropped, so the panel showed the
+  // tab it had for up to one poll. Now the look that is running is followed by one more.
   const refresh = useCallback(async () => {
-    if (busy.current) return;
+    if (busy.current) {
+      again.current = true;
+      return;
+    }
     busy.current = true;
     try {
-      const event = await observeActivePage();
-      setState((prev) => reducePage(prev, { ...event, at: Date.now() }));
+      do {
+        again.current = false;
+        // eslint-disable-next-line no-await-in-loop -- one look after the other, in order
+        const event = await observeActivePage();
+        if (!alive.current) return;
+        setState((prev) => reducePage(prev, { ...event, at: Date.now() }));
+      } while (again.current && alive.current);
     } finally {
       busy.current = false;
     }
   }, []);
 
   useEffect(() => {
+    alive.current = true;
     refresh();
     const timer = setInterval(refresh, POLL_MS);
     const onTab = () => refresh();
@@ -76,6 +89,7 @@ export function usePage() {
     chrome.tabs.onUpdated.addListener(onTab);
     chrome.tabs.onRemoved.addListener(onClosed);
     return () => {
+      alive.current = false;
       clearInterval(timer);
       chrome.tabs.onActivated.removeListener(onTab);
       chrome.tabs.onUpdated.removeListener(onTab);

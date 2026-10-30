@@ -98,10 +98,13 @@ test('"SLA breached" finds the breached tickets first and filters by their ids',
   const r = await build({ presets: ['open', 'breached'], groupBy: 'priority' }, inst);
   assert.equal(r.data.query, `active=true^sys_idIN${id(1)},${id(2)}`);
   assert.equal(inst.calls.find((c) => c.table === 'task_sla').query, 'active=true^has_breached=true^task.sys_class_name=incident');
-  // Nothing breached: match nothing, never everything.
-  const quiet = fakeInstance({ rules: [{ when: (c) => c.kind === 'query' && c.table === 'task_sla', then: [] }] });
+  // Nothing breached (SLA records are visible, none of them breached): match nothing, never everything.
+  const quiet = fakeInstance({ rules: [{ when: (c) => c.kind === 'query' && c.table === 'task_sla' && c.query !== '', then: [] }] });
   const q = await build({ presets: ['breached'], groupBy: 'none' }, quiet);
   assert.match(q.data.query, /^sys_idIN0{32}$/);
+  // No SLA record visible at all: that is not "nothing breached" (tests/reports-hardening.test.js has the details).
+  const unseen = await build({ presets: ['breached'], groupBy: 'none' }, fakeInstance({ hidden: ['task_sla'] }));
+  assert.equal(unseen.data.available, false);
   const noSla = await build({ presets: ['breached'] }, fakeInstance({ denied: ['task_sla'] }));
   assert.match(noSla.data.reason, /SLA information is not available/);
 });

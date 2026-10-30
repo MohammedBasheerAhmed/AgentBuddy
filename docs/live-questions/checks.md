@@ -90,3 +90,14 @@ none of them can make the tabs write anything.
     fulfilment checklist sends the answers). Suggested change for the context area: for answers whose reference table is `sys_user`,
     return `refs: [{ role: 'variable_reference', sysId, name }]` like the approvers. Until then the name goes out unless the same
     person is also the requester, opener, assignee or an approver.
+
+    Update 2026-10-30: done in `src/context/related.js` (`readVariables` returns `variable_reference` people for `sys_user` answers).
+
+## Added 2026-10-30 (features walk)
+
+18. **"Did the customer answer?" when note authors are logins.** When sys_user cannot be read, note authors stay as logins
+    (`abel.tuter`). The Check tab used to compare those with the customer's NAME, so a reply from the customer counted as an agent's and
+    the tab warned "The customer has not replied to your last message". It now matches the name, the email, the front of the email and
+    first plus last name, without case, accents or word order; a login that matches nobody gives "Could not tell who wrote the last
+    message" instead of a guess. Check as a fulfiller who cannot read sys_user: a ticket where the customer wrote last.
+19. **`kb_use` column** for the "linked to an article" line: see `docs/live-questions/knowledge.md` question 21 (detected, not assumed).

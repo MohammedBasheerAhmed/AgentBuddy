@@ -140,7 +140,7 @@ module.exports = {
     ran = await runAfter(p, () => clickButton(p, /^Friendlier/));
     const req = await checkAiRun(t, ctx, p, 'rewrite-friendly', ran, { before, system: /improve a piece of text they wrote/, userHas: [/\[PERSON_\d+\]/, /\[EMAIL_\d+\]/, /\[PHONE_\d+\]/, /\[CARD_\d+\]/, /\[SECRET_\d+\]/] });
     t.check('rewrite: the Priya Raman typed under "Names to hide" was masked too (she is not on the ticket)', req ? !/Priya|Raman/.test(req.raw) : false);
-    t.check('rewrite: the answer has the real values back (name, email, card, password), locally only', [data.SEED.callerName, data.MORE_SEED.rewriteEmail, data.MORE_SEED.rewriteCard, data.MORE_SEED.rewritePassword, data.MORE_SEED.rewriteName].every((v) => (ran.result || '').includes(v)), (ran.result || '').replace(/\s+/g, ' ').slice(0, 140));
+    t.check('rewrite: the answer has the real names and email back, locally only; the card and password stay hidden as markers', [data.SEED.callerName, data.MORE_SEED.rewriteEmail, data.MORE_SEED.rewriteName].every((v) => (ran.result || '').includes(v)) && ![data.MORE_SEED.rewriteCard, data.MORE_SEED.rewritePassword].some((v) => (ran.result || '').includes(v)) && /\[CARD_\d+\]/.test(ran.result || '') && /\[SECRET_\d+\]/.test(ran.result || ''), (ran.result || '').replace(/\s+/g, ' ').slice(0, 140));
     await waitForText(p, 'Use it in the form', { timeout: 8000 });
 
     // 3. Into the WORK NOTE (internal): replace, then add below

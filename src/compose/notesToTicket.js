@@ -55,6 +55,9 @@ const LABELS = [
   ['questions', 'questions'],
 ];
 
+/** The labels the notes-to-ticket prompt asks for (lower case); the parser also accepts the short forms above. */
+export const PROPOSAL_LABELS = Object.freeze(['short description', 'description', 'impact', 'urgency', 'category hint', 'contact type', 'questions still to ask']);
+
 // A line that starts a labelled section: optional list/markdown marks, the label, optional marks, a colon, the value.
 const LINE = /^[\s#>*_-]*([A-Za-z][A-Za-z ]{2,40}?)[\s*_]*:[\s*_]*(.*)$/;
 

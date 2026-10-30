@@ -13,6 +13,7 @@
 import { SYS_ID_RE, TABLE_RE, oneLine } from '../../context/util.js';
 import { queryTable, aggregate } from '../tableApi.js';
 import { tryCallPage } from '../pageBridge.js';
+import { blockedError } from '../policyGuard.js';
 import { createRuntime, runReport } from '../../reports/engine/index.js';
 import { createReader, attempt } from '../../reports/engine/reader.js';
 import { normalizeTables, probeTables, tableAccess } from '../../reports/engine/common.js';
@@ -39,7 +40,33 @@ export function cleanParams(input) {
   if (top !== undefined) out.top = top;
   // The shift handover's period: 8, 12 or 24 hours (anything else is ignored, so the section uses its default).
   if (input?.hours !== undefined && Number(input.hours) === normalizeHours(input.hours)) out.hours = normalizeHours(input.hours);
+  // The dashboard's "as of" instant (one per load, shared by its widgets); the engine ignores it unless it is recent (asOfFor).
+  const asOf = Math.floor(Number(input?.asOf));
+  if (Number.isFinite(asOf) && asOf > 0) out.asOf = asOf;
   return out;
+}
+
+/**
+ * The reads a report makes. The content script hands every READ operation its policy-guarded reads (`ctx.deps`, made by
+ * src/content/policyGuard.js from the managed policy merged with the panel's): the Table API read is taken from there, so the
+ * guard's checks apply to reports exactly as to every other read (blocked tables, dot-walked columns through a blocked table, rows
+ * of a blocked class in `task`). The guarded reads carry no Aggregate API call, so `aggregate` is the table client's own, behind the
+ * same guard's isBlocked() for the table and for every table a dot-walked group-by column passes through.
+ * Tests call the operations without `ctx`: then the injected deps are used as they are.
+ */
+export function readsFor(base, ctx) {
+  const guarded = ctx?.deps;
+  if (!guarded || typeof guarded.queryTable !== 'function' || typeof guarded.isBlocked !== 'function') return { deps: base, isBlocked: null };
+  const isBlocked = (table) => guarded.isBlocked(String(table || '').toLowerCase());
+  // If the content script's reads ever carry their own (guarded) Aggregate API call, that one is used underneath.
+  const aggregateRead = typeof guarded.aggregate === 'function' ? guarded.aggregate : base.aggregate;
+  const aggregate = async (table, options = {}) => {
+    const steps = [...(options.groupBy || []), ...(options.avgFields || [])].flatMap((f) => String(f).toLowerCase().split('.').slice(0, -1));
+    const hit = [table, ...steps].find((t) => isBlocked(t));
+    if (hit) throw blockedError(hit);
+    return aggregateRead(table, options);
+  };
+  return { deps: { queryTable: guarded.queryTable, aggregate }, isBlocked };
 }
 
 /** Blocked tables from the organisation's policy, as the panel passes them: plain lower-case identifiers. */
@@ -62,12 +89,15 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
     return { userId, name: [session.firstName, session.lastName].filter(Boolean).join(' ') };
   }
 
-  const readerFor = (userId, blocked) => createReader({ deps, cache: runtime.cache, limiter: runtime.limiter, prefix: userId, blocked: cleanBlocked(blocked) });
+  const readerFor = (userId, blocked, ctx) => {
+    const reads = readsFor(deps, ctx);
+    return createReader({ deps: reads.deps, cache: runtime.cache, limiter: runtime.limiter, prefix: userId, blocked: cleanBlocked(blocked), isBlocked: reads.isBlocked });
+  };
 
   return {
-    async reportContext(args = {}) {
+    async reportContext(args = {}, ctx) {
       const { userId, name } = await whoAmI();
-      const reader = readerFor(userId, args.blocked);
+      const reader = readerFor(userId, args.blocked, ctx);
       const [tables, groups] = await Promise.all([probeTables(reader, REPORT_TABLE_IDS), attempt(() => readMyGroups(reader, userId), 'sys_user_grmember')]);
       return {
         user: { name },
@@ -78,18 +108,18 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
       };
     },
 
-    async reportGroups(args = {}) {
+    async reportGroups(args = {}, ctx) {
       const { userId } = await whoAmI();
       const search = oneLine(args.search || '', 60);
       if (search.length < 2) return { groups: [], note: 'Type at least two letters of the group name.' };
-      const reader = readerFor(userId, args.blocked);
+      const reader = readerFor(userId, args.blocked, ctx);
       const query = `${buildQuery([{ op: 'like', field: 'name', value: search }, { op: 'true', field: 'active' }])}^ORDERBYname`;
       const found = await attempt(() => reader.rows('sys_user_group', query, ['sys_id', 'name'], { limit: 20, displayValue: false }), 'sys_user_group');
       if (!found.ok) return { groups: [], note: found.status === 'denied' ? 'Groups are not available to you.' : found.note };
       return { groups: found.value.filter((r) => SYS_ID_RE.test(String(r.sys_id || ''))).map((r) => ({ id: String(r.sys_id), name: oneLine(r.name, 80) })), note: found.value.length ? '' : 'No group matches.' };
     },
 
-    async reportRun(args = {}) {
+    async reportRun(args = {}, ctx) {
       const { userId } = await whoAmI();
       const kind = args.kind === 'builder' ? 'builder' : 'section';
       if (kind === 'section' && !SECTION_IDS.includes(args.section)) throw new Error('That report does not exist.');
@@ -101,7 +131,8 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
         params: cleanParams(args.params),
         config: args.config,
       };
-      return runReport(request, { deps, userId, runtime, blocked: cleanBlocked(args.blocked) });
+      const reads = readsFor(deps, ctx);
+      return runReport(request, { deps: reads.deps, isBlocked: reads.isBlocked, userId, runtime, blocked: cleanBlocked(args.blocked) });
     },
 
     async reportClear() {
@@ -111,11 +142,12 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
 
     // Every argument is checked by normalizeCoachingRequest (one group id, a date range of at most 92 days, a sample of 1 to 10,
     // known non-HR tables). The answer is plain JSON; nothing is kept here (the read uses a cache of its own that is dropped).
-    async coachingSample(args = {}) {
+    async coachingSample(args = {}, ctx) {
       const { userId } = await whoAmI();
       const now = Date.now();
       const request = normalizeCoachingRequest(args, { now });
-      return readCoachingSample(request, { deps, userId, blocked: cleanBlocked(args.blocked), now });
+      const reads = readsFor(deps, ctx);
+      return readCoachingSample(request, { deps: reads.deps, isBlocked: reads.isBlocked, userId, blocked: cleanBlocked(args.blocked), now });
     },
   };
 }

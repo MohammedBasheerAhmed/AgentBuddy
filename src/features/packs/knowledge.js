@@ -7,8 +7,10 @@
 import { articleParts, gapParts, mergeParts } from '../../knowledge/parts.js';
 import { chatParts } from '../../chat/parts.js';
 import { sectionOrAll } from '../../knowledge/sections.js';
+import { rulesFor } from '../../prompts/rules.js';
 
-const CHAT_SUMMARY_HEADINGS = ['Summary', 'Outcome', 'Follow-ups', 'Suggested ticket notes'];
+// The headings of the chat summary: the ticket notes Insert takes the last one (tests/prompts-contract.test.js).
+export const CHAT_SUMMARY_HEADINGS = Object.freeze(['Summary', 'Outcome', 'Follow-ups', 'Suggested ticket notes']);
 
 const clip = (text, max) => {
   const value = String(text ?? '').trim();
@@ -77,7 +79,8 @@ export default [
       'Clarity: sentences that are vague, too long or full of jargon; quote the words you mean.\n' +
       'Missing: prerequisites, permissions, warnings or information the reader needs and the text does not give.\n' +
       'Looks outdated: steps or product names that may no longer be right, and why you suspect it (a version, a date, a menu name).\n' +
-      'Rules: base every point on the article text. At most three bullets per heading. Do not rewrite the whole article. Do not invent product names, versions, links or steps that are not in the text. No greeting. At most 250 words.',
+      'Rules: base every point on the article text. At most three bullets per heading. Do not rewrite the whole article. Do not invent product names, versions, links or steps that are not in the text. No greeting. At most 250 words. ' +
+      rulesFor('published'),
     instruction: 'Suggest how to improve this knowledge article.',
   },
   {
@@ -95,7 +98,8 @@ export default [
       'Merged article: the whole merged article as plain text. Start with one line saying what it is for, then "Before you begin" if the articles need prerequisites, then numbered steps, then "If this does not work". Keep every step and fact that appears in the articles.\n' +
       'Retire: the article numbers (for example KB0010001) that the merged article replaces, one per line, or "None" when none should be retired. Name the article you would keep, if any.\n' +
       'What changed: short bullets on what was combined, dropped or reworded, and every place where the articles disagree, so the author can check it.\n' +
-      'Rules: use only what the articles say. Where they disagree, keep the safer wording and list the conflict under What changed. Never invent steps, versions, links or contact details. Keep every placeholder written in square brackets exactly as it is: the author fills them in. No greeting.',
+      'Rules: use only what the articles say. Where they disagree, keep the safer wording and list the conflict under What changed. Never invent steps, versions, links or contact details. Keep every placeholder written in square brackets exactly as it is: the author fills them in. No greeting. At most 600 words in all. ' +
+      rulesFor('published'),
     instruction: 'Draft one merged article from these near-duplicates and say which article numbers to retire.',
   },
   {
@@ -113,7 +117,8 @@ export default [
       'Who it is for: who has this problem and when they would look for the article.\n' +
       'Outline: a numbered list of sections, for example Symptoms, Cause (only if the data suggests one), Steps, How to check it worked, When to ask for help.\n' +
       'Facts to collect first: what the author still has to find out from the resolved tickets before writing, because the data does not say.\n' +
-      'Rules: use only the data. Never invent causes, fixes, versions or links. Keep every placeholder written in square brackets exactly as it is. No greeting. At most 200 words.',
+      'Rules: use only the data. Never invent causes, fixes, versions or links. Keep every placeholder written in square brackets exactly as it is. No greeting. At most 200 words. ' +
+      rulesFor('published'),
     instruction: 'Draft an outline for a knowledge article about this topic.',
   },
   {
@@ -138,7 +143,8 @@ export default [
       'Outcome: one line - resolved, partly resolved, handed over, abandoned or unclear - and the reason in a few words.\n' +
       'Follow-ups: bullet points for anything the agent or the customer still has to do, or "None".\n' +
       'Suggested ticket notes: at most five short lines for the work notes of a ticket - the issue, what was tried, the result and the next step.\n' +
-      'Rules: use only what is in the chat. Write "Not stated" when something is missing. Messages from a bot are context, not the customer. Do not promise anything on the agent\'s behalf. Never repeat passwords, card numbers or other secrets. No greeting. At most 170 words in all.',
+      'Rules: use only what is in the chat. Write "Not stated" when something is missing. Messages from a bot are context, not the customer. Do not promise anything on the agent\'s behalf. Never repeat passwords, card numbers or other secrets. No greeting. At most 170 words in all. ' +
+      rulesFor('agent'),
     instruction: 'Summarise this chat for the agent.',
   },
   {
@@ -159,7 +165,8 @@ export default [
       '2. Asks the one question that would help most.\n' +
       '3. A short holding reply that is honest about what happens next.\n' +
       'Rules: ground every reply in the chat and the knowledge articles. Never promise a fix, a time, a refund or an outcome that the data does not support. If the data does not say something, ask or say you will check. ' +
-      'Never include passwords, codes or other people\'s details. Do not add a signature. At most 40 words per reply.',
+      'Never include passwords, codes or other people\'s details. Do not add a signature. At most 40 words per reply. ' +
+      rulesFor('customer'),
     instruction: 'Write three replies to the customer\'s most recent message.',
   },
 ];

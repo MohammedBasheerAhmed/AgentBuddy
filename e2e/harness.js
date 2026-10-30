@@ -236,6 +236,67 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
     if (scripts.length !== 2) await ctx.ext((origin) => chrome.runtime.sendMessage({ type: 'ab:enable-instance', origin }), inst.origin);
   };
 
+  /**
+   * The key vault (src/lib/keyStore.js): the IndexedDB database on the extension's origin where "This browser" and "Encrypted"
+   * keep the AI key, out of reach of content scripts. `op` is 'get' (returns { slot: value } for the slots that exist) or 'remove'.
+   */
+  ctx.vault = (op, keys) =>
+    ctx.ext(
+      (op, keys) =>
+        new Promise((resolve, reject) => {
+          const open = indexedDB.open('agentbuddy_vault', 1);
+          open.onupgradeneeded = () => open.result.createObjectStore('keys');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const db = open.result;
+            const tx = db.transaction('keys', op === 'get' ? 'readonly' : 'readwrite');
+            const store = tx.objectStore('keys');
+            const out = {};
+            keys.forEach((k) => {
+              if (op !== 'get') return void store.delete(k);
+              const r = store.get(k);
+              r.onsuccess = () => {
+                if (r.result !== undefined) out[k] = r.result;
+              };
+            });
+            tx.oncomplete = () => {
+              db.close();
+              resolve(out);
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        }),
+      op,
+      keys
+    );
+  /** Every entry in the vault, as { slot: value } (for the "nothing about a record is stored" sweep). */
+  ctx.vaultAll = () =>
+    ctx.ext(
+      () =>
+        new Promise((resolve) => {
+          const open = indexedDB.open('agentbuddy_vault', 1);
+          open.onupgradeneeded = () => open.result.createObjectStore('keys');
+          open.onerror = () => resolve({});
+          open.onsuccess = () => {
+            const db = open.result;
+            const store = db.transaction('keys', 'readonly').objectStore('keys');
+            const out = {};
+            const cursor = store.openCursor();
+            cursor.onsuccess = () => {
+              const c = cursor.result;
+              if (c) {
+                out[String(c.key)] = c.value;
+                c.continue();
+              } else {
+                db.close();
+                resolve(out);
+              }
+            };
+            cursor.onerror = () => resolve(out);
+          };
+        })
+    );
+
   ctx.settings = () => ctx.ext(async (k) => (await chrome.storage.local.get(k))[k] || {}, KEYS.settings);
   ctx.audit = () => ctx.ext(async (k) => (await chrome.storage.local.get(k))[k] || [], KEYS.audit);
 

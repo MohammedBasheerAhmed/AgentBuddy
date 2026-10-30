@@ -17,19 +17,21 @@ module.exports = {
     const slot = KEYS.keyFor('custom');
     const encSlot = 'agentbuddy_keyenc_custom';
     const base = { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, piiMode: 'standard', previewMode: 'never', instances: [inst.origin] };
-    const keys = () => ctx.ext(async (a, b) => ({ local: await chrome.storage.local.get([a, b]), session: await chrome.storage.session.get([a]) }), slot, encSlot);
+    const keys = async () => ({ ...(await ctx.ext(async (a, b) => ({ local: await chrome.storage.local.get([a, b]), session: await chrome.storage.session.get([a]) }), slot, encSlot)), vault: await ctx.vault('get', [slot, encSlot]) });
 
     const ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-classic');
 
     // ---- 1. Memory-only: the key exists only in chrome.storage.session ---------------------------------------------------
     await ctx.configure({ ...base, keyStorage: 'session' });
     await ctx.ext(async (s, e) => { await chrome.storage.local.remove([s, e]); }, slot, encSlot);
+    await ctx.vault('remove', [slot, encSlot]);
     await ctx.ext(async (s, k) => { await chrome.storage.session.set({ [s]: k }); }, slot, ai.key);
     let panel = await ctx.openPanel();
     await waitForRecord(panel.page);
     const run1 = await runFeature(panel.page, /^Summarise this ticket/);
     t.check('memory-only key: the panel finds it and the request goes out with it', Boolean(run1.result) && ai.requests.length === 1 && ai.requests[0].auth === `Bearer ${ai.key}`, run1.error || '');
-    t.check('memory-only key: nothing about it on disk (chrome.storage.local)', !(await keys()).local[slot] && !(await keys()).local[encSlot]);
+    const memOnly = await keys();
+    t.check('memory-only key: nothing about it on disk (chrome.storage.local or the vault)', !memOnly.local[slot] && !memOnly.local[encSlot] && !memOnly.vault[slot] && !memOnly.vault[encSlot]);
     await panel.close();
 
     // ---- 2. Encrypted: save through the real settings page ---------------------------------------------------------------
@@ -43,7 +45,7 @@ module.exports = {
     await clickButton(page, /^Save key/);
     await waitForText(page, 'Key saved.', { timeout: 15000 });
     let stored = await keys();
-    t.check('encrypted key: an encrypted blob is on disk and the clear key is NOT', Boolean(stored.local[encSlot]?.ct) && !stored.local[slot] && !JSON.stringify(stored.local).includes(ai.key), JSON.stringify(Object.keys(stored.local[encSlot] || {})));
+    t.check('encrypted key: an encrypted blob is in the vault and the clear key is on disk nowhere', Boolean(stored.vault[encSlot]?.ct) && !stored.vault[slot] && !stored.local[slot] && !stored.local[encSlot] && !JSON.stringify({ l: stored.local, v: stored.vault }).includes(ai.key), JSON.stringify(Object.keys(stored.vault[encSlot] || {})));
     t.check('encrypted key: unlocked for this browser session (clear key only in session storage)', stored.session[slot] === ai.key);
 
     // ---- 3. "Browser restart": session storage is emptied, the key is locked ---------------------------------------------------
@@ -85,7 +87,8 @@ module.exports = {
     // Back to the plain local key the other scenarios expect.
     await ctx.configure({ keyStorage: 'local', previewMode: 'always' });
     await ctx.ext(async (s, e) => { await chrome.storage.local.remove([e]); await chrome.storage.session.remove([s]); }, slot, encSlot);
-    await ctx.ext(async (s, k) => { await chrome.storage.local.set({ [s]: k }); }, slot, ai.key);
+    await ctx.vault('remove', [slot, encSlot]);
+    await ctx.ext(async (s, k) => { await chrome.storage.local.set({ [s]: k }); }, slot, ai.key); // moved into the vault on first read
     await ticket.close();
   },
 };

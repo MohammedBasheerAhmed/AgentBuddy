@@ -6,6 +6,7 @@
 import { requestExplainParts } from '../../checks/requestView.js';
 import { checklistParts } from '../../checks/checklistParts.js';
 import { resolutionImproveParts } from '../../checks/resolutionParts.js';
+import { rulesFor } from '../../prompts/rules.js';
 
 export default [
   {
@@ -25,7 +26,8 @@ export default [
       'Say what happens next only if the data says so. Refer to teams in general terms ("our desktop support team"); never name an individual staff member, approver or any other person. ' +
       'Do not promise a date or an outcome the data does not support; mention a due date only if the data gives one, as "expected by". ' +
       'If an approval was rejected, say so gently and invite the requester to reply if they want to talk about it. ' +
-      'Never mention work notes or anything internal. Start with a short greeting and end with one friendly line. No signature. At most 90 words.',
+      'Never mention work notes or anything internal. Start with a short greeting and end with one friendly line. No signature. At most 90 words. ' +
+      rulesFor('customer'),
     instruction: 'Write the status message for the requester.',
   },
   {
@@ -46,7 +48,9 @@ export default [
       'Verification: how it was confirmed to work, or "Not confirmed with the customer".\n' +
       'Rules: add a fact only if the rest of the ticket data states it; never invent a cause, a step or a confirmation. ' +
       'Keep the agent\'s own wording where it is already clear. Name the product, the error text and the action taken, because other agents will search these notes later. ' +
-      'Do not include passwords, keys, card numbers or the customer\'s personal details. No greeting, no apology, at most 120 words.',
+      'Do not include passwords, keys, card numbers or the customer\'s personal details. The customer can often read these notes: describe what was done, not who did it. ' +
+      'No greeting, no apology, nothing before or after the three lines, at most 120 words. ' +
+      rulesFor('agent'),
     instruction: 'Rewrite the agent\'s resolution notes so they are complete and useful to the next person.',
   },
   {
@@ -65,7 +69,8 @@ export default [
       'Merge lines that are one action and split a line that hides two. Use the answers (which model, which software, which date) where they change a step.\n' +
       'Rules: use only what the data says and never invent a step the instructions do not support. ' +
       'If the instructions are missing or too vague, write a short general list for this kind of item and make the first line "Instructions are missing, so this is a general list". ' +
-      'Do not include passwords or personal details. No introduction and no closing.',
+      'Do not include passwords or personal details. No introduction and no closing. ' +
+      rulesFor('agent'),
     instruction: 'Write the checklist for this task.',
   },
 ];

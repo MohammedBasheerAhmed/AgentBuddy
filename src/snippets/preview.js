@@ -6,6 +6,12 @@ import { BUILTIN_VARIABLES, buildVariables, listVariables, renderSnippet } from 
 
 export const KNOWN_VARIABLE_NAMES = Object.freeze(BUILTIN_VARIABLES.map((v) => v.name));
 
+/**
+ * The context spec the Snippets panel reads the open record with (src/context/specs/compose.js): exactly the columns the
+ * built-in variables use, the people and the SLAs, and no notes.
+ */
+export const SNIPPET_FEATURE = 'snippet-fill';
+
 // The example column of BUILTIN_VARIABLES as the nested object renderSnippet reads.
 function exampleVariables() {
   const vars = {};
@@ -21,7 +27,7 @@ function exampleVariables() {
  * The snippet text as it would be inserted.
  * @param {string} body the snippet's template
  * @param {{ pack?: object|null, agent?: object|null, now?: number|Date, examples?: boolean }} [options]
- *   pack: the open record's ContextPack (read with the 'reply-draft' feature); examples: true fills from the example values
+ *   pack: the open record's ContextPack (read with SNIPPET_FEATURE); examples: true fills from the example values
  *   instead (used when no record is open, so the person still sees what the snippet will look like)
  * @returns {{ text: string, missing: string[], source: 'record' | 'examples' }}
  */

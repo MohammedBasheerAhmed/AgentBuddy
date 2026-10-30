@@ -42,3 +42,16 @@ export async function checkSourceTab(tabId, api) {
   if (!isWebAddress(tab.url)) return { status: 'not-enabled' };
   return { status: 'ready', page: { tabId, href: tab.url, windowId: tab.windowId, surface: surfaceOf(tab.url), status: 'no-record' } };
 }
+
+/**
+ * What the full page shows after a new check of its tab, given what it showed before. The ServiceNow tab is checked again every
+ * time it moves; while the new page is loading its content script does not answer yet, so a check says "not enabled" for a moment.
+ * Throwing the dashboard away then (and building it again a second later) restarted every widget on every click in ServiceNow. So
+ * a dashboard that was showing STAYS, with `reconnecting: true` (the page says the tab is not answering right now), until the tab
+ * answers again or is closed. Pure.
+ */
+export function nextSource(previous, checked) {
+  if (checked?.status === 'ready') return checked;
+  if (checked?.status === 'not-enabled' && previous?.status === 'ready' && previous.page) return { status: 'ready', page: previous.page, reconnecting: true };
+  return checked || { status: 'no-tab' };
+}

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Agent Buddy: recommended locked-down policy for Google Chrome on macOS (a configuration profile for your MDM).
+  1. Replace EXTENSION_ID (three places) with the id of your build, and the example addresses with your own.
+  2. Give the three PayloadUUID values new UUIDs (uuidgen) and PayloadIdentifier your own reverse-DNS prefix.
+  3. After installing, open chrome://policy and check every Agent Buddy key shows Status OK.
+  Check this file first: node scripts/check-policy.js <this file>
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadDisplayName</key>
+  <string>Agent Buddy (Google Chrome)</string>
+  <key>PayloadIdentifier</key>
+  <string>example.corp.agentbuddy.chrome</string>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadScope</key>
+  <string>System</string>
+  <key>PayloadUUID</key>
+  <string>6F0B6E2C-1C2D-4C7E-9E1A-3B8F2D4A5C01</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadDisplayName</key>
+      <string>Agent Buddy policy (Google Chrome)</string>
+      <key>PayloadIdentifier</key>
+      <string>example.corp.agentbuddy.chrome.policy</string>
+      <key>PayloadType</key>
+      <string>com.google.Chrome.extensions.EXTENSION_ID</string>
+      <key>PayloadUUID</key>
+      <string>6F0B6E2C-1C2D-4C7E-9E1A-3B8F2D4A5C02</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>allowedInstances</key>
+      <array>
+        <string>https://acme.service-now.com</string>
+        <string>https://acme-test.service-now.com</string>
+      </array>
+      <key>aiProvider</key>
+      <string>openai</string>
+      <key>aiBaseUrl</key>
+      <string>https://ai-gateway.corp.example/v1</string>
+      <key>allowedModels</key>
+      <array>
+        <string>gpt-5-mini</string>
+      </array>
+      <key>piiMode</key>
+      <string>strict</string>
+      <key>previewMode</key>
+      <string>always</string>
+      <key>keyStorage</key>
+      <string>session</string>
+      <key>allowHrContent</key>
+      <false/>
+      <key>sensitiveTablePrefixes</key>
+      <array>
+        <string>x_acme_hr_</string>
+      </array>
+      <key>disabledFeatures</key>
+      <array>
+        <string>coaching-snapshot</string>
+      </array>
+      <key>tokenBudgetPerDay</key>
+      <integer>200000</integer>
+      <key>auditExport</key>
+      <true/>
+      <key>coachingEnabled</key>
+      <false/>
+      <key>disablePageBar</key>
+      <false/>
+    </dict>
+    <dict>
+      <key>PayloadDisplayName</key>
+      <string>Install Agent Buddy (Google Chrome)</string>
+      <key>PayloadIdentifier</key>
+      <string>example.corp.agentbuddy.chrome.install</string>
+      <key>PayloadType</key>
+      <string>com.google.Chrome</string>
+      <key>PayloadUUID</key>
+      <string>6F0B6E2C-1C2D-4C7E-9E1A-3B8F2D4A5C03</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>ExtensionInstallForcelist</key>
+      <array>
+        <string>EXTENSION_ID;https://extensions.corp.example/agentbuddy/update.xml</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

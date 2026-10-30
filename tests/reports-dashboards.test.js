@@ -13,15 +13,17 @@ const memory = (initial) => {
   return { data, get: async (k) => data.get(k), set: async (k, v) => { data.set(k, JSON.parse(JSON.stringify(v))); } };
 };
 
-test('a first run gets the two ready-made dashboards', () => {
+test('a first run gets the ready-made dashboards, hand-over and the explainer included', () => {
   const { state, status } = sanitizeState(undefined, makeId);
   assert.equal(status, 'empty');
   assert.equal(state.version, DASHBOARDS_VERSION);
-  assert.deepEqual(state.dashboards.map((d) => d.name), ['My day at a glance', 'Team overview']);
+  assert.deepEqual(state.dashboards.map((d) => d.name), ['My day at a glance', 'Team overview', 'Shift handover']);
   assert.equal(state.activeId, state.dashboards[0].id);
   assert.deepEqual(state.dashboards[0].scope.kind, 'mine');
   assert.deepEqual(state.dashboards[1].scope.kind, 'groups');
-  assert.deepEqual(state.dashboards[1].widgets.map((w) => w.section), ['overview', 'workload', 'sla', 'quality', 'fulfilment']);
+  assert.deepEqual(state.dashboards[1].widgets.map((w) => w.section), ['overview', 'workload', 'sla', 'quality', 'fulfilment', 'insights']);
+  assert.deepEqual(state.dashboards[2].scope.kind, 'groups');
+  assert.deepEqual(state.dashboards[2].widgets.map((w) => w.section), ['handover', 'insights']);
 });
 
 test('what is stored is configuration only: no key outside the allowed list', () => {
@@ -93,7 +95,7 @@ test('stored data that is corrupt or in the wrong shape falls back to the defaul
   for (const bad of ['text', 42, [], { version: 1 }, { version: 1, dashboards: 'x' }, { version: 0, dashboards: [] }, { version: 1, dashboards: [] }, { version: 1, dashboards: [null, 5, 'x'] }]) {
     const { state, status } = sanitizeState(bad, makeId);
     assert.equal(status, 'corrupt', JSON.stringify(bad));
-    assert.equal(state.dashboards.length, 2);
+    assert.equal(state.dashboards.length, PRESETS.length);
   }
 });
 
@@ -120,20 +122,21 @@ test('a dashboard list is capped, ids are made unique, and the active one always
 test('add, rename, switch and remove dashboards; the last one stays', () => {
   let s = defaultState(makeId);
   s = addDashboard(s, { name: 'Night shift', scope: { kind: 'mine' }, widgets: [{ type: 'section', section: 'sla' }] }, makeId);
-  assert.equal(s.dashboards.length, 3);
-  assert.equal(s.dashboards[2].name, 'Night shift');
-  assert.equal(s.activeId, s.dashboards[2].id, 'the new one is shown');
-  assert.equal(s.dashboards[2].widgets[0].section, 'sla');
-  s = renameDashboard(s, s.dashboards[2].id, '  Late shift  ');
-  assert.equal(s.dashboards[2].name, 'Late shift');
-  assert.equal(renameDashboard(s, s.dashboards[2].id, '   ').dashboards[2].name, 'Late shift', 'an empty name keeps the old one');
+  const added = PRESETS.length;
+  assert.equal(s.dashboards.length, added + 1);
+  assert.equal(s.dashboards[added].name, 'Night shift');
+  assert.equal(s.activeId, s.dashboards[added].id, 'the new one is shown');
+  assert.equal(s.dashboards[added].widgets[0].section, 'sla');
+  s = renameDashboard(s, s.dashboards[added].id, '  Late shift  ');
+  assert.equal(s.dashboards[added].name, 'Late shift');
+  assert.equal(renameDashboard(s, s.dashboards[added].id, '   ').dashboards[added].name, 'Late shift', 'an empty name keeps the old one');
   s = setActive(s, s.dashboards[0].id);
   assert.equal(s.activeId, s.dashboards[0].id);
   assert.equal(setActive(s, 'nope').activeId, s.activeId);
   s = removeDashboard(s, s.dashboards[0].id);
-  assert.equal(s.dashboards.length, 2);
+  assert.equal(s.dashboards.length, added);
   assert.ok(s.dashboards.some((d) => d.id === s.activeId), 'removing the active one picks another');
-  s = removeDashboard(s, s.dashboards[0].id);
+  while (s.dashboards.length > 1) s = removeDashboard(s, s.dashboards[0].id);
   assert.equal(s.dashboards.length, 1);
   assert.equal(removeDashboard(s, s.dashboards[0].id).dashboards.length, 1, 'never zero dashboards');
 });
@@ -152,7 +155,7 @@ test('a ready-made dashboard can be added back once', () => {
   assert.equal(s.dashboards.some((d) => d.id === 'preset-team'), true);
   assert.equal(addPresetDashboard(s, 'preset-team', makeId).dashboards.length, s.dashboards.length, 'not twice');
   assert.equal(addPresetDashboard(s, 'nope', makeId), s);
-  assert.deepEqual(PRESETS.map((p) => p.id), ['preset-my-day', 'preset-team']);
+  assert.deepEqual(PRESETS.map((p) => p.id), ['preset-my-day', 'preset-team', 'preset-handover']);
 });
 
 test('widgets: add, remove, reorder (ends stay put), update', () => {
@@ -223,5 +226,5 @@ test('the store refuses what is invalid, too big, or when storage fails', async 
   const broken = createDashboardStore({ storage: { get: async () => { throw new Error('no storage'); }, set: async () => {} }, makeId });
   const { status, state } = await broken.load();
   assert.equal(status, 'unavailable');
-  assert.equal(state.dashboards.length, 2);
+  assert.equal(state.dashboards.length, PRESETS.length);
 });

@@ -64,7 +64,55 @@ test('masking scrubs emails anywhere and known names inside ticket titles', () =
     ]),
   ]);
   assert.equal(masked[0].rows[0].title, 'Person 1 cannot log in, mail [email]');
-  assert.equal(masked[0].rows[1].title, 'Escalated by Person 2 to Annette Lee; ping [email]', 'a name that is not in a person column is not guessed');
+  // "to Annette Lee": a full name after a cue word is found in the title itself (src/pii/names.js), numbered after the columns.
+  assert.equal(masked[0].rows[1].title, 'Escalated by Person 2 to Person 3; ping [email]');
+});
+
+test('masking: names written in a title are found by their cue and become Person N, numbered after the person columns', () => {
+  const masked = maskTables([
+    table([
+      { who: 'Ann Lee', group: 'Service Desk', title: 'New laptop for Anna Schmidt', n: 1 },
+      { who: 'Bo Ray', group: 'Service Desk', title: "Customer's manager is María-José O'Neil", n: 2 },
+      { who: 'Ann Lee', group: 'Network', title: 'Spoke with Dr. Priya Raman; cc: Anna Schmidt', n: 3 },
+      { who: 'Bo Ray', group: 'Network', title: 'Hi Tom, the VPN is back', n: 4 },
+    ]),
+  ]);
+  assert.deepEqual(masked[0].rows.map((r) => r.who), ['Person 1', 'Person 2', 'Person 1', 'Person 2']);
+  assert.deepEqual(masked[0].rows.map((r) => r.title), [
+    'New laptop for Person 3',
+    "Customer's manager is Person 4",
+    'Spoke with Dr. Person 5; cc: Person 3',
+    'Hi Person 6, the VPN is back',
+  ]);
+  assert.deepEqual(masked[0].rows.map((r) => r.group), ['Service Desk', 'Service Desk', 'Network', 'Network'], 'group names are never names');
+});
+
+test('masking: the numbering of names found in titles is the same every time and does not depend on column order', () => {
+  const rows = [
+    { who: 'Ann Lee', title: 'Leaver - Tom Baker', note: 'spoke with Raj Patel' },
+    { who: 'Ann Lee', title: 'Access for Raj Patel', note: 'Hi Tom Baker,' },
+  ];
+  const a = maskTables([{ title: 'A', columns: [{ key: 'who', label: 'Owner', person: true }, { key: 'title', label: 'T' }, { key: 'note', label: 'N' }], rows }]);
+  const b = maskTables([{ title: 'A', columns: [{ key: 'who', label: 'Owner', person: true }, { key: 'title', label: 'T' }, { key: 'note', label: 'N' }], rows }]);
+  assert.deepEqual(a, b);
+  assert.deepEqual(a[0].rows.map((r) => [r.title, r.note]), [['Leaver - Person 2', 'spoke with Person 3'], ['Access for Person 3', 'Hi Person 2,']]);
+});
+
+test('masking: a first name found in prose that belongs to one person-column name is that person', () => {
+  const masked = maskTables([table([{ who: 'Ann Lee', group: 'G', title: 'Spoke with Ann about it', n: 1 }])]);
+  assert.equal(masked[0].rows[0].title, 'Spoke with Person 1 about it');
+});
+
+test('masking: Strict mode also masks a full name with no cue; Standard leaves it (the export screen says so)', () => {
+  const rows = [{ who: 'Ann Lee', group: 'G', title: 'Monitor broken - Rutger Visser at desk 4', n: 1 }];
+  assert.equal(maskTables([table(rows)])[0].rows[0].title, 'Monitor broken - Rutger Visser at desk 4');
+  assert.equal(maskTables([table(rows)], { mode: 'strict' })[0].rows[0].title, 'Monitor broken - Person 2 at desk 4');
+});
+
+test('a masked CSV of titles with prose names has none of them in it', () => {
+  const titles = ['Laptop for Anna Schmidt', 'Hi Tom, VPN is down', "manager is María-José O'Neil", '@Kevin Lee please check', 'Regards,\nOliver Bennett'];
+  const csv = tablesToCsv(maskTables([table(titles.map((title, i) => ({ who: 'Ann Lee', group: 'G', title, n: i })))]));
+  for (const name of ['Anna', 'Schmidt', 'Tom', 'María', "O'Neil", 'Kevin', 'Oliver', 'Bennett']) assert.ok(!csv.includes(name), `${name} is in the CSV`);
 });
 
 test('masking does not change the input and survives odd cells', () => {

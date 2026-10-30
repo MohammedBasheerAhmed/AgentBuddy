@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Tile, DataTable } from '../charts/index.js';
+import DrillLink from '../charts/DrillLink.jsx';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
 
@@ -16,6 +17,8 @@ export function OverviewBody({ d, env }) {
     if (drills.length === 1) env.openList(drills[0].table, drills[0].query);
     else if (drills.length > 1) setPicked(picked?.key === tile.key ? null : tile);
   };
+  // A tile with ONE list behind it is a link to that list; one with several tables opens a choice (a button), whose entries are links.
+  const hrefOf = (dr) => (env.listHref ? env.listHref(dr.table, dr.query) || '' : '');
 
   return (
     <>
@@ -29,17 +32,25 @@ export function OverviewBody({ d, env }) {
             unavailable={t.unavailable}
             tone={t.value > 0 && TONE[t.key] ? TONE[t.key] : 'neutral'}
             onOpen={t.drills?.length ? () => open(t) : undefined}
+            href={t.drills?.length === 1 ? hrefOf(t.drills[0]) : ''}
+            expanded={t.drills?.length > 1 ? picked?.key === t.key : undefined}
           />
         ))}
       </div>
       {picked && (
         <div className="ab-pick" role="group" aria-label={`Open ${picked.label} in ServiceNow`}>
           <span className="ab-hint">Open in ServiceNow:</span>
-          {picked.drills.map((dr) => (
-            <button key={dr.table} type="button" className="ab-btn ab-btn-sm" onClick={() => env.openList(dr.table, dr.query)}>
-              {dr.label} ({dr.count})
-            </button>
-          ))}
+          {picked.drills.map((dr) =>
+            hrefOf(dr) ? (
+              <DrillLink key={dr.table} className="ab-btn ab-btn-sm ab-pick-link" href={hrefOf(dr)} onOpen={() => env.openList(dr.table, dr.query)} label={`${dr.label}: ${dr.count}. Open the list.`}>
+                {dr.label} ({dr.count})
+              </DrillLink>
+            ) : (
+              <button key={dr.table} type="button" className="ab-btn ab-btn-sm" onClick={() => env.openList(dr.table, dr.query)}>
+                {dr.label} ({dr.count})
+              </button>
+            )
+          )}
         </div>
       )}
       {d.perTable?.length > 1 && (

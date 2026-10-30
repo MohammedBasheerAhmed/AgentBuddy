@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { contextFor } from '../features/registry.js';
 import { peopleFor } from '../features/parts.js';
-import { prepareRun, executeRun, previewRequired, auditBlocked, auditCancelled } from '../lib/pipeline.js';
+import { prepareRun, executeRun, previewRequired, auditBlocked, auditCancelled, maskMore as maskInRun } from '../lib/pipeline.js';
 import { resolveProviderConfig } from '../providers/config.js';
 import { ensureAiPermission } from '../lib/aiPermission.js';
 import { sendChat } from '../providers/index.js';
@@ -34,21 +34,38 @@ const DEPS = { ensureAiPermission, prepareRun, previewRequired, auditBlocked, cr
  *
  * Render the returned `run` object with <RunPanel run={run} ... />.
  *
- * A run the person abandons (Cancel, Close, another record) cannot be called back from the AI provider, so the request may still
- * complete and be audited as sent; its answer is dropped and never shown (the steps and decisions are in runFlow.js / runLogic.js).
+ * A run the person abandons (Stop waiting, Close, another record, the view going away) has its request aborted (an AbortController
+ * per send); a request the provider had already answered may still be audited as sent, but its answer is dropped and never shown
+ * (the steps and decisions are in runFlow.js / runLogic.js).
  */
 export function useRun({ page, eff, record }) {
   const [phase, setPhase] = useState('idle'); // idle | reading | preview | sending | done | error
   const [active, setActive] = useState(null);
-  const [prepared, setPrepared] = useState(null);
+  const [prepared, setPreparedState] = useState(null);
+  // The prepared run the preview is about, read by Send and Cancel. A ref as well as state: after "Mask this too" Send must take
+  // the request that was just sealed again, never one a render behind (that one has less masked).
+  const preparedRef = useRef(null);
+  const setPrepared = useCallback((next) => {
+    preparedRef.current = next;
+    setPreparedState(next);
+  }, []);
   const [result, setResult] = useState(null);
   const [people, setPeople] = useState([]); // everyone on the pack, for the safe-to-send check on what gets inserted
   const [scan, setScan] = useState(null); // the firewall's scan(): also recognises values it masked on the way out
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState(''); // about the answer: it was cut short (from the provider layer)
   const [lastPack, setLastPack] = useState(null);
   const tokens = useRef(null); // a newer run (or reset) invalidates an older one still in flight
   if (!tokens.current) tokens.current = makeTokens();
   const lastGetPack = useRef(undefined); // so "Try again" re-reads the same thing
+  const controller = useRef(null); // aborts the request in flight
+
+  const abort = useCallback(() => {
+    controller.current?.abort();
+    controller.current = null;
+  }, []);
+  // The view went away (another record, the panel closed): stop the request in flight.
+  useEffect(() => abort, [abort]);
 
   const host = (() => {
     try {
@@ -60,11 +77,13 @@ export function useRun({ page, eff, record }) {
 
   const reset = useCallback(() => {
     tokens.current.drop();
+    abort();
     setPhase('idle');
     setPrepared(null);
     setResult(null);
     setError('');
-  }, []);
+    setNotice('');
+  }, [setPrepared, abort]);
 
   const fail = useCallback((err) => {
     setError(plainError(err));
@@ -73,7 +92,12 @@ export function useRun({ page, eff, record }) {
 
   async function send(p, cfg, previewShown, mine) {
     setPhase('sending');
-    const out = await sendFlow({ prepared: p, config: cfg, values: eff.values, host, previewShown, policy: eff.policy, tokensUsedToday, isCurrent: () => tokens.current.isCurrent(mine), deps: DEPS });
+    // One request at a time: an older one still in flight is stopped.
+    abort();
+    const own = new AbortController();
+    controller.current = own;
+    const out = await sendFlow({ prepared: p, config: cfg, values: eff.values, host, previewShown, policy: eff.policy, tokensUsedToday, signal: own.signal, isCurrent: () => tokens.current.isCurrent(mine), deps: DEPS });
+    if (controller.current === own) controller.current = null;
     if (out.status === 'abandoned') return;
     if (out.status === 'failed') {
       fail(out.error);
@@ -82,6 +106,7 @@ export function useRun({ page, eff, record }) {
     setPeople(peopleFor(p.pack));
     setScan(() => (text) => p.firewall.scan(text)); // (a function stored in state: wrapped so React does not call it)
     setLastPack(lastPackOf(p.pack, internalTextsOf));
+    setNotice(out.notice || '');
     setResult(out.text);
     setPhase('done');
   }
@@ -89,9 +114,11 @@ export function useRun({ page, eff, record }) {
   async function run(feature, { getPack } = {}) {
     const mine = tokens.current.next();
     lastGetPack.current = getPack;
+    abort();
     setActive(feature);
     setResult(null);
     setError('');
+    setNotice('');
     setPhase('reading');
     const allowSensitive = Boolean(eff.policy?.allowHrContent);
     const cfg = resolveProviderConfig(eff.values, eff.apiKey);
@@ -122,7 +149,9 @@ export function useRun({ page, eff, record }) {
   }
 
   async function confirmPreview() {
-    const { p, cfg } = prepared;
+    const current = preparedRef.current;
+    if (!current) return; // already sent or cancelled (a second click)
+    const { p, cfg } = current;
     const mine = tokens.current.current();
     // "first time per feature" (or per group of features): remember that this one has been checked.
     const before = eff.values.previewSeen || [];
@@ -133,9 +162,24 @@ export function useRun({ page, eff, record }) {
   }
 
   async function cancelPreview() {
-    const { p, cfg } = prepared;
+    const current = preparedRef.current;
+    if (!current) return;
+    const { p, cfg } = current;
+    setPrepared(null);
     await auditCancelled({ feature: p.feature, pack: p.pack, config: cfg, values: eff.values, stats: p.stats, logAudit });
     reset();
+  }
+
+  /**
+   * "Mask this too" in the preview: the same firewall masks `text` as well and seals the request again (src/lib/pipeline.js
+   * maskMore). Returns { ok, masked } or { ok: false, problem } for the dialog to say what happened.
+   */
+  function maskMore(text) {
+    const current = preparedRef.current;
+    if (!current) return { ok: false, problem: 'GONE' };
+    const out = maskInRun(current.p, text);
+    if (out.ok) setPrepared({ p: out.prepared, cfg: current.cfg });
+    return out.ok ? { ok: true, masked: out.masked } : { ok: false, problem: out.problem };
   }
 
   return {
@@ -146,6 +190,7 @@ export function useRun({ page, eff, record }) {
     people,
     scan,
     error,
+    notice,
     lastPack,
     busy: phase === 'reading' || phase === 'sending' || phase === 'preview',
     run,
@@ -153,5 +198,6 @@ export function useRun({ page, eff, record }) {
     reset,
     confirmPreview,
     cancelPreview,
+    maskMore,
   };
 }

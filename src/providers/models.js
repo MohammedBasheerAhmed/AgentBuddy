@@ -1,8 +1,10 @@
 // Which models a provider's server offers, so a person can pick one instead of typing it: GET <address>/models with their key
 // (OpenAI-style servers, company gateways and most vendors answer this). No ticket text is in this request, only the key, and
 // only to the address chat requests go to. The call itself is in openai.js (the one place that talks to these servers); this file
-// reads the answer. Anthropic has a different list call and is not covered: its models are listed by hand.
-import { apiOf } from './config.js';
+// reads the answer. Anthropic has a different list call and is not covered: its models are listed by hand. Azure OpenAI is not
+// covered either: what the person picks there is a deployment name, and Azure gives a key no list of deployments (only the
+// management API, which needs an Azure sign-in, does), so Settings asks for the names instead.
+import { apiOf, PROVIDERS } from './config.js';
 import { fetchModelsBody } from './openai.js';
 
 export const MAX_MODELS = 500;
@@ -22,14 +24,20 @@ export function parseModelIds(body) {
   return [...ids].sort((a, b) => a.localeCompare(b));
 }
 
+/** Can "Load models" ask this provider's server for a list? (Settings hides the button and explains when not.) */
+export const canListModels = (provider) => apiOf(provider) === 'openai' && !PROVIDERS[provider]?.azure;
+
 /**
  * Ask the server for its models. `config` is resolveProviderConfig()'s answer ({ provider, baseUrl, apiKey, keyOptional }).
- * Throws a plain message the person can act on; the typed model name always still works. `fetchFn` is for tests.
+ * Throws a plain message the person can act on; the typed model name always still works. `fetchFn` is for tests; `signal` cancels.
  */
-export async function listModels(config, fetchFn) {
+export async function listModels(config, fetchFn, { signal, sleep } = {}) {
+  if (PROVIDERS[config.provider]?.azure) throw new Error('Azure OpenAI does not give a key a list of your deployments. Type the deployment name instead.');
   if (apiOf(config.provider) !== 'openai') throw new Error('This provider has no list to load here. Pick one of the listed models or type its name.');
+  if (config.invalidBaseUrl) throw new Error(`The AI address is not valid: ${config.invalidBaseUrl}`);
+  if (config.provider === 'custom' && !config.baseUrl) throw new Error('Enter the address of your AI server in Settings first.');
   if (!config.apiKey && !config.keyOptional) throw new Error('Enter your key first, then load the models.');
-  const { host, body } = await fetchModelsBody({ apiKey: config.apiKey, baseUrl: config.baseUrl, fetchFn });
+  const { host, body } = await fetchModelsBody({ apiKey: config.apiKey, baseUrl: config.baseUrl, fetchFn, signal, sleep });
   const ids = parseModelIds(body);
   if (!ids.length) throw new Error(`${host} answered, but with no models. Type the model name instead.`);
   return ids;

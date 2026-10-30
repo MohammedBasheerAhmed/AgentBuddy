@@ -168,8 +168,9 @@ function splitName(full) {
   return { first: words[0], last: words.slice(1).join(' ') };
 }
 
-// Who the record is "for", by role. The first role found wins.
-const CALLER_ROLES = ['caller', 'requested_for', 'contact', 'affected_user', 'opened_for', 'subject_person', 'requester'];
+// Who the record is "for", by role. The first role found wins. A customer service case names a contact (business customers) or
+// a consumer (private customers): both are the person a reply is written to.
+const CALLER_ROLES = ['caller', 'requested_for', 'contact', 'consumer', 'affected_user', 'opened_for', 'subject_person', 'requester'];
 
 function findPerson(people, roles) {
   if (!Array.isArray(people)) return null;

@@ -1,6 +1,7 @@
 import React from 'react';
 import ChartFrame from './ChartFrame.jsx';
 import { clipLabel, formatNumber, heatLayout, itemsToTable, summarizeItems } from './geometry.js';
+import DrillLink, { hrefOf } from './DrillLink.jsx';
 
 /**
  * A row of cells shaded on a five-step scale (for example the ageing buckets 0-1d ... 15+d). The shade is never the only cue:
@@ -8,8 +9,9 @@ import { clipLabel, formatNumber, heatLayout, itemsToTable, summarizeItems } fro
  *
  *   cells  [{ key, label, value }]
  *   total  the denominator for the shares (default: the sum of the cells)
+ *   hrefFor(cell)  with onDrill: the address of the list a cell opens; the cell is then a real link (see DrillLink.jsx)
  */
-export default function HeatStrip({ title, cells, onDrill, total, unit = '', emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
+export default function HeatStrip({ title, cells, onDrill, hrefFor, total, unit = '', emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
   const list = Array.isArray(cells) ? cells.filter((c) => c && typeof c === 'object') : [];
   const layout = heatLayout(list, { total });
   const summary = `${title ? `${title}. ` : ''}${summarizeItems(list, { unit, total, max: 8 })}`;
@@ -18,7 +20,7 @@ export default function HeatStrip({ title, cells, onDrill, total, unit = '', emp
     <ChartFrame
       title={title}
       summary={summary}
-      interactive={Boolean(onDrill)}
+      interactive={Boolean(onDrill) && (!hrefFor || list.some((c) => hrefOf(hrefFor, c)))}
       defaultTable={defaultTable}
       empty={list.length === 0}
       emptyText={emptyText}
@@ -35,10 +37,16 @@ export default function HeatStrip({ title, cells, onDrill, total, unit = '', emp
               <span className="ab-heat-share">{layout.total > 0 ? `${cell.share}%` : '-'}</span>
             </>
           );
+          const name = `${cell.label}: ${formatNumber(cell.value)}${layout.total > 0 ? `, ${cell.share}%` : ''}. Open the list.`;
+          const href = onDrill && hrefFor ? hrefOf(hrefFor, list[i]) : '';
           return (
             <li key={cell.key}>
-              {onDrill ? (
-                <button type="button" className={`ab-heat-cell ab-heat-${cell.level}`} aria-label={`${cell.label}: ${formatNumber(cell.value)}${layout.total > 0 ? `, ${cell.share}%` : ''}. Open the list.`} onClick={() => onDrill(list[i])}>
+              {href ? (
+                <DrillLink className={`ab-heat-cell ab-heat-${cell.level}`} href={href} onOpen={() => onDrill(list[i])} label={name}>
+                  {inner}
+                </DrillLink>
+              ) : onDrill && !hrefFor ? (
+                <button type="button" className={`ab-heat-cell ab-heat-${cell.level}`} aria-label={name} onClick={() => onDrill(list[i])}>
                   {inner}
                 </button>
               ) : (

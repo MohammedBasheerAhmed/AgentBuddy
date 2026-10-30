@@ -1,0 +1,25 @@
+{
+  "allowedInstances": [
+    "https://acme.service-now.com",
+    "https://acme-test.service-now.com"
+  ],
+  "aiProvider": "openai",
+  "aiBaseUrl": "https://ai-gateway.corp.example/v1",
+  "allowedModels": [
+    "gpt-5-mini"
+  ],
+  "piiMode": "strict",
+  "previewMode": "always",
+  "keyStorage": "session",
+  "allowHrContent": false,
+  "sensitiveTablePrefixes": [
+    "x_acme_hr_"
+  ],
+  "disabledFeatures": [
+    "coaching-snapshot"
+  ],
+  "tokenBudgetPerDay": 200000,
+  "auditExport": true,
+  "coachingEnabled": false,
+  "disablePageBar": false
+}

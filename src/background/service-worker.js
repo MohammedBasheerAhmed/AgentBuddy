@@ -6,8 +6,12 @@ import { MSG, toWireError } from '../lib/messages.js';
 import { checkExtensionSender } from '../lib/senderCheck.js';
 import { loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
 import { instancePattern, isInstanceAllowed, normalizeInstance } from '../policy/policy.js';
-import { BAR_TYPES, handleBarMessage } from './bar.js';
+import { BAR_TYPES, handleBarMessage, restrictStorageAccess, retireOpenTabs } from './bar.js';
 import { LAUNCH_KEY } from '../lib/launch.js';
+
+// First thing on every start of the worker: content scripts may not read or change chrome.storage.local / .session (where the
+// browser supports closing them). Nothing in a content script needs them; see restrictStorageAccess in bar.js.
+restrictStorageAccess(chrome.storage).catch(() => {});
 
 const CONTENT_ID = 'ab-content';
 const BRIDGE_ID = 'ab-bridge';
@@ -86,6 +90,9 @@ async function disableInstance(rawOrigin) {
   const settings = await loadSettings();
   const instances = (settings.instances || []).filter((o) => o !== origin);
   await saveSettings({ instances });
+  // Pages of the site that are open now keep their content script until they reload: tell them to stop (no bar, no answers to the
+  // panel). This must happen while the browser's permission still lets the worker find those tabs.
+  if (origin) await retireOpenTabs(instancePattern(origin), { queryTabs: (q) => chrome.tabs.query(q), sendToTab: (id, m) => chrome.tabs.sendMessage(id, m) });
   try {
     await chrome.permissions.remove({ origins: [instancePattern(origin)] });
   } catch {

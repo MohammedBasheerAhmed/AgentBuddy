@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffective } from '../sidepanel/useEffective.js';
 import ReportsDashboard from '../sidepanel/reports/ReportsDashboard.jsx';
-import { checkSourceTab, parseTabId } from './sourceTab.js';
+import { checkSourceTab, nextSource, parseTabId } from './sourceTab.js';
 
 const MESSAGES = {
   'no-tab': 'This page needs a ServiceNow tab to read from. Open ServiceNow, open the Agent Buddy side panel, choose Team and press "Open full page".',
@@ -16,7 +16,11 @@ export default function DashboardApp() {
   const tabId = useMemo(() => parseTabId(window.location.search), []);
   const [source, setSource] = useState({ status: 'checking' });
 
-  const check = useCallback(async () => setSource(await checkSourceTab(tabId, chrome)), [tabId]);
+  // A dashboard that is showing stays while the ServiceNow tab loads its next page (nextSource), so its widgets do not start over.
+  const check = useCallback(async () => {
+    const checked = await checkSourceTab(tabId, chrome);
+    setSource((previous) => nextSource(previous, checked));
+  }, [tabId]);
 
   useEffect(() => {
     document.title = 'Agent Buddy team dashboard';
@@ -52,7 +56,15 @@ export default function DashboardApp() {
       {source.status === 'checking' || !eff.ready ? (
         <p className="ab-sub" role="status">Checking the ServiceNow tab…</p>
       ) : source.status === 'ready' ? (
-        <ReportsDashboard page={source.page} eff={eff} layout="page" />
+        <>
+          {source.reconnecting && (
+            <p className="ab-note ab-note-warn" role="status">
+              The ServiceNow tab is not answering right now (it may be loading a page). The numbers below stay as they were. When the tab is
+              back, press Refresh for new numbers.
+            </p>
+          )}
+          <ReportsDashboard page={source.page} eff={eff} layout="page" />
+        </>
       ) : (
         <section className="ab-card" role="alert">
           <h2 className="ab-h">Open ServiceNow and reload</h2>

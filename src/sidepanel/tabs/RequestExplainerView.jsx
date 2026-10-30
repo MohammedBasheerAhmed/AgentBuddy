@@ -15,7 +15,7 @@ import { useLoader } from '../checks/useLoader.js';
 const feature = featureById('request-explain');
 const isNotVisible = (err) => err?.code === 'NOT_FOUND' || err?.code === 'ACCESS_DENIED';
 
-export default function RequestExplainerView({ page, eff, record, header, run, aiReady }) {
+export default function RequestExplainerView({ page, eff, record, header, run, aiReady, active = true }) {
   const allowSensitive = Boolean(eff.policy?.allowHrContent);
   const readPack = (target, spec) => read(page.tabId, 'pack', { table: target.table, sysId: target.sysId, feature: spec, allowSensitive });
 
@@ -31,7 +31,7 @@ export default function RequestExplainerView({ page, eff, record, header, run, a
       const own = { table: record.table, sysId: record.sysId };
       return { target: { ...own, note: 'You cannot see the requested item this task belongs to. Showing the task on its own.' }, pack: await readPack(own, 'request-status') };
     }
-  }, [page.tabId, record.table, record.sysId, record.kind, allowSensitive]);
+  }, [page.tabId, record.table, record.sysId, record.kind, allowSensitive], { active });
 
   const data = state.data;
   const view = useMemo(() => (data ? buildRequestView(data.pack, { currentNumber: record.number || header?.number || '' }) : null), [data, record.number, header?.number]);
@@ -51,7 +51,7 @@ export default function RequestExplainerView({ page, eff, record, header, run, a
         )}
       </section>
 
-      <LoadNotes state={state} />
+      <LoadNotes state={state} onRetry={reload} />
       {view && <RequestBody view={view} />}
 
       {canExplain && data && (

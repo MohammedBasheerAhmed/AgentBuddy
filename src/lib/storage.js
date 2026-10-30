@@ -2,7 +2,7 @@
 // Everything fails soft where it can: a storage problem must not stop the panel from opening.
 import { DEFAULT_SETTINGS, effectiveSettings, normalizePolicy } from '../policy/policy.js';
 import { AUDIT_KEY, AUDIT_SALT_KEY, appendAudit, makeAuditEntry, hashRecordId } from '../audit/auditLog.js';
-import { createKeyStore } from './keyStore.js';
+import { createKeyStore, indexedDbArea } from './keyStore.js';
 
 export const SETTINGS_KEY = 'agentbuddy_settings';
 export const SNIPPETS_KEY = 'agentbuddy_snippets';
@@ -44,7 +44,38 @@ export async function loadEffective() {
   return effectiveSettings(settings, policy);
 }
 
-export const keyStore = () => createKeyStore({ local: chrome.storage.local, session: chrome.storage.session });
+// chrome.storage.session is closed to content scripts by default (TRUSTED_CONTEXTS); the unlocked AI key and the bar's launch request
+// rely on that. Pin it, so nothing (another extension page, a later change) can have opened it to the ServiceNow pages.
+let sessionPinned = false;
+function keepSessionPrivate() {
+  if (sessionPinned) return;
+  sessionPinned = true;
+  try {
+    const pending = chrome.storage.session?.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' });
+    if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+  } catch {
+    /* an older browser without setAccessLevel keeps the default, which is the same */
+  }
+}
+
+let vault; // one IndexedDB connection per page
+/** The vault the AI key is kept in (Agent Buddy's own IndexedDB; a content script cannot open it). null when IndexedDB is missing. */
+export function keyVault() {
+  if (vault === undefined) vault = indexedDbArea();
+  return vault;
+}
+
+/**
+ * The key store, with the organisation's policy: a `keyStorage` the policy forces is applied to a key that was saved before the
+ * policy came (moved into memory for 'session', not used until it has a passphrase for 'encrypted'; see keyStore.js).
+ */
+export const keyStore = () => {
+  keepSessionPrivate();
+  return createKeyStore(
+    { local: chrome.storage.local, session: chrome.storage.session, vault: keyVault() },
+    { requiredMode: async () => (await loadPolicy()).keyStorage }
+  );
+};
 
 // ---- audit log: no content, salted record hash -------------------------------------------------------------------
 

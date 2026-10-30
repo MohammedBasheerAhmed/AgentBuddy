@@ -56,7 +56,7 @@ test('the query is for MY active tickets and reads SLAs in one batch', async () 
   const deps = fakeDeps({ tables: { incident: [row('incident', 'a'.repeat(32), 'INC1', 't', '3 - Moderate', '2026-10-26 11:00:00')] } });
   await readMyDay({ userId: USER }, deps, { tables: ['incident'], now: NOW });
   assert.equal(deps.calls[0].query, `assigned_to=${USER}^active=true^ORDERBYDESCsys_updated_on`);
-  assert.equal(deps.calls.filter((c) => c.table === 'task_sla').length, 1);
+  assert.equal(deps.calls.filter((c) => c.table === 'task_sla' && /^taskIN/.test(c.query)).length, 1);
   assert.match(deps.calls.find((c) => c.table === 'task_sla').query, /^taskIN/);
 });
 

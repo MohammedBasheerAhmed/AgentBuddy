@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { MSG } from '../lib/messages.js';
 import { instancePattern, isInstanceAllowed } from '../policy/policy.js';
 import MyDayView from './MyDayView.jsx';
-import { isAiReady } from './aiReady.js';
+import { aiNeeds, setupProblem } from './aiReady.js';
 import { plainError } from './ask.js';
 
 // Shown when the active tab is not a ticket: the site is not enabled yet, or it is enabled but no record is open.
@@ -10,8 +10,8 @@ export default function SetupView({ page, eff, onChanged }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // A local model (Ollama, or a server on this computer) needs no key.
-  const aiReady = isAiReady(eff);
+  // A local model (Ollama, or a server on this computer) needs no key. 'unlock' | 'add-key' | 'setup' | '' (ready).
+  const needs = aiNeeds(eff);
 
   async function enable() {
     setError('');
@@ -75,13 +75,15 @@ export default function SetupView({ page, eff, onChanged }) {
         </section>
       )}
 
-      {!aiReady && (
+      {needs && (
         <section className="ab-card">
-          <h2 className="ab-h">{eff.keyLocked ? 'Unlock your AI key' : 'Add an AI key'}</h2>
+          <h2 className="ab-h">{{ unlock: 'Unlock your AI key', setup: 'Finish the AI set-up' }[needs] || 'Add an AI key'}</h2>
           <p className="ab-sub">
-            {eff.keyLocked
-              ? 'Your key is encrypted. Enter your passphrase in Settings to use it in this browser session.'
-              : 'Agent Buddy works with the AI provider you choose. Add a key in Settings. Personal data is masked before anything is sent.'}
+            {needs === 'unlock'
+              ? 'Your key is protected by a passphrase. Enter it in Settings to use the key in this browser session.'
+              : needs === 'setup'
+                ? `${setupProblem(eff)} Settings has the fields for it.`
+                : 'Agent Buddy works with the AI provider you choose. Add a key in Settings. Personal data is masked before anything is sent.'}
           </p>
           <div className="ab-row">
             <button type="button" className="ab-btn" onClick={() => chrome.runtime.openOptionsPage()}>

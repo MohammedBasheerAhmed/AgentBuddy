@@ -197,16 +197,51 @@ export async function readResolvedTickets({ days = 60, tables = ['incident'] } =
 
 // ---- Which of those tickets have a knowledge article -------------------------------------------------------------------
 
-// Where the link between a ticket and an article is kept (the "Attached Knowledge" list and the knowledge-use log).
-// Neither could be verified on a real instance (docs/live-questions/knowledge.md), so each is tried and checked.
-// (The Check tab asks the same two tables in src/content/ops/checks.js KB_SOURCES: keep the column names the same.)
+// Where the link between a ticket and an article is kept (the "Attached Knowledge" list and the knowledge-use log), and the
+// column of each that points at the ticket. Neither could be verified on a real instance (docs/live-questions/knowledge.md,
+// question 21), so each is tried and checked. For kb_use even the column is not certain (`task_id` or `task`): see
+// detectLinkColumn. The Check tab (src/content/ops/checks.js) uses this same list.
 export const LINK_SOURCES = Object.freeze([
-  { table: 'm2m_kb_task', task: 'task' },
-  { table: 'kb_use', task: 'task_id' },
+  Object.freeze({ table: 'm2m_kb_task', columns: Object.freeze(['task']) }),
+  Object.freeze({ table: 'kb_use', columns: Object.freeze(['task_id', 'task']) }),
 ]);
 const LINK_CHUNK = 40;
 
-async function readLinkSource({ table, task }, ids, deps, memo) {
+/**
+ * Which of `columns` points at the ticket in `table`. With one candidate there is nothing to find out. With several, ONE
+ * unfiltered read of one row asks for all of them: the Table API leaves a column the table does not have out of its answer, so
+ * the row shows which exists. A condition on the wrong column would be ignored by ServiceNow and answered with up to a
+ * thousand unrelated rows; this read moves one. It is also the "can this user see any row at all?" read that an empty answer
+ * needs (confirmEmptyIsReallyEmpty), so it replaces that read rather than adding one. Memoised per table in `memo`.
+ * @returns {Promise<{ column: string, visible: boolean, failure: { status: string, note: string } | null }>}
+ *   visible: a row was seen (an empty filtered answer is then a fact); failure: why the table cannot be used.
+ */
+export function detectLinkColumn(table, columns, deps, memo) {
+  if (columns.length === 1) return Promise.resolve({ column: columns[0], visible: false, failure: null });
+  const key = `link-column:${table}`;
+  if (memo?.has(key)) return memo.get(key);
+  const promise = (async () => {
+    const { rows, failure } = await softRead(deps, table, '', ['sys_id', ...columns], { limit: 1, displayValue: false });
+    if (failure) return { column: '', visible: false, failure };
+    if (!rows.length) {
+      const note = `Your user sees no rows of ${table} at all, so "none for this record" proves nothing: the instance may have none, or an access rule hides them.`;
+      return { column: '', visible: false, failure: { status: STATUS.EMPTY_OR_HIDDEN, note } };
+    }
+    const column = columns.find((name) => Object.prototype.hasOwnProperty.call(rows[0], name)) || '';
+    if (!column) {
+      const names = columns.length === 2 ? `neither a ${columns[0]} nor a ${columns[1]} column` : `none of the columns ${columns.join(', ')}`;
+      return { column: '', visible: true, failure: { status: STATUS.ERROR, note: `${table} has ${names}, so it says nothing about which tickets used an article.` } };
+    }
+    return { column, visible: true, failure: null };
+  })();
+  memo?.set(key, promise);
+  return promise;
+}
+
+async function readLinkSource({ table, columns }, ids, deps, memo) {
+  const detected = await detectLinkColumn(table, columns, deps, memo);
+  if (detected.failure) return { table, usable: false, linked: new Set(), status: detected.failure.status, note: detected.failure.note };
+  const task = detected.column;
   const linked = new Set();
   const chunks = [];
   for (let i = 0; i < ids.length; i += LINK_CHUNK) chunks.push(ids.slice(i, i + LINK_CHUNK));
@@ -230,8 +265,9 @@ async function readLinkSource({ table, task }, ids, deps, memo) {
   });
   if (usable) {
     for (const result of results) for (const row of result?.rows || []) linked.add(raw(row[task]).toLowerCase());
-    // Nothing found for any ticket: either no ticket has an article, or this user cannot see the table. Tell them apart.
-    if (!linked.size) {
+    // Nothing found for any ticket: either no ticket has an article, or this user cannot see the table. Tell them apart
+    // (unless the column probe already saw a row: then the table is visible and "none" is a fact).
+    if (!linked.size && !detected.visible) {
       const seen = await confirmEmptyIsReallyEmpty(table, deps, memo);
       if (seen.status !== STATUS.EMPTY) {
         usable = false;

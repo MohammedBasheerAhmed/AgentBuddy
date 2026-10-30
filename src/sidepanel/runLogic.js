@@ -44,6 +44,40 @@ export function seenAfterConfirm({ previewMode, feature, seen = [] }) {
   return key && !seen.includes(key) ? [...seen, key] : seen;
 }
 
+// What "Mask" in the preview says, by the result of maskMore (src/lib/pipeline.js). Plain and short; never quotes the text.
+const MASK_MESSAGES = Object.freeze({
+  EMPTY: 'Select or type the text to hide first.',
+  SHORT: 'Use at least 2 letters or digits.',
+  LONG: 'That is too long. Select a shorter piece.',
+  PLACEHOLDER: 'Select plain text only, not a highlighted part.',
+  NOT_FOUND: 'That text is not in what will be sent.',
+  NOT_DATA: "That is Agent Buddy's own wording, not ticket text. Nothing changed.",
+  FAILED: 'That could not be hidden. If it must not be sent, press Cancel.',
+  GONE: 'This check has closed.',
+});
+
+/** The line the preview shows after "Mask": how many places were masked, or why nothing changed. */
+export function maskMessage(out) {
+  if (out?.ok) {
+    const n = Number(out.masked) || 0;
+    return `Masked in ${n} ${n === 1 ? 'place' : 'places'}. Read the text again before you send.`;
+  }
+  return MASK_MESSAGES[out?.problem] || MASK_MESSAGES.FAILED;
+}
+
+/**
+ * The record a run was started on, for binding its answer (Insert goes only into that record). It is taken ONCE, when the run
+ * enters 'reading'; every later render keeps it, so a view that stays on screen while the person opens another record does not
+ * re-bind the answer to whatever page is open when the answer arrives.
+ * @param {string|null} previousPhase the phase at the last render (null before the first)
+ * @param {string} phase the phase now
+ * @param {*} current what was taken before
+ * @param {() => *} take reads it from the page that is open now
+ */
+export function startedOnAfter(previousPhase, phase, current, take) {
+  return phase === 'reading' && previousPhase !== 'reading' ? take() : current;
+}
+
 /** '' when the model's text is usable; otherwise what to tell the person. */
 export function answerProblem(text) {
   return typeof text === 'string' && text.trim() ? '' : EMPTY_ANSWER;

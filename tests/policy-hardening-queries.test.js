@@ -50,17 +50,25 @@ test('SEC-13: nothing, null and undefined are refused too', () => {
   for (const value of ['', '   ', null, undefined]) assert.equal(queryValue(value), '');
 });
 
-test('SEC-13: findOpenDuplicates puts none of the refused values into a query', async () => {
-  for (const name of ['javascript:gs.getUserID()', 'a\\b', 'a\u0000b', 'a^b']) {
-    const deps = fakeDeps({ incident: [{ sys_id: v(ID), number: v('INC1'), short_description: v('x'), cmdb_ci: v('c', name), opened_at: v('2026-10-26 08:00:00') }] });
-    const { hits, access } = await findOpenDuplicates({ table: 'incident', sysId: ID, fields: { cmdb_ci: name } }, deps, {});
-    assert.deepEqual(hits, []);
-    assert.equal(deps.calls.length, 0, `no read for ${JSON.stringify(name)}`);
-    assert.equal(access[0].status, 'skipped');
+test('SEC-13: findOpenDuplicates puts no name and none of the refused values into a query: only sys_ids', async () => {
+  // Stronger than refusing bad names: the duplicate finder compares the CI and the service by their sys_ids, read from the record
+  // itself, so no display text (the pack's or the instance's) is ever part of a condition.
+  for (const name of ['javascript:gs.getUserID()', 'a\\b', 'a\u0000b', 'a^b', 'gw-eu-1']) {
+    const deps = fakeDeps({ incident: [{ sys_id: v(ID), number: v('INC1'), short_description: v('x'), cmdb_ci: v('c'.repeat(32), name), opened_at: v('2026-10-26 08:00:00') }] });
+    await findOpenDuplicates({ table: 'incident', sysId: ID, fields: { cmdb_ci: name } }, deps, {});
+    for (const call of deps.calls) {
+      assert.ok(!call.query.includes(name), `${JSON.stringify(name)} is not in ${call.query}`);
+      assert.match(call.query, /^(?:sys_id=[0-9a-f]{32}|cmdb_ci=[0-9a-f]{32}\^active=true\^sys_id!=[0-9a-f]{32}\^ORDERBYDESCopened_at)$/);
+    }
   }
-  const ok = fakeDeps({ incident: [] });
-  await findOpenDuplicates({ table: 'incident', sysId: ID, fields: { cmdb_ci: 'gw-eu-1' } }, ok, {});
-  assert.match(ok.calls[0].query, /^cmdb_ci\.name=gw-eu-1\^/);
+  // A STORED value that is not a sys_id (a bad import, a forged answer) is refused the same way: no query is built from it.
+  for (const stored of ['javascript:gs.getUserID()', 'a^ORactive=true', 'gw-eu-1']) {
+    const deps = fakeDeps({ incident: [{ sys_id: v(ID), number: v('INC1'), cmdb_ci: v(stored, 'x'), opened_at: v('2026-10-26 08:00:00') }] });
+    const { hits, access } = await findOpenDuplicates({ table: 'incident', sysId: ID, fields: { cmdb_ci: 'x' } }, deps, {});
+    assert.deepEqual(hits, []);
+    assert.equal(access[0].status, 'skipped');
+    assert.deepEqual(deps.calls.map((c) => c.query), [`sys_id=${ID}`], `only the record itself was read for ${JSON.stringify(stored)}`);
+  }
 });
 
 // ---- SEC-13: the reference tables ---------------------------------------------------------------------------------------------

@@ -1,5 +1,10 @@
 // Dates for reports. ServiceNow stores date-times as UTC text ('YYYY-MM-DD HH:MM:SS'); "today" and "this week" are the
-// person's own (the browser's time zone). Pure: the time zone offset is a parameter so tests are exact.
+// person's own (the browser's time zone). Pure: the time zone is a parameter so tests are exact.
+//
+// A time zone is given as minutes west of UTC (Date#getTimezoneOffset): either one fixed number, or a function of the instant
+// (the default, `localOffset`), which is what a zone with summer time needs. With a fixed number a day that starts in winter time
+// but is looked at in summer time would begin an hour early or late: on the day the clocks change "opened today" counted one hour
+// of yesterday (or missed one hour of today), and every daily bucket before the change was shifted by that hour.
 import { parseSnTime, formatSnTime } from '../../context/util.js';
 
 export const MINUTE = 60000;
@@ -8,42 +13,61 @@ export const DAY = 86400000;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** Minutes west of UTC, as Date#getTimezoneOffset reports it. */
+/** Minutes west of UTC at the instant `ms`, as Date#getTimezoneOffset reports it (the browser's zone, summer time included). */
 export const localOffset = (ms) => new Date(ms).getTimezoneOffset();
+
+/** The offset (minutes west of UTC) a time zone has at `ms`: `tz` is a fixed number or a function of the instant. */
+export function offsetAt(tz, ms) {
+  const n = typeof tz === 'function' ? Number(tz(ms)) : Number(tz);
+  // Real zones lie within UTC-12 and UTC+14; anything else (NaN, a typo) falls back to the browser's own zone.
+  return Number.isFinite(n) && Math.abs(n) <= 16 * 60 ? n : localOffset(ms);
+}
 
 /** "Now" for query text: rounded down to the minute, so equal requests in the same minute share one cache entry. */
 export const quantize = (ms) => Math.floor(ms / MINUTE) * MINUTE;
 
-/** The instant the local day containing `ms` began. */
-export function startOfLocalDay(ms, offsetMin = localOffset(ms)) {
-  const local = ms - offsetMin * MINUTE;
-  return Math.floor(local / DAY) * DAY + offsetMin * MINUTE;
+// A local calendar date is handled as "that date at 00:00 UTC" (a whole number of days), so date arithmetic needs no zone.
+const localDateOf = (ms, tz) => Math.floor((ms - offsetAt(tz, ms) * MINUTE) / DAY) * DAY;
+
+/** The instant local midnight of `localDate` was, with the offset in force at that moment (not the offset of today). */
+function instantOfLocalDate(localDate, tz) {
+  const guess = localDate + offsetAt(tz, localDate) * MINUTE;
+  return localDate + offsetAt(tz, guess) * MINUTE;
 }
 
+/** The instant the local day containing `ms` began. */
+export function startOfLocalDay(ms, tz = localOffset) {
+  return Math.min(ms, instantOfLocalDate(localDateOf(ms, tz), tz));
+}
+
+const mondayOf = (localDate) => localDate - ((new Date(localDate).getUTCDay() + 6) % 7) * DAY; // getUTCDay of a local date = local weekday
+
 /** The instant the local week (Monday first) containing `ms` began. */
-export function startOfLocalWeek(ms, offsetMin = localOffset(ms)) {
-  const dayStart = startOfLocalDay(ms, offsetMin);
-  const weekday = new Date(dayStart - offsetMin * MINUTE).getUTCDay(); // 0 = Sunday in local terms
-  const sinceMonday = (weekday + 6) % 7;
-  return dayStart - sinceMonday * DAY;
+export function startOfLocalWeek(ms, tz = localOffset) {
+  return Math.min(ms, instantOfLocalDate(mondayOf(localDateOf(ms, tz)), tz));
 }
 
 /** 'Oct 27' for the local day that starts at `startMs`. */
-export function dayLabel(startMs, offsetMin = localOffset(startMs)) {
-  const d = new Date(startMs - offsetMin * MINUTE);
+export function dayLabel(startMs, tz = localOffset) {
+  const d = new Date(startMs - offsetAt(tz, startMs) * MINUTE);
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
-/** Bucket starts (oldest first) for the last `count` local days or weeks, ending with the one that holds `now`. */
-export function bucketStarts({ now, unit = 'day', count = 14, offsetMin = localOffset(now) }) {
+/**
+ * Bucket starts (oldest first) for the last `count` local days or weeks, ending with the one that holds `now`. Each start is that
+ * day's own local midnight, so a bucket that spans a change to or from summer time is 23 or 25 hours long, as the day was.
+ * (`offsetMin` is the time zone: a number or a function, see the top of this file.)
+ */
+export function bucketStarts({ now, unit = 'day', count = 14, offsetMin = localOffset }) {
   const n = Math.max(1, Math.min(Number(count) || 1, 120));
-  const step = unit === 'week' ? 7 * DAY : DAY;
-  const last = unit === 'week' ? startOfLocalWeek(now, offsetMin) : startOfLocalDay(now, offsetMin);
-  return Array.from({ length: n }, (_, i) => last - (n - 1 - i) * step);
+  const stepDays = unit === 'week' ? 7 : 1;
+  const today = localDateOf(now, offsetMin);
+  const last = unit === 'week' ? mondayOf(today) : today;
+  return Array.from({ length: n }, (_, i) => instantOfLocalDate(last - (n - 1 - i) * stepDays * DAY, offsetMin));
 }
 
 /** Label for each bucket: a day is 'Oct 27', a week is 'Oct 20' (the Monday it starts). */
-export const bucketLabels = (starts, offsetMin) => starts.map((s) => dayLabel(s, offsetMin));
+export const bucketLabels = (starts, offsetMin = localOffset) => starts.map((s) => dayLabel(s, offsetMin));
 
 /**
  * Count timestamps (ms) into buckets. `starts` is ascending; a bucket runs until the next start (the last one for `step` ms).

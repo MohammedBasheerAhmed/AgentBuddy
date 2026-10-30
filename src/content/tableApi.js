@@ -10,6 +10,20 @@ import { sessionHeaders } from './sessionToken.js';
 // Hard ceiling on rows per request. Guards against a mistyped query pulling tens of thousands of rows into memory.
 const MAX_LIMIT = 1000;
 
+// A table name is a plain identifier. Every caller validates it already; this is the last check before it becomes part of the
+// address, because encodeURIComponent leaves "." alone and "/api/now/table/.." would be a request for another path.
+const TABLE_NAME_RE = /^[a-z][a-z0-9_]{0,79}$/;
+function checkTable(table) {
+  if (typeof table !== 'string' || !TABLE_NAME_RE.test(table)) throw new Error('That is not a valid table name.');
+}
+
+// Rows per request: 1 to MAX_LIMIT. A negative, zero or non-numeric limit must never reach the instance as "no limit".
+export function clampLimit(limit) {
+  const n = Number(limit);
+  if (Number.isNaN(n) || n < 1) return 1;
+  return Math.min(Math.floor(n), MAX_LIMIT);
+}
+
 // ---- Session and error handling shared by every request ------------------------------------
 
 export const SESSION_EXPIRED_MESSAGE = 'Your ServiceNow session has expired. Log in again, then retry.';
@@ -129,12 +143,14 @@ export async function readJson(response, what) {
 
 export async function queryTable(table, query, fields = [], options = {}) {
   const { limit = 50, displayValue = false, offset = 0, signal } = options;
+  checkTable(table);
+  const start = Math.max(0, Math.floor(Number(offset) || 0));
 
   const params = new URLSearchParams();
   if (query) params.set('sysparm_query', query);
   if (fields.length) params.set('sysparm_fields', fields.join(','));
-  params.set('sysparm_limit', String(Math.min(limit, MAX_LIMIT)));
-  if (offset) params.set('sysparm_offset', String(offset));
+  params.set('sysparm_limit', String(clampLimit(limit)));
+  if (start) params.set('sysparm_offset', String(start));
   params.set('sysparm_display_value', displayValue ? 'all' : 'false');
   params.set('sysparm_exclude_reference_link', 'true');
 
@@ -157,6 +173,7 @@ export async function fetchRecord(table, sysId, fields = [], options = {}) {
 
 /** Number of rows matching `query`, via the Aggregate API (no rows transferred). */
 export async function countRecords(table, query = '') {
+  checkTable(table);
   const params = new URLSearchParams({ sysparm_count: 'true' });
   if (query) params.set('sysparm_query', query);
   const response = await instanceFetch(`/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`, {
@@ -174,6 +191,8 @@ export async function countRecords(table, query = '') {
  * Returns the raw `result` array: [{ stats: { count }, groupby_fields: [{ field, value, display_value }] }].
  */
 export async function countByColumn(table, query, column) {
+  checkTable(table);
+  if (!AGGREGATE_COLUMN_RE.test(String(column))) throw new Error('That is not a valid column name.');
   const params = new URLSearchParams({ sysparm_count: 'true', sysparm_group_by: column, sysparm_display_value: 'all' });
   if (query) params.set('sysparm_query', query);
   const response = await instanceFetch(`/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`, {
@@ -185,16 +204,21 @@ export async function countByColumn(table, query, column) {
 }
 
 const AGGREGATE_COLUMN_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){0,2}$/;
+// A group filter on the count only ("count^assigned_to^>^2"): enough to drop small groups, nothing that could carry other query text.
+const AGGREGATE_HAVING_RE = /^count\^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){0,2}\^(>|<|=|>=|<=)\^\d{1,6}$/;
 
 /**
  * One Aggregate API read, GET only: counts (always), optionally per value of up to two columns and with the average of
- * numeric columns. Returns the raw `result`: an object `{ stats: { count, avg? } }` without a grouping, an array
- * `[{ stats, groupby_fields: [{ field, value, display_value }] }]` with one. Used by the reports engine (src/reports/engine).
+ * numeric columns. `having` keeps only the groups whose count passes a comparison. Returns the raw `result`: an object
+ * `{ stats: { count, avg? } }` without a grouping, an array `[{ stats, groupby_fields: [{ field, value, display_value }] }]` with
+ * one. Used by the reports engine (src/reports/engine).
  */
-export async function aggregate(table, { query = '', groupBy = [], avgFields = [], signal } = {}) {
+export async function aggregate(table, { query = '', groupBy = [], avgFields = [], having = '', signal } = {}) {
+  checkTable(table);
   [...groupBy, ...avgFields].forEach((name) => {
     if (!AGGREGATE_COLUMN_RE.test(String(name))) throw new Error('That is not a valid column name.');
   });
+  if (having && !AGGREGATE_HAVING_RE.test(String(having))) throw new Error('That is not a valid group filter.');
   const params = new URLSearchParams({ sysparm_count: 'true' });
   if (query) params.set('sysparm_query', query);
   if (groupBy.length) {
@@ -202,6 +226,7 @@ export async function aggregate(table, { query = '', groupBy = [], avgFields = [
     params.set('sysparm_display_value', 'all');
   }
   if (avgFields.length) params.set('sysparm_avg_fields', avgFields.join(','));
+  if (having) params.set('sysparm_having', having);
   const response = await instanceFetch(`/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`, {
     credentials: 'same-origin',
     headers: await sessionHeaders(),

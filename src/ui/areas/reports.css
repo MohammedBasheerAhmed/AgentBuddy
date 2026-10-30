@@ -353,3 +353,32 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
   /* A printed note keeps its text and drops its buttons. */
   .ab-ai-actions, .ab-handover-ai > .ab-row, .ab-handover-ai > .ab-hint { display: none !important; }
 }
+
+/* ---- drill-downs that open a ServiceNow list are real links (src/sidepanel/charts/DrillLink.jsx): they keep the look of the
+   buttons they replaced, with an underline on the label as the "this opens something" cue, and the theme's focus ring ---- */
+a.ab-tile-link, a.ab-hbar-row, a.ab-legend-item, a.ab-heat-cell, a.ab-stack-link { color: inherit; text-decoration: none; cursor: pointer; }
+a.ab-hbar-row, a.ab-legend-item, a.ab-stack-link { border-radius: var(--ab-radius-xs); }
+a.ab-hbar-row:hover, a.ab-legend-item:hover, a.ab-stack-link:hover { background: var(--ab-bg-subtle); }
+a.ab-hbar-row:hover .ab-hbar-label, a.ab-legend-item:hover .ab-legend-label, a.ab-stack-link:hover .ab-stack-label, a.ab-tile-link:hover .ab-tile-label { text-decoration: underline; }
+a.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
+a.ab-heat-cell, a.ab-heat-cell .ab-heat-label { color: var(--ab-chart-seq-label); }
+a.ab-stack-link { display: block; }
+.ab-pick-link { display: inline-flex; align-items: center; }
+
+/* ---- a widget whose read failed: the reason, then "Try again" ---- */
+.ab-widget-error { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
+.ab-widget-error .ab-note { margin: 0; }
+
+/* ---- My day (src/sidepanel/MyDayView.jsx) ---- */
+.ab-myday-head { justify-content: space-between; align-items: center; }
+.ab-myday-head .ab-h { margin: 0; }
+.ab-myday-summary { margin: 8px 0 0; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); font-weight: 600; }
+.ab-myday-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ab-myday-list .ab-feature { min-width: 0; overflow-wrap: anywhere; }
+.ab-myday-list.ab-is-busy { opacity: 0.7; }
+.ab-myday-access { margin-top: 8px; }
+.ab-dash-help { margin: 0; }
+@media print {
+  /* Screen-only help and buttons. */
+  .ab-dash-help, .ab-widget-error .ab-btn { display: none !important; }
+}

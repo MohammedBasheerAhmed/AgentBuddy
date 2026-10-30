@@ -23,7 +23,8 @@ test('M9: the boundary draws its children until one of them throws, then a plain
   boundary.state = { failed: true };
   const markup = renderToStaticMarkup(boundary.render());
   assert.ok(markup.includes(BOUNDARY_TEXT));
-  assert.equal(BOUNDARY_TEXT, 'Something went wrong in this part of Agent Buddy. Reload the panel.');
+  assert.equal(BOUNDARY_TEXT, 'Something went wrong in this part of Agent Buddy. Try again, or reload the panel.');
+  assert.match(markup, /<button[^>]*>Try again<\/button>/);
   assert.match(markup, /<button[^>]*>Open Settings<\/button>/);
   assert.ok(!markup.includes('fine'), 'the broken part is not drawn again');
 });

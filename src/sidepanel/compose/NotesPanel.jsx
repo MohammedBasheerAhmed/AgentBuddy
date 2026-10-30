@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import AiKeyNote from '../AiKeyNote.jsx';
 import { read } from '../ask.js';
 import { useRun } from '../useRun.js';
 import RunPanel from '../RunPanel.jsx';
@@ -8,7 +9,7 @@ import { CONTACT_TYPES, LEVELS, parseTicketProposal, planFill } from '../../comp
 import { buildComposePack, pageTable, peopleFromNames } from '../../compose/rewrite.js';
 import { reviewForCustomer } from '../../safeSend/review.js';
 import { expectFromPage } from '../../lib/fillable.js';
-import { ReviewHints, aiNotReadyText, featureState, fillField, fillReason, isAiReady, useFill } from './shared.js';
+import { ReviewHints, featureState, fillField, fillReason, isAiReady, useFill } from './shared.js';
 
 const FEATURE_ID = 'notes-to-ticket';
 const FIELD_NAMES = { short_description: 'Short description', description: 'Description', impact: 'Impact', urgency: 'Urgency', contact_type: 'Contact type' };
@@ -132,7 +133,7 @@ export default function NotesPanel({ page, eff }) {
 
   return (
     <div className="ab-compose-stack">
-      {!aiReady && <p className="ab-note ab-note-warn">{aiNotReadyText(eff)}</p>}
+      <AiKeyNote eff={eff} what="this" />
 
       <section className="ab-card" aria-label="Rough notes">
         <div className="ab-field">

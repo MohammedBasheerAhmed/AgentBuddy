@@ -4,6 +4,7 @@
 //    rehydrated locally and rendered as plain text (no image, no link that loads anything).
 const { findLeaks } = require('../leaks.js');
 const { clickButton, waitForText, textOf, runFeature, waitForRecord } = require('../ui.js');
+const { leftoverPlaceholders } = require('../common.js');
 
 const AUDIT_KEYS = ['time', 'feature', 'table', 'record', 'provider', 'model', 'host', 'piiMode', 'preview', 'masked', 'counts', 'inputTokens', 'outputTokens', 'outcome', 'ms', 'reason'];
 
@@ -52,7 +53,8 @@ module.exports = {
     const result = await textOf(p, '.ab-output');
     t.check('a result is shown (no error)', result !== null, (await textOf(p, '.ab-note-danger')) || '');
     t.check('result shows the REAL caller name (rehydrated locally)', Boolean(result) && result.includes(data.SEED.callerName), (result || '').replace(/\s+/g, ' ').slice(0, 120));
-    t.check('result has no leftover placeholders', Boolean(result) && !/\[[A-Z_]{2,20}_\d+\]/.test(result));
+    t.check('result has no leftover placeholders except the card and password markers, which are never put back', Boolean(result) && leftoverPlaceholders(result).length === 0 && /\[CARD_\d+\]/.test(result) && /\[SECRET_\d+\]/.test(result) && !result.includes(data.SEED.card) && !result.includes(data.SEED.password), (result || '').replace(/\s+/g, ' ').slice(0, 160));
+    t.check('the panel says why the card and password stay hidden in the answer', /stay hidden in answers/.test((await textOf(p, '.ab-note-warn[role="status"]')) || ''));
     t.check('rendered result has no <img>, <a>, <iframe> or other loading element', (await p.evaluate(() => document.querySelectorAll('img, picture, a[href], iframe, object, embed, video, audio, link[rel=stylesheet][href^="http"]').length)) === 0);
 
     // ---- 3. What the AI server actually received ------------------------------------------------------------------

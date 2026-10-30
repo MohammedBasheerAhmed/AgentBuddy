@@ -107,3 +107,19 @@ instead of Insert" or a less specific email suggestion, never a wrong write.
     the panel offers Copy.
 24. **`chrome.storage.session` in the side panel.** The checklist ticks need it. It exists in Chrome 102+ and Edge for extension
     pages; without it the ticks live only as long as the panel does (an in-memory stand-in).
+
+## Added 2026-10-30 (features walk)
+
+25. **Snippets are filled from their own context spec, `snippet-fill`** (`src/context/specs/compose.js`): number, short description,
+    state, priority, the people and the SLAs, no notes, no description. The Snippets panel still reads the pack with `reply-draft`, which
+    has no `priority`, so `{{priority}}` was always "The record has no value for this", and ten notes were read for nothing. Needs one
+    line in `src/sidepanel/compose/SnippetsPanel.jsx` (not this area's file): `feature: SNIPPET_FEATURE` (from `src/snippets/preview.js`)
+    instead of `'reply-draft'`. Check after that change: `{{priority}}` and `{{sla.due}}` fill on an incident and a requested item.
+26. **A consumer is the caller of a snippet.** `{{caller.first_name}}` on a customer service case with a private customer (consumer,
+    `csm_consumer`) was empty; the role `consumer` now counts after `contact`. Check on a B2C case.
+27. **The email suggestion compares times on one clock.** Note times read from `sys_journal_field` are stored UTC; field values are
+    display values in the reader's time zone. "Was the person told after it was resolved?" compared the two, so it was wrong by the
+    reader's UTC offset (an answer sent 30 minutes after resolving counted as "not told" at UTC+2). The `email-compose` pack now carries
+    the stored UTC values of `opened_at`, `resolved_at` and `closed_at` in `related.times` (spec key `times`), and the suggestion uses
+    them unless the notes came from the record's own fields (then both sides are local). Check: an incident resolved a few minutes
+    before the agent's last comment, with the user's time zone far from UTC; the suggestion says the person was already told.

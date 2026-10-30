@@ -2,6 +2,8 @@
 import { packToParts } from '../parts.js';
 import { ALL_TASKS, WORKABLE } from './kinds.js';
 import { relatedParts } from '../../itsm/parts.js';
+import { pickRequesterQuestions, pickResolutionNotes } from '../picks.js';
+import { rulesFor } from '../../prompts/rules.js';
 
 // The extras a record carries (SLAs, approvals, tasks, answers on the request form). Which of them a feature actually gets is
 // decided by its context spec (FEATURE_RELATED); a list that could not be read is said so to the model, never left out silently.
@@ -26,7 +28,8 @@ const CORE = [
       'Done so far: steps already tried and their results.\n' +
       'Current state: status, owner and anything we are waiting for.\n' +
       'Next step: the single most useful next action.\n' +
-      'Rules: use only facts in the ticket data. Write "Not stated" when something is missing. Do not guess causes. No greeting, at most 120 words.',
+      'Rules: use only facts in the ticket data. Write "Not stated" when something is missing. Do not guess causes. No greeting, nothing before or after the five lines, at most 120 words. ' +
+      rulesFor('agent'),
     instruction: 'Summarise the ticket for the agent who is about to work on it.',
   },
   {
@@ -42,7 +45,8 @@ const CORE = [
       'Write the next customer-visible reply to the most recent customer message, using the rest of the ticket for context.\n' +
       'Rules: be polite, calm and specific; use plain language. Answer what was asked. Do not promise a fix, a date or an outcome that the ticket does not support. ' +
       'Never include internal work notes, internal team names or other people\'s details. If information is missing, ask for it as a short numbered list. ' +
-      'End with one short closing line. Do not add a signature name. At most 150 words.',
+      'End with one short closing line. Do not add a signature name. At most 150 words. ' +
+      rulesFor('customer'),
     instruction: 'Draft the agent\'s reply to the requester.',
     // Internal notes are context for the agent, not material to quote back at the customer.
     parts: withRelated('reply-draft', 10),
@@ -55,7 +59,8 @@ const CORE = [
     kinds: ['incident', 'problem', 'requested_item', 'catalog_task', 'case', 'task'], // not 'request': its ceiling has no close_notes
     journal: 25,
     parts: withRelated('resolution-notes', 25),
-    insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes' },
+    // The close code has its own choice field: the Insert leaves the "Suggested close code" line out (src/features/picks.js).
+    insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes', pick: pickResolutionNotes },
     system:
       'You help a service desk agent write resolution notes for a ServiceNow ticket they are about to resolve.\n' +
       'Write exactly these lines:\n' +
@@ -64,7 +69,10 @@ const CORE = [
       'Verification: how it was confirmed to work, or "Not confirmed with the customer".\n' +
       'Suggested close code: one short phrase for the closure category.\n' +
       'Rules: use only facts in the ticket data and never invent steps. Keep it factual and neutral, no apologies or greetings, at most 120 words. ' +
-      'Resolution notes are searched later by other agents, so name the product, error text and the action taken.',
+      'Resolution notes are searched later by other agents, so name the product, error text and the action taken. ' +
+      'The customer can often read these notes too: describe what was done, not who did it, and never include passwords, internal discussion or personal details. ' +
+      'The "Suggested close code" line is advice for the agent and is not inserted into the notes. ' +
+      rulesFor('agent'),
     instruction: 'Write the resolution notes for this ticket.',
   },
   {
@@ -80,7 +88,8 @@ const CORE = [
       'You help a service desk agent hand a ticket to another team or shift.\n' +
       'Write an internal hand-off note with exactly these headings, each followed by short bullet points:\n' +
       'Summary\nSymptoms and evidence\nSteps tried (with results)\nOpen questions\nDo this first\nCustomer expectations (dates and SLA stated in the ticket)\n' +
-      'Rules: use only facts in the ticket data, write "None" for an empty heading, no guessing, at most 180 words.',
+      'Rules: use only facts in the ticket data, write "None" for an empty heading, no guessing, at most 180 words. ' +
+      rulesFor('agent'),
     instruction: 'Write the hand-off note for the next resolver.',
   },
   {
@@ -91,12 +100,16 @@ const CORE = [
     kinds: WORKABLE,
     journal: 8,
     parts: withRelated('missing-info', 8),
-    insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
+    // The "Missing:" line is the agent's checklist: only the questions go into the customer comment (src/features/picks.js).
+    insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments', pick: pickRequesterQuestions },
     system:
       'You help a service desk agent get the information needed to resolve a ticket.\n' +
-      'First write one line starting "Missing:" that lists the key details not yet in the ticket (for example affected user or device, exact error text, when it started, steps to reproduce, business impact).\n' +
-      'Then write 3 to 5 numbered questions for the requester. One question per line, plain language, each with a few words of reason in brackets.\n' +
-      'Rules: only ask for what the ticket does not already say. Never ask for passwords or security codes. No greeting.',
+      'First write one line starting "Missing:" that lists, for the agent, the key details not yet in the ticket (for example affected user or device, exact error text, when it started, steps to reproduce, business impact).\n' +
+      'Then, after a blank line, write for the requester: one short, friendly sentence that introduces the questions, then 3 to 5 numbered questions. ' +
+      'One question per line, plain language, each with a few words of reason in brackets.\n' +
+      'Only the part after the "Missing:" line is sent to the requester, as a customer-visible comment.\n' +
+      'Rules: only ask for what the ticket does not already say. Never ask for passwords or security codes. No greeting and no signature. At most 120 words in all. ' +
+      rulesFor('customer'),
     instruction: 'List what is missing and write the questions to ask the requester.',
   },
 ];

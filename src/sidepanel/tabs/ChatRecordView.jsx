@@ -1,42 +1,58 @@
-import { useCallback, useEffect, useState } from 'react';
 import { read } from '../ask.js';
 import { describeMinutes } from '../../chat/stats.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import Notes from '../knowledge/Notes.jsx';
+import ErrorNote from '../ErrorNote.jsx';
 import { aiNeedsText } from '../aiReady.js';
+import { useLoader } from '../checks/useLoader.js';
 
 // D1, D2: the facts about this chat (who, how many messages, how long the customer has waited, what they said last) with no
 // AI, and one-click buttons for the two AI features. The messages are read with the person's own session; when the chat tables
 // are not readable the tab says so instead of showing an empty chat.
-// props: { page, eff, record, header, run, aiReady }
+// props: { page, eff, record, header, run, aiReady, active }. `active`: the tab is on show (it reads again when it comes back into view:
+// new messages may have arrived).
 
 const WAITING_WARN_MINUTES = 5;
 const ROLE = { customer: 'customer', agent: 'agent', opened_for: 'customer', assigned_to: 'agent', journal_author: 'in the chat' };
+const num = (v) => (Number.isFinite(v) ? v : null);
 
-export default function ChatRecordView({ page, eff, record, run, aiReady }) {
-  const [state, setState] = useState({ phase: 'loading', data: null, error: '' });
+/**
+ * The content script's answer, in the shape this tab draws. It comes from the page, so it is checked: an answer that is not an
+ * overview is "the chat could not be read", never a crash of the tab.
+ */
+export function chatOverviewOf(answer) {
+  const o = answer && typeof answer === 'object' ? answer.overview : null;
+  if (!o || typeof o !== 'object') throw new Error('The chat could not be read. Try again.');
+  return {
+    overview: {
+      ...o,
+      count: Number.isFinite(o.count) ? o.count : 0,
+      byCustomer: num(o.byCustomer) ?? 0,
+      byAgent: num(o.byAgent) ?? 0,
+      byBot: num(o.byBot) ?? 0,
+      waitingMinutes: num(o.waitingMinutes),
+      durationMinutes: num(o.durationMinutes),
+      firstResponseMinutes: num(o.firstResponseMinutes),
+      participants: Array.isArray(o.participants) ? o.participants.filter((p) => p && typeof p.name === 'string') : [],
+      lastCustomer: o.lastCustomer && typeof o.lastCustomer.text === 'string' ? o.lastCustomer : null,
+      lastMessage: o.lastMessage && typeof o.lastMessage.text === 'string' ? o.lastMessage : null,
+    },
+    access: Array.isArray(answer.access) ? answer.access : [],
+  };
+}
+
+export default function ChatRecordView({ page, eff, record, run, aiReady, active = true }) {
   const summary = featureById('chat-summary');
   const reply = featureById('chat-reply');
 
-  const load = useCallback(async () => {
-    setState({ phase: 'loading', data: null, error: '' });
-    try {
-      const data = await read(page.tabId, 'chatOverview', { table: record.table, sysId: record.sysId });
-      setState({ phase: 'ready', data, error: '' });
-    } catch (err) {
-      setState({ phase: 'error', data: null, error: err?.message || 'The chat could not be read.' });
-    }
-  }, [page.tabId, record.table, record.sysId]);
+  const [state, load] = useLoader(async () => chatOverviewOf(await read(page.tabId, 'chatOverview', { table: record.table, sysId: record.sysId })), [page.tabId, record.table, record.sysId], { active });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const { phase, data, error } = state;
+  // While it reads again the last answer stays on screen.
+  const { data, error } = state;
+  const phase = data ? 'ready' : state.phase;
   const o = data?.overview;
   const chatEntry = (data?.access || []).find((a) => a.source === 'chat');
   const noMessages = phase === 'ready' && o.count === 0;
-
   const button = (feature, primary) => (
     <button
       key={feature.id}
@@ -55,11 +71,11 @@ export default function ChatRecordView({ page, eff, record, run, aiReady }) {
         <div className="ab-row ab-kb-head">
           <h2 className="ab-h">This chat</h2>
           <span className="ab-spacer" />
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={phase === 'loading'}>Refresh</button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
         </div>
         <p className="ab-sub">Read with your own session. Nothing here is sent to an AI.</p>
         {phase === 'loading' && <p className="ab-note" role="status">Reading the conversation…</p>}
-        {phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{error}</p>}
+        {phase === 'error' && <ErrorNote error={error} onRetry={load} />}
 
         {noMessages && (
           <p className="ab-note ab-note-warn" role="status">

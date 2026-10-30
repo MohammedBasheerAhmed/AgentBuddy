@@ -10,7 +10,12 @@ Written from the reports engineer's hand-back. Nothing here has run against a re
    (`src/reports/engine/constants.js`).
 2. **Date literals in `sysparm_query` are read as UTC.** Compare "opened today" with the UI's "on Today" filter for a user whose time
    zone is not UTC. If wrong, change `snLiteral` in `src/reports/engine/time.js`.
-3. **"Today" is the browser's time zone**, assumed equal to the person's ServiceNow time zone.
+3. **"Today" is the browser's time zone**, assumed equal to the person's ServiceNow time zone. Since the 2026-10-30 review the zone's
+   summer time is followed day by day (`offsetAt` in `src/reports/engine/time.js`): on the day the clocks change, "today" and every daily
+   bucket start at that day's real local midnight. Still assumed: the browser's zone IS the person's ServiceNow zone. Check with a user
+   whose ServiceNow profile has another time zone than the computer: "Opened today" against the list's "Opened on Today". If they
+   differ, the zone has to come from ServiceNow (for example by comparing `value` and `display_value` of one date column read with
+   `sysparm_display_value=all`, which the probe read could do at no extra cost).
 4. **Aggregate API with two group-by columns.** `sysparm_group_by=assigned_to,state` with `sysparm_display_value=all` should return two
    `groupby_fields`, and an empty reference comes back as a group with value `''`. Open the stats URL in the browser to see. If
    wrong, the Workload people and group boards are unavailable; the fix is to group by one column and read states separately.
@@ -53,3 +58,38 @@ Written from the reports engineer's hand-back. Nothing here has run against a re
 
 The feature id `reports` in `disabledFeatures` turns the Team tab off. `blockedTables` is honoured on every report read. Mention both
 to the policy author (`docs/deployment.md`).
+
+## Added by the 2026-10-30 review (correctness, links, load on the instance)
+
+21. **`task_sla.business_percentage` is filled for every SLA** (equal to `percentage` on an SLA without a schedule), and an SLA with a
+    schedule breaches when IT reaches 100. The reports and My day now judge "at risk" by it, as the record view does
+    (`src/context/related.js`); the plain `percentage` (which counts nights and weekends) is used only when the business one is empty.
+    Check an 8-to-5 SLA in the evening: plain above 100, business below, not breached. If business is empty on real rows, nothing
+    breaks (the plain one is used), but say so here. The SLA read asks for `business_percentage>=75^ORpercentage>=75` so no row is missed.
+22. **A paused SLA has `stage` = `paused`** (raw value). It is never counted "due soon" (its clock is stopped and its planned end moves
+    when it resumes), and the "Due soon" list adds `stage!=paused`. Check the stage choice values on `task_sla`.
+23. **"0" from `task_sla` and `sysapproval_approver` is checked.** When a count is 0, one unfiltered one-row read asks whether the person
+    can see ANY row of the table; if not, the tile says "not available" (you can see no SLA / approval records at all) instead of 0.
+    Check with a user who has no SLA read access: the SLA tiles must not say 0.
+24. **The Aggregate API's `sysparm_having`** (`count^caller_id^>^2`) returns only the groups with at least 3 tickets. The engine now passes
+    `having` to the table client for the repeat-caller breakdown, but `aggregate()` in `src/content/tableApi.js` (not owned by reports)
+    does not send it yet, so today the instance still returns one group per caller and the engine filters. Check on a real instance:
+    `/api/now/stats/incident?sysparm_count=true&sysparm_group_by=caller_id&sysparm_having=count^caller_id^>^2`. If the syntax differs,
+    change the string in `groups()` (`src/reports/engine/reader.js`).
+25. **A list drill-down is a real link** (`/nav_to.do?uri=<table>_list.do?sysparm_query=...`, target `_blank`, `rel=noopener noreferrer`):
+    a plain click opens it in the ServiceNow tab, Ctrl/middle-click in a new tab, the right-click menu offers "Open link in new tab".
+    Check in the real side panel and on the full page, light and dark, with the keyboard (Tab to a bar, Enter).
+26. **SLA counts filter by the exact ticket class** (`task.sys_class_nameINincident,...`), while ticket counts on a parent table include
+    its child classes (a case subclass, for example). If an instance uses child classes of the report tables, the SLA tiles may count
+    fewer tickets than the Open tile. Check whether your cases or changes use child tables.
+27. **Reports go through the content script's policy guard** (`src/content/policyGuard.js`): the managed policy's `blockedTables` is now
+    refused inside the ServiceNow page as well (row reads through the guard, Aggregate API reads checked with its `isBlocked`), not
+    only by the list the panel sends. Check with a managed policy that blocks `problem`: no request to `problem` in the network log.
+28. **One "as of" instant per dashboard load.** All widgets of one load send the same `params.asOf` (the moment Refresh was pressed or the
+    dashboard opened), so "no update in 3 days" and "due within 4 hours" are the same question for every widget and the second
+    widget's reads come from the cache. The engine ignores an instant older than ten minutes. Check in the network log: a Team
+    overview load should not repeat a count with a timestamp one minute later.
+29. **The ServiceNow tab moving does not reload the Team tab.** Widgets read again only when the tab, the instance, the scope, the tables,
+    a section's own setting or Refresh change. A read that was on its way when the page changed waits and asks again (1.5 s, then
+    4 s). On the full page, the dashboard stays (with a line saying the tab is not answering) while the tab loads. Check: open the
+    Team tab, click around in ServiceNow, and watch the network log: no new report reads.

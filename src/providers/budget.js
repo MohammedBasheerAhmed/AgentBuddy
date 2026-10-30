@@ -1,7 +1,7 @@
 // Storage side of AI usage and spend caps (the arithmetic is in src/lib/aiUsage.js). Runs in the side panel, the only page that
 // makes model calls. Everything here fails soft: a storage problem must never stop a chat, so only
 // a cap that is really reached refuses a call.
-import { USAGE_KEY, PRICES_KEY, CAPS_KEY, appendEntry, makeEntry, checkCaps, priceKey } from '../lib/aiUsage.js';
+import { USAGE_KEY, PRICES_KEY, CAPS_KEY, appendEntry, makeEntry, checkCaps, priceKey, normalizeCaps } from '../lib/aiUsage.js';
 
 const hasStorage = () => typeof chrome !== 'undefined' && Boolean(chrome.storage?.local);
 
@@ -26,8 +26,26 @@ export async function assertWithinCaps(provider, now = new Date()) {
     return { status: 'ok', items: [], worst: null, message: '' };
   }
   const result = checkCaps(state.log, state.caps, provider, now);
-  if (result.status === 'blocked') throw new Error(result.message);
+  if (result.status === 'blocked') {
+    const err = new Error(result.message);
+    err.code = 'BUDGET'; // what the audit log records (src/lib/pipeline.js errorReason)
+    throw err;
+  }
   return result;
+}
+
+/**
+ * Save the person's own limits (Settings > Usage and limits). Only the fields in `patch` change; a blank or 0 means "no limit".
+ * Returns the caps as they are now. Throws when the browser does not let it save (Settings shows that next to the field).
+ */
+export async function saveCaps(patch) {
+  if (!hasStorage()) throw new Error('Settings cannot be saved here.');
+  return withLock(async () => {
+    const stored = (await chrome.storage.local.get(CAPS_KEY))[CAPS_KEY];
+    const next = normalizeCaps({ ...(stored && typeof stored === 'object' ? stored : {}), ...patch });
+    await chrome.storage.local.set({ [CAPS_KEY]: next });
+    return next;
+  });
 }
 
 /** Log one finished call. Never throws. */

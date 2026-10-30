@@ -1,6 +1,7 @@
 // Small presentational pieces shared by the three record tabs of the checks area. No state, no reads: they draw what they
 // are given (React escapes every string, so ticket text is never markup).
 import React from 'react';
+import ErrorNote from '../ErrorNote.jsx';
 
 /** A collapsible card with a title and an optional count. */
 export function Section({ title, count, children, defaultOpen = true }) {
@@ -41,12 +42,12 @@ export function Hints({ lines }) {
   );
 }
 
-/** The state of a read: a quiet "looking" line and a red error. Renders nothing once the data is there. */
-export function LoadNotes({ state }) {
+/** The state of a read: a quiet "looking" line and a red error with "Try again" (onRetry). Renders nothing once the data is there. */
+export function LoadNotes({ state, onRetry }) {
   return (
     <>
       {state.phase === 'loading' && !state.data && <p className="ab-note" role="status">Looking…</p>}
-      {state.phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{state.error}</p>}
+      {state.phase === 'error' && <ErrorNote error={state.error} onRetry={onRetry} />}
     </>
   );
 }

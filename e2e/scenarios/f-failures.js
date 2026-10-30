@@ -98,12 +98,14 @@ module.exports = {
     await ctx.configure({ baseUrls: {} });
     await ctx.sleep(300);
     ai.requests.length = 0;
-    const noAddress = await runFeature(p, /^Summarise this ticket/);
-    t.check('custom provider with no address: plain message, no preview, nothing to approve', /address of your AI server/i.test(noAddress.error || '') && noAddress.preview === null, noAddress.error || '');
+    // The set-up is checked before anything can start: the AI buttons are off and the panel says what to finish, in Settings.
+    const setupText = await waitForText(p, /Finish the AI set-up in Settings[^.]*: Enter the address of your AI server/, { timeout: 8000 }).catch(() => '');
+    const summariseOff = await p.evaluate(() => [...document.querySelectorAll('button')].filter((b) => /^Summarise this ticket/.test(b.innerText.trim()) && b.getClientRects().length > 0).every((b) => b.disabled));
+    t.check('custom provider with no address: the AI buttons are off and the panel says to enter the address in Settings, before anything starts', Boolean(setupText) && summariseOff, setupText ? '' : 'no set-up sentence on screen');
     await ctx.sleep(500);
     t.check('custom provider with no address: nothing went out to the AI server or to any public API', ai.requests.length === 0 && !ctx.net.some((n) => /api\.openai\.com|api\.anthropic\.com/.test(n.url)), ctx.net.filter((n) => /api\.openai\.com/.test(n.url)).map((n) => n.url).join(' '));
     const noAddressAudit = (await ctx.audit()).slice(beforeBlocked);
-    t.check("custom provider with no address: audited as 'blocked' (BAD_URL)", noAddressAudit.length === 1 && noAddressAudit[0].outcome === 'blocked' && noAddressAudit[0].reason === 'BAD_URL', JSON.stringify(noAddressAudit));
+    t.check('custom provider with no address: nothing could start, so nothing was audited as sent', !noAddressAudit.some((e) => e.outcome === 'sent'), JSON.stringify(noAddressAudit));
     await ctx.configure({ baseUrls: { custom: ai.baseUrl } });
     await ctx.sleep(300);
     await panel.close();

@@ -106,5 +106,10 @@ test('without the person columns the same name WOULD go out: the check above is 
   tables.incident[0].description = v('Abel Tuter says the VPN drops.');
   const pack = await read(tables, 'incident', INCIDENT_ID, 'resolution-improve');
   const blind = { ...pack, people: [] };
-  assert.ok(run('resolution-improve', blind).includes('Abel Tuter'), 'a firewall that knows nobody cannot mask a name in prose');
+  // Since names written in prose are found by their cue (src/pii/names.js), the title's "for Abel Tuter" teaches the firewall the
+  // name and it is masked everywhere, even here.
+  assert.ok(!run('resolution-improve', blind).includes('Abel Tuter'), 'found in prose ("for Abel Tuter") and masked');
+  // With no cue anywhere, the same name still goes out: that is why the spec reads the person columns.
+  const noCue = { ...blind, fields: { description: pack.fields.description }, journal: [] };
+  assert.ok(run('resolution-improve', noCue).includes('Abel Tuter'), 'a firewall that knows nobody cannot mask a name in prose with no cue');
 });

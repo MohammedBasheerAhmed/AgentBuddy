@@ -116,7 +116,9 @@ test('the pack: a report, aggregate figures, group names, ticket numbers; assign
   for (const never of [ZELDA, DASH_CALLER, 'PWNED', INJECTION.slice(0, 15), 'Printer fire']) assert.ok(!all.includes(never), `${never} is in the pack`);
   // the repeat callers are only counted
   const quality = pack.report.sections.find((s) => s.id === 'quality').lines.join('\n');
-  assert.match(quality, /Callers with 3\+ tickets in 30 days: \d+ of \d+ callers \(names are not included\)/);
+  // Only the number of repeat callers: the instance is asked for those alone, so a total of all callers is not known and not claimed.
+  assert.match(quality, /Callers with 3\+ tickets in 30 days: \d+ \(names are not included\)/);
+  assert.ok(!/ of \d+ callers/.test(quality));
 });
 
 test('the parts: the scope first, then one part per section, each a plain text block with figures', async () => {

@@ -91,7 +91,8 @@ export async function overviewSection(ctx) {
   // The SLA tiles open the task_sla list (the SLAs, not the tickets): the ticket is one click further.
   const slaBase = andQuery('active=true', `task.sys_class_nameIN${tables.map((t) => t.table).join(',')}`, ctx.scope.taskQuery);
   const slaDrills = {
-    dueSoon: andQuery(slaBase, 'has_breached=false', buildQuery([{ op: 'until', field: 'planned_end_time', ms: ctx.now + LIMITS.dueSoonHours * HOUR }])),
+    // A paused SLA is not counting down, so it is not "due soon" (sla.js leaves it out of the count the same way).
+    dueSoon: andQuery(slaBase, 'has_breached=false', 'stage!=paused', buildQuery([{ op: 'until', field: 'planned_end_time', ms: ctx.now + LIMITS.dueSoonHours * HOUR }])),
     breached: andQuery(slaBase, 'has_breached=true'),
   };
   const slaTile = (key, label, n, hint) => ({

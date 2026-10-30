@@ -194,7 +194,7 @@ test('export bar: appears when there are rows, offers CSV, copy and masking, and
   assert.match(on, /Copy as table/);
   assert.match(on, /Mask names and emails/);
   assert.match(on, /checked=""/);
-  assert.match(on, /not found/);
+  assert.match(on, /Check the file before you share it/, 'it says the person should still look: a name with nothing around it can pass');
   const off = html(h(ExportBar, { title: 'SLA risk radar', result: r, env }));
   assert.ok(!/checked=""/.test(off));
   const empty = html(h(ExportBar, { title: 'x', result: { id: 'sla', data: { available: false } }, env }));

@@ -127,9 +127,11 @@ test('open duplicates: same CI or service, still open, inside the window, best m
   assert.ok(!hits.some((h) => h.number === 'INC0010001'), 'not the ticket itself');
   assert.ok(!hits.some((h) => h.number === 'INC0009588'), 'opened weeks ago');
   assert.deepEqual(access.map((a) => [a.source, a.status]), [['incident', 'ok']]);
+  // The record's own stored CI and service first, then one read per id (src/context/similar.js: by id, never by name).
   const queries = deps.callsTo('incident').map((c) => c.query);
-  assert.equal(queries[0], `cmdb_ci.name=VPN Gateway EU^active=true^sys_id!=${INCIDENT_ID}^ORDERBYDESCopened_at`);
-  assert.equal(queries[1], `business_service.name=Remote Access^active=true^sys_id!=${INCIDENT_ID}^ORDERBYDESCopened_at`);
+  assert.equal(queries[0], `sys_id=${INCIDENT_ID}`);
+  assert.equal(queries[1], `cmdb_ci=0c1d2e3f4a5b4c6d8e7f9a0b1c2d3e4f^active=true^sys_id!=${INCIDENT_ID}^ORDERBYDESCopened_at`);
+  assert.equal(queries[2], `business_service=1d2e3f4a5b6c4d7e8f9a0b1c2d3e4f50^active=true^sys_id!=${INCIDENT_ID}^ORDERBYDESCopened_at`);
 });
 
 test('the window decides: 48 hours also finds the ticket from yesterday, 1 hour finds nothing', async () => {
@@ -142,7 +144,10 @@ test('the window decides: 48 hours also finds the ticket from yesterday, 1 hour 
 });
 
 test('open duplicates need a CI or a service, a readable table, and respect sensitivity', async () => {
-  const bare = await findOpenDuplicates({ table: 'incident', sysId: INCIDENT_ID, fields: { short_description: 'x' } }, fakeDeps(buildInstance()), { now: NOW });
+  // What the RECORD stores decides (not the fields of the pack the panel sends): a record with no CI and no service is skipped.
+  const noCi = buildInstance();
+  noCi.incident = noCi.incident.map((row) => (row.sys_id.value === INCIDENT_ID ? { ...row, cmdb_ci: v('', ''), business_service: v('', '') } : row));
+  const bare = await findOpenDuplicates({ table: 'incident', sysId: INCIDENT_ID, fields: { short_description: 'x' } }, fakeDeps(noCi), { now: NOW });
   assert.equal(bare.access[0].status, 'skipped');
 
   const denied = await findOpenDuplicates(await incidentPack(), fakeDeps(buildInstance(), { denied: ['incident'] }), { now: NOW });
@@ -155,21 +160,24 @@ test('open duplicates need a CI or a service, a readable table, and respect sens
 
 test('rows of other CIs are not duplicates when the instance ignored the condition', async () => {
   const pack = await incidentPack();
+  // An instance that ignores the CI / service condition (as ServiceNow does for a column it does not know) answers with every
+  // active ticket: none of them may be taken for a duplicate.
   const tables = buildInstance();
-  // without a cmdb_ci/business_service column on any row the dotted conditions are ignored and every active ticket comes back
-  tables.incident = tables.incident.map(({ cmdb_ci, business_service, ...rest }) => rest);
-  const { hits, access } = await findOpenDuplicates(pack, fakeDeps(tables), { now: NOW });
+  const sample = tables.incident.find((row) => row.number.value === 'INC0010002');
+  tables.incident.push({ ...sample, sys_id: v('8'.repeat(32)), number: v('INC0010099'), cmdb_ci: v('7'.repeat(32), 'Payroll DB'), business_service: v('6'.repeat(32), 'Payroll') });
+  const deps = fakeDeps(tables);
+  const ignoring = { ...deps, queryTable: (table, query, ...rest) => deps.queryTable(table, query.replace(/^(?:cmdb_ci|business_service)=[0-9a-f]{32}\^/, ''), ...rest) };
+  const { hits, access } = await findOpenDuplicates(pack, ignoring, { now: NOW });
   assert.deepEqual(hits, []);
   assert.equal(access[0].status, 'error');
   assert.match(access[0].note, /did not apply the filter/);
 });
 
-test('open duplicates: a CI name with a caret in it is not put into a query', async () => {
+test('open duplicates: a CI name with a caret in it never reaches a query (names are not used at all)', async () => {
   const deps = fakeDeps(buildInstance());
-  const { hits, access } = await findOpenDuplicates({ table: 'incident', sysId: INCIDENT_ID, fields: { cmdb_ci: 'a^b' } }, deps, { now: NOW });
-  assert.deepEqual(hits, []);
-  assert.equal(access[0].status, 'skipped');
-  assert.equal(deps.calls.length, 0);
+  await findOpenDuplicates({ table: 'incident', sysId: INCIDENT_ID, fields: { cmdb_ci: 'a^b' } }, deps, { now: NOW });
+  for (const call of deps.calls) assert.ok(!call.query.includes('a^b') && !call.query.includes('.name='), call.query);
+  for (const call of deps.calls.slice(1)) assert.match(call.query, /^(?:cmdb_ci|business_service)=[0-9a-f]{32}\^active=true\^sys_id!=[0-9a-f]{32}\^ORDERBYDESCopened_at$/);
 });
 
 // ---- Knowledge --------------------------------------------------------------------------------------------------

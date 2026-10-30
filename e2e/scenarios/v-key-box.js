@@ -11,7 +11,7 @@ module.exports = {
     ai.reset();
     await ctx.ensureEnabled();
     const slot = KEYS.keyFor('custom');
-    const storedKey = () => ctx.ext(async (s) => (await chrome.storage.local.get(s))[s] || '', slot);
+    const storedKey = async () => (await ctx.vault('get', [slot]))[slot] || '';
 
     await ctx.ext(async (settingsKey, keySlot, baseUrl) => {
       await chrome.storage.local.remove([keySlot]);
@@ -19,6 +19,7 @@ module.exports = {
       await chrome.storage.local.remove(['agentbuddy_key_deepseek']);
       await chrome.storage.local.set({ [settingsKey]: { ...cur, provider: 'deepseek', baseUrls: { custom: baseUrl }, models: { custom: 'test-model' }, keyStorage: 'local' } });
     }, KEYS.settings, slot, ai.baseUrl);
+    await ctx.vault('remove', [slot, 'agentbuddy_key_deepseek', 'agentbuddy_keyenc_deepseek']);
 
     const page = await ctx.newPage('options-key-box');
     await page.goto(ctx.extUrl('options.html'), { waitUntil: 'load' });

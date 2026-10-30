@@ -17,6 +17,7 @@ module.exports = {
       const cur = (await chrome.storage.local.get(settingsKey))[settingsKey] || {};
       await chrome.storage.local.set({ [settingsKey]: { ...cur, provider: 'anthropic', baseUrls: {}, models: {}, keyStorage: 'local' } });
     }, KEYS.settings, KEYS.keyFor('custom'));
+    await ctx.vault('remove', [KEYS.keyFor('custom')]);
 
     const page = await ctx.newPage('options-ui');
     await page.goto(ctx.extUrl('options.html'), { waitUntil: 'load' });
@@ -47,8 +48,9 @@ module.exports = {
     t.check('what is typed is still what the boxes show', (await page.$eval('#baseurl', (el) => el.value)) === ai.baseUrl && (await page.$eval('#model', (el) => el.value)) === 'test-model');
 
     t.check('the key field is a password field', (await page.$eval('#key', (el) => el.type)) === 'password');
-    const stored = await ctx.ext((slot) => chrome.storage.local.get(slot), KEYS.keyFor('custom'));
-    t.check("the key is stored where the key store's 'local' mode keeps it", stored[KEYS.keyFor('custom')] === ai.key);
+    const stored = await ctx.vault('get', [KEYS.keyFor('custom')]);
+    const onDisk = await ctx.ext((slot) => chrome.storage.local.get(slot), KEYS.keyFor('custom'));
+    t.check("the key is stored where the key store's 'local' mode keeps it (the vault), not in chrome.storage.local", stored[KEYS.keyFor('custom')] === ai.key && !onDisk[KEYS.keyFor('custom')]);
     const shown = await page.evaluate(() => document.body.innerText + [...document.querySelectorAll('input')].map((i) => i.value).join(' '));
     t.check('after saving, the key is not shown anywhere on the page', !shown.includes(ai.key));
 

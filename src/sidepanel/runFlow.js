@@ -41,19 +41,22 @@ export async function prepareFlow({ feature, getPack, readPack, readOp, allowSen
 }
 
 /**
- * Send a prepared request. The audit entry is written by executeRun whatever happens.
- * @returns {Promise<{ status: 'abandoned' } | { status: 'failed', error: Error } | { status: 'done', text: string }>}
+ * Send a prepared request. The audit entry is written by executeRun whatever happens. `signal` (an AbortSignal) stops the
+ * request when the person cancels; a stopped request is 'abandoned', not a failure to show.
+ * @returns {Promise<{ status: 'abandoned' } | { status: 'failed', error: Error } | { status: 'done', text: string, notice: string }>}
+ *   notice: what to tell the person about the answer (it was cut short), '' when nothing.
  */
-export async function sendFlow({ prepared, config, values, host, previewShown, policy = null, tokensUsedToday = null, isCurrent, deps }) {
+export async function sendFlow({ prepared, config, values, host, previewShown, policy = null, tokensUsedToday = null, signal, isCurrent, deps }) {
   try {
     // policy + tokensUsedToday: the organisation's daily token budget is checked before anything is sent.
-    const out = await deps.executeRun({ prepared, config, values, host, previewShown, policy, tokensUsedToday, sendChat: deps.sendChat, logAudit: deps.logAudit });
+    const out = await deps.executeRun({ prepared, config, values, host, previewShown, policy, tokensUsedToday, signal, sendChat: deps.sendChat, logAudit: deps.logAudit });
     if (!isCurrent()) return { status: 'abandoned' };
     // An answer with nothing in it is a failure the person should hear about, not an empty card.
     const empty = answerProblem(out.text);
     if (empty) return { status: 'failed', error: new Error(empty) };
-    return { status: 'done', text: out.text };
+    return { status: 'done', text: out.text, notice: out.notice || '' };
   } catch (err) {
+    if (err?.code === 'CANCELLED') return { status: 'abandoned' };
     return isCurrent() ? { status: 'failed', error: err } : { status: 'abandoned' };
   }
 }

@@ -17,6 +17,42 @@ export function dialogKeyAction(e, count, at) {
 }
 
 /**
+ * A key pressed while the dialog is on screen but the focus is NOT inside it: it has not taken the focus yet (it is still
+ * waiting to be seen), or the focus was lost (the button that opened it went away). Escape still cancels and Tab brings the
+ * focus in. A dialog that is not visible (waiting in a hidden part of the panel) leaves every key alone, and so does a key
+ * something else already handled.
+ * @param {{ key: string, shiftKey?: boolean, defaultPrevented?: boolean }} e
+ * @param {{ visible: boolean, inside: boolean, count: number }} state
+ * @returns {{ type: 'cancel' } | { type: 'focus', index: number } | null}
+ */
+export function outsideKeyAction(e, { visible, inside, count }) {
+  if (!visible || inside || e.defaultPrevented) return null;
+  if (e.key === 'Escape') return { type: 'cancel' };
+  if (e.key === 'Tab' && count > 0) return { type: 'focus', index: e.shiftKey ? count - 1 : 0 };
+  return null;
+}
+
+/**
+ * The text selected inside `container` ('' when the selection is empty or starts or ends outside it). `selection` is the
+ * window's Selection (injected, so this is tested without a browser).
+ */
+export function selectedTextIn(container, selection, max = 1000) {
+  if (!container || !selection || selection.isCollapsed || !selection.rangeCount) return '';
+  const inside = (n) => Boolean(n) && (n === container || (typeof container.contains === 'function' && container.contains(n)));
+  if (!inside(selection.anchorNode) || !inside(selection.focusNode)) return '';
+  return String(selection.toString()).trim().slice(0, max);
+}
+
+/**
+ * Where the focus goes back to when the dialog closes: the control that had it before the dialog took it, if that is still on
+ * the page and the focus is now nowhere (on the body, or on nothing). Returns the element to focus, or null.
+ */
+export function focusToRestore(opener, active, body) {
+  if (!opener || opener.isConnected === false || typeof opener.focus !== 'function') return null;
+  return !active || active === body ? opener : null;
+}
+
+/**
  * Make everything around `node` inert (not clickable, not focusable, hidden from screen readers) while it is open: every sibling
  * of the node and of each of its ancestors. Returns the function that puts things back. `aria-modal` alone does not do this.
  */

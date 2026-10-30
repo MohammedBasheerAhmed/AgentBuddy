@@ -7,6 +7,7 @@
 //                  person who opened it are read for their names only (see OTHERS). Nothing about priority or categories:
 //                  an email to the customer has no use for them.
 // 'compose-people' only the people on a record, so a rewrite or notes run can mask their names precisely. No notes, no extras.
+// 'snippet-fill'   what the Snippets panel fills a snippet's {{variables}} from (no AI is involved).
 
 const WHO = ['caller_id', 'requested_for', 'contact', 'consumer'];
 // Read only so the firewall knows these people by name (a name can appear inside a description or a comment). The draft's parts
@@ -36,9 +37,22 @@ export default {
         hr_case: ['opened_for', 'subject_person'],
       },
     },
+    // What a snippet's built-in variables are filled from (src/snippets/render.js buildVariables): the number, title, state and
+    // priority, the person it is for and the assignee, and the SLAs for {{sla.due}}. Nothing is sent to an AI: the values go
+    // into the snippet the agent inserts. No notes, no description. (The panel used to read the 'reply-draft' spec, which has
+    // no priority, so {{priority}} could never be filled, and which read ten notes no snippet uses.)
+    'snippet-fill': {
+      common: ['number', 'short_description', 'state', 'priority', 'assigned_to', ...WHO],
+      by: {
+        hr_case: ['opened_for', 'subject_person'],
+      },
+    },
   },
-  journal: { 'email-compose': true, 'compose-people': false },
-  related: { 'email-compose': ['slas', 'approvals'], 'compose-people': [] },
+  journal: { 'email-compose': true, 'compose-people': false, 'snippet-fill': false },
+  related: { 'email-compose': ['slas', 'approvals'], 'compose-people': [], 'snippet-fill': ['slas'] },
+  // The email suggestion compares when the ticket was opened and resolved with when the last note was written (stored UTC)
+  // and with the clock; the display values are in the reader's time zone, hours off. Their stored values ride along.
+  times: { 'email-compose': ['opened_at', 'resolved_at', 'closed_at'] },
   fieldsByKind: {},
   extendFields: {},
 };

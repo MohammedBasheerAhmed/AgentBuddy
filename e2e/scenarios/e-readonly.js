@@ -111,8 +111,14 @@ module.exports = {
     const stored = findLeaks(everythingStored, data);
     t.check('chrome.storage (local, session, sync) holds no ticket data: no names, emails, phones, cards, passwords or ticket text', stored.critical.length === 0 && stored.gaps.length === 0 && !/disconnecting|Printer offline|Issue:|recurring VPN|Ignore all previous/.test(everythingStored) && !everythingStored.includes(data.INCIDENT_ID), [...stored.critical, ...stored.gaps.map((g) => g.value)].join(' | '));
     t.info(`storage keys: ${Object.keys(JSON.parse(everythingStored).local).join(', ')}`);
-    const webStorage = await ctx.ext(async () => ({ local: localStorage.length, session: sessionStorage.length, idb: (await indexedDB.databases()).length, caches: (await caches.keys()).length }));
-    t.check('no localStorage, sessionStorage, IndexedDB or Cache API data in the extension', Object.values(webStorage).every((n) => n === 0), JSON.stringify(webStorage));
+    // The one IndexedDB database allowed is the key vault, and it may hold AI keys (plain or encrypted) and nothing else.
+    const webStorage = await ctx.ext(async () => ({ local: localStorage.length, session: sessionStorage.length, idb: (await indexedDB.databases()).filter((d) => d.name !== 'agentbuddy_vault').length, caches: (await caches.keys()).length }));
+    t.check('no localStorage, sessionStorage, Cache API data or IndexedDB database other than the key vault in the extension', Object.values(webStorage).every((n) => n === 0), JSON.stringify(webStorage));
+    const vault = await ctx.vaultAll();
+    const vaultText = JSON.stringify(vault);
+    const vaultLeaks = findLeaks(vaultText, data);
+    t.check('the key vault holds AI keys only: every entry is a key slot, and no ticket data', Object.keys(vault).every((k) => /^agentbuddy_key(enc)?_[a-z0-9_]+$/.test(k)) && vaultLeaks.critical.length === 0 && vaultLeaks.gaps.length === 0 && !vaultText.includes(data.INCIDENT_ID), Object.keys(vault).join(', '));
+    t.check('no AI key is left in chrome.storage.local (content scripts can read that area)', !Object.keys(JSON.parse(everythingStored).local).some((k) => /^agentbuddy_key(enc)?_/.test(k)), Object.keys(JSON.parse(everythingStored).local).join(', '));
     const logged = findLeaks(ctx.consoleLog.map((l) => l.text).join('\n'), data);
     t.check(`no personal data in any console line of any page or the service worker (${ctx.consoleLog.length} lines)`, logged.critical.length === 0 && logged.gaps.length === 0, [...logged.critical, ...logged.gaps.map((g) => g.value)].join(' | '));
 

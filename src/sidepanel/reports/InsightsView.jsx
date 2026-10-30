@@ -1,7 +1,7 @@
 import React, { useSyncExternalStore } from 'react';
 import { useRun } from '../useRun.js';
 import { buildInsightsPack, checkInsightsNote, describeInputs, INSIGHT_MAX_WORDS } from '../../reports/ai/insights.js';
-import { AiBlocked, AiResult, AiShell, RunProgress, aiNotReadyText, featureState, isAiReady } from './aiShared.jsx';
+import { AiBlocked, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { andList, readLabel } from './format.js';
 
 const FEATURE_ID = 'dashboard-insights';
@@ -67,7 +67,7 @@ export default function InsightsView({ env, eff }) {
           <p className="ab-hint">
             Sends counts, trends, group names, ticket numbers and the names of assignees (masked). No ticket titles, descriptions or notes are sent. The preview shows exactly what will be sent.
           </p>
-          {!aiReady && <p className="ab-note ab-note-warn">{aiNotReadyText(eff)}</p>}
+          {!aiReady && <AiKeyLine eff={eff} />}
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!aiReady || !hasInputs || run.busy} onClick={go}>
               Explain these numbers

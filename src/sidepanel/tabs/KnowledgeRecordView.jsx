@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
 import { read } from '../ask.js';
 import { articleFromPack, checkArticle } from '../../knowledge/articleChecks.js';
 import { checkOutgoing } from '../../safeSend/index.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import Notes from '../knowledge/Notes.jsx';
+import ErrorNote from '../ErrorNote.jsx';
 import { aiNeedsText } from '../aiReady.js';
+import { useLoader } from '../checks/useLoader.js';
 
 // C5: checks on the article that is open, then optional AI suggestions. The checks run here on the pack the context engine read
 // (nothing is sent anywhere); "Suggest improvements" goes through useRun like every other AI feature and is Copy only.
-// props: { page, eff, record, header, run, aiReady }
+// props: { page, eff, record, header, run, aiReady, active }
 
 const SECRET_KINDS = new Set(['SECRET', 'URL_CREDENTIALS', 'CARD', 'IBAN', 'NATIONAL_ID']);
 const LEVEL = { problem: 'Fix', warn: 'Check', info: 'Consider' };
@@ -26,27 +27,19 @@ function summaryLine(counts) {
 
 const ago = (days) => (days <= 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`);
 
-export default function KnowledgeRecordView({ page, eff, record, run, aiReady }) {
-  const [state, setState] = useState({ phase: 'loading', result: null, access: [], error: '' });
+export default function KnowledgeRecordView({ page, eff, record, run, aiReady, active = true }) {
   const feature = featureById('article-optimise');
   const available = isFeatureAvailable(feature, eff.policy);
 
-  const load = useCallback(async () => {
-    setState({ phase: 'loading', result: null, access: [], error: '' });
-    try {
-      const pack = await read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: 'article-check' });
-      const result = checkArticle(articleFromPack(pack), { now: Date.now(), scanSecrets: countSecrets });
-      setState({ phase: 'ready', result, access: pack.access || [], error: '' });
-    } catch (err) {
-      setState({ phase: 'error', result: null, access: [], error: err?.message || 'The article could not be read.' });
-    }
-  }, [page.tabId, record.table, record.sysId]);
+  // Read again when the tab comes back into view (the article may have been edited meanwhile); the last result stays meanwhile.
+  const [state, load] = useLoader(async () => {
+    const pack = await read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: 'article-check' });
+    return { result: checkArticle(articleFromPack(pack), { now: Date.now(), scanSecrets: countSecrets }), access: Array.isArray(pack?.access) ? pack.access : [] };
+  }, [page.tabId, record.table, record.sysId], { active });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const { phase, result, access, error } = state;
+  const phase = state.data ? 'ready' : state.phase;
+  const { result, access } = state.data || { result: null, access: [] };
+  const error = state.error;
   const facts = result?.facts;
 
   return (
@@ -55,11 +48,11 @@ export default function KnowledgeRecordView({ page, eff, record, run, aiReady })
         <div className="ab-row ab-kb-head">
           <h2 className="ab-h">Checks on this article</h2>
           <span className="ab-spacer" />
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={phase === 'loading'}>Refresh</button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
         </div>
         <p className="ab-sub">Found with your own session. Nothing here is sent to an AI.</p>
         {phase === 'loading' && <p className="ab-note" role="status">Reading the article…</p>}
-        {phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{error}</p>}
+        {phase === 'error' && <ErrorNote error={error} onRetry={load} />}
         {phase === 'ready' && (
           <>
             <p className={`ab-note ${result.counts.problem ? 'ab-note-danger' : result.counts.warn ? 'ab-note-warn' : 'ab-note-ok'}`} role="status">{summaryLine(result.counts)}</p>
