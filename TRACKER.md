@@ -24,7 +24,9 @@ ask for that.
   of that window, so it read itself and never found the ServiceNow tab (scenario b, then every scenario after it). The harness now
   takes the main window's focus away and gives it back (the only way that worked there). Also: a failed scenario now prints the pages,
   windows, focus changes and errors; the workflow can be run by hand with a list of scenarios; the actions are on Node 24 (v7).
-  Left: take `continue-on-error: true` off the e2e job once it has passed a few times.
+  Since then two more tests that were racing the slower runner were fixed (scenarios o and c). Of the last four full runs on GitHub
+  three pass 1,010 of 1,010; one had three timing failures in scenarios q (ticks after a panel reload) and x (the quick-actions bar),
+  which pass locally and on the other runs. Left: find that timing flake, then take `continue-on-error: true` off the e2e job.
 - **R6, accessibility and dark mode: done and proven.** New e2e scenario `zz` (`e2e/a11y.js`) audits every screen and half, the
   cards opened, the first-run card, the preview dialog, an answer, the Team full page and Settings in light and dark: contrast, names,
   labels, tab structure, visible focus, 24 px targets, duplicate ids; then reduced motion and 320 px. Contrast was already fine. It
