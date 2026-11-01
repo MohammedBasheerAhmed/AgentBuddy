@@ -41,7 +41,7 @@ ask for that.
      approval), and which languages, if any?
 2. **Then R3, R5 and the rest of R6**, as you decided.
 3. **V1, the real-instance walk-through, whenever you are at Chrome** (it can go first if you are). Reload Agent Buddy in the
-   already-open Chrome from `D:AgentBuddydist` (no separate automation window), sign in to dev364920 yourself, and walk a real
+   already-open Chrome from `D:\AgentBuddy\dist` (no separate automation window), sign in to dev364920 yourself, and walk a real
    ticket screen by screen. Answer the open questions in `docs/live-questions/`, these four first: the email form takes Insert or
    forces Copy (`compose.md` 3), Chrome accepts the `defaultDashboard` policy as one object (`policy.md` 15), priority-account names
    match the case (`policy.md` 16), the labels of a Workspace's notes boxes (`checks.md` 20).
