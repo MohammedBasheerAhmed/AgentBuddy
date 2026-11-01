@@ -27,6 +27,8 @@ module.exports = {
     const panel = await ctx.openPanel();
     const p = panel.page;
     await waitForRecord(p);
+    // The number comes first; the title arrives with the header's own read, a moment later on a slow runner.
+    await waitForText(p, 'VPN keeps disconnecting', { timeout: 15000 }).catch(() => {});
     const shown = await panel.text();
     t.check('panel shows the open record (number and title)', shown.includes('INC0010001') && shown.includes('VPN keeps disconnecting'));
     t.check('panel is ready to use AI (key found by the key store)', !/Add an AI key|Your AI key is locked/.test(shown));
