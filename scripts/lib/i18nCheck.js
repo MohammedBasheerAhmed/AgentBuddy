@@ -32,11 +32,11 @@ function unescapeText(raw, quote) {
 }
 
 const STR = '(?:\'((?:\\\\.|[^\'\\\\\\n])*)\'|"((?:\\\\.|[^"\\\\\\n])*)")';
-const CALL_ONE = new RegExp(`(?<![\\w.$])(t|tm)\\(\\s*${STR}`, 'g');
+const CALL_ONE = new RegExp(`(?<![\\w.$])(t|tm|tx)\\(\\s*${STR}`, 'g');
 const CALL_PLURAL = new RegExp(`(?<![\\w.$])tn\\(\\s*[^,()]+(?:\\([^()]*\\))?[^,()]*,\\s*${STR}\\s*,\\s*${STR}`, 'g');
 // a call whose first argument is not a quoted text: t(label), t(`..`), t('a' + b)
-const DYNAMIC = /(?<![\w.$])(?:t|tm)\(\s*(?!['"])[^)\s]/g;
-const DYNAMIC_PLUS = new RegExp(`(?<![\\w.$])(?:t|tm)\\(\\s*${STR}\\s*\\+`, 'g');
+const DYNAMIC = /(?<![\w.$])(?:t|tm|tx)\(\s*(?!['"])[^)\s]/g;
+const DYNAMIC_PLUS = new RegExp(`(?<![\\w.$])(?:t|tm|tx)\\(\\s*${STR}\\s*\\+`, 'g');
 const DYNAMIC_PLURAL = /(?<![\w.$])tn\(\s*[^,()]+(?:\([^()]*\))?[^,()]*,\s*(?!['"])[^\s]/g;
 
 const lineOf = (code, index) => code.slice(0, index).split('\n').length;
@@ -52,7 +52,7 @@ function collect(files) {
   };
   for (const file of files) {
     const code = fs.readFileSync(file, 'utf8');
-    if (!/\b(?:t|tm|tn)\(/.test(code)) continue;
+    if (!/\b(?:t|tm|tn|tx)\(/.test(code)) continue;
     for (const m of code.matchAll(CALL_ONE)) {
       const raw = m[2] !== undefined ? m[2] : m[3];
       add(unescapeText(raw), file, lineOf(code, m.index), false);

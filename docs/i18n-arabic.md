@@ -11,6 +11,9 @@ no Arabic entry.
   (`t('Open')`, not `t(label)`, not `t('Open ' + x)`).
 - A value that changes is a `{name}`, never part of the key: `t('Showing {shown} of {total}', { shown, total })`.
 - A text with a count uses `tn(count, '{n} ticket', '{n} tickets')`; its Arabic entry is an object with the six plural forms.
+- A sentence with an element inside it (a bold word, a code span, an AI badge) is written once, with a slot for the element:
+  `tx('Write {mark} where a value should go', { mark: <span className="ab-mono">{'{{name}}'}</span> })` (`src/i18n/jsx.jsx`). Never cut
+  a sentence in pieces around the element: the Arabic puts the words in another order.
 - A text kept in a table and shown later is marked where it is written, `tm('Open')`, and shown with `t(TABLE[key])`.
 - Data from a ticket (a record number, a name, a title, an email, a field value) and anything the AI wrote is shown as it is. When one of
   them goes into a sentence, pass it through `isolate(value)` so the right-to-left sentence keeps it whole:
