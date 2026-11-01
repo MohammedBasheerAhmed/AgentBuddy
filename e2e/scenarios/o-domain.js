@@ -178,7 +178,10 @@ module.exports = {
     t.check('Standard mode: nothing reached the AI', ai.requests.length === before);
 
     await ctx.configure({ piiMode: 'strict' });
-    await ctx.waitUntil('the panel to follow the new privacy mode', async () => (await hrState()).off, { timeout: 8000 });
+    // Nothing on screen tells Standard from Strict here (every action is off in both), so there is nothing to wait for: the panel reads
+    // the settings again after any storage change (the key vault is read too), which on a slow runner takes longer than the launch
+    // request below needs to arrive, and then the run starts in Standard mode and ends with the first message again.
+    await ctx.sleep(2000);
     hs = await hrState();
     t.check('Strict mode with no organisation policy: still one note (HR content not allowed), the actions stay off', hs.note.length === 1 && /HR case content is not sent/.test(hs.note[0]) && hs.off, JSON.stringify(hs));
     await launch();
