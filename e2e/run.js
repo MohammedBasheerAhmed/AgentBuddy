@@ -73,7 +73,7 @@ async function describeFailure(ctx, id) {
   say(`${pages.length} page(s) open after scenario ${id} failed`);
   for (const page of pages) {
     const url = page.url();
-    const text = await boxed(page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, url.startsWith('chrome-extension') ? 1400 : 300)), '(no text: the page did not answer)');
+    const text = await boxed(page.evaluate((max) => document.body.innerText.replace(/\s+/g, ' ').slice(0, max), url.startsWith('chrome-extension') ? 1400 : 300),'(no text: the page did not answer)');
     say(`page ${url.slice(0, 90)}  closed=${page.isClosed()}  text: ${text}`);
     const file = await ctx.shot(page, `fail-${id}-${url.split('/').pop().slice(0, 20)}`);
     if (file) say(`  screenshot -> ${file}`);
