@@ -106,8 +106,10 @@ module.exports = {
     await ctx.waitUntil('the Related tickets card', () => p.evaluate(() => document.querySelector('#ab-ticket-half-tab-insights')?.getAttribute('aria-selected') === 'true' && [...document.querySelectorAll('[data-card="related"]')].some((c) => c.getClientRects().length > 0)), { timeout: 10000 });
     t.check('"Related tickets" brings that card forward in Insights (nothing is sent)', ai.requests.length === 0, `${ai.requests.length} requests`);
 
-    await p.evaluate(() => window.scrollTo(0, 0)); // (showing a card scrolls the panel down; the tabs would sit under the sticky header)
-    await openScreen(p, 'Team'); // an AI action starts from any screen: it brings the Ticket screen forward
+    // An AI action starts from any screen: it brings the Ticket screen forward. (Showing a card scrolls the panel down for a while, and the tabs
+    // can sit under the sticky header: a real click on the tab may land on the header, so the tab is pressed by the page's own click here.)
+    await p.evaluate(() => document.querySelector('#ab-sec-tab-team').click());
+    await ctx.waitUntil('the Team screen', () => p.evaluate(() => document.querySelector('#ab-sec-tab-team')?.getAttribute('aria-selected') === 'true'), { timeout: 8000 });
     await openPalette();
     await typeIn('summarise');
     t.check('"summarise" finds the AI action of this ticket', (await options())[0]?.id === 'run:record-summary', (await options()).map((o) => o.id).join(' '));
