@@ -88,6 +88,8 @@ async function describeFailure(ctx, id) {
     ['(the control page did not answer)']
   );
   for (const line of windows) say(line);
+  const focusLog = await boxed(ctx.ext(() => window.__focusLog || []), []);
+  for (const line of focusLog.slice(-40)) say(`focus ${line}`);
   for (const e of ctx.errors.slice(-6)) say(`error [${e.from}/${e.kind}] ${String(e.text).slice(0, 200)}`);
   for (const c of ctx.consoleLog.filter((x) => x.from === 'service-worker').slice(-4)) say(`service worker [${c.type}] ${String(c.text).slice(0, 200)}`);
 }

@@ -67,6 +67,7 @@ jobs:
         env:
           AB_E2E_TMP: ${{ runner.temp }}/agentbuddy-e2e
           SCENARIOS: ${{ inputs.scenarios }}
+          E2E_TIMING: "1"
         run: node build.js && node e2e/run.js "$SCENARIOS"
       - name: Keep the screenshots of failed steps
         if: failure()

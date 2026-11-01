@@ -297,14 +297,26 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
   /** Run a function inside the control page (an extension page, so chrome.runtime/storage/scripting/tabs are there). */
   ctx.ext = (fn, ...args) => ctx.ctl.evaluate(fn, ...args);
 
-  // The panel is a small popup window here (see openPanel), and it reads "the active tab of the last focused window". `focused:false`
-  // keeps the main window in front on Windows, but headless Chrome on Linux (CI) lets the popup take the focus (when it opens and
-  // when a button in it is pressed), so the panel then looked at itself and never found the ServiceNow tab. The control page asks
-  // for the main window's focus back several times a second; a window that is already in front is not changed.
+  // Which window and tab the browser calls focused and active, over time. The panel is a small popup window here (see openPanel) and
+  // reads "the active tab of the last focused window"; on Linux (CI) it was found looking at itself. The log (with the time of each
+  // change) is printed when a scenario fails, to be read next to the run's own timestamps.
   await ctx.ctl
-    .evaluate(async () => {
-      const main = (await chrome.windows.getCurrent()).id;
-      setInterval(() => chrome.windows.update(main, { focused: true }).catch(() => {}), 250);
+    .evaluate(() => {
+      window.__focusLog = [];
+      const note = (what) => window.__focusLog.push(`${new Date().toISOString().slice(11, 23)} ${what}`);
+      let last = null;
+      setInterval(async () => {
+        try {
+          const w = await chrome.windows.getLastFocused();
+          if (w.id !== last) note(`last focused window is now ${w.id} (${w.type})`);
+          last = w.id;
+        } catch {
+          /* the browser is closing */
+        }
+      }, 50);
+      chrome.windows.onFocusChanged.addListener((id) => note(`onFocusChanged ${id}`));
+      chrome.windows.onCreated.addListener((w) => note(`window ${w.id} created (${w.type}, focused=${w.focused})`));
+      chrome.tabs.onActivated.addListener((a) => note(`tab ${a.tabId} active in window ${a.windowId}`));
     })
     .catch(() => {});
 
