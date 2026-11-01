@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffective } from '../sidepanel/useEffective.js';
 import ReportsDashboard from '../sidepanel/reports/ReportsDashboard.jsx';
 import { checkSourceTab, nextSource, parseTabId } from './sourceTab.js';
-import { t } from '../i18n/index.js';
+import { t, tm, t as tr } from '../i18n/index.js';
 import { useLanguage } from '../i18n/useLanguage.js';
 
 const MESSAGES = {
-  'no-tab': 'This page needs a ServiceNow tab to read from. Open ServiceNow, open the Agent Buddy side panel, choose Team and press "Open full page".',
-  gone: 'The ServiceNow tab this dashboard was opened for has been closed. Open ServiceNow again, open the Agent Buddy side panel, choose Team and press "Open full page".',
-  'not-enabled': 'Agent Buddy cannot reach that ServiceNow tab. Open ServiceNow, make sure Agent Buddy is turned on for it, reload the ServiceNow tab, then press "Check again".',
+  'no-tab': tm('This page needs a ServiceNow tab to read from. Open ServiceNow, open the Agent Buddy side panel, choose Team and press "Open full page".'),
+  gone: tm('The ServiceNow tab this dashboard was opened for has been closed. Open ServiceNow again, open the Agent Buddy side panel, choose Team and press "Open full page".'),
+  'not-enabled': tm('Agent Buddy cannot reach that ServiceNow tab. Open ServiceNow, make sure Agent Buddy is turned on for it, reload the ServiceNow tab, then press "Check again".'),
 };
 
 // The Team dashboard on a page of its own: the same components as the side panel, with room for several columns. It reads
@@ -26,7 +26,7 @@ export default function DashboardApp() {
   }, [tabId]);
 
   useEffect(() => {
-    document.title = 'Agent Buddy team dashboard';
+    document.title = t('Agent Buddy team dashboard');
     check();
   }, [check]);
 
@@ -70,7 +70,7 @@ export default function DashboardApp() {
       ) : (
         <section className="ab-card" role="alert">
           <h2 className="ab-h">{t('Open ServiceNow and reload')}</h2>
-          <p className="ab-sub">{MESSAGES[source.status]}</p>
+          <p className="ab-sub">{tr(MESSAGES[source.status])}</p>
           <button type="button" className="ab-btn" onClick={check}>{t('Check again')}</button>
         </section>
       )}

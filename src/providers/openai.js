@@ -5,6 +5,7 @@ import { OPENAI_MODEL, OPENAI_API_URL } from './config.js';
 import { toOpenAIMessages, toOpenAITools, fromOpenAIResponse } from './messages.js';
 import { chatCompletionsUrl, modelsUrl, azureChatUrl } from '../lib/aiUsage.js';
 import { AiError, requestJson, LIST_TIMEOUT_MS } from './http.js';
+import { t, isolate } from '../i18n/index.js';
 
 // The output limit sent where the server is known to accept it (OpenAI's own API and Azure OpenAI take max_completion_tokens; the
 // older max_tokens is refused by their reasoning models). Other compatible servers keep their own default: some refuse a limit above
@@ -29,7 +30,7 @@ const hostOf = (url) => {
   try {
     return new URL(url).host;
   } catch {
-    return 'the AI address';
+    return t('the AI address');
   }
 };
 
@@ -55,9 +56,9 @@ export async function fetchModelsBody({ apiKey, baseUrl = '', fetchFn, signal, s
     });
     return { host, body };
   } catch (err) {
-    if (err?.code === 'BAD_KEY' || err?.code === 'NO_ACCESS') throw new AiError(`${host} rejected the API key. Check it and try again.`, err.code);
+    if (err?.code === 'BAD_KEY' || err?.code === 'NO_ACCESS') throw new AiError(t('{host} rejected the API key. Check it and try again.', { host: isolate(host) }), err.code);
     if (err?.code === 'BAD_ANSWER') return { host, body: null }; // not JSON (a sign-in page): "answered, but with no models"
-    if (err?.status && err.status !== 429 && err.status < 500) throw new AiError(`${host} does not give a list of its models (answer ${err.status}). Type the model name instead.`, 'NO_LIST');
+    if (err?.status && err.status !== 429 && err.status < 500) throw new AiError(t('{host} does not give a list of its models (answer {status}). Type the model name instead.', { host: isolate(host), status: err.status }), 'NO_LIST');
     throw err;
   }
 }
@@ -69,9 +70,9 @@ export async function fetchModelsBody({ apiKey, baseUrl = '', fetchFn, signal, s
  * provider's name for messages. `signal` cancels; `timeoutMs`, `fetchFn` and `sleep` are passed to http.js.
  */
 export async function sendOpenAI({ apiKey, model = OPENAI_MODEL, messages, tools = [], baseUrl = '', azure = null, keyOptional = false, name = '', signal, timeoutMs, fetchFn, sleep }) {
-  const who = name || (baseUrl ? `The endpoint ${hostOf(baseUrl)}` : 'OpenAI');
+  const who = name || (baseUrl ? t('The endpoint {host}', { host: isolate(hostOf(baseUrl)) }) : 'OpenAI');
   if (!apiKey && !keyOptional) {
-    throw new AiError(!baseUrl && !name ? 'Missing OpenAI API key. Configure it in the Agent Buddy settings.' : `Missing API key for ${who}. Configure it in the Agent Buddy settings.`, 'NO_KEY');
+    throw new AiError(!baseUrl && !name ? t('Missing OpenAI API key. Configure it in the Agent Buddy settings.') : t('Missing API key for {who}. Configure it in the Agent Buddy settings.', { who }), 'NO_KEY');
   }
   const wire = toOpenAIMessages(messages);
   const body = { model, messages: wire };

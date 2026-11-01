@@ -35,6 +35,9 @@ export function keyPreview(key) {
   return { preview: text.length >= 16 ? `${text.slice(0, 4)}…${text.slice(-4)}` : '', length: text.length };
 }
 
+// (core.js, not index.js: the service worker's bundle carries this file, and it has no Arabic catalogue to carry)
+import { t } from '../i18n/core.js';
+
 // OWASP Password Storage Cheat Sheet (2023 and current): PBKDF2-HMAC-SHA256 with at least 600,000 iterations.
 export const PBKDF2_ITERATIONS = 600000;
 const MAX_ITERATIONS = 10000000; // a stored blob asking for more is damaged (and would freeze the page)
@@ -58,7 +61,7 @@ async function deriveKey(passphrase, salt, iterations) {
  * so a blob copied into another provider's slot does not decrypt.
  */
 export async function encryptSecret(secret, passphrase, iterations = PBKDF2_ITERATIONS, bindTo = '') {
-  if (!passphrase) throw new Error('A passphrase is needed to encrypt the key.');
+  if (!passphrase) throw new Error(t('A passphrase is needed to encrypt the key.'));
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(passphrase, salt, iterations);
@@ -68,16 +71,16 @@ export async function encryptSecret(secret, passphrase, iterations = PBKDF2_ITER
 
 /** Decrypt a blob from encryptSecret (v1 blobs of earlier versions too). Throws a plain error for a wrong passphrase or a damaged blob. */
 export async function decryptSecret(blob, passphrase, bindTo = '') {
-  if (!blob || (blob.v !== 1 && blob.v !== BLOB_VERSION)) throw new Error('The stored key is in an unknown format.');
+  if (!blob || (blob.v !== 1 && blob.v !== BLOB_VERSION)) throw new Error(t('The stored key is in an unknown format.'));
   const iterations = Number(blob.iter) || 310000; // v1 blobs were written with 310,000
-  if (!Number.isInteger(iterations) || iterations < 1 || iterations > MAX_ITERATIONS) throw new Error('Wrong passphrase, or the stored key is damaged.');
+  if (!Number.isInteger(iterations) || iterations < 1 || iterations > MAX_ITERATIONS) throw new Error(t('Wrong passphrase, or the stored key is damaged.'));
   try {
     const key = await deriveKey(passphrase, unb64(blob.salt), iterations);
     const additional = blob.v === BLOB_VERSION && blob.aad && bindTo ? { additionalData: enc.encode(bindTo) } : {};
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(blob.iv), ...additional }, key, unb64(blob.ct));
     return dec.decode(plain);
   } catch {
-    throw new Error('Wrong passphrase, or the stored key is damaged.');
+    throw new Error(t('Wrong passphrase, or the stored key is damaged.'));
   }
 }
 
@@ -99,7 +102,7 @@ const checkProvider = (provider) => {
   if (!PROVIDER_RE.test(String(provider || ''))) throw new Error('Unknown AI provider.');
 };
 
-const NO_VAULT = 'This browser does not let Agent Buddy keep the key in its own storage. Choose "Memory only" under "Where to keep the key".';
+const noVault = () => t('This browser does not let Agent Buddy keep the key in its own storage. Choose "Memory only" under "Where to keep the key".');
 
 /**
  * @param {{ local, session, vault? }} areas
@@ -160,9 +163,9 @@ export function createKeyStore(areas, { requiredMode = async () => null } = {}) 
       checkProvider(provider);
       const trimmed = cleanKey(key);
       if (trimmed && mode === 'encrypted' && String(passphrase).length < MIN_PASSPHRASE) {
-        throw new Error(`Choose a passphrase of at least ${MIN_PASSPHRASE} characters. A longer one is safer.`);
+        throw new Error(t('Choose a passphrase of at least {min} characters. A longer one is safer.', { min: MIN_PASSPHRASE }));
       }
-      if (trimmed && mode !== 'session' && !areas.vault) throw new Error(NO_VAULT);
+      if (trimmed && mode !== 'session' && !areas.vault) throw new Error(noVault());
       await store.remove(provider);
       if (!trimmed) return;
       if (mode === 'session') {
@@ -236,7 +239,7 @@ export function createKeyStore(areas, { requiredMode = async () => null } = {}) 
           await store.save({ provider, key: disk, mode: 'encrypted', passphrase });
           return true;
         }
-        throw new Error('There is no encrypted key to unlock.');
+        throw new Error(t('There is no encrypted key to unlock.'));
       }
       const key = await decryptSecret(blob, passphrase, encSlot(provider));
       await areas.session.set({ [slot(provider)]: key });
@@ -259,7 +262,7 @@ export function createKeyStore(areas, { requiredMode = async () => null } = {}) 
     async changeMode({ provider, mode, passphrase = '' }) {
       const { memory, disk } = await read(provider);
       const key = memory || disk;
-      if (!key) throw new Error('Unlock or enter the key first.');
+      if (!key) throw new Error(t('Unlock or enter the key first.'));
       await store.save({ provider, key, mode, passphrase });
     },
   };
@@ -289,8 +292,8 @@ export function indexedDbArea({ name = VAULT_DB, factory = globalThis.indexedDB 
           };
           resolve(db);
         };
-        request.onerror = () => reject(request.error || new Error('The key store could not be opened.'));
-        request.onblocked = () => reject(new Error('The key store is in use by another window. Close other Agent Buddy settings pages and try again.'));
+        request.onerror = () => reject(request.error || new Error(t('The key store could not be opened.')));
+        request.onblocked = () => reject(new Error(t('The key store is in use by another window. Close other Agent Buddy settings pages and try again.')));
       }).catch((err) => {
         opening = null;
         throw err;
@@ -305,8 +308,8 @@ export function indexedDbArea({ name = VAULT_DB, factory = globalThis.indexedDB 
       const tx = db.transaction(VAULT_STORE, mode);
       const result = work(tx.objectStore(VAULT_STORE));
       tx.oncomplete = () => resolve(result());
-      tx.onerror = () => reject(tx.error || new Error('The key store could not be read or written.'));
-      tx.onabort = () => reject(tx.error || new Error('The key store could not be read or written.'));
+      tx.onerror = () => reject(tx.error || new Error(t('The key store could not be read or written.')));
+      tx.onabort = () => reject(tx.error || new Error(t('The key store could not be read or written.')));
     });
   };
   return {

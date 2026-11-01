@@ -7,7 +7,7 @@ import NotesPanel from '../compose/NotesPanel.jsx';
 import { featureById } from '../../features/registry.js';
 import { profilesOfFeature, shownFor } from '../../profiles/profiles.js';
 import TicketLine, { useTicketHeader } from './TicketLine.jsx';
-import { t } from '../../i18n/index.js';
+import { t, tm } from '../../i18n/index.js';
 
 // The Write screen, AI Assist half: Rewrite (7 modes, AI23) and Notes to ticket (AI24). Masked text goes to the AI after a preview;
 // every AI button carries the AI mark. The AI email drafts are offered on the Ticket screen now. Props: { page, eff, active }.
@@ -18,7 +18,7 @@ export default function WriteAssist({ page, eff, active }) {
   return (
     <div className="ab-write" data-half="assist">
       <TicketLine page={page} header={header} />
-      <AiKeyNote eff={eff} what="Rewrite and Notes to ticket" />
+      <AiKeyNote eff={eff} what={tm('Rewrite and Notes to ticket')} />
       <CardFrame id="write-rewrite" title={t('Rewrite')} summary={t('Shorter, friendlier, plain, formal, translated')} actions={<AiBadge />}>
         <ErrorBoundary resetKey="rewrite">
           <RewritePanel page={page} eff={eff} showKeyNote={false} />

@@ -15,10 +15,10 @@ export default function MissingCard({ page, eff, record, header, active, setSumm
   const pack = ticket.data?.pack;
   const result = pack ? missingDetails(pack) : null;
   const n = result?.items.length || 0;
-  useReport(setSummary, result ? (n ? `${n} to ask about: ${result.items.slice(0, 2).map((i) => i.short).join(', ')}${n > 2 ? '…' : ''}` : 'Nothing obvious missing') : '');
+  useReport(setSummary, result ? (n ? t('{n} to ask about: {list}', { n, list: `${result.items.slice(0, 2).map((i) => i.short).join(t(', '))}${n > 2 ? '…' : ''}` }) : t('Nothing obvious missing')) : '');
   useReport(setAttention, n >= 2 && stateBucket(header?.state) === 'new' ? 'warn' : '');
 
-  if (!result) return <ReadState state={ticket} what="this ticket" onRetry={ticket.reload} />;
+  if (!result) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   return (
     <>
       {!result.textRead && <p className="ab-hint">{t('The text of this record is not read (a sensitive record), so only the fields are checked.')}</p>}

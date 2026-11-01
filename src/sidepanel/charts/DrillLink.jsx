@@ -1,5 +1,6 @@
 import React from 'react';
 import { isPlainClick, NEW_TAB_HINT } from '../linkClick.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * A part of a chart that opens a ServiceNow LIST (a tile, a bar, a legend row, a heat cell, a stacked row) as a real link, the same
@@ -18,7 +19,7 @@ export default function DrillLink({ href, onOpen, className, label, children }) 
       target="_blank"
       rel="noopener noreferrer"
       data-ab-link="list"
-      title={NEW_TAB_HINT}
+      title={t(NEW_TAB_HINT)}
       aria-label={label}
       onClick={(event) => {
         if (!isPlainClick(event)) return; // the browser opens a new tab

@@ -3,6 +3,7 @@ import { EMAIL_TYPES, parseEmailDraft } from '../compose/emailRecommend.js';
 import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
 import { emailClientTarget } from '../lib/fillable.js';
 import { parseSafeText, toPlainText } from '../render/safeText.js';
+import { t, tm } from '../i18n/index.js';
 
 // A result the agent wants to carry to ANOTHER form: "Open a new article form" navigates the tab away, which would lose the
 // draft with the record it came from. The draft is kept here, in memory only (never in storage), under these rules:
@@ -113,7 +114,7 @@ export function subjectWithNumber(subject, number) {
   return `${n}: ${s}`.slice(0, 200);
 }
 
-export const isEmailFeature = (feature) => Boolean(feature?.id) && EMAIL_TYPES.some((t) => t.featureId === feature.id);
+export const isEmailFeature = (feature) => Boolean(feature?.id) && EMAIL_TYPES.some((type) => type.featureId === feature.id);
 
 /**
  * The draft "Open the email form" carries to the email form of the ticket it was written for, or null when it cannot be bound
@@ -153,15 +154,16 @@ export function emailDraft({ feature, text, people = [], scan = null, internalTe
  */
 export function emailInserts(draft) {
   const out = [];
-  if (draft?.subject) out.push({ field: 'subject', label: 'Insert subject', fieldLabel: 'Subject', mode: 'replace', pick: () => draft.subject });
-  if (draft?.body) out.push({ field: 'body', label: 'Insert body', fieldLabel: 'Body', mode: 'append', pick: () => draft.body });
+  // (fieldLabel is the page's own label of the box, matched in the page in English: marked with tm(), shown with t() where it is read)
+  if (draft?.subject) out.push({ field: 'subject', label: t('Insert subject'), fieldLabel: tm('Subject'), mode: 'replace', pick: () => draft.subject });
+  if (draft?.body) out.push({ field: 'body', label: t('Insert body'), fieldLabel: tm('Body'), mode: 'append', pick: () => draft.body });
   return out;
 }
 
 /** The expectation every insert of an email draft carries: the email form of that ticket, nothing else (src/lib/fillable.js). */
 export const emailExpect = (draft) => {
-  const t = ticketOf(draft?.email);
-  return t ? { email: true, table: t.table, sysId: t.sysId } : null;
+  const ticket = ticketOf(draft?.email);
+  return ticket ? { email: true, table: ticket.table, sysId: ticket.sysId } : null;
 };
 
 /**

@@ -10,48 +10,61 @@ import { EMAIL_TYPES, statusLines } from '../../compose/emailRecommend.js';
 import { REWRITE_PRESETS, composeParts } from '../../compose/rewrite.js';
 import { LANGUAGE_AGENT, rulesFor } from '../../prompts/rules.js';
 import { stageOf } from '../stages.js';
+import { t, t as tr } from '../../i18n/index.js';
 
 // ---- Email ---------------------------------------------------------------------------------------------------------
 
 // What each kind of email is for. The shared rules follow in emailSystem().
 const EMAIL_TASKS = {
   'ask-info': {
-    title: 'Draft an email asking for information',
+    get title() {
+      return t('Draft an email asking for information');
+    },
     task:
       'Ask the person for the specific information still needed to move the ticket forward. If the notes and comments show that you already asked, write a friendly reminder instead. ' +
       'Put the questions in a short numbered list, each in plain words with a few words of why. Ask only for what the ticket does not already say, and never for passwords or security codes.',
     instruction: 'Draft the email asking the person for information.',
   },
   'status-update': {
-    title: 'Draft a status update email',
+    get title() {
+      return t('Draft a status update email');
+    },
     task:
       'Give a short progress update: where the ticket stands now (use the state, the hold reason and the status lines, in plain words), what happens next, and when the person will hear from us only if the ticket data states a date. ' +
       'If the ticket is on hold, say why in words the person understands.',
     instruction: 'Draft the status update email.',
   },
   resolution: {
-    title: 'Draft a resolution email',
+    get title() {
+      return t('Draft a resolution email');
+    },
     task:
       'Tell the person the ticket has been resolved. Say in one or two plain sentences what was done, using the resolution notes in the ticket data and leaving out internal jargon. ' +
       'Ask them to reply if the problem is still there.',
     instruction: 'Draft the email telling the person the ticket is resolved.',
   },
   'approval-nudge': {
-    title: 'Draft an approval reminder',
+    get title() {
+      return t('Draft an approval reminder');
+    },
     task:
       'Write a courteous reminder that an approval for this request is still waiting. If the data names who still has to approve, address the email to them; otherwise write it so it can go to the approver. ' +
       'Say in plain words what is being approved and that the request cannot move on until it is decided. Do not pressure or blame anyone.',
     instruction: 'Draft the approval reminder email.',
   },
   apology: {
-    title: 'Draft an apology for the wait',
+    get title() {
+      return t('Draft an apology for the wait');
+    },
     task:
       'Write a short, sincere apology for the delay or the missed target. Say what is being done now, using only the ticket data. ' +
       'Do not make excuses, do not blame anyone, and do not offer compensation or promise a fix date.',
     instruction: 'Draft the apology email.',
   },
   closure: {
-    title: 'Draft a closure email',
+    get title() {
+      return t('Draft a closure email');
+    },
     task:
       'Tell the person the ticket is closed (or about to be closed). Summarise the outcome in one sentence and say they are welcome to contact the service desk again if they need more help. ' +
       'Do not promise that the ticket can be reopened or any process the ticket data does not describe.',
@@ -111,11 +124,16 @@ const EMAIL_WHEN = {
 };
 
 const EMAIL_FEATURES = EMAIL_TYPES.map((type) => {
-  const t = EMAIL_TASKS[type.id];
+  const task = EMAIL_TASKS[type.id];
   return {
     id: type.featureId,
-    title: t.title,
-    description: type.blurb,
+    // (read when shown, so they follow the language of the panel; `tr` looks the English text up like t)
+    get title() {
+      return tr(task.title);
+    },
+    get description() {
+      return tr(type.blurb);
+    },
     wave: 1,
     previewGroup: 'email', // one "check what will be sent" for all six email drafts, not six
     kinds: EMAIL_KINDS,
@@ -125,8 +143,8 @@ const EMAIL_FEATURES = EMAIL_TYPES.map((type) => {
     context: 'email-compose',
     journal: 10,
     parts: (pack) => emailParts(pack, { approvers: type.id === 'approval-nudge' }),
-    system: emailSystem(t.task),
-    instruction: t.instruction,
+    system: emailSystem(task.task),
+    instruction: task.instruction,
   };
 });
 
@@ -164,10 +182,15 @@ const REWRITE_INSTRUCTIONS = {
 };
 
 const REWRITE_FEATURES = REWRITE_PRESETS.map((preset) => {
-  const base = {
+  // (a function, not a spread of an object with getters: a spread would freeze title and description in English at import)
+  const withBase = (extra) => ({
     id: preset.featureId,
-    title: preset.title,
-    description: `Rewrites the text you give it: ${preset.label.toLowerCase()}.`,
+    get title() {
+      return tr(preset.title);
+    },
+    get description() {
+      return t('Rewrites the text you give it: {what}.', { what: tr(preset.label).toLowerCase() });
+    },
     wave: 2,
     previewGroup: 'rewrite', // one "check what will be sent" for all the rewrite presets
     kinds: [],
@@ -175,21 +198,26 @@ const REWRITE_FEATURES = REWRITE_PRESETS.map((preset) => {
     journal: 0,
     parts: composeParts,
     system: rewriteSystem(REWRITE_TASKS[preset.id]),
-  };
-  if (!preset.needsLanguage) return { ...base, instruction: REWRITE_INSTRUCTIONS[preset.id] };
+    ...extra,
+  });
+  if (!preset.needsLanguage) return withBase({ instruction: REWRITE_INSTRUCTIONS[preset.id] });
   // The language is picked from a fixed list in the panel (src/compose/rewrite.js: withLanguage), never typed in.
   const instructionFor = preset.id === 'translate'
     ? (name) => `Translate the text into ${name}.`
     : (name) => `Write the original text, then a line with three dashes, then the translation into ${name}.`;
-  return { ...base, instructionFor, instruction: instructionFor('English') };
+  return withBase({ instructionFor, instruction: instructionFor('English') });
 });
 
 // ---- Notes to ticket -----------------------------------------------------------------------------------------------
 
 const NOTES_TO_TICKET = {
   id: 'notes-to-ticket',
-  title: 'Notes to ticket',
-  description: 'Turns rough call or walk-up notes into a short description, a description and a few form values to review.',
+  get title() {
+    return t('Notes to ticket');
+  },
+  get description() {
+    return t('Turns rough call or walk-up notes into a short description, a description and a few form values to review.');
+  },
   wave: 2,
   kinds: [],
   context: 'compose-people',

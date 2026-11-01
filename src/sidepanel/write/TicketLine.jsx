@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { read } from '../ask.js';
 import { ticketLabel } from '../../compose/ticketLabel.js';
+import { t } from '../../i18n/index.js';
 
 // "For INC0012345 – VPN keeps disconnecting": the line at the top of each Write half, so it is always clear which ticket a snippet is
 // filled from, which form a check reads and where a rewrite goes. The title comes from the record's header read (number, title,
@@ -30,7 +31,7 @@ export default function TicketLine({ page, header }) {
   const label = ticketLabel(page, header);
   return (
     <p className={`ab-write-for ab-write-for-${label.kind}`} aria-live="polite">
-      {label.kind === 'none' ? `${label.text} Open one to fill in its details.` : label.text}
+      {label.kind === 'none' ? `${label.text} ${t('Open one to fill in its details.')}` : label.text}
     </p>
   );
 }

@@ -5,7 +5,7 @@ import { read } from '../ask.js';
 import { LoadNotes } from '../checks/Bits.jsx';
 import { RequestBody } from '../checks/RequestBody.jsx';
 import { useLoader } from '../checks/useLoader.js';
-import { t } from '../../i18n/index.js';
+import { t, isolate, t as tr } from '../../i18n/index.js';
 
 // A9, "Where is this request?" on a request, a requested item or a catalog task. Everything on this tab is read with the
 // person's own session and worked out locally: no AI key is needed and nothing is sent anywhere. The one AI button writes a
@@ -30,7 +30,7 @@ export default function RequestExplainerView({ page, eff, record, header, run, a
       if (target.table === record.table || !isNotVisible(err)) throw err;
       // The item the task belongs to cannot be read by this user: show the task on its own, and say so.
       const own = { table: record.table, sysId: record.sysId };
-      return { target: { ...own, note: 'You cannot see the requested item this task belongs to. Showing the task on its own.' }, pack: await readPack(own, 'request-status') };
+      return { target: { ...own, note: t('You cannot see the requested item this task belongs to. Showing the task on its own.') }, pack: await readPack(own, 'request-status') };
     }
   }, [page.tabId, record.table, record.sysId, record.kind, allowSensitive], { active });
 
@@ -48,7 +48,7 @@ export default function RequestExplainerView({ page, eff, record, header, run, a
         <p className="ab-sub">{t('Found with your own session. Nothing here is sent to an AI.')}</p>
         {data?.target.note && <p className="ab-note ab-note-warn" role="note">{data.target.note}</p>}
         {data && data.target.table !== record.table && (
-          <p className="ab-hint">This task belongs to {data.pack.fields?.number || 'a requested item'}; the status below is for that item.</p>
+          <p className="ab-hint">{t('This task belongs to {number}; the status below is for that item.', { number: data.pack.fields?.number ? isolate(data.pack.fields.number) : t('a requested item') })}</p>
         )}
       </section>
 
@@ -66,7 +66,7 @@ export default function RequestExplainerView({ page, eff, record, header, run, a
               disabled={!aiReady || run.busy}
               onClick={() => run.run(feature, { getPack: () => readPack(data.target, 'request-explain') })}
             >
-              {feature.title}
+              {tr(feature.title)}
             </button>
           </div>
           {/* The requester usually reads the requested item, not the task: say where Insert will put the message. */}

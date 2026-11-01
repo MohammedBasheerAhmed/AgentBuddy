@@ -4,6 +4,8 @@
 // Every function tolerates what real data looks like: an empty list, a zero total, NaN or negative numbers (clamped to 0),
 // very large numbers and very long labels. Nothing in this file can produce NaN or Infinity in a number or a path.
 
+import { t } from '../../i18n/core.js';
+
 // ---- numbers -----------------------------------------------------------------------------------
 
 const round = (n, decimals = 2) => {
@@ -504,50 +506,51 @@ export function heatLayout(cells, { total } = {}) {
 
 // ---- text for people who cannot see the chart ----------------------------------------------------
 
-const STATUS_WORD = { good: 'good', warn: 'warning', bad: 'bad' };
+const statusWord = (tone) => ({ good: t('good'), warn: t('warning'), bad: t('bad') })[tone];
 
 /** "In Progress 12 (40%), New 8 (27%), and 3 more. Total 30." */
 export function summarizeItems(items, { unit = '', total, max = 6 } = {}) {
   const list = Array.isArray(items) ? items.filter((it) => it && typeof it === 'object') : [];
-  if (!list.length) return 'No data.';
+  if (!list.length) return t('No data.');
   const sum = list.reduce((a, it) => a + num(it.value), 0);
-  const t = num(total) || sum;
+  const whole = num(total) || sum;
   const cap = Math.max(1, Math.floor(num(max)) || 6);
   const parts = list.slice(0, cap).map((it) => {
     const value = withUnit(formatNumber(num(it.value)), unit);
-    return `${clipLabel(it.label, 40)} ${value}${t > 0 ? ` (${percent(it.value, t)}%)` : ''}`;
+    return `${clipLabel(it.label, 40)} ${value}${whole > 0 ? ` (${percent(it.value, whole)}%)` : ''}`;
   });
   const more = list.length - cap;
-  return `${parts.join(', ')}${more > 0 ? `, and ${more} more` : ''}. Total ${withUnit(formatNumber(t), unit)}.`;
+  const totalText = withUnit(formatNumber(whole), unit);
+  return more > 0 ? t('{parts}, and {more} more. Total {total}.', { parts: parts.join(t(', ')), more, total: totalText }) : t('{parts}. Total {total}.', { parts: parts.join(t(', ')), total: totalText });
 }
 
 /** "Alice: New 3, In Progress 5, total 8. Bob: ..." for stacked bars. */
 export function summarizeStacked(rows, series, { max = 5 } = {}) {
   const layout = stackedLayout(rows, series, { maxRows: Math.max(1, Math.floor(num(max)) || 5) });
-  if (!layout.rows.length) return 'No data.';
+  if (!layout.rows.length) return t('No data.');
   const parts = layout.rows.map((row) => {
     const bits = layout.series.filter((s) => row.parts[s.key] > 0).map((s) => `${clipLabel(s.label, 30)} ${formatNumber(row.parts[s.key])}`);
-    return `${clipLabel(row.label, 40)}: ${bits.length ? bits.join(', ') : 'none'}, total ${formatNumber(row.total)}`;
+    return t('{label}: {bits}, total {total}', { label: clipLabel(row.label, 40), bits: bits.length ? bits.join(t(', ')) : t('none'), total: formatNumber(row.total) });
   });
-  return `${parts.join('. ')}.${layout.hidden ? ` ${layout.hidden} more not listed.` : ''}`;
+  return `${parts.join('. ')}.${layout.hidden ? ` ${t('{n} more not listed.', { n: layout.hidden })}` : ''}`;
 }
 
 /** "Opened: starts at 3 (Mon), ends at 7 (Sun), highest 9 (Wed). Resolved: ..." for line charts. */
 export function summarizeSeries(series, { unit = '', maxSeries = 4 } = {}) {
   const list = (Array.isArray(series) ? series : []).filter((s) => s && typeof s === 'object');
-  if (!list.length || list.every((s) => !(s.points || []).length)) return 'No data.';
+  if (!list.length || list.every((s) => !(s.points || []).length)) return t('No data.');
   const at = (p) => `${withUnit(formatNumber(num(p?.value)), unit)}${p?.label ? ` (${clipLabel(p.label, 14)})` : ''}`;
   return list
     .slice(0, Math.max(1, Math.floor(num(maxSeries)) || 4))
     .map((s) => {
       const pts = Array.isArray(s.points) ? s.points : [];
-      const name = clipLabel(s.label ?? s.key ?? 'Series', 30);
-      if (!pts.length) return `${name}: no data.`;
+      const name = clipLabel(s.label ?? s.key ?? t('Series'), 30);
+      if (!pts.length) return t('{name}: no data.', { name });
       let high = pts[0];
       pts.forEach((p) => {
         if (num(p?.value) > num(high?.value)) high = p;
       });
-      return `${name}: starts at ${at(pts[0])}, ends at ${at(pts[pts.length - 1])}, highest ${at(high)}.`;
+      return t('{name}: starts at {first}, ends at {last}, highest {high}.', { name, first: at(pts[0]), last: at(pts[pts.length - 1]), high: at(high) });
     })
     .join(' ');
 }
@@ -555,18 +558,18 @@ export function summarizeSeries(series, { unit = '', maxSeries = 4 } = {}) {
 /** "SLA met: 82% of 100% (warning)". */
 export function summarizeGauge({ label, value, max, unit = '', tone } = {}) {
   const v = withUnit(formatNumber(num(value), { decimals: Number.isInteger(num(value)) ? 0 : 1 }), unit);
-  const m = num(max) ? ` of ${withUnit(formatNumber(num(max)), unit)}` : '';
-  const status = STATUS_WORD[tone] ? ` (${STATUS_WORD[tone]})` : '';
-  return `${label ? `${clipLabel(label, 40)}: ` : ''}${v}${m}${status}.`;
+  const shown = num(max) ? t('{value} of {max}', { value: v, max: withUnit(formatNumber(num(max)), unit) }) : v;
+  const status = statusWord(tone) ? ` (${statusWord(tone)})` : '';
+  return `${label ? `${clipLabel(label, 40)}: ` : ''}${shown}${status}.`;
 }
 
 /** The plain sentence for a tile: "Open: 12, assigned to your groups. Up 3 since yesterday." */
 export function describeTile({ label, value, hint, delta, unavailable, loading } = {}) {
   const name = clipLabel(label, 60);
-  if (loading) return `${name}: loading.`;
-  if (unavailable) return `${name}: not available to you.`;
+  if (loading) return t('{name}: loading.', { name });
+  if (unavailable) return t('{name}: not available to you.', { name });
   const shown = typeof value === 'number' ? formatNumber(value) : String(value ?? '');
-  const dir = { up: 'Up', down: 'Down', flat: 'No change' }[delta?.direction] || '';
+  const dir = { up: t('Up'), down: t('Down'), flat: t('No change') }[delta?.direction] || '';
   const change = delta?.text ? ` ${[dir, delta.text].filter(Boolean).join(' ')}.` : '';
   return `${name}: ${shown}${hint ? `, ${clipLabel(hint, 80)}` : ''}.${change}`;
 }
@@ -575,30 +578,30 @@ export function describeTile({ label, value, hint, delta, unavailable, loading }
 
 const col = (key, label, align) => ({ key, label, ...(align ? { align } : {}) });
 
-export function itemsToTable(items, { unit = '', total, labelHeader = 'Name', valueHeader } = {}) {
+export function itemsToTable(items, { unit = '', total, labelHeader = t('Name'), valueHeader } = {}) {
   const list = Array.isArray(items) ? items.filter((it) => it && typeof it === 'object') : [];
   const sum = list.reduce((a, it) => a + num(it.value), 0);
-  const t = num(total) || sum;
+  const whole = num(total) || sum;
   return {
-    columns: [col('label', labelHeader), col('value', valueHeader ?? (unit ? `Value (${unit})` : 'Count'), 'right'), col('share', 'Share', 'right')],
-    rows: list.map((it, i) => ({ key: keyOf(it, i), label: String(it.label ?? ''), value: num(it.value), share: t > 0 ? `${percent(it.value, t)}%` : '-' })),
+    columns: [col('label', labelHeader), col('value', valueHeader ?? (unit ? t('Value ({unit})', { unit }) : t('Count')), 'right'), col('share', t('Share'), 'right')],
+    rows: list.map((it, i) => ({ key: keyOf(it, i), label: String(it.label ?? ''), value: num(it.value), share: whole > 0 ? `${percent(it.value, whole)}%` : '-' })),
   };
 }
 
-export function stackedToTable(rows, series, { labelHeader = 'Name' } = {}) {
+export function stackedToTable(rows, series, { labelHeader = t('Name') } = {}) {
   const layout = stackedLayout(rows, series);
   return {
-    columns: [col('label', labelHeader), ...layout.series.map((s) => col(`s_${s.key}`, String(s.label ?? s.key), 'right')), col('total', 'Total', 'right')],
+    columns: [col('label', labelHeader), ...layout.series.map((s) => col(`s_${s.key}`, String(s.label ?? s.key), 'right')), col('total', t('Total'), 'right')],
     rows: layout.rows.map((row) => ({ key: row.key, label: row.label, total: row.total, ...Object.fromEntries(layout.series.map((s) => [`s_${s.key}`, row.parts[s.key]])) })),
   };
 }
 
-export function seriesToTable(series, { labelHeader = 'When' } = {}) {
+export function seriesToTable(series, { labelHeader = t('When') } = {}) {
   const list = (Array.isArray(series) ? series : []).filter((s) => s && typeof s === 'object');
   const length = list.reduce((a, s) => Math.max(a, Array.isArray(s.points) ? s.points.length : 0), 0);
   const longest = list.find((s) => (s.points?.length || 0) === length);
   return {
-    columns: [col('label', labelHeader), ...list.map((s, i) => col(`s${i}`, String(s.label ?? s.key ?? `Series ${i + 1}`), 'right'))],
+    columns: [col('label', labelHeader), ...list.map((s, i) => col(`s${i}`, String(s.label ?? s.key ?? t('Series {n}', { n: i + 1 })), 'right'))],
     rows: Array.from({ length }, (_, i) => ({ key: String(i), label: String(longest?.points?.[i]?.label ?? ''), ...Object.fromEntries(list.map((s, si) => [`s${si}`, s.points?.[i] ? num(s.points[i].value) : null])) })),
   };
 }

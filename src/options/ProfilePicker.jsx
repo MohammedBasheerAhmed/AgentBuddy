@@ -20,7 +20,7 @@ import { t } from '../i18n/index.js';
 export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, instant = false, primary = true, idBase = 'ab-prof' }) {
   const choices = profileChoices({ eff, roles, hints });
   const [ticked, setTicked] = useState(choices.ticked);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(null); // { ok, text } after a save
   const suggestionKey = choices.ticked.join(',');
   // A suggestion that arrives later (the hints read answered) is shown, unless the person already changed a box.
   const [touched, setTouched] = useState(false);
@@ -31,16 +31,16 @@ export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, ins
 
   if (choices.locked) {
     const names = (eff?.values?.profiles || []).map((id) => profileById(id)?.label).filter(Boolean);
-    return <p className="ab-sub">Set by your organisation{names.length ? `: ${names.join(', ')}` : ''}.</p>;
+    return <p className="ab-sub">{names.length ? t('Set by your organisation: {names}.', { names: names.join(t(', ')) }) : t('Set by your organisation.')}</p>;
   }
 
   async function save(list) {
-    setStatus('');
+    setStatus(null);
     try {
       await onSave(confirmedProfiles(list, choices));
-      if (instant) setStatus('Saved.');
+      if (instant) setStatus({ ok: true, text: t('Saved.') });
     } catch {
-      setStatus('The browser did not save that. Try again.');
+      setStatus({ ok: false, text: t('The browser did not save that. Try again.') });
     }
   }
 
@@ -81,8 +81,8 @@ export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, ins
         </div>
       )}
       {status && (
-        <p className={`ab-note${status === 'Saved.' ? '' : ' ab-note-danger'}`} role="status">
-          {status}
+        <p className={`ab-note${status.ok ? '' : ' ab-note-danger'}`} role="status">
+          {status.text}
         </p>
       )}
     </div>

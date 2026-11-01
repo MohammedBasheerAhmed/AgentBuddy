@@ -3,6 +3,7 @@
 // instances the person enabled (and the browser granted), (3) keep that registration in sync with the permissions, and
 // (4) answer the bar on the ServiceNow page: which actions it may show, and "open the panel and run this one" (bar.js).
 import { MSG, toWireError } from '../lib/messages.js';
+import { tm } from '../i18n/core.js'; // (an English text marked for the catalogue: the panel shows it in its language, see plainError)
 import { checkExtensionSender } from '../lib/senderCheck.js';
 import { keyStore, loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
 import { instancePattern, isInstanceAllowed, normalizeInstance } from '../policy/policy.js';
@@ -83,11 +84,11 @@ async function injectIntoOpenTabs(origin) {
 
 async function enableInstance(rawOrigin) {
   const origin = normalizeInstance(rawOrigin);
-  if (!origin) throw new Error('That is not a valid https address.');
+  if (!origin) throw new Error(tm('That is not a valid https address.'));
   const policy = await loadPolicy();
-  if (!isInstanceAllowed(origin, policy)) throw new Error('Your organisation has not approved this instance for Agent Buddy.');
+  if (!isInstanceAllowed(origin, policy)) throw new Error(tm('Your organisation has not approved this instance for Agent Buddy.'));
   if (!(await chrome.permissions.contains({ origins: [instancePattern(origin)] }))) {
-    throw new Error('The browser has not granted access to this site yet. Use the Enable button in the side panel.');
+    throw new Error(tm('The browser has not granted access to this site yet. Use the Enable button in the side panel.'));
   }
   const settings = await loadSettings();
   const instances = [...new Set([...(settings.instances || []), origin])];

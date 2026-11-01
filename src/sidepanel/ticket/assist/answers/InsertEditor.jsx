@@ -23,9 +23,9 @@ const MAX_EDIT = 8000;
  *   onCancel
  */
 export default function InsertEditor({ targets, initial, textFor, review, page, record, busy = false, onInsert, onCancel }) {
-  const usable = (Array.isArray(targets) ? targets : []).filter((t) => !t.blocked);
+  const usable = (Array.isArray(targets) ? targets : []).filter((x) => !x.blocked);
   const [key, setKey] = useState(usable[0]?.key || '');
-  const target = usable.find((t) => t.key === key) || usable[0] || null;
+  const target = usable.find((x) => x.key === key) || usable[0] || null;
   const [text, setText] = useState(String(initial ?? '').slice(0, MAX_EDIT));
   const [mode, setMode] = useState(target?.mode || 'append');
   const [findings, setFindings] = useState(null); // serious findings the last Insert stopped at
@@ -50,7 +50,7 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
   const modes = Array.isArray(target.modes) && target.modes.length ? target.modes : [target.mode || 'append'];
   const chosen = modes.includes(mode) ? mode : modes[0];
   const told = describeTarget(target, chosen, { page, record });
-  const name = target.fieldLabel || target.label;
+  const name = t(target.fieldLabel || target.label); // (the field's label as the page names it stays English in the target: the page is matched by it)
 
   const go = async (force = false) => {
     const outcome = await onInsert(target, text, chosen, force);
@@ -68,7 +68,7 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
             className="ab-select"
             value={target.key}
             onChange={(e) => {
-              const next = usable.find((t) => t.key === e.target.value);
+              const next = usable.find((x) => x.key === e.target.value);
               if (!next) return;
               setKey(next.key);
               setMode(next.mode);
@@ -76,16 +76,15 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
               if (typeof textFor === 'function') setText(String(textFor(next) ?? '').slice(0, MAX_EDIT));
             }}
           >
-            {usable.map((t) => (
-              <option key={t.key} value={t.key}>{t.fieldLabel || t.label}</option>
+            {usable.map((x) => (
+              <option key={x.key} value={x.key}>{t(x.fieldLabel || x.label)}</option>
             ))}
           </select>
         </div>
       )}
       <div className="ab-field">
         <label className="ab-label" id={`${ids}-label`} htmlFor={`${ids}-text`}>
-          Text for {name}
-          {isCustomerVisible(target.field) && target.field === 'comments' ? ' (the customer sees it)' : ''}
+          {isCustomerVisible(target.field) && target.field === 'comments' ? t('Text for {name} (the customer sees it)', { name }) : t('Text for {name}', { name })}
         </label>
         <textarea
           id={`${ids}-text`}
@@ -106,18 +105,18 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
           <legend className="ab-sub">{t('What is already in {name}', { name })}</legend>
           <label className="ab-radio">
             <input type="radio" name={`${ids}-mode`} value="append" checked={chosen === 'append'} onChange={() => setMode('append')} />
-            Keep it, add this below
+            {t('Keep it, add this below')}
           </label>
           <label className="ab-radio">
             <input type="radio" name={`${ids}-mode`} value="replace" checked={chosen === 'replace'} onChange={() => setMode('replace')} />
-            Replace it with this
+            {t('Replace it with this')}
           </label>
         </fieldset>
       )}
       <p className="ab-hint" id={`${ids}-where`}>{told.where} {told.next}</p>
       {findings ? (
         <div className="ab-note ab-note-warn" role="alert">
-          <strong>{isCustomerVisible(target.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
+          <strong>{isCustomerVisible(target.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
           <ul className="ab-findings">
             {findings.map((f, i) => (
               <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
@@ -145,7 +144,7 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
       )}
       <div className="ab-row ab-insert-actions">
         <button type="button" className="ab-btn ab-btn-sm ab-btn-ai" disabled={busy || !text.trim()} onClick={() => go(false)}>
-          {chosen === 'replace' ? `Replace ${name}` : `Insert into ${name}`}
+          {chosen === 'replace' ? t('Replace {name}', { name }) : t('Insert into {name}', { name })}
         </button>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={busy} onClick={onCancel}>{t('Cancel')}</button>
       </div>

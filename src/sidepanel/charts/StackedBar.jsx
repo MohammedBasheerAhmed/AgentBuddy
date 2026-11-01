@@ -3,6 +3,7 @@ import ChartFrame, { PatternDefs, Swatch, patternId, useUid } from './ChartFrame
 import { clipLabel, formatNumber, stackedLayout, stackedToTable, summarizeStacked, toneClass, toneForIndex } from './geometry.js';
 import { useWidth } from './useWidth.js';
 import DrillLink, { hrefOf } from './DrillLink.jsx';
+import { t } from '../../i18n/index.js';
 
 const BAR_HEIGHT = 22;
 
@@ -18,7 +19,7 @@ const BAR_HEIGHT = 22;
  *                    total and bar) is then one real link (see DrillLink.jsx) and the segments are not separate targets. A row without
  *                    an address ("Others") is not clickable.
  */
-export default function StackedBar({ title, rows, series, onDrill, hrefFor, emptyText = 'Nothing to show.', labelHeader, maxRows = 12, defaultTable = false }) {
+export default function StackedBar({ title, rows, series, onDrill, hrefFor, emptyText = t('Nothing to show.'), labelHeader, maxRows = 12, defaultTable = false }) {
   const uid = useUid();
   const [ref, width] = useWidth();
   const defs = (Array.isArray(series) ? series : []).filter((s) => s && typeof s === 'object').map((s, i) => ({ ...s, tone: s.tone || toneForIndex(i) }));
@@ -47,7 +48,7 @@ export default function StackedBar({ title, rows, series, onDrill, hrefFor, empt
       emptyText={emptyText}
       legend={legend}
       table={{ ...stackedToTable(list, defs, { labelHeader }), caption: title }}
-      note={layout.hidden > 0 ? `and ${layout.hidden} more. Show as table for all rows.` : ''}
+      note={layout.hidden > 0 ? t('and {n} more. Show as table for all rows.', { n: layout.hidden }) : ''}
     >
       <div ref={ref} className="ab-stack">
         <PatternDefs uid={uid} tones={defs.map((s) => s.tone)} />
@@ -87,7 +88,7 @@ export default function StackedBar({ title, rows, series, onDrill, hrefFor, empt
                       className={`ab-seg ${toneClass(seg.tone)}`}
                       role="button"
                       tabIndex={0}
-                      aria-label={`${name}. Open the list.`}
+                      aria-label={t('{name}. Open the list.', { name })}
                       onClick={() => onDrill(row.key, seg.key)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -110,7 +111,7 @@ export default function StackedBar({ title, rows, series, onDrill, hrefFor, empt
           if (href) {
             const parts = row.segments.map((seg) => `${seg.seriesLabel} ${formatNumber(seg.value)}`).join(', ');
             return (
-              <DrillLink key={row.key} className="ab-stack-row ab-stack-link" href={href} onOpen={() => onDrill(row.key)} label={`${row.label}: ${formatNumber(row.total)}${parts ? ` (${parts})` : ''}. Open the list.`}>
+              <DrillLink key={row.key} className="ab-stack-row ab-stack-link" href={href} onOpen={() => onDrill(row.key)} label={t('{name}. Open the list.', { name: `${row.label}: ${formatNumber(row.total)}${parts ? ` (${parts})` : ''}` })}>
                 {content}
               </DrillLink>
             );

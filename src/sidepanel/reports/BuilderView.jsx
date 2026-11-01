@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Tile, HorizontalBar, Donut, TrendChart, DataTable } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
 import { useReport } from './useReport.js';
+import { t, tn } from '../../i18n/index.js';
+import { placeholderName, shown, shownList } from '../../reports/shown.js';
 
 /** The picture for a builder result, in the chart type the person chose. */
 export function BuilderChart({ data, env }) {
@@ -9,38 +11,41 @@ export function BuilderChart({ data, env }) {
   const drill = (item) => item?.query && env.openList(data.table, item.query);
   const hasDrill = items.some((i) => i.query);
   const hrefFor = env.listHref ? (item) => (item?.query ? env.listHref(data.table, item.query) : '') : undefined;
-  const label = data.groupLabel;
+  const label = shown(data.groupLabel);
+  const table = shown(data.tableLabel);
+  const unitText = shown(unit);
 
   if (data.groupBy === 'none') {
     const query = items[0]?.query || data.query;
-    return <Tile label={data.tableLabel} value={items[0]?.value ?? 0} hint={data.filter} onOpen={() => env.openList(data.table, query)} href={env.listHref ? env.listHref(data.table, query) || '' : ''} />;
+    return <Tile label={table} value={items[0]?.value ?? 0} hint={shownList(data.filter)} onOpen={() => env.openList(data.table, query)} href={env.listHref ? env.listHref(data.table, query) || '' : ''} />;
   }
   if (data.series) {
     return (
       <TrendChart
-        title={`${data.tableLabel} per ${data.timeUnit}`}
-        series={[{ key: 'v', label: data.tableLabel, tone: 'c1', points: data.series.labels.map((l, i) => ({ label: l, value: data.series.values[i] })) }]}
+        title={data.timeUnit === 'week' ? t('{table} per week', { table }) : t('{table} per day', { table })}
+        series={[{ key: 'v', label: table, tone: 'c1', points: data.series.labels.map((l, i) => ({ label: l, value: data.series.values[i] })) }]}
         area={config.chart !== 'table'}
-        unit={unit}
+        unit={unitText}
         labelHeader={label}
         defaultTable={config.chart === 'table'}
       />
     );
   }
-  const list = items.map((i) => ({ key: i.key || i.label, label: i.label, value: i.value, hint: data.metric !== 'count' ? `${i.n} tickets` : undefined, query: i.query }));
+  const list = items.map((i) => ({ key: i.key || i.label, label: placeholderName(i.label), value: i.value, hint: data.metric !== 'count' ? tn(i.n, '{n} ticket', '{n} tickets') : undefined, query: i.query }));
+  const heading = t('{table} by {groupBy}', { table, groupBy: label.toLowerCase() });
   if (config.chart === 'donut') {
-    return <Donut title={`${data.tableLabel} by ${label.toLowerCase()}`} items={list} centerLabel={unit} onDrill={hasDrill ? drill : undefined} hrefFor={hasDrill ? hrefFor : undefined} labelHeader={label} />;
+    return <Donut title={heading} items={list} centerLabel={unitText} onDrill={hasDrill ? drill : undefined} hrefFor={hasDrill ? hrefFor : undefined} labelHeader={label} />;
   }
   if (config.chart === 'table') {
     return (
       <DataTable
-        caption={`${data.tableLabel} by ${label.toLowerCase()}`}
-        columns={[{ key: 'label', label }, { key: 'value', label: data.metric === 'count' ? 'Tickets' : 'Days', align: 'right' }, ...(data.metric === 'count' ? [] : [{ key: 'n', label: 'Tickets counted', align: 'right' }])]}
-        rows={items}
+        caption={heading}
+        columns={[{ key: 'label', label }, { key: 'value', label: data.metric === 'count' ? t('Tickets') : t('Days'), align: 'right' }, ...(data.metric === 'count' ? [] : [{ key: 'n', label: t('Tickets counted'), align: 'right' }])]}
+        rows={items.map((i) => ({ ...i, label: placeholderName(i.label) }))}
       />
     );
   }
-  return <HorizontalBar title={`${data.tableLabel} by ${label.toLowerCase()}`} items={list} unit={unit} onDrill={hasDrill ? drill : undefined} hrefFor={hasDrill ? hrefFor : undefined} labelHeader={label} maxItems={12} />;
+  return <HorizontalBar title={heading} items={list} unit={unitText} onDrill={hasDrill ? drill : undefined} hrefFor={hasDrill ? hrefFor : undefined} labelHeader={label} maxItems={12} />;
 }
 
 // A custom report on a dashboard: whatever the report builder put together, drawn the way the person chose.
@@ -62,12 +67,12 @@ export default function BuilderView({ widget, env, actions }) {
   useEffect(() => () => loaded?.remove(wid), [loaded, wid]);
   return (
     <SectionShell
-      title={state.result?.title || widget.builder.title || 'Custom report'}
-      help={ok ? `Filter: ${d.filter}.` : ''}
+      title={shown(state.result?.title) || widget.builder.title || t('Custom report')}
+      help={ok ? t('Filter: {filter}.', { filter: shownList(d.filter) }) : ''}
       state={state}
       env={env}
       widgetId={widget.id}
-      facts={ok ? [d.basedOn || `${d.total} in total`] : []}
+      facts={ok ? [d.basedOn ? shown(d.basedOn) : t('{n} in total', { n: d.total })] : []}
       actions={actions}
     >
       {ok && <BuilderChart data={d} env={env} />}

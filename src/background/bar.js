@@ -12,6 +12,7 @@
 // A content script whose site is no longer turned on (switched off, the browser's permission taken away, the organisation's list
 // changed) is answered with the code SITE_OFF and retires: no bar, no answers to the panel, until the page is reloaded.
 import { MSG, SITE_OFF_CODE } from '../lib/messages.js';
+import { tm } from '../i18n/core.js'; // (an English text marked for the catalogue: the panel shows it in its language, see plainError)
 import { contentScriptOrigin } from '../lib/senderCheck.js';
 import { kindForTable } from '../context/kinds.js';
 import { TABLE_RE } from '../context/util.js';
@@ -20,6 +21,7 @@ import { quickActions, quickItems } from '../features/quick.js';
 import { FEATURE_ID_RE, makeLaunch } from '../lib/launch.js';
 import { aiAvailable } from '../profiles/profiles.js';
 import { resolveProviderConfig } from '../providers/config.js';
+import { browserLanguage, resolveLanguage, setLanguage, t } from '../i18n/index.js';
 
 export const BAR_TYPES = new Set([MSG.BAR_ACTIONS, MSG.BAR_LAUNCH]);
 
@@ -45,7 +47,7 @@ export async function barAiOn(settings, policy, { keyMode }) {
 }
 
 function siteOff() {
-  const err = new Error('This site is not turned on.');
+  const err = new Error(tm('This site is not turned on.'));
   err.code = SITE_OFF_CODE;
   return err;
 }
@@ -62,11 +64,11 @@ const CARD_KINDS = new Set(['incident', 'problem', 'change', 'request', 'request
 export async function barActions({ table, settings, policy, deps }) {
   const kind = kindForTable(table);
   const aiOn = deps.aiOn ? await Promise.resolve(deps.aiOn(settings, policy)).catch(() => true) : true;
-  if (aiOn) return quickActions({ kind, pins: settings.quickPins, policy, aiOn: true }).map((a) => ({ id: a.id, label: a.label, ai: true }));
+  if (aiOn) return quickActions({ kind, pins: settings.quickPins, policy, aiOn: true }).map((a) => ({ id: a.id, label: t(a.label), ai: true }));
   const cards = CARD_KINDS.has(kind) ? ['ready', 'related'] : [];
   return quickItems({ kind, pins: settings.quickPins, policy, ai: false, cards })
     .filter((item) => item.ai === false)
-    .map((item) => ({ id: item.id, label: item.label, ai: false }));
+    .map((item) => ({ id: item.id, label: t(item.label), ai: false }));
 }
 
 /**
@@ -77,11 +79,11 @@ export async function barActions({ table, settings, policy, deps }) {
  */
 export async function handleBarMessage(message, sender, deps) {
   const origin = contentScriptOrigin(sender, deps.runtimeId);
-  if (!origin) throw new Error('This request is only allowed from the page of a site you turned on.');
+  if (!origin) throw new Error(tm('This request is only allowed from the page of a site you turned on.'));
   // BAR_ACTIONS with no table at all is the question "is the bar on here?"; an empty or odd table is still refused.
   const probe = message.type === MSG.BAR_ACTIONS && message.table === undefined;
   const table = typeof message.table === 'string' ? message.table.trim().toLowerCase() : '';
-  if (!probe && !TABLE_RE.test(table)) throw new Error('That is not a valid record.');
+  if (!probe && !TABLE_RE.test(table)) throw new Error(tm('That is not a valid record.'));
 
   // The browser opens the side panel only while the click that asked for it is still being handled, and that ends the first time
   // this function waits for anything. So the panel is opened first, before the checks below; if a check then fails the person has
@@ -102,18 +104,20 @@ export async function handleBarMessage(message, sender, deps) {
 
   // The person (or the organisation) switched the bar off: it shows nothing and does not look at the page.
   const bar = settings.pageBar !== false && !policy.disablePageBar;
-  if (probe) return { actions: [], bar };
+  // The bar speaks the language of the panel (Settings > Language); the labels below are written in it.
+  const language = setLanguage(resolveLanguage(settings.language, browserLanguage()));
+  if (probe) return { actions: [], bar, language };
 
   // Hidden for this record: the organisation blocked the table, or it is HR content the organisation does not allow.
   const shown = bar && isTableAllowed(table, policy) && !(isSensitiveByPolicy(table, policy) && !policy.allowHrContent);
   const actions = shown ? await barActions({ table, settings, policy, deps }) : [];
 
-  if (message.type === MSG.BAR_ACTIONS) return { actions, bar };
+  if (message.type === MSG.BAR_ACTIONS) return { actions, bar, language };
 
   // BAR_LAUNCH: only an action the bar was allowed to offer for this table.
-  if (!actions.some((a) => a.id === message.featureId)) throw new Error('That action is not available here.');
+  if (!actions.some((a) => a.id === message.featureId)) throw new Error(tm('That action is not available here.'));
   const launch = makeLaunch({ tabId: sender.tab.id, table, sysId: message.sysId, featureId: message.featureId, now: deps.now() });
-  if (!launch) throw new Error('That is not a valid request.');
+  if (!launch) throw new Error(tm('That is not a valid request.'));
   await deps.saveLaunch(launch);
   return { opened: opening ? await opening : false };
 }

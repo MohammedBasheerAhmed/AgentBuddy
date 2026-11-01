@@ -49,8 +49,8 @@ export default function TicketInsights({ page, eff, record, header, active, open
     if (!openCard?.id) return;
     setOpen((o) => ({ ...o, [openCard.id]: true }));
     // After the card has opened and the half is shown.
-    const t = setTimeout(() => root.current?.querySelector(`[data-card="${openCard.id}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => root.current?.querySelector(`[data-card="${openCard.id}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
+    return () => clearTimeout(timer);
   }, [openCard]);
 
   // One stable pair of setters per card, so a card can call them from its effects without causing a loop.

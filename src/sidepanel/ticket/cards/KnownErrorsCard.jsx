@@ -4,7 +4,7 @@ import { arrangeProblems } from '../../../insights/changes.js';
 import { useRecordRead } from './data.js';
 import { useReport } from './useInsight.js';
 import { CopyButton, ItemLink, Notes, ReadState } from './bits.jsx';
-import { t } from '../../../i18n/index.js';
+import { t, tn, isolate } from '../../../i18n/index.js';
 
 // N26, known errors and open problems for this configuration item or service, workaround first: a fix may already exist.
 
@@ -18,21 +18,28 @@ export default function KnownErrorsCard({ page, eff, record, active, setSummary,
   const items = arrangeProblems(data?.items);
   const withWorkaround = items.filter((p) => p.workaround).length;
   const knownErrors = items.filter((p) => p.knownError).length;
+  const openProblems = items.length - knownErrors;
   useReport(
     setSummary,
     data
       ? items.length
-        ? [knownErrors && `${knownErrors} known error${knownErrors === 1 ? '' : 's'}`, `${items.length - knownErrors} open problem${items.length - knownErrors === 1 ? '' : 's'}`, withWorkaround && `${withWorkaround} with a workaround`].filter((x) => x && !/^0 /.test(x)).join(' · ')
+        ? [
+            knownErrors > 0 && tn(knownErrors, '{n} known error', '{n} known errors'),
+            openProblems > 0 && tn(openProblems, '{n} open problem', '{n} open problems'),
+            withWorkaround > 0 && t('{n} with a workaround', { n: withWorkaround }),
+          ]
+            .filter(Boolean)
+            .join(' · ')
         : known
-          ? 'None on this item'
+          ? t('None on this item')
           : status === 'skipped'
-            ? 'No CI or service on this ticket'
+            ? t('No CI or service on this ticket')
             : ''
       : ''
   );
   useReport(setAttention, withWorkaround ? 'warn' : '');
 
-  if (!data) return <ReadState state={state} what="problems" onRetry={state.reload} />;
+  if (!data) return <ReadState state={state} what={t('problems')} onRetry={state.reload} />;
   return (
     <>
       {status === 'skipped' && <p className="ab-hint">{data.access[0].note}</p>}
@@ -42,7 +49,7 @@ export default function KnownErrorsCard({ page, eff, record, active, setSummary,
           items={items}
           render={(p) => (
             <div key={p.sysId} className="ab-ins-row">
-              <ItemLink page={page} item={p} line={[p.knownError ? 'Known error' : 'Problem', p.state, p.priority].filter(Boolean).join(' · ')} extra={p.workaround ? `Workaround: ${clip(p.workaround, 220)}` : ''} />
+              <ItemLink page={page} item={p} line={[p.knownError ? t('Known error') : t('Problem'), p.state, p.priority].filter(Boolean).join(' · ')} extra={p.workaround ? t('Workaround: {text}', { text: isolate(clip(p.workaround, 220)) }) : ''} />
               {p.workaround && <CopyButton value={p.workaround} label={t('Copy workaround')} />}
             </div>
           )}

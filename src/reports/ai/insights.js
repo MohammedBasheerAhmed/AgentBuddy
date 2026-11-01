@@ -5,18 +5,19 @@
 // firewall masks them). NOT sent: ticket titles or descriptions, callers' names (repeat callers are only counted), notes. A
 // section that is not on the dashboard is not sent, and the AI is told it is missing so it does not guess.
 import { REPORT_TABLE, addPeople, blockedSet, carriesSensitive, checkAnswer, figure, line, resultNotes, scopeText } from './common.js';
+import { tm } from '../../i18n/core.js';
 
 export const INSIGHT_HEADINGS = Object.freeze(['What stands out:', 'Likely reasons (hypotheses):', 'Suggested actions:']);
 export const INSIGHT_MAX_WORDS = 220;
 
 /** The sections this feature understands, in the order they are written out. `field` is the part's handle for a policy. */
 export const INSIGHT_SECTIONS = Object.freeze([
-  { id: 'overview', title: 'Overview', field: 'insights_overview' },
-  { id: 'handover', title: 'Shift handover', field: 'insights_handover' },
-  { id: 'workload', title: 'Workload and ageing', field: 'insights_workload' },
-  { id: 'sla', title: 'SLA risk radar', field: 'insights_sla' },
-  { id: 'quality', title: 'Quality and trend', field: 'insights_quality' },
-  { id: 'fulfilment', title: 'Request fulfilment', field: 'insights_requests' },
+  { id: 'overview', title: tm('Overview'), field: 'insights_overview' },
+  { id: 'handover', title: tm('Shift handover'), field: 'insights_handover' },
+  { id: 'workload', title: tm('Workload and ageing'), field: 'insights_workload' },
+  { id: 'sla', title: tm('SLA risk radar'), field: 'insights_sla' },
+  { id: 'quality', title: tm('Quality and trend'), field: 'insights_quality' },
+  { id: 'fulfilment', title: tm('Request fulfilment'), field: 'insights_requests' },
 ]);
 // A dashboard that shows none of these has nothing to explain; the others add to it.
 export const INSIGHT_CORE = Object.freeze(['overview', 'workload', 'sla', 'quality', 'fulfilment']);

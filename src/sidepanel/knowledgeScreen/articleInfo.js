@@ -1,15 +1,15 @@
 // Small pure helpers for the Knowledge screen: how fresh an article is, in words; the link to share an article with a customer; and
-// the rows the duplicate groups and the knowledge-gap topics are exported as (CSV, through src/lib/export.js toCsv).
-
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+// the rows the duplicate groups and the knowledge-gap topics are exported as (CSV, through src/lib/export.js toCsv). The CSV files keep
+// their English column names and values: they are data for a spreadsheet, not text of the panel.
+import { t, tn } from '../../i18n/index.js';
 
 /** "3 days", "5 weeks", "8 months", "2 years" for an age in days (>= 1). */
 export function ageText(days) {
   const d = Math.max(1, Math.floor(days));
-  if (d < 14) return plural(d, 'day');
-  if (d < 60) return plural(Math.floor(d / 7), 'week');
-  if (d < 365) return plural(Math.floor(d / 30), 'month');
-  return plural(Math.floor(d / 365), 'year');
+  if (d < 14) return tn(d, '{n} day', '{n} days');
+  if (d < 60) return tn(Math.floor(d / 7), '{n} week', '{n} weeks');
+  if (d < 365) return tn(Math.floor(d / 30), '{n} month', '{n} months');
+  return tn(Math.floor(d / 365), '{n} year', '{n} years');
 }
 
 /**
@@ -20,12 +20,12 @@ export function ageText(days) {
  */
 export function freshnessOf({ ageDays = null, expiresInDays = null } = {}) {
   if (Number.isFinite(expiresInDays) && expiresInDays <= 30) {
-    return { level: 'expiring', text: expiresInDays <= 0 ? 'Expires today' : `Expires in ${plural(expiresInDays, 'day')}` };
+    return { level: 'expiring', text: expiresInDays <= 0 ? t('Expires today') : tn(expiresInDays, 'Expires in {n} day', 'Expires in {n} days') };
   }
   if (!Number.isFinite(ageDays) || ageDays < 0) return { level: 'unknown', text: '' };
-  if (ageDays < 1) return { level: 'fresh', text: 'Updated today' };
-  if (ageDays > 365) return { level: 'stale', text: `Not updated for ${ageText(ageDays)}` };
-  return { level: ageDays > 180 ? 'aging' : 'fresh', text: `Updated ${ageText(ageDays)} ago` };
+  if (ageDays < 1) return { level: 'fresh', text: t('Updated today') };
+  if (ageDays > 365) return { level: 'stale', text: t('Not updated for {age}', { age: ageText(ageDays) }) };
+  return { level: ageDays > 180 ? 'aging' : 'fresh', text: t('Updated {age} ago', { age: ageText(ageDays) }) };
 }
 
 const PORTAL_SEGMENT_RE = /^\/[a-z][a-z0-9_-]{0,30}$/i;

@@ -9,7 +9,7 @@ import { originOf, setPending } from './pendingDraft.js';
 import { choicesOf, createGuard, insertTargets, insertText, insertsForKind, performInsert, primaryOf } from './insertFlow.js';
 import ReviewHints from './ReviewHints.jsx';
 import InsertEditor from './ticket/assist/answers/InsertEditor.jsx';
-import { t } from '../i18n/index.js';
+import { t, isolate } from '../i18n/index.js';
 
 const NO_TEXTS = []; // (one array, so the memoised review below is not redone on every render)
 
@@ -80,10 +80,10 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   async function copy(why = '', value = plain) {
     try {
       await navigator.clipboard.writeText(value);
-      setNote({ kind: 'ok', text: why ? `${why} Copied to the clipboard instead.` : 'Copied to the clipboard.' });
+      setNote({ kind: 'ok', text: why ? t('{why} Copied to the clipboard instead.', { why }) : t('Copied to the clipboard.') });
       audit('copied');
     } catch {
-      setNote({ kind: 'danger', text: 'The browser blocked copying. Select the text and copy it by hand.' });
+      setNote({ kind: 'danger', text: t('The browser blocked copying. Select the text and copy it by hand.') });
     }
   }
 
@@ -94,12 +94,18 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     // exists on the incident too, and filling that by mistake would be easy to miss.
     const here = page.record?.table || page.newRecord?.table || '';
     if (spec.table && here !== spec.table) {
-      setNote({ kind: 'warn', text: `This goes into a ${spec.table === 'kb_knowledge' ? 'knowledge article' : spec.table} form. Open that form first${feature.open?.table === spec.table ? ' (use the button below)' : ''}, then insert. Copy works now.` });
+      const form = spec.table === 'kb_knowledge' ? t('knowledge article') : spec.table;
+      setNote({
+        kind: 'warn',
+        text: feature.open?.table === spec.table
+          ? t('This goes into a {form} form. Open that form first (use the button below), then insert. Copy works now.', { form })
+          : t('This goes into a {form} form. Open that form first, then insert. Copy works now.', { form }),
+      });
       return;
     }
     const value = textFor(spec);
     if (!value) {
-      setNote({ kind: 'danger', text: 'That part is not in the text, so there is nothing to insert. Use Copy instead.' });
+      setNote({ kind: 'danger', text: t('That part is not in the text, so there is nothing to insert. Use Copy instead.') });
       return;
     }
     // Where the text goes: a draft on a blank form says so; an insert for another kind of form goes to the form that is open;
@@ -140,14 +146,14 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
 
   // Edit before Insert: the edited text goes in through the same insert path (insertFlow insertText: the record it was written
   // for, one field, the review again on the edited text, never a save). The editor shows the review's findings itself.
-  async function insertEdited(t, value, mode, force) {
+  async function insertEdited(item, value, mode, force) {
     if (guard.current.busy) return null;
     setNote(null);
     setBusy(true);
     let outcome;
     try {
       outcome = await guard.current.run(null, () =>
-        insertText({ page, target: t, text: value, mode, source, pinned: target, review: { people, scan, internalTexts, internalPhrases }, force, send: (tabId, message) => chrome.tabs.sendMessage(tabId, message) })
+        insertText({ page, target: item, text: value, mode, source, pinned: target, review: { people, scan, internalTexts, internalPhrases }, force, send: (tabId, message) => chrome.tabs.sendMessage(tabId, message) })
       );
     } finally {
       setBusy(false);
@@ -155,10 +161,10 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     if (!outcome || outcome.status === 'findings') return outcome;
     if (outcome.status === 'inserted') {
       setNote({ kind: 'ok', text: outcome.note });
-      setDone((prev) => ({ ...prev, [t.key]: true }));
+      setDone((prev) => ({ ...prev, [item.key]: true }));
       setEditing(null);
       audit('inserted');
-      if (onInserted) onInserted(t.spec);
+      if (onInserted) onInserted(item.spec);
     } else if (outcome.status === 'blocked') {
       setNote({ kind: 'warn', text: outcome.why });
     } else if (outcome.status !== 'empty') {
@@ -172,7 +178,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   const replacing = inserts.some((spec) => fillModeFor(spec.field, spec.mode) === 'replace');
   // Which ticket this answer belongs to, said on the card itself where it can be inserted: an answer must never be taken for another
   // ticket's. (A Copy-only answer, such as a rewrite of pasted text, is not bound to a record, so it names none.)
-  const writtenFor = !inserts.length ? '' : target?.newRecord ? `For a new ${target.table === 'kb_knowledge' ? 'knowledge article' : target.table} form` : source?.number ? `Written for ${source.number}` : '';
+  const writtenFor = !inserts.length ? '' : target?.newRecord ? t('For a new {form} form', { form: target.table === 'kb_knowledge' ? t('knowledge article') : target.table }) : source?.number ? t('Written for {number}', { number: isolate(source.number) }) : '';
 
   return (
     <section className="ab-card ab-result" aria-labelledby={headingId}>
@@ -185,7 +191,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             {choices.map((c, i) => (
               <li key={i}>
                 <SafeText text={c} />
-                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={`Copy reply ${i + 1}`}>{t('Copy this')}</button>
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={t('Copy reply {n}', { n: i + 1 })}>{t('Copy this')}</button>
               </li>
             ))}
           </ol>
@@ -196,8 +202,8 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       {madeWithout && <p className="ab-hint ab-answer-gaps" style={{ marginTop: 8 }}>{madeWithout}</p>}
       {findings && (
         <div className="ab-note ab-note-warn" role="alert" style={{ marginTop: 8 }}>
-          <strong>{isCustomerVisible(findings.spec.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
-          <ul style={{ margin: '4px 0 6px', paddingLeft: 18 }}>
+          <strong>{isCustomerVisible(findings.spec.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
+          <ul style={{ margin: '4px 0 6px', paddingInlineStart: 18 }}>
             {findings.items.map((f, i) => (
               <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
             ))}
@@ -212,9 +218,9 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       {!findings && !editing && <ReviewHints hints={hints} />}
       {editing && (
         <InsertEditor
-          targets={[...targets.filter((t) => t.key === editing.key), ...targets.filter((t) => t.key !== editing.key)]}
+          targets={[...targets.filter((item) => item.key === editing.key), ...targets.filter((item) => item.key !== editing.key)]}
           initial={editing.text}
-          textFor={(t) => textFor(t.spec)}
+          textFor={(item) => textFor(item.spec)}
           review={{ people, scan, internalTexts, internalPhrases }}
           page={page}
           record={page.record}
@@ -237,7 +243,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
               disabled={busy || inserted || (wrongRecord && !spec.table)}
               onClick={() => insert(spec, key, false)}
             >
-              {inserted ? 'Inserted' : spec.label}
+              {inserted ? t('Inserted') : spec.label}
             </button>
           );
         })}
@@ -249,15 +255,15 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
               // The tab is about to leave this record, which resets the panel: keep the draft (in memory, for this site only,
               // for 15 minutes) for the blank form.
               if (!setPending({ feature, text, people, scan, internalTexts, origin: originOf(page.href) })) {
-                setNote({ kind: 'warn', text: 'Agent Buddy could not keep the draft for the new form. Copy it first.' });
+                setNote({ kind: 'warn', text: t('Agent Buddy could not keep the draft for the new form. Copy it first.') });
                 return;
               }
               if (!openNewRecord(page, feature.open.table)) {
-                setNote({ kind: 'warn', text: 'Agent Buddy could not open that form. Copy the text instead.' });
+                setNote({ kind: 'warn', text: t('Agent Buddy could not open that form. Copy the text instead.') });
               }
             }}
           >
-            {feature.open.label || 'Open a new form'}
+            {feature.open.label || t('Open a new form')}
           </button>
         )}
         <button type="button" className={`ab-btn ab-btn-sm${copyFirst ? ' ab-btn-primary' : ''}`} onClick={() => copy()}>{t('Copy')}</button>

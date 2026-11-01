@@ -9,6 +9,7 @@ import { chatParts } from '../../chat/parts.js';
 import { sectionOrAll } from '../../knowledge/sections.js';
 import { numberedChoices } from '../picks.js';
 import { rulesFor } from '../../prompts/rules.js';
+import { t, tm } from '../../i18n/index.js';
 
 // The headings of the chat summary: the ticket notes Insert takes the last one (tests/prompts-contract.test.js).
 export const CHAT_SUMMARY_HEADINGS = Object.freeze(['Summary', 'Outcome', 'Follow-ups', 'Suggested ticket notes']);
@@ -56,15 +57,19 @@ async function addKnowledge(pack, { read }) {
       ...(hits.length ? { requirePreview: true } : {}),
     };
   } catch {
-    return { ...pack, access: [...(pack.access || []), { source: 'kb_knowledge', status: 'error', note: 'The knowledge base could not be searched, so the replies use the chat only.' }] };
+    return { ...pack, access: [...(pack.access || []), { source: 'kb_knowledge', status: 'error', note: t('The knowledge base could not be searched, so the replies use the chat only.') }] };
   }
 }
 
 export default [
   {
     id: 'article-optimise',
-    title: 'Suggest improvements',
-    description: 'Title, keywords, structure, clarity, missing prerequisites and steps that look out of date.',
+    get title() {
+      return t('Suggest improvements');
+    },
+    get description() {
+      return t('Title, keywords, structure, clarity, missing prerequisites and steps that look out of date.');
+    },
     wave: 3,
     kinds: ['knowledge'],
     group: 'work',
@@ -88,8 +93,12 @@ export default [
   },
   {
     id: 'kb-merge-draft',
-    title: 'Draft a merged article',
-    description: 'One article drafted from near-duplicates, with the numbers to retire.',
+    get title() {
+      return t('Draft a merged article');
+    },
+    get description() {
+      return t('One article drafted from near-duplicates, with the numbers to retire.');
+    },
     wave: 3,
     kinds: [],
     keepMasked: true,
@@ -107,8 +116,12 @@ export default [
   },
   {
     id: 'kb-gap-outline',
-    title: 'Draft an article outline',
-    description: 'An outline for an article that many resolved tickets would have needed.',
+    get title() {
+      return t('Draft an article outline');
+    },
+    get description() {
+      return t('An outline for an article that many resolved tickets would have needed.');
+    },
     wave: 3,
     kinds: [],
     keepMasked: true,
@@ -126,8 +139,12 @@ export default [
   },
   {
     id: 'chat-summary',
-    title: 'Summarise this chat',
-    description: 'Summary, outcome and follow-ups, with notes ready to paste into the ticket.',
+    get title() {
+      return t('Summarise this chat');
+    },
+    get description() {
+      return t('Summary, outcome and follow-ups, with notes ready to paste into the ticket.');
+    },
     wave: 2,
     kinds: ['chat'],
     group: 'resolve',
@@ -137,8 +154,10 @@ export default [
     // The ticket notes go into the work notes of the form that is open; when the form does not allow it, the person gets Copy.
     insert: {
       field: 'work_notes',
-      label: 'Add notes to work notes',
-      fieldLabel: 'Work notes',
+      get label() {
+        return t('Add notes to work notes');
+      },
+      fieldLabel: tm('Work notes'),
       pick: (text) => sectionOrAll(text, 'Suggested ticket notes', CHAT_SUMMARY_HEADINGS),
     },
     system:
@@ -154,8 +173,12 @@ export default [
   },
   {
     id: 'chat-reply',
-    title: 'Suggest replies',
-    description: 'Three short replies to the customer\'s last message, using the chat and the knowledge base.',
+    get title() {
+      return t('Suggest replies');
+    },
+    get description() {
+      return t('Three short replies to the customer\'s last message, using the chat and the knowledge base.');
+    },
     wave: 2,
     kinds: ['chat'],
     group: 'reply',

@@ -4,7 +4,7 @@ import DrillLink from './DrillLink.jsx';
 import { t } from '../../i18n/index.js';
 
 const ARROW = { up: '▲', down: '▼', flat: '▬' };
-const WORD = { up: 'Up', down: 'Down', flat: 'No change' };
+const wordOf = (direction) => ({ up: t('Up'), down: t('Down'), flat: t('No change') })[direction];
 
 /**
  * One headline number. HTML, not SVG.
@@ -42,9 +42,9 @@ export default function Tile({ label, value, hint, delta, tone = 'neutral', onOp
       {delta?.text && !missing && !busy ? (
         <span className={`ab-tile-delta${delta.good === true ? ' ab-tile-delta-good' : delta.good === false ? ' ab-tile-delta-bad' : ''}`}>
           <span aria-hidden="true">{ARROW[dir]}</span>
-          <span className="ab-chart-sr">{WORD[dir]} </span>
+          <span className="ab-chart-sr">{wordOf(dir)} </span>
           {delta.text}
-          {delta.good === true ? ' (better)' : delta.good === false ? ' (worse)' : ''}
+          {delta.good === true ? ` (${t('better')})` : delta.good === false ? ` (${t('worse')})` : ''}
         </span>
       ) : null}
     </>
@@ -53,7 +53,7 @@ export default function Tile({ label, value, hint, delta, tone = 'neutral', onOp
   const className = `ab-tile ${toneClass(missing ? 'neutral' : tone)}${missing ? ' ab-tile-missing' : ''}`;
   if (onOpen && href && !missing && !busy) {
     return (
-      <DrillLink className={`${className} ab-tile-button ab-tile-link`} href={href} onOpen={onOpen} label={`${describeTile({ label, value: shown, hint, delta })} Open the list.`}>
+      <DrillLink className={`${className} ab-tile-button ab-tile-link`} href={href} onOpen={onOpen} label={t('{description} Open the list.', { description: describeTile({ label, value: shown, hint, delta }) })}>
         {body}
       </DrillLink>
     );

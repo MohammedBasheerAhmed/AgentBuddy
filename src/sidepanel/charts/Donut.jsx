@@ -2,6 +2,7 @@ import React from 'react';
 import ChartFrame, { PatternDefs, Swatch, patternId, useUid } from './ChartFrame.jsx';
 import { donutArcs, formatNumber, itemsToTable, percent, summarizeItems, toneClass, toneForIndex } from './geometry.js';
 import DrillLink, { hrefOf } from './DrillLink.jsx';
+import { t } from '../../i18n/index.js';
 
 const RADIUS = 52;
 
@@ -14,7 +15,7 @@ const RADIUS = 52;
  *   onDrill(item)
  *   hrefFor(item) with onDrill: the address of the list a legend row opens; the row is then a real link (see DrillLink.jsx)
  */
-export default function Donut({ title, items, centerLabel = '', onDrill, hrefFor, emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
+export default function Donut({ title, items, centerLabel = '', onDrill, hrefFor, emptyText = t('Nothing to show.'), labelHeader, valueHeader, defaultTable = false }) {
   const uid = useUid();
   const list = (Array.isArray(items) ? items : []).filter((it) => it && typeof it === 'object').map((it, i) => ({ ...it, tone: it.tone || toneForIndex(i) }));
   const ring = donutArcs(list, { radius: RADIUS, thickness: 20 });
@@ -35,7 +36,7 @@ export default function Donut({ title, items, centerLabel = '', onDrill, hrefFor
             <span className="ab-legend-pct">{ring.total > 0 ? `${pct}%` : '-'}</span>
           </>
         );
-        const name = `${arc.label}: ${formatNumber(arc.value)}${ring.total > 0 ? `, ${pct}%` : ''}. Open the list.`;
+        const name = t('{name}. Open the list.', { name: `${arc.label}: ${formatNumber(arc.value)}${ring.total > 0 ? `, ${pct}%` : ''}` });
         const href = onDrill && hrefFor ? hrefOf(hrefFor, item) : '';
         return (
           <li key={arc.key}>

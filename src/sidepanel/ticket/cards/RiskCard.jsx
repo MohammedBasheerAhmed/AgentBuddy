@@ -11,7 +11,10 @@ import { t } from '../../../i18n/index.js';
 // N9, risk signals without AI: angry or urgent wording, capitals, chasers, reopen and reassignment counts, time waiting, the VIP flag,
 // the SLA, and a priority that looks too low for what the ticket shows. Each signal says why. From the `glance` read: no read of its own.
 
-const LEVEL = { high: ['High', 'danger'], medium: ['Watch', 'warn'], low: ['Note', ''] };
+const levelFor = (level) => {
+  const levels = { high: [t('High'), 'danger'], medium: [t('Watch'), 'warn'], low: [t('Note'), ''] };
+  return levels[level] || levels.low;
+};
 
 export default function RiskCard({ page, eff, record, active, setSummary, setAttention }) {
   const ticket = useTicketFacts({ page, record, eff, active });
@@ -25,7 +28,7 @@ export default function RiskCard({ page, eff, record, active, setSummary, setAtt
   useReport(setSummary, risk ? risk.summary : '');
   useReport(setAttention, risk ? risk.attention : '');
 
-  if (!risk) return <ReadState state={ticket} what="this ticket" onRetry={ticket.reload} />;
+  if (!risk) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   return (
     <>
       <p className="ab-hint">{t('Counted with word and count rules, not a judgement: they miss sarcasm and other languages.')}</p>
@@ -35,7 +38,7 @@ export default function RiskCard({ page, eff, record, active, setSummary, setAtt
           items={risk.signals}
           className="ab-chk-list"
           render={(s) => {
-            const [word, tone] = LEVEL[s.level] || LEVEL.low;
+            const [word, tone] = levelFor(s.level);
             return (
               <div key={s.id} className="ab-chk-item" data-status={s.level === 'high' ? 'warn' : ''}>
                 <span className="ab-chk-head">

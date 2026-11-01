@@ -4,7 +4,7 @@ import { routingVote } from '../../../insights/routing.js';
 import { useLookalikes, useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ItemLink, Notes, ReadState } from './bits.jsx';
-import { t } from '../../../i18n/index.js';
+import { t, isolate } from '../../../i18n/index.js';
 
 // N10, where similar tickets went: a count over the solved look-alikes' own assignment groups and categories. A hint for routing, not
 // a rule; the AI version (with reasons) is in AI Assist.
@@ -15,13 +15,13 @@ export default function RoutingCard({ page, eff, record, active, setSummary }) {
   const fields = ticket.data?.pack?.fields || {};
   const hits = Array.isArray(look.data?.hits) ? look.data.hits : [];
   const vote = routingVote(hits, { group: fields.assignment_group, category: fields.category });
-  useReport(setSummary, look.data && !look.error ? (vote.enough ? vote.line : 'Too few solved look-alikes to tell') : '');
+  useReport(setSummary, look.data && !look.error ? (vote.enough ? vote.line : t('Too few solved look-alikes to tell')) : '');
 
-  if (!look.data || look.error) return <ReadState state={look} what="solved tickets like this one" onRetry={look.reload} />;
+  if (!look.data || look.error) return <ReadState state={look} what={t('solved tickets like this one')} onRetry={look.reload} />;
   if (!vote.enough) {
     return (
       <>
-        <p className="ab-hint">{hits.length ? 'The solved look-alikes found do not say which group solved them.' : 'No solved look-alikes were found, so there is nothing to count.'}</p>
+        <p className="ab-hint">{hits.length ? t('The solved look-alikes found do not say which group solved them.') : t('No solved look-alikes were found, so there is nothing to count.')}</p>
         <Notes access={look.data.access} />
       </>
     );
@@ -34,7 +34,7 @@ export default function RoutingCard({ page, eff, record, active, setSummary }) {
       {vote.detail && <p className="ab-hint">{vote.detail}</p>}
       {!vote.strong && <p className="ab-hint">{t('The look-alikes do not agree much: treat this as a weak hint.')}</p>}
       {examples.length > 0 && <ShowMore items={examples} render={(h) => <ItemLink key={h.sysId} page={page} item={h} line={[h.category, h.subcategory].filter(Boolean).join(' / ')} />} />}
-      {others.length > 0 && <p className="ab-hint">Also: {others.map((g) => `${g.name} (${g.count})`).join(', ')}.</p>}
+      {others.length > 0 && <p className="ab-hint">{t('Also: {groups}.', { groups: others.map((g) => `${isolate(g.name)} (${g.count})`).join(t(', ')) })}</p>}
       <Notes access={look.data.access} />
     </>
   );

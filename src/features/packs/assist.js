@@ -13,6 +13,7 @@ import { relatedParts } from '../../itsm/parts.js';
 import { composeParts } from '../../compose/rewrite.js';
 import { rulesFor } from '../../prompts/rules.js';
 import core from './core.js';
+import { t } from '../../i18n/index.js';
 
 /** The longest question or description the panel accepts (a question, not a document). */
 export const MAX_ASK_CHARS = 500;
@@ -34,8 +35,8 @@ export const clipAsk = (text) =>
 /** '' when the text can be asked; otherwise what to tell the person. */
 export function askProblem(text) {
   const clean = clipAsk(text);
-  if (!clean) return 'Type your question first.';
-  if (clean.length < MIN_ASK_CHARS) return 'Say a little more, so the AI knows what you want to find out.';
+  if (!clean) return t('Type your question first.');
+  if (clean.length < MIN_ASK_CHARS) return t('Say a little more, so the AI knows what you want to find out.');
   return '';
 }
 
@@ -58,8 +59,12 @@ export function askParts(pack, question = '') {
 
 const ASK_TICKET = {
   id: 'ask-ticket',
-  title: 'Ask about this ticket',
-  description: 'Your own question about this ticket, answered from what the ticket says.',
+  get title() {
+    return t('Ask about this ticket');
+  },
+  get description() {
+    return t('Your own question about this ticket, answered from what the ticket says.');
+  },
   wave: 3,
   kinds: [], // not on the Actions list: the question box on the Ticket screen runs it (src/sidepanel/ticket/assist/answers)
   group: 'understand',
@@ -97,8 +102,12 @@ export function wantedResultParts(pack, wanted = '') {
 
 const REWRITE_OWN = {
   id: 'rewrite-own',
-  title: 'Rewrite as you describe',
-  description: 'Rewrites an answer the way you describe it: shorter, warmer, another order, another language.',
+  get title() {
+    return t('Rewrite as you describe');
+  },
+  get description() {
+    return t('Rewrites an answer the way you describe it: shorter, warmer, another order, another language.');
+  },
   wave: 3,
   previewGroup: 'rewrite', // one "check what will be sent" with the other rewrite presets
   kinds: [],

@@ -10,10 +10,11 @@
 //     the setup help shows. Visited sections stay mounted (hidden) on the last page seen, so a new ServiceNow tab picks them up.
 
 import { isEnabledPage } from './pageState.js';
+import { tm, t as tr } from '../i18n/index.js';
 
 // What the sections work on meanwhile is said too: an Insert from a section goes to that last ServiceNow tab, not to the one on show.
-export const BANNER_NOT_SERVICENOW = 'This tab is not a ServiceNow page. Agent Buddy keeps working with your last ServiceNow tab.';
-export const BANNER_NOT_ON = 'Agent Buddy is not turned on for this tab. It keeps working with your last ServiceNow tab.';
+export const BANNER_NOT_SERVICENOW = tm('This tab is not a ServiceNow page. Agent Buddy keeps working with your last ServiceNow tab.');
+export const BANNER_NOT_ON = tm('Agent Buddy is not turned on for this tab. It keeps working with your last ServiceNow tab.');
 
 /**
  * @param {{ ids: string[], active: string, visited: Set<string>, page: object, lastGood: object|null, lastSeen: object|null }} input
@@ -48,7 +49,7 @@ export function planPanel({ ids, active, visited, page, lastGood, lastSeen }) {
     enabled,
     base,
     mountPage,
-    banner: !enabled && base ? (page.origin ? BANNER_NOT_ON : BANNER_NOT_SERVICENOW) : '',
+    banner: !enabled && base ? tr(page.origin ? BANNER_NOT_ON : BANNER_NOT_SERVICENOW) : '',
     showNav,
     visible,
     recordPage: pageMounted ? record : null,

@@ -2,6 +2,7 @@ import React from 'react';
 import ChartFrame from './ChartFrame.jsx';
 import { barLayout, clipLabel, formatNumber, itemsToTable, percent, summarizeItems, toneClass, withUnit } from './geometry.js';
 import DrillLink, { hrefOf } from './DrillLink.jsx';
+import { t } from '../../i18n/index.js';
 
 const BAR_HEIGHT = 10;
 
@@ -16,7 +17,7 @@ const BAR_HEIGHT = 10;
  *   hrefFor(item)  with onDrill: the address of the list a row opens; the row is then a real link (see DrillLink.jsx). A row without
  *                  an address is not clickable at all, so nothing looks like it opens something it cannot.
  */
-export default function HorizontalBar({ title, items, unit = '', total, onDrill, hrefFor, maxItems = 12, emptyText = 'Nothing to show.', labelHeader, valueHeader, defaultTable = false }) {
+export default function HorizontalBar({ title, items, unit = '', total, onDrill, hrefFor, maxItems = 12, emptyText = t('Nothing to show.'), labelHeader, valueHeader, defaultTable = false }) {
   const list = Array.isArray(items) ? items.filter((it) => it && typeof it === 'object') : [];
   const layout = barLayout(list, { width: 100, rowHeight: BAR_HEIGHT, maxItems });
   const denominator = Number(total) > 0 ? Number(total) : layout.total;
@@ -44,7 +45,7 @@ export default function HorizontalBar({ title, items, unit = '', total, onDrill,
         </svg>
       </>
     );
-    const name = `${row.label}: ${valueText}${pct !== null ? `, ${pct}%` : ''}. Open the list.`;
+    const name = t('{name}. Open the list.', { name: `${row.label}: ${valueText}${pct !== null ? `, ${pct}%` : ''}` });
     const href = onDrill && hrefFor ? hrefOf(hrefFor, item) : '';
     return (
       <li key={row.key}>
@@ -72,7 +73,7 @@ export default function HorizontalBar({ title, items, unit = '', total, onDrill,
       empty={list.length === 0}
       emptyText={emptyText}
       table={{ ...itemsToTable(list, { unit, total, labelHeader, valueHeader }), caption: title }}
-      note={layout.hidden.count > 0 ? `and ${layout.hidden.count} more (${withUnit(formatNumber(layout.hidden.value), unit)}). Show as table for all rows.` : ''}
+      note={layout.hidden.count > 0 ? t('and {n} more ({value}). Show as table for all rows.', { n: layout.hidden.count, value: withUnit(formatNumber(layout.hidden.value), unit) }) : ''}
     >
       <ul className="ab-hbar">{rows}</ul>
     </ChartFrame>

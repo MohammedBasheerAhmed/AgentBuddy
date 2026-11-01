@@ -4,9 +4,11 @@
 import { COMMON_WORDS } from '../../pii/dictionary.js';
 import { oneLine } from '../../context/util.js';
 import { line } from './common.js';
+import { tm } from '../../i18n/core.js';
 
-export const PER_PERSON_NOTE =
-  'The AI\'s answer may rank, score or name individual people. This tool is for patterns in the work of a group, not for judging people, so it is held back. Use the group themes only, and do not share lines about individuals.';
+export const PER_PERSON_NOTE = tm(
+  'The AI\'s answer may rank, score or name individual people. This tool is for patterns in the work of a group, not for judging people, so it is held back. Use the group themes only, and do not share lines about individuals.'
+);
 
 // Words that rate or rank. Used with a person's name, a label such as "Agent A", or a placeholder in the same sentence.
 const RATING = new RegExp(

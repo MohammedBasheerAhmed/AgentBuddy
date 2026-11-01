@@ -40,12 +40,13 @@ function unescapeText(raw, quote) {
 }
 
 const STR = '(?:\'((?:\\\\.|[^\'\\\\\\n])*)\'|"((?:\\\\.|[^"\\\\\\n])*)")';
-const CALL_ONE = new RegExp(`(?<![\\w.$])(t|tm|tx)\\(\\s*${STR}`, 'g');
+// (`tr` is `t` imported under another name, in a file that has a variable called t.)
+const CALL_ONE = new RegExp(`(?<![\\w.$])(t|tr|tm|tx)\\(\\s*${STR}`, 'g');
 const CALL_PLURAL = new RegExp(`(?<![\\w.$])tn\\(\\s*[^,()]+(?:\\([^()]*\\))?[^,()]*,\\s*${STR}\\s*,\\s*${STR}`, 'g');
 // A call that cannot be read: t(`..`), t(a + b), t(f(x)), and a tm() or tx() whose text is not written out. (t(NAME) and t(TABLE[key]) are
 // fine: they show a text that was marked with tm() where it is written.)
-const DYNAMIC = /(?<![\w.$])(?:(?:t|tm|tx)\(\s*(?:`|[A-Za-z_$][\w$.]*\s*[+(]|[0-9({!\[])|(?:tm|tx)\((?!\s*['"]))/g;
-const DYNAMIC_PLUS = new RegExp(`(?<![\\w.$])(?:t|tm|tx)\\(\\s*${STR}\\s*\\+`, 'g');
+const DYNAMIC = /(?<![\w.$])(?:(?:t|tr|tm|tx)\(\s*(?:`|[A-Za-z_$][\w$.]*\s*[+(]|[0-9({!\[])|(?:tm|tx)\((?!\s*['"]))/g;
+const DYNAMIC_PLUS = new RegExp(`(?<![\\w.$])(?:t|tr|tm|tx)\\(\\s*${STR}\\s*\\+`, 'g');
 const DYNAMIC_PLURAL = /(?<![\w.$])tn\(\s*[^,()]+(?:\([^()]*\))?[^,()]*,\s*(?!['"])[^\s]/g;
 
 // Comments are not code: blank them out (keeping the line breaks, so the line numbers stay right).
@@ -67,7 +68,7 @@ function collect(files) {
   };
   for (const file of files) {
     const code = withoutComments(fs.readFileSync(file, 'utf8'));
-    if (!/\b(?:t|tm|tn|tx)\(/.test(code)) continue;
+    if (!/\b(?:t|tr|tm|tn|tx)\(/.test(code)) continue;
     for (const m of code.matchAll(CALL_ONE)) {
       const raw = m[2] !== undefined ? m[2] : m[3];
       add(unescapeText(raw), file, lineOf(code, m.index), false);
@@ -128,7 +129,10 @@ function checkI18n(options = {}) {
       if (absent.length) badPlural.push({ key, why: `missing forms: ${absent.join(', ')}` });
       for (const form of Object.keys(entry)) if (!PLURAL_CATEGORIES.includes(form)) badPlural.push({ key, why: `unknown form "${form}"` });
       for (const [form, text] of Object.entries(entry)) {
-        if (paramsOf(String(text)) !== paramsOf(other) && paramsOf(String(text)) !== paramsOf(one)) params.push({ key: `${key} [${form}]`, english: paramsOf(other), arabic: paramsOf(String(text)) });
+        // A form may leave out {n} (Arabic says "تذكرة واحدة" and "تذكرتان" without a number) but may not use a name the English does not have.
+        const have = new Set(paramsOf(other).split(',').filter(Boolean));
+        const extra = paramsOf(String(text)).split(',').filter((name) => name && !have.has(name));
+        if (extra.length) params.push({ key: `${key} [${form}]`, english: paramsOf(other), arabic: paramsOf(String(text)) });
       }
     } else if (typeof entry !== 'string') {
       badPlural.push({ key, why: 'an object is only for texts with a count (tn)' });
@@ -140,4 +144,20 @@ function checkI18n(options = {}) {
   return { missing, extra, params, dynamic, badPlural, used: keys.size, entries: Object.keys(table).length };
 }
 
-module.exports = { checkI18n, collect, loadCatalogue, walk };
+/** Each catalogue file on its own: [{ file, table }] (to see whether two files give one English text two different translations). */
+function loadCatalogueFiles(language = 'ar') {
+  const dir = path.join(SRC, 'i18n', language);
+  return fs
+    .readdirSync(dir)
+    .filter((name) => name.endsWith('.js') && name !== 'index.js')
+    .sort()
+    .map((name) => {
+      const built = esbuild.buildSync({ entryPoints: [path.join(dir, name)], bundle: true, format: 'cjs', platform: 'node', write: false, logLevel: 'silent' });
+      const module_ = { exports: {} };
+      // eslint-disable-next-line no-new-func -- our own source, built a moment ago
+      new Function('module', 'exports', built.outputFiles[0].text)(module_, module_.exports);
+      return { file: name, table: Object.values(module_.exports)[0] || {} };
+    });
+}
+
+module.exports = { checkI18n, collect, loadCatalogue, loadCatalogueFiles, walk };

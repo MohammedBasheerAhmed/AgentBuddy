@@ -16,7 +16,7 @@ export default function OutageCard({ page, eff, record, active, setSummary, setA
   useReport(setSummary, sig ? sig.line || sig.note : '');
   useReport(setAttention, sig?.over ? 'danger' : '');
 
-  if (!sig) return <ReadState state={ticket} what="this ticket" onRetry={ticket.reload} />;
+  if (!sig) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   const recentFirst = [...sig.hits].sort((a, b) => (a.hoursAgo ?? 1e9) - (b.hoursAgo ?? 1e9));
   return (
     <>
@@ -30,7 +30,7 @@ export default function OutageCard({ page, eff, record, active, setSummary, setA
       {recentFirst.length > 0 && (
         <ShowMore
           items={recentFirst}
-          render={(h) => <ItemLink key={h.sysId} page={page} item={h} line={[h.state, Number.isFinite(h.hoursAgo) ? `${h.hoursAgo} h ago` : '', h.assignment_group].filter(Boolean).join(' · ')} />}
+          render={(h) => <ItemLink key={h.sysId} page={page} item={h} line={[h.state, Number.isFinite(h.hoursAgo) ? t('{hours} h ago', { hours: h.hoursAgo }) : '', h.assignment_group].filter(Boolean).join(' · ')} />}
         />
       )}
       <Notes access={ticket.data?.outage?.access} />

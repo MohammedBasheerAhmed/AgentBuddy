@@ -5,6 +5,8 @@
 // A field the pack could not read is not "missing": on a sensitive (HR) record free text is not read at all, and then the text
 // rules are skipped instead of reporting every text as empty.
 
+import { isolate, t } from '../i18n/index.js';
+
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
 // Kinds where a fault is being worked (a request or a change has other key facts).
@@ -17,7 +19,33 @@ const STEPS = /\bsteps?\b|\breproduce\b|^\s*(?:\d+[.)]|[-*])\s+\S|\bwhen i\b|\ba
 const CUSTOMER_ROLES = ['caller', 'requested_for', 'contact', 'consumer'];
 
 // A word or two per item, for the card's one-line summary.
-export const SHORT = Object.freeze({ title: 'title', description: 'description', ci: 'CI', impact: 'who is affected', error: 'error text', contact: 'contact', steps: 'steps', category: 'category' });
+// (Getters, so the words follow the language when they are read.)
+export const SHORT = Object.freeze({
+  get title() {
+    return t('title');
+  },
+  get description() {
+    return t('description');
+  },
+  get ci() {
+    return t('CI');
+  },
+  get impact() {
+    return t('who is affected');
+  },
+  get error() {
+    return t('error text');
+  },
+  get contact() {
+    return t('contact');
+  },
+  get steps() {
+    return t('steps');
+  },
+  get category() {
+    return t('category');
+  },
+});
 
 const item = (id, title, why) => ({ id, title, why, short: SHORT[id] || id });
 
@@ -38,33 +66,33 @@ export function missingDetails(pack) {
 
   if (textRead) {
     const words = title.split(/\s+/).filter(Boolean);
-    if (!title) items.push(item('title', 'No short description', 'A clear title is what the next person and the search for look-alikes start from.'));
-    else if (words.length < 3 || VAGUE_TITLE.test(title)) items.push(item('title', 'The short description is vague', 'Say what fails and where, for example "VPN drops every 10 minutes on the London profile".'));
-    if (!body) items.push(item('description', 'No description', 'Ask what happened, since when, and what the person was doing.'));
-    else if (body.length < 40) items.push(item('description', 'The description is very short', 'A few more sentences save a round trip to the customer.'));
+    if (!title) items.push(item('title', t('No short description'), t('A clear title is what the next person and the search for look-alikes start from.')));
+    else if (words.length < 3 || VAGUE_TITLE.test(title)) items.push(item('title', t('The short description is vague'), t('Say what fails and where, for example "VPN drops every 10 minutes on the London profile".')));
+    if (!body) items.push(item('description', t('No description'), t('Ask what happened, since when, and what the person was doing.')));
+    else if (body.length < 40) items.push(item('description', t('The description is very short'), t('A few more sentences save a round trip to the customer.')));
   }
   if (['incident', 'problem', 'case'].includes(kind) && !text(f.cmdb_ci) && !text(f.asset) && !text(f.product)) {
-    items.push(item('ci', 'No configuration item', 'Without it, outages, recent changes and known errors on the same item cannot be checked.'));
+    items.push(item('ci', t('No configuration item'), t('Without it, outages, recent changes and known errors on the same item cannot be checked.')));
   }
   if (textRead && ['incident', 'case', 'task'].includes(kind) && !SCOPE.test(all)) {
-    items.push(item('impact', 'Not clear who else is affected', `Ask whether colleagues have the same problem.${text(f.impact) ? ` The impact is set to ${text(f.impact)}.` : ''}`));
+    items.push(item('impact', t('Not clear who else is affected'), `${t('Ask whether colleagues have the same problem.')}${text(f.impact) ? ` ${t('The impact is set to {impact}.', { impact: isolate(text(f.impact)) })}` : ''}`));
   }
   if (textRead && ['incident', 'problem', 'case'].includes(kind) && (title || body) && !ERROR_TEXT.test(all)) {
-    items.push(item('error', 'No error message quoted', 'The exact error text (or a screenshot) is often the fastest way to the fix.'));
+    items.push(item('error', t('No error message quoted'), t('The exact error text (or a screenshot) is often the fastest way to the fix.')));
   }
   const people = Array.isArray(pack?.people) ? pack.people : [];
   const customer = people.find((p) => CUSTOMER_ROLES.includes(p?.role));
   // An email that could not be read (sys_user refused) is not an email that is missing.
   const usersRead = !(Array.isArray(pack?.access) ? pack.access : []).some((a) => a?.source === 'sys_user' && a?.status !== 'ok' && a?.status !== 'empty');
   if (textRead && kind !== 'problem') {
-    if (!customer) items.push(item('contact', 'No caller or contact', 'Nobody is named as the person to keep informed.'));
-    else if (!text(customer.email) && usersRead) items.push(item('contact', 'No email address for the caller', 'Check how to reach them before you promise an update.'));
+    if (!customer) items.push(item('contact', t('No caller or contact'), t('Nobody is named as the person to keep informed.')));
+    else if (!text(customer.email) && usersRead) items.push(item('contact', t('No email address for the caller'), t('Check how to reach them before you promise an update.')));
   }
   if (textRead && ['incident', 'problem', 'case'].includes(kind) && body && !STEPS.test(body)) {
-    items.push(item('steps', 'No steps to reproduce', 'Ask what they do just before it happens, so you can see it yourself.'));
+    items.push(item('steps', t('No steps to reproduce'), t('Ask what they do just before it happens, so you can see it yourself.')));
   }
   if (['incident', 'problem', 'case'].includes(kind) && !text(f.category)) {
-    items.push(item('category', 'No category', 'The category drives routing and reports.'));
+    items.push(item('category', t('No category'), t('The category drives routing and reports.')));
   }
   return { applicable: true, items, textRead };
 }

@@ -4,6 +4,7 @@ import { exportFileName, maskTables, tablesToCsv, tablesToTsv } from '../../repo
 import { copyText, downloadText } from './download.js';
 import { dashboardTables } from './dashboardEnv.js';
 import { t } from '../../i18n/index.js';
+import { shown } from '../../reports/shown.js';
 
 // F7, once per dashboard: everything on screen as one CSV or one table to paste, a single section when that is what is wanted, and
 // the "mask names and emails" switch. Files are made here, in the browser, from the results already loaded (memory only): nothing is
@@ -23,10 +24,11 @@ export default function ExportPanel({ name, entries, order, mask, setMask, maskM
   const sections = (entries || [])
     .filter((e) => e?.result && at.has(e.id))
     .sort((a, b) => at.get(a.id) - at.get(b.id))
-    .map((e) => ({ id: e.id, title: String(e.result.title || 'Section'), tables: resultTables(e.result).filter((t) => t.rows.length) }))
+    // `title` is what the list shows; `fileTitle` (English) makes the file's name.
+    .map((e) => ({ id: e.id, title: shown(String(e.result.title || t('Section'))), fileTitle: String(e.result.title || 'Section'), tables: resultTables(e.result).filter((x) => x.rows.length) }))
     .filter((s) => s.tables.length);
-  const saved = mask ? 'CSV saved to your downloads, with names masked.' : 'CSV saved to your downloads.';
-  const copied = (ok) => say(ok ? 'Copied. Paste it into a spreadsheet or a mail.' : 'Could not copy. Use Download instead.');
+  const saved = mask ? t('CSV saved to your downloads, with names masked.') : t('CSV saved to your downloads.');
+  const copied = (ok) => say(ok ? t('Copied. Paste it into a spreadsheet or a mail.') : t('Could not copy. Use Download instead.'));
 
   return (
     <section className="ab-card ab-export-panel" aria-label={t('Export')}>
@@ -60,10 +62,10 @@ export default function ExportPanel({ name, entries, order, mask, setMask, maskM
                 {sections.map((s) => (
                   <li key={s.id} className="ab-export-item">
                     <span className="ab-export-name">{s.title}</span>
-                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-label={`Download ${s.title} as CSV`} onClick={() => { downloadText(exportFileName(s.title), tablesToCsv(masked(s.tables))); say(saved); }}>
+                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-label={t('Download {title} as CSV', { title: s.title })} onClick={() => { downloadText(exportFileName(s.fileTitle), tablesToCsv(masked(s.tables))); say(saved); }}>
                       {t('Download CSV')}
                     </button>
-                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-label={`Copy ${s.title} as a table`} onClick={async () => copied(await copyText(tablesToTsv(masked(s.tables))))}>
+                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-label={t('Copy {title} as a table', { title: s.title })} onClick={async () => copied(await copyText(tablesToTsv(masked(s.tables))))}>
                       {t('Copy')}
                     </button>
                   </li>

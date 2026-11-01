@@ -7,11 +7,12 @@ import QualityGateView from './tabs/QualityGateView.jsx';
 import KnowledgeRecordView from './tabs/KnowledgeRecordView.jsx';
 import ChatRecordView from './tabs/ChatRecordView.jsx';
 import FulfilmentChecklistView from './tabs/FulfilmentChecklistView.jsx';
+import { tm } from '../i18n/index.js';
 
 export const RECORD_TABS = [
-  { id: 'request', label: 'Request', kinds: ['request', 'requested_item', 'catalog_task'], View: RequestExplainerView },
-  { id: 'check', label: 'Check', kinds: ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'task'], View: QualityGateView },
-  { id: 'article', label: 'Article', kinds: ['knowledge'], View: KnowledgeRecordView },
-  { id: 'checklist', label: 'Checklist', kinds: ['catalog_task', 'requested_item'], View: FulfilmentChecklistView },
-  { id: 'chat', label: 'Chat', kinds: ['chat'], View: ChatRecordView },
+  { id: 'request', label: tm('Request'), kinds: ['request', 'requested_item', 'catalog_task'], View: RequestExplainerView },
+  { id: 'check', label: tm('Check'), kinds: ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'task'], View: QualityGateView },
+  { id: 'article', label: tm('Article'), kinds: ['knowledge'], View: KnowledgeRecordView },
+  { id: 'checklist', label: tm('Checklist'), kinds: ['catalog_task', 'requested_item'], View: FulfilmentChecklistView },
+  { id: 'chat', label: tm('Chat'), kinds: ['chat'], View: ChatRecordView },
 ];

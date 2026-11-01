@@ -11,6 +11,7 @@
 // options (all optional): now (ms number or () => ms), makeId (used) => string, for predictable tests.
 
 import { stripUnsafeChars } from '../render/safeText.js';
+import { isolate, t } from '../i18n/index.js';
 
 export const LIMITS = Object.freeze({ title: 80, shortcut: 30, body: 8000, count: 500, importChars: 2000000, importEntries: 2000, importErrors: 20 });
 
@@ -51,27 +52,28 @@ const oneLine = (t) => t.replace(/\s+/g, ' ').trim();
  * Over-long values are rejected, never silently cut.
  */
 export function normalizeSnippet(input, options) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return { snippet: null, errors: ['This is not a snippet.'] };
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { snippet: null, errors: [t('This is not a snippet.')] };
   const errors = [];
-  const field = (name, label) => {
+  // `mustBeText` says the problem in the panel's language, only when there is one.
+  const field = (name, mustBeText) => {
     const v = input[name];
     if (v === undefined || v === null) return '';
     if (typeof v !== 'string') {
-      errors.push(`${label} must be text.`);
+      errors.push(mustBeText());
       return '';
     }
     return v;
   };
-  const title = oneLine(stripUnsafeChars(field('title', 'The title')));
-  const shortcut = stripUnsafeChars(field('shortcut', 'The search word')).trim().toLowerCase();
-  const body = stripUnsafeChars(field('body', 'The text'));
+  const title = oneLine(stripUnsafeChars(field('title', () => t('The title must be text.'))));
+  const shortcut = stripUnsafeChars(field('shortcut', () => t('The search word must be text.'))).trim().toLowerCase();
+  const body = stripUnsafeChars(field('body', () => t('The text must be text.')));
 
-  if (!title) errors.push('A title is needed.');
-  else if (title.length > LIMITS.title) errors.push(`The title is longer than ${LIMITS.title} characters.`);
-  if (shortcut.length > LIMITS.shortcut) errors.push(`The search word is longer than ${LIMITS.shortcut} characters.`);
-  else if (shortcut && !SHORTCUT_OK.test(shortcut)) errors.push('The search word can only use a-z, 0-9, dash, underscore and slash (no spaces).');
-  if (!body.trim()) errors.push('The text is empty.');
-  else if (body.length > LIMITS.body) errors.push(`The text is longer than ${LIMITS.body} characters.`);
+  if (!title) errors.push(t('A title is needed.'));
+  else if (title.length > LIMITS.title) errors.push(t('The title is longer than {max} characters.', { max: LIMITS.title }));
+  if (shortcut.length > LIMITS.shortcut) errors.push(t('The search word is longer than {max} characters.', { max: LIMITS.shortcut }));
+  else if (shortcut && !SHORTCUT_OK.test(shortcut)) errors.push(t('The search word can only use a-z, 0-9, dash, underscore and slash (no spaces).'));
+  if (!body.trim()) errors.push(t('The text is empty.'));
+  else if (body.length > LIMITS.body) errors.push(t('The text is longer than {max} characters.', { max: LIMITS.body }));
   if (errors.length) return { snippet: null, errors };
 
   const now = nowOf(options);
@@ -94,11 +96,11 @@ const owner = (list, shortcut, exceptId) => (shortcut ? list.find((s) => s.short
 /** Adds a snippet. Returns { list, snippet, error }; error is '' on success and list is then a new array. */
 export function addSnippet(list, input, options) {
   const current = Array.isArray(list) ? list : [];
-  if (current.length >= LIMITS.count) return { list: current, snippet: null, error: `The library is full (${LIMITS.count} snippets).` };
+  if (current.length >= LIMITS.count) return { list: current, snippet: null, error: t('The library is full ({max} snippets).', { max: LIMITS.count }) };
   const { snippet, errors } = normalizeSnippet(input, options);
   if (!snippet) return { list: current, snippet: null, error: errors[0] };
   const taken = owner(current, snippet.shortcut, '');
-  if (taken) return { list: current, snippet: null, error: `The search word "${snippet.shortcut}" is already used by "${taken.title}".` };
+  if (taken) return { list: current, snippet: null, error: t('The search word "{word}" is already used by "{title}".', { word: isolate(snippet.shortcut), title: isolate(taken.title) }) };
   const now = nowOf(options);
   const added = { ...snippet, id: freshId(new Set(current.map((s) => s.id)), options), createdAt: now, updatedAt: now };
   return { list: [...current, added], snippet: added, error: '' };
@@ -108,7 +110,7 @@ export function addSnippet(list, input, options) {
 export function updateSnippet(list, id, patch, options) {
   const current = Array.isArray(list) ? list : [];
   const at = current.findIndex((s) => s.id === id);
-  if (at < 0) return { list: current, snippet: null, error: 'That snippet no longer exists.' };
+  if (at < 0) return { list: current, snippet: null, error: t('That snippet no longer exists.') };
   const old = current[at];
   const changes = patch && typeof patch === 'object' ? patch : {};
   const merged = {
@@ -120,7 +122,7 @@ export function updateSnippet(list, id, patch, options) {
   const { snippet, errors } = normalizeSnippet(merged, options);
   if (!snippet) return { list: current, snippet: null, error: errors[0] };
   const taken = owner(current, snippet.shortcut, old.id);
-  if (taken) return { list: current, snippet: null, error: `The search word "${snippet.shortcut}" is already used by "${taken.title}".` };
+  if (taken) return { list: current, snippet: null, error: t('The search word "{word}" is already used by "{title}".', { word: isolate(snippet.shortcut), title: isolate(taken.title) }) };
   const next = { ...snippet, id: old.id, createdAt: old.createdAt, updatedAt: nowOf(options) };
   return { list: current.map((s, i) => (i === at ? next : s)), snippet: next, error: '' };
 }
@@ -204,23 +206,23 @@ export function exportSnippets(list) {
 export function importSnippets(jsonText, existing, options) {
   const result = { list: Array.isArray(existing) ? existing.slice() : [], added: 0, skipped: 0, errors: [] };
   if (typeof jsonText !== 'string' || !jsonText.trim()) {
-    result.errors.push('The file is empty.');
+    result.errors.push(t('The file is empty.'));
     return result;
   }
   if (jsonText.length > LIMITS.importChars) {
-    result.errors.push('The file is too large to import.');
+    result.errors.push(t('The file is too large to import.'));
     return result;
   }
   let data;
   try {
     data = JSON.parse(jsonText);
   } catch {
-    result.errors.push('This is not a valid JSON file.');
+    result.errors.push(t('This is not a valid JSON file.'));
     return result;
   }
   const entries = Array.isArray(data) ? data : data && typeof data === 'object' && Array.isArray(data.snippets) ? data.snippets : null;
   if (!entries) {
-    result.errors.push('No snippets found: expected a list of snippets or {"snippets": [...]}.');
+    result.errors.push(t('No snippets found: expected a list of snippets or {format}.', { format: '{"snippets": [...]}' }));
     return result;
   }
 
@@ -230,34 +232,33 @@ export function importSnippets(jsonText, existing, options) {
   const texts = new Set(result.list.map((s) => `${s.title}\u0000${s.body}`));
   let full = false;
   const considered = Math.min(entries.length, LIMITS.importEntries);
-  if (entries.length > considered) messages.push(`Only the first ${considered} entries were read.`);
+  if (entries.length > considered) messages.push(t('Only the first {count} entries were read.', { count: considered }));
 
   for (let n = 0; n < considered; n++) {
-    const label = `Snippet ${n + 1}`;
     // Only the three content fields are taken from the file; ids and dates are made fresh.
     const entry = entries[n];
     const picked = entry && typeof entry === 'object' && !Array.isArray(entry) ? { title: entry.title, shortcut: entry.shortcut, body: entry.body } : entry;
     const { snippet, errors } = normalizeSnippet(picked, options);
     if (!snippet) {
       result.skipped++;
-      messages.push(`${label}: ${errors[0]}`);
+      messages.push(t('Snippet {number}: {problem}', { number: n + 1, problem: errors[0] }));
       continue;
     }
     if (result.list.length >= LIMITS.count) {
       result.skipped++;
-      if (!full) messages.push(`The library is full (${LIMITS.count} snippets); the rest were skipped.`);
+      if (!full) messages.push(t('The library is full ({max} snippets); the rest were skipped.', { max: LIMITS.count }));
       full = true;
       continue;
     }
     if (snippet.shortcut && shortcuts.has(snippet.shortcut)) {
       result.skipped++;
-      messages.push(`${label} ("${snippet.title}"): the search word "${snippet.shortcut}" is already used.`);
+      messages.push(t('Snippet {number} ("{title}"): the search word "{word}" is already used.', { number: n + 1, title: isolate(snippet.title), word: isolate(snippet.shortcut) }));
       continue;
     }
     const key = `${snippet.title}\u0000${snippet.body}`;
     if (texts.has(key)) {
       result.skipped++;
-      messages.push(`${label} ("${snippet.title}"): already in your library.`);
+      messages.push(t('Snippet {number} ("{title}"): already in your library.', { number: n + 1, title: isolate(snippet.title) }));
       continue;
     }
     const id = freshId(usedIds, options);
@@ -269,7 +270,7 @@ export function importSnippets(jsonText, existing, options) {
   }
 
   const shown = messages.slice(0, LIMITS.importErrors);
-  if (messages.length > shown.length) shown.push(`...and ${messages.length - shown.length} more.`);
+  if (messages.length > shown.length) shown.push(t('...and {count} more.', { count: messages.length - shown.length }));
   result.errors = shown;
   return result;
 }

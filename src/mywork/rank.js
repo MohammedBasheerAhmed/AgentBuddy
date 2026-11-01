@@ -8,6 +8,7 @@
 //   'waiting'   on hold, waiting on the customer or on somebody else
 //   'resolved'  resolved but still active (the base incident and case stay active until they auto-close)
 import { pluralOf } from './tables.js';
+import { tm } from '../i18n/core.js';
 
 /** ServiceNow priority 1 (critical) to 5 (planning), from its display text ("2 - High"); 9 when there is none. */
 export function priorityRank(display) {
@@ -117,17 +118,17 @@ export function filterChips(items, { classNames = {} } = {}) {
   const list = items || [];
   const count = (id) => list.filter((i) => passes(i, id)).length;
   const chips = [
-    { id: 'status:breached', label: 'SLA breached' },
-    { id: 'status:due', label: 'SLA at risk' },
-    { id: 'status:replied', label: 'Replied' },
-    { id: 'status:waiting', label: 'On hold' },
-    { id: 'prio:1', label: 'P1' },
-    { id: 'prio:2', label: 'P2' },
+    { id: 'status:breached', label: tm('SLA breached') },
+    { id: 'status:due', label: tm('SLA at risk') },
+    { id: 'status:replied', label: tm('Replied') },
+    { id: 'status:waiting', label: tm('On hold') },
+    { id: 'prio:1', label: tm('P1') },
+    { id: 'prio:2', label: tm('P2') },
   ].map((c) => ({ ...c, count: count(c.id) }));
   const types = [...new Set(list.map((i) => i.type || i.table))];
   if (types.length > 1) {
     types
-      .map((t) => ({ id: `type:${t}`, label: pluralOf(t, classNames[t]), count: count(`type:${t}`) }))
+      .map((type) => ({ id: `type:${type}`, label: pluralOf(type, classNames[type]), count: count(`type:${type}`) }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
       .forEach((c) => chips.push(c));
   }
@@ -141,7 +142,7 @@ export function sharedCis(items, { min = 3 } = {}) {
   const by = new Map();
   for (const item of items || []) {
     if (!item.ci?.id || item.work === 'resolved') continue;
-    const entry = by.get(item.ci.id) || { id: item.ci.id, name: item.ci.name || 'one configuration item', count: 0, numbers: [] };
+    const entry = by.get(item.ci.id) || { id: item.ci.id, name: item.ci.name || tm('one configuration item'), count: 0, numbers: [] };
     entry.count += 1;
     entry.numbers.push(item.number);
     by.set(item.ci.id, entry);

@@ -7,6 +7,7 @@
 // their display values (fields): the difference between the two is the reader's offset, so a local note time can be put right.
 
 import { parseSnTime } from '../context/util.js';
+import { t, tn } from '../i18n/index.js';
 
 const MIN = 60000;
 const HOUR = 60 * MIN;
@@ -18,23 +19,23 @@ const QUARTER = 15 * MIN;
 export function shortSpan(ms) {
   if (!Number.isFinite(ms)) return '';
   const minutes = Math.max(0, Math.round(ms / MIN));
-  if (minutes < 1) return 'under 1 min';
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1) return t('under 1 min');
+  if (minutes < 60) return tn(minutes, '{n} min', '{n} min');
   const hours = Math.floor(minutes / 60);
   if (hours < 48) {
     const rest = minutes - hours * 60;
-    return rest && hours < 10 ? `${hours}h ${rest}m` : `${hours}h`;
+    return rest && hours < 10 ? t('{hours}h {minutes}m', { hours, minutes: rest }) : tn(hours, '{n}h', '{n}h');
   }
-  return `${Math.floor(hours / 24)} d`;
+  return tn(Math.floor(hours / 24), '{n} d', '{n} d');
 }
 
 /** "just now", "12 min ago", "3 h ago", "2 d ago". '' when not a number. A time in the future is "just now". */
 export function agoText(ms) {
   if (!Number.isFinite(ms)) return '';
-  if (ms < MIN) return 'just now';
-  if (ms < HOUR) return `${Math.round(ms / MIN)} min ago`;
-  if (ms < 2 * DAY) return `${Math.round(ms / HOUR)} h ago`;
-  return `${Math.floor(ms / DAY)} d ago`;
+  if (ms < MIN) return t('just now');
+  if (ms < HOUR) return tn(Math.round(ms / MIN), '{n} min ago', '{n} min ago');
+  if (ms < 2 * DAY) return tn(Math.round(ms / HOUR), '{n} h ago', '{n} h ago');
+  return tn(Math.floor(ms / DAY), '{n} d ago', '{n} d ago');
 }
 
 /** "in 3 h", "in 2 d" for a time ahead; agoText for one behind. */
@@ -42,7 +43,7 @@ export function relativeText(at, now) {
   if (!Number.isFinite(at) || !Number.isFinite(now)) return '';
   const d = at - now;
   if (d <= MIN) return agoText(-d);
-  return `in ${shortSpan(d)}`;
+  return t('in {span}', { span: shortSpan(d) });
 }
 
 /**
@@ -72,11 +73,11 @@ export function notesAreLocal(pack) {
  * (the time may then be off by the reader's offset). ms is NaN when the time cannot be read at all.
  */
 export function noteInstant(entry, pack) {
-  const t = parseSnTime(entry?.when);
-  if (!Number.isFinite(t)) return { ms: NaN, approx: true };
-  if (!notesAreLocal(pack)) return { ms: t, approx: false };
+  const at = parseSnTime(entry?.when);
+  if (!Number.isFinite(at)) return { ms: NaN, approx: true };
+  if (!notesAreLocal(pack)) return { ms: at, approx: false };
   const offset = tzOffsetMs(pack);
-  return offset === null ? { ms: t, approx: true } : { ms: t - offset, approx: false };
+  return offset === null ? { ms: at, approx: true } : { ms: at - offset, approx: false };
 }
 
 /** A stored (UTC) date column of the pack as an instant, NaN when it is not there. */

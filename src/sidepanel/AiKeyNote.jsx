@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import { aiNeeds, aiNeedsText } from './aiReady.js';
 import { keyStore } from '../lib/storage.js';
-import { t } from '../i18n/index.js';
+import { t, tm, t as tr } from '../i18n/index.js';
 
 /**
  * Open Settings, on one of its two pages: '' (Basics) or 'ai' (AI Assist). A page is opened as its own address (options.html#ai, an
@@ -19,8 +19,8 @@ export function openSettings(page = '') {
   chrome.runtime.openOptionsPage();
 }
 
-export const UNLOCK_TEXT = 'Your AI key is locked. Enter your passphrase to unlock it for this browser session.';
-const CHOOSE_TEXT = 'Your organisation requires the saved AI key to be encrypted. Choose a passphrase for it in Settings.';
+export const UNLOCK_TEXT = tm('Your AI key is locked. Enter your passphrase to unlock it for this browser session.');
+const CHOOSE_TEXT = tm('Your organisation requires the saved AI key to be encrypted. Choose a passphrase for it in Settings.');
 
 /**
  * The passphrase of a locked key, entered where the key is needed (AI0.1): the same unlock as on the Settings page (keyStore.unlock,
@@ -60,7 +60,7 @@ export function KeyUnlock({ eff, primary = false }) {
       await eff?.refresh?.();
     } catch (err) {
       setPass('');
-      setError(err?.message || 'The key could not be unlocked.');
+      setError(err?.message || t('The key could not be unlocked.'));
     } finally {
       setBusy(false);
     }
@@ -69,7 +69,7 @@ export function KeyUnlock({ eff, primary = false }) {
   if (mustChoose) {
     return (
       <div className="ab-note ab-note-warn ab-keynote">
-        <p className="ab-keynote-text">{CHOOSE_TEXT}</p>
+        <p className="ab-keynote-text">{tr(CHOOSE_TEXT)}</p>
         <button type="button" className="ab-btn ab-btn-sm" onClick={() => openSettings('ai')}>
           {t('Open Settings')}
         </button>
@@ -79,7 +79,7 @@ export function KeyUnlock({ eff, primary = false }) {
   return (
     <div className="ab-note ab-note-warn ab-keynote ab-unlock">
       <label className="ab-keynote-text" htmlFor={id}>
-        {UNLOCK_TEXT}
+        {tr(UNLOCK_TEXT)}
       </label>
       <div className="ab-unlock-row">
         <input
@@ -100,7 +100,7 @@ export function KeyUnlock({ eff, primary = false }) {
           disabled={busy}
         />
         <button type="button" onClick={unlock} className={`ab-btn ab-btn-sm${primary ? ' ab-btn-primary' : ''}`} disabled={!pass || busy}>
-          {busy ? 'Unlocking…' : 'Unlock'}
+          {busy ? t('Unlocking…') : t('Unlock')}
         </button>
       </div>
       {error && (

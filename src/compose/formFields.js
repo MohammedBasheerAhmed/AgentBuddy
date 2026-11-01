@@ -6,16 +6,18 @@
 // whether the person who raised the ticket can read the field, and whether it holds one line only.
 
 import { FILLABLE_FIELDS, isCustomerVisible as fieldIsCustomerVisible } from '../lib/fillable.js';
+import { tm } from '../i18n/core.js';
 
 const field = (name, label, fieldLabel) =>
   Object.freeze({ name, label, fieldLabel, customerVisible: FILLABLE_FIELDS[name].customerVisible === true, singleLine: FILLABLE_FIELDS[name].singleLine === true });
 
 export const FORM_FIELDS = Object.freeze([
-  field('comments', 'Customer comment', 'Additional comments'),
-  field('work_notes', 'Work note', 'Work notes'),
-  field('close_notes', 'Resolution notes', 'Resolution notes'),
-  field('description', 'Description', 'Description'),
-  field('short_description', 'Short description', 'Short description'),
+  // `label` is shown to the person (marked with tm(), shown with t()); `fieldLabel` is the name of the control on the page, as ServiceNow writes it.
+  field('comments', tm('Customer comment'), 'Additional comments'),
+  field('work_notes', tm('Work note'), 'Work notes'),
+  field('close_notes', tm('Resolution notes'), 'Resolution notes'),
+  field('description', tm('Description'), 'Description'),
+  field('short_description', tm('Short description'), 'Short description'),
 ]);
 
 /** The only names the form-reading operation will ask the page for. */

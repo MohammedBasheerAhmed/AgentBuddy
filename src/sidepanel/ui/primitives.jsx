@@ -9,7 +9,7 @@ import { t } from '../../i18n/index.js';
 // Styles: src/ui/areas/shell.css.
 
 /** The AI mark: a small spark and the letters "AI". Decorative where the text next to it already says AI. */
-export function AiBadge({ label = 'AI', title = 'Uses AI. Masked text goes to the AI you chose, after a preview.' }) {
+export function AiBadge({ label = 'AI', title = t('Uses AI. Masked text goes to the AI you chose, after a preview.') }) {
   return (
     <span className="ab-ai-badge" title={title}>
       <svg className="ab-ai-spark" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" focusable="false">
@@ -22,7 +22,7 @@ export function AiBadge({ label = 'AI', title = 'Uses AI. Masked text goes to th
 
 /** The shield mark that replaces the footer sentence: the privacy promise, said once, on hover and for screen readers. */
 export function ShieldMark() {
-  const text = 'Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.';
+  const text = t('Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
   return (
     <span className="ab-shield" title={text} role="img" aria-label={text}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
@@ -70,7 +70,7 @@ export function CardFrame({ title, summary = '', attention = '', open, defaultOp
  * The first `limit` items, then a button for the rest.
  *   items, render(item, index) -> node, limit (default 3), more ("Show all") and less ("Show fewer") labels
  */
-export function ShowMore({ items, render, limit = 3, more = 'Show all', less = 'Show fewer', className = 'ab-list' }) {
+export function ShowMore({ items, render, limit = 3, more = t('Show all'), less = t('Show fewer'), className = 'ab-list' }) {
   const [all, setAll] = useState(false);
   const list = Array.isArray(items) ? items : [];
   const shown = all ? list : list.slice(0, limit);
@@ -95,7 +95,7 @@ export function HalfRule({ half, destination = '' }) {
     return (
       <p className="ab-halfrule ab-halfrule-assist">
         <AiBadge />
-        <span>{destination ? `Masked text goes to ${destination}. You see it first.` : 'Masked text goes to the AI you choose. You see it first.'}</span>
+        <span>{destination ? t('Masked text goes to {destination}. You see it first.', { destination }) : t('Masked text goes to the AI you choose. You see it first.')}</span>
       </p>
     );
   }
@@ -115,8 +115,8 @@ export function HalfRule({ half, destination = '' }) {
 export function HalfSwitch({ value, onChange, idBase, assist = true, assistNote = '' }) {
   if (!assist) return null;
   const tabs = [
-    { id: 'insights', label: 'Insights' },
-    { id: 'assist', label: 'AI Assist' },
+    { id: 'insights', label: t('Insights') },
+    { id: 'assist', label: t('AI Assist') },
   ];
   const onKeyDown = (e) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
@@ -127,21 +127,21 @@ export function HalfSwitch({ value, onChange, idBase, assist = true, assistNote 
   };
   return (
     <div className="ab-halfswitch" role="tablist" aria-label={t('Insights or AI Assist')} onKeyDown={onKeyDown}>
-      {tabs.map((t) => (
+      {tabs.map((tab) => (
         <button
-          key={t.id}
-          id={`${idBase}-tab-${t.id}`}
+          key={tab.id}
+          id={`${idBase}-tab-${tab.id}`}
           type="button"
           role="tab"
-          aria-selected={value === t.id}
-          aria-controls={`${idBase}-panel-${t.id}`}
-          tabIndex={value === t.id ? 0 : -1}
-          className={`ab-halfswitch-tab ab-halfswitch-${t.id}${value === t.id ? ' is-on' : ''}`}
-          onClick={() => onChange(t.id)}
+          aria-selected={value === tab.id}
+          aria-controls={`${idBase}-panel-${tab.id}`}
+          tabIndex={value === tab.id ? 0 : -1}
+          className={`ab-halfswitch-tab ab-halfswitch-${tab.id}${value === tab.id ? ' is-on' : ''}`}
+          onClick={() => onChange(tab.id)}
         >
-          {t.id === 'assist' && <AiBadge label="" title="" />}
-          {t.label}
-          {t.id === 'assist' && assistNote && <span className="ab-halfswitch-note">{assistNote}</span>}
+          {tab.id === 'assist' && <AiBadge label="" title="" />}
+          {tab.label}
+          {tab.id === 'assist' && assistNote && <span className="ab-halfswitch-note">{assistNote}</span>}
         </button>
       ))}
     </div>

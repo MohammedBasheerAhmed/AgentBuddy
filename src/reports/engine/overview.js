@@ -3,6 +3,9 @@
 // out and named; a number that is missing for any table is flagged, never shown as zero.
 import { LIMITS } from './constants.js';
 import { attempt } from './reader.js';
+import { say, tm } from './say.js';
+import { t } from '../../i18n/core.js';
+import { shown } from '../shown.js';
 import { andQuery, clampInt, sectionResult, stateClass, sumResults, usableTables, resolvedColumn, resolvedStates, notResolved, onlyResolved } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { DAY, HOUR, startOfLocalDay } from './time.js';
@@ -49,7 +52,7 @@ async function readTable(ctx, t, { staleDays, dayStart }) {
     doneValues: done.values,
     doneLabels: done.labels,
     openedToday,
-    resolvedToday: resolvedToday || { ok: false, status: 'error', note: 'No resolved date column on this table.' },
+    resolvedToday: resolvedToday || { ok: false, status: 'error', note: tm('No resolved date column on this table.') },
   };
 }
 
@@ -71,7 +74,7 @@ export async function overviewSection(ctx) {
   const dayStart = startOfLocalDay(ctx.now, ctx.offsetMin);
   const tables = usableTables(ctx);
 
-  const [rows, sla] = await Promise.all([Promise.all(tables.map((t) => readTable(ctx, t, { staleDays, dayStart }))), tables.length ? readSlaSnapshot(ctx) : { ok: false, status: 'error', note: 'No ticket table can be read.' }]);
+  const [rows, sla] = await Promise.all([Promise.all(tables.map((t) => readTable(ctx, t, { staleDays, dayStart }))), tables.length ? readSlaSnapshot(ctx) : { ok: false, status: 'error', note: tm('No ticket table can be read.') }]);
   if (sla.ok && sla.cap) ctx.caps.push(sla.cap);
 
   const waitLabels = [...new Set(rows.flatMap((r) => (r.waiting.ok ? r.waiting.detail.labels : [])))];
@@ -114,29 +117,29 @@ export async function overviewSection(ctx) {
     note: slaUnavailable ? sla.note : '',
     hint,
     partial: false,
-    drills: sla.ok && n > 0 ? [{ table: 'task_sla', label: 'SLAs', count: n, query: slaDrills[key] }] : [],
+    drills: sla.ok && n > 0 ? [{ table: 'task_sla', label: tm('SLAs'), count: n, query: slaDrills[key] }] : [],
   });
 
   const tiles = [
-    { ...tile('open', 'Open', total(rows, 'open')), drills: drill('open'), hint: 'Tickets that are still active' },
-    slaTile('dueSoon', 'Due soon', sla.counts?.dueSoon, `SLA ends within ${LIMITS.dueSoonHours} hours`),
-    slaTile('breached', 'Breached', sla.counts?.breached, 'SLA already breached'),
+    { ...tile('open', tm('Open'), total(rows, 'open')), drills: drill('open'), hint: tm('Tickets that are still active') },
+    slaTile('dueSoon', tm('Due soon'), sla.counts?.dueSoon, say(tm('SLA ends within {hours} hours'), { hours: LIMITS.dueSoonHours })),
+    slaTile('breached', tm('Breached'), sla.counts?.breached, tm('SLA already breached')),
   ];
-  if (ctx.scope.unassignedMeaningful) tiles.push({ ...tile('unassigned', 'Unassigned', total(rows, 'unassigned')), drills: drill('unassigned'), hint: 'Open with nobody assigned' });
+  if (ctx.scope.unassignedMeaningful) tiles.push({ ...tile('unassigned', tm('Unassigned'), total(rows, 'unassigned')), drills: drill('unassigned'), hint: tm('Open with nobody assigned') });
   tiles.push(
-    { ...tile('stale', `No update in ${staleDays}+ days`, total(rows, 'stale')), drills: drill('stale'), hint: 'Open and untouched' },
-    { ...tile('waiting', 'Waiting', total(rows, 'waiting')), drills: drill('waiting'), hint: waitLabels.length ? `States: ${waitLabels.join(', ')}` : 'On hold, pending or awaiting information' },
-    { ...tile('openedToday', 'Opened today', total(rows, 'openedToday')), drills: drill('openedToday'), hint: 'Since midnight' },
-    { ...tile('resolvedToday', 'Resolved today', total(rows, 'resolvedToday')), drills: drill('resolvedToday'), hint: 'Resolved or closed since midnight' }
+    { ...tile('stale', say(tm('No update in {days}+ days'), { days: staleDays }), total(rows, 'stale')), drills: drill('stale'), hint: tm('Open and untouched') },
+    { ...tile('waiting', tm('Waiting'), total(rows, 'waiting')), drills: drill('waiting'), hint: waitLabels.length ? say(tm('States: {labels}'), { labels: waitLabels.join(', ') }) : tm('On hold, pending or awaiting information') },
+    { ...tile('openedToday', tm('Opened today'), total(rows, 'openedToday')), drills: drill('openedToday'), hint: tm('Since midnight') },
+    { ...tile('resolvedToday', tm('Resolved today'), total(rows, 'resolvedToday')), drills: drill('resolvedToday'), hint: tm('Resolved or closed since midnight') }
   );
   // Resolved but not yet closed: only when there are some, so a queue without them shows no extra tile. Never part of Open.
   const resolvedActive = total(rows, 'resolvedActive');
   const doneLabels = [...new Set(rows.flatMap((r) => r.doneLabels || []))];
   if (resolvedActive.value > 0) {
-    tiles.splice(1, 0, { ...tile('resolvedActive', 'Resolved, not closed', resolvedActive), drills: drill('resolvedActive'), hint: `Waiting to close${doneLabels.length ? ` (${doneLabels.join(', ')})` : ''}. Not counted as open.` });
+    tiles.splice(1, 0, { ...tile('resolvedActive', tm('Resolved, not closed'), resolvedActive), drills: drill('resolvedActive'), hint: doneLabels.length ? say(tm('Waiting to close ({labels}). Not counted as open.'), { labels: doneLabels.join(', ') }) : tm('Waiting to close. Not counted as open.') });
   }
   tiles.forEach((t) => {
-    if (t.partial) t.hint = `${t.hint}. Some tables could not be counted.`;
+    if (t.partial) t.hint = say(tm('{hint}. Some tables could not be counted.'), { hint: t.hint });
     t.drills = t.drills || [];
   });
 
@@ -146,7 +149,7 @@ export async function overviewSection(ctx) {
     if (failures.length) ctx.access.push({ source: r.table, status: failures[0].status, note: `${r.label}: ${failures[0].note}` });
   });
 
-  return sectionResult('overview', 'Overview', ctx, {
+  return sectionResult('overview', tm('Overview'), ctx, {
     tiles,
     staleDays,
     perTable: rows.map((r) => ({
@@ -167,30 +170,30 @@ export async function overviewSection(ctx) {
 
 export function overviewTables(result) {
   const d = result.data;
-  if (!d) return [];
+  if (!d || d.available === false) return []; // an empty scope or a table list with nothing to read has no tables
   return [
     {
-      title: 'Overview',
+      title: t('Overview'),
       columns: [
-        { key: 'label', label: 'Measure' },
-        { key: 'value', label: 'Value' },
-        { key: 'note', label: 'Note' },
+        { key: 'label', label: t('Measure') },
+        { key: 'value', label: t('Value') },
+        { key: 'note', label: t('Note') },
       ],
-      rows: d.tiles.map((t) => ({ label: t.label, value: t.unavailable ? 'Not available to you' : t.value, note: t.hint || '' })),
+      rows: d.tiles.map((tile) => ({ label: shown(tile.label), value: tile.unavailable ? t('Not available to you') : tile.value, note: shown(tile.hint || '') })),
     },
     {
-      title: 'Overview by table',
+      title: t('Overview by table'),
       columns: [
-        { key: 'label', label: 'Table' },
-        { key: 'open', label: 'Open' },
-        { key: 'unassigned', label: 'Unassigned' },
-        { key: 'stale', label: `No update in ${d.staleDays}+ days` },
-        { key: 'waiting', label: 'Waiting' },
-        { key: 'resolvedActive', label: 'Resolved, not closed' },
-        { key: 'openedToday', label: 'Opened today' },
-        { key: 'resolvedToday', label: 'Resolved today' },
+        { key: 'label', label: t('Table') },
+        { key: 'open', label: shown('Open') },
+        { key: 'unassigned', label: t('Unassigned') },
+        { key: 'stale', label: t('No update in {days}+ days', { days: d.staleDays }) },
+        { key: 'waiting', label: t('Waiting') },
+        { key: 'resolvedActive', label: t('Resolved, not closed') },
+        { key: 'openedToday', label: t('Opened today') },
+        { key: 'resolvedToday', label: t('Resolved today') },
       ],
-      rows: d.perTable.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v === null ? 'n/a' : v]))),
+      rows: d.perTable.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v === null ? t('n/a') : k === 'label' ? shown(v) : v]))),
     },
   ];
 }

@@ -6,6 +6,7 @@
 // but is looked at in summer time would begin an hour early or late: on the day the clocks change "opened today" counted one hour
 // of yesterday (or missed one hour of today), and every daily bucket before the change was shifted by that hour.
 import { parseSnTime, formatSnTime } from '../../context/util.js';
+import { say, tm } from './say.js';
 
 export const MINUTE = 60000;
 export const HOUR = 3600000;
@@ -70,11 +71,11 @@ export function chooseZone(snZone, { browser = browserZone(), local = localOffse
   const wanted = typeof snZone === 'string' ? snZone.trim() : '';
   const tz = wanted ? zoneOffset(wanted) : null;
   if (tz) return { id: wanted, source: 'servicenow', tz, note: '' };
-  const where = browser ? `your browser's time zone (${browser})` : "your browser's time zone";
+  const where = browser ? say(tm("your browser's time zone ({zone})"), { zone: browser }) : tm("your browser's time zone");
   let note;
-  if (snZone === null || snZone === undefined) note = `"Today" is counted in ${where}: your ServiceNow time zone could not be read.`;
-  else if (!wanted) note = `"Today" is counted in ${where}: your ServiceNow profile uses the system time zone, which Agent Buddy cannot read.`;
-  else note = `"Today" is counted in ${where}: this browser does not know your ServiceNow time zone (${wanted.slice(0, 40)}).`;
+  if (snZone === null || snZone === undefined) note = say(tm('"Today" is counted in {where}: your ServiceNow time zone could not be read.'), { where });
+  else if (!wanted) note = say(tm('"Today" is counted in {where}: your ServiceNow profile uses the system time zone, which Agent Buddy cannot read.'), { where });
+  else note = say(tm('"Today" is counted in {where}: this browser does not know your ServiceNow time zone ({zone}).'), { where, zone: wanted.slice(0, 40) });
   return { id: browser, source: 'browser', tz: local, note };
 }
 

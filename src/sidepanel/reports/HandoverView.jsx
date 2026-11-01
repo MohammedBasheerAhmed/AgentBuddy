@@ -9,8 +9,8 @@ import { HANDOVER_MAX_WORDS, NOTABLE_MAX, buildHandoverPack, checkHandoverNote }
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
 import { AiBlocked, AiButton, AiResult, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
-import { plural } from './format.js';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
+import { shown as shownText } from '../../reports/shown.js';
 
 const FEATURE_ID = 'shift-handover';
 
@@ -24,10 +24,10 @@ function Block({ title, children }) {
 }
 
 // The facts on a ticket's second line in the hand-over lists.
-const who = (t) => t.owner || 'Unassigned';
-const slaLine = (now) => (t) => [dueText({ endMs: t.endMs, breached: t.risk === 'Breached', paused: t.paused, plannedEnd: t.plannedEnd }, now), t.risk === 'Breached' ? '' : `${t.percent}% used`, who(t), t.priority];
-const stateLine = (t) => [t.state, ageText(t.ageDays), who(t)];
-const eventLine = (t) => [t.priority, t.state, who(t), t.group];
+const who = (item) => item.owner || t('Unassigned');
+const slaLine = (now) => (item) => [dueText({ endMs: item.endMs, breached: item.risk === 'Breached', paused: item.paused, plannedEnd: item.plannedEnd }, now), item.risk === 'Breached' ? '' : t('{percent}% used', { percent: item.percent }), who(item), item.priority];
+const stateLine = (item) => [item.state, ageText(item.ageDays), who(item)];
+const eventLine = (item) => [item.priority, item.state, who(item), item.group];
 
 // One kind of event in the period: how many, the first few, and an honest line when it could not be counted.
 function Events({ title, list, hours, meta, env }) {
@@ -41,11 +41,11 @@ function Events({ title, list, hours, meta, env }) {
   const total = list.total;
   return (
     <Block title={`${title}${total === null ? '' : `: ${total}`}`}>
-      <TicketList items={list.items} env={env} meta={meta} empty={total === null ? 'None could be listed.' : `None in the last ${hours} hours.`} />
+      <TicketList items={list.items} env={env} meta={meta} empty={total === null ? t('None could be listed.') : t('None in the last {hours} hours.', { hours })} />
       {(list.capped || list.partial) && (
         <p className="ab-hint">
-          {list.partial ? 'Some tables could not be read, so this may be incomplete. ' : ''}
-          {list.capped ? `Listing the first ${list.items.length}${total === null ? '' : ` of ${total}`}.` : ''}
+          {list.partial ? `${t('Some tables could not be read, so this may be incomplete.')} ` : ''}
+          {list.capped ? (total === null ? t('Listing the first {n}.', { n: list.items.length }) : t('Listing the first {n} of {total}.', { n: list.items.length, total })) : ''}
         </p>
       )}
     </Block>
@@ -66,23 +66,23 @@ export function HandoverBody({ d, env, now }) {
   return (
     <>
       <div className="ab-tiles">
-        <Tile label={t('Open')} value={s.open} unavailable={s.open === null} hint={t('Tickets that are still active')} />
+        <Tile label={shownText('Open')} value={s.open} unavailable={s.open === null} hint={t('Tickets that are still active')} />
         <Tile label={t('Breached')} value={s.breached} unavailable={s.breached === null} tone={tone(s.breached, 'bad')} hint={t('SLA already breached')} />
         <Tile label={t('At risk')} value={s.atRisk} unavailable={s.atRisk === null} tone={tone(s.atRisk, 'warn')} hint={t('Most of the SLA time used')} />
-        <Tile label={t('Due soon')} value={s.dueSoon} unavailable={s.dueSoon === null} tone={tone(s.dueSoon, 'warn')} hint={`Ends within ${s.dueSoonHours} hours`} />
+        <Tile label={t('Due soon')} value={s.dueSoon} unavailable={s.dueSoon === null} tone={tone(s.dueSoon, 'warn')} hint={t('Ends within {hours} hours', { hours: s.dueSoonHours })} />
         {s.unassigned !== undefined && <Tile label={t('Unassigned')} value={s.unassigned} unavailable={s.unassigned === null} tone={tone(s.unassigned, 'warn')} hint={t('Open with nobody assigned')} />}
-        <Tile label={`No update in ${s.staleDays}+ days`} value={s.stale} unavailable={s.stale === null} tone={tone(s.stale, 'warn')} hint={t('Open and untouched')} />
+        <Tile label={t('No update in {days}+ days', { days: s.staleDays })} value={s.stale} unavailable={s.stale === null} tone={tone(s.stale, 'warn')} hint={t('Open and untouched')} />
       </div>
 
       <Block title={t('Needs attention now')}>
         {!d.sla.available ? (
-          <p className="ab-note">{d.sla.reason || 'SLA information is not available to you.'}</p>
+          <p className="ab-note">{shownText(d.sla.reason) || t('SLA information is not available to you.')}</p>
         ) : (
           <TicketList
             items={d.sla.top}
             env={env}
             meta={slaLine(at)}
-            empty={d.sla.ticketsAtIssue ? 'The tickets at issue are listed when ticket details can be read.' : 'No SLA is breached or at risk right now.'}
+            empty={d.sla.ticketsAtIssue ? t('The tickets at issue are listed when ticket details can be read.') : t('No SLA is breached or at risk right now.')}
           />
         )}
       </Block>
@@ -102,7 +102,7 @@ export function HandoverBody({ d, env, now }) {
             <summary>{t('Waiting by state')}</summary>
             <DataTable
               caption={t('Waiting by state')}
-              columns={[{ key: 'label', label: 'State' }, { key: 'kind', label: 'Waiting for', format: (v) => ({ customer: 'The customer', approval: 'An approval', other: 'Other' })[v] || v }, { key: 'count', label: 'Tickets', align: 'right' }]}
+              columns={[{ key: 'label', label: t('State') }, { key: 'kind', label: t('Waiting for'), format: (v) => ({ customer: t('The customer'), approval: t('An approval'), other: t('Other') })[v] || v }, { key: 'count', label: t('Tickets'), align: 'right' }]}
               rows={w.byState}
             />
           </details>
@@ -112,7 +112,7 @@ export function HandoverBody({ d, env, now }) {
       <Events title={t('Priority 1-2 opened')} list={d.events.opened} hours={d.hours} meta={eventLine} env={env} />
       <Events title={t('Priority 1-2 resolved')} list={d.events.resolved} hours={d.hours} meta={eventLine} env={env} />
       <Events title={t('SLAs breached')} list={d.events.breaches} hours={d.hours} meta={slaLine(at)} env={env} />
-      <Events title={t('Handed over 3+ times and touched')} list={d.events.reassigned} hours={d.hours} meta={(t) => [`${t.reassignments} moves`, who(t), t.group]} env={env} />
+      <Events title={t('Handed over 3+ times and touched')} list={d.events.reassigned} hours={d.hours} meta={(item) => [tn(item.reassignments, '{n} move', '{n} moves'), who(item), item.group]} env={env} />
 
       <Block title={t('Oldest open')}>
         <TicketList items={d.oldest} env={env} meta={stateLine} empty={t('Nothing to show.')} />
@@ -125,8 +125,11 @@ export function HandoverBody({ d, env, now }) {
 export function noteChecks(text) {
   const c = checkHandoverNote(text);
   const out = [];
-  if (c.tooLong) out.push(`The note is ${c.words} words; the aim was ${HANDOVER_MAX_WORDS}. Trim it before you share it.`);
-  if (c.missing.length) out.push(`The AI left out ${plural(c.missing.length, 'heading')}: ${c.missing.join(' ')}. Add ${c.missing.length === 1 ? 'it' : 'them'} before you share the note.`);
+  if (c.tooLong) out.push(t('The note is {words} words; the aim was {max}. Trim it before you share it.', { words: c.words, max: HANDOVER_MAX_WORDS }));
+  if (c.missing.length) {
+    const missing = c.missing.join(' ');
+    out.push(tn(c.missing.length, 'The AI left out {n} heading: {missing}. Add it before you share the note.', 'The AI left out {n} headings: {missing}. Add them before you share the note.', { missing }));
+  }
   return out;
 }
 
@@ -152,7 +155,7 @@ export function HandoverAi({ result, page, eff, hours, primary = true }) {
     run.run(feature, {
       getPack: async () => {
         const pack = buildHandoverPack(result, { blockedFields, sensitivePrefixes });
-        if (!pack) throw new Error('There is nothing to hand over yet. Wait for the numbers to load.');
+        if (!pack) throw new Error(t('There is nothing to hand over yet. Wait for the numbers to load.'));
         return pack;
       },
     });
@@ -175,25 +178,25 @@ export function HandoverAi({ result, page, eff, hours, primary = true }) {
           </div>
         </>
       )}
-      <RunProgress run={run} eff={eff} page={page} readingText="Getting the numbers ready…" />
+      <RunProgress run={run} eff={eff} page={page} readingText={t('Getting the numbers ready…')} />
       <AiResult
         run={run}
         eff={eff}
         featureId={FEATURE_ID}
-        heading={`Hand-over note, last ${hours} hours`}
-        notice={[...(stale ? ['The hand-over numbers have been read again since this note was written.'] : []), ...(shown ? noteChecks(run.result) : [])]}
+        heading={t('Hand-over note, last {hours} hours', { hours })}
+        notice={[...(stale ? [t('The hand-over numbers have been read again since this note was written.')] : []), ...(shown ? noteChecks(run.result) : [])]}
       />
     </div>
   );
 }
 
 /** The period picker (8, 12 or 24 hours). */
-export function HoursPicker({ hours, onChange, label = 'Period' }) {
+export function HoursPicker({ hours, onChange, label = t('Period') }) {
   return (
     <div className="ab-seg" role="group" aria-label={label}>
       {HANDOVER_HOURS.map((h) => (
         <button key={h} type="button" className="ab-btn ab-btn-sm ab-seg-btn" aria-pressed={hours === h} onClick={() => onChange(h)}>
-          {t('{h} hours', { h })}
+          {tn(h, '{n} hour', '{n} hours')}
         </button>
       ))}
     </div>
@@ -217,7 +220,7 @@ export default function HandoverView({ widget, env }) {
       env={env}
       widgetId={widget?.id}
       actions={<HoursPicker hours={hours} onChange={setHours} />}
-      facts={ok ? [`Last ${d.hours} hours`] : []}
+      facts={ok ? [t('Last {hours} hours', { hours: d.hours })] : []}
     >
       {ok && <HandoverBody d={d} env={env} />}
     </SectionShell>

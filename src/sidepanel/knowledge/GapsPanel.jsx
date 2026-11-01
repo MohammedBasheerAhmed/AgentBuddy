@@ -7,7 +7,8 @@ import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import Notes from './Notes.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { TOPIC_COLUMNS, exportFileName, topicRows } from '../knowledgeScreen/articleInfo.js';
-import { t } from '../../i18n/index.js';
+import { shown as shownText } from '../../reports/shown.js';
+import { formatNumber, isolate, t, tn } from '../../i18n/index.js';
 
 // N19 Knowledge-gap radar (Insights, no AI): "articles to write". Recently resolved incidents (and cases) are grouped by what they
 // are about, the ones that already have a knowledge article are left out when that can be read, and the groups are ranked by how
@@ -16,20 +17,27 @@ import { t } from '../../i18n/index.js';
 // While a search reads, its choices are locked (the answer is for what was chosen when it started) and it can be stopped.
 
 const DAYS = [30, 60, 90];
-const n = (v) => Number(v || 0).toLocaleString('en');
+const n = (v) => formatNumber(Number(v || 0));
 
 /** "Looked at 500 of 12,400 tickets resolved in the last 60 days in your groups." */
 export function lookedAtText(data, scopeWords = '') {
   const scanned = Number(data?.scanned) || 0;
   const total = Number.isFinite(data?.total) ? data.total : null;
-  const count = total !== null && total > scanned ? `${n(scanned)} of ${n(total)}` : n(scanned);
-  return `Looked at ${count} ticket${scanned === 1 && (total === null || total <= 1) ? '' : 's'} resolved in the last ${data?.days || 60} days${scopeWords ? ` ${scopeWords}` : ''}.`;
+  const days = data?.days || 60;
+  if (total !== null && total > scanned) {
+    const params = { scanned: n(scanned), total: n(total), days, scope: scopeWords };
+    return scopeWords ? t('Looked at {scanned} of {total} tickets resolved in the last {days} days {scope}.', params) : t('Looked at {scanned} of {total} tickets resolved in the last {days} days.', params);
+  }
+  const params = { n: n(scanned), days, scope: scopeWords };
+  return scopeWords
+    ? tn(scanned, 'Looked at {n} ticket resolved in the last {days} days {scope}.', 'Looked at {n} tickets resolved in the last {days} days {scope}.', params)
+    : tn(scanned, 'Looked at {n} ticket resolved in the last {days} days.', 'Looked at {n} tickets resolved in the last {days} days.', params);
 }
 
 /** The scope as words, for the summary line ("in your 3 groups", "in category Network"). */
 export function scopeWords(scope, categories = []) {
-  if (scope?.kind === 'mine') return scope.groups ? `in your ${scope.groups === 1 ? 'group' : `${scope.groups} groups`}` : 'in your groups';
-  if (scope?.kind === 'category') return `in category ${categories.find((c) => c.value === scope.category)?.name || scope.category}`;
+  if (scope?.kind === 'mine') return scope.groups ? (scope.groups === 1 ? t('in your group') : t('in your {count} groups', { count: scope.groups })) : t('in your groups');
+  if (scope?.kind === 'category') return t('in category {name}', { name: isolate(categories.find((c) => c.value === scope.category)?.name || scope.category) });
   return '';
 }
 
@@ -92,7 +100,7 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
       const words = scopeWords(clean.scope, scopes.categories);
       onFound(clean.clusters.length ? { clusters: clean.clusters, days: clean.days || days, scopeText: words, at: Date.now() } : null);
     } catch (err) {
-      if (mine === token.current) setState({ phase: 'error', data: null, error: err?.message || 'The tickets could not be read.' });
+      if (mine === token.current) setState({ phase: 'error', data: null, error: err?.message || t('The tickets could not be read.') });
     }
   }
 
@@ -104,9 +112,9 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
   function exportTopics() {
     try {
       downloadText(exportFileName('knowledge-gaps'), toCsv(topicRows(state.data.clusters), TOPIC_COLUMNS));
-      setNote(`Saved ${state.data.clusters.length} topic${state.data.clusters.length === 1 ? '' : 's'} as a CSV file in your downloads.`);
+      setNote(tn(state.data.clusters.length, 'Saved {n} topic as a CSV file in your downloads.', 'Saved {n} topics as a CSV file in your downloads.'));
     } catch {
-      setNote('The browser did not save the file.');
+      setNote(t('The browser did not save the file.'));
     }
   }
 
@@ -119,24 +127,24 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-gap-days">{t('Resolved in the last')}</label>
           <select id="ab-gap-days" className="ab-select" value={days} disabled={loading} onChange={(e) => setDays(Number(e.target.value))}>
-            {DAYS.map((d) => <option key={d} value={d}>{t('{d} days', { d })}</option>)}
+            {DAYS.map((d) => <option key={d} value={d}>{tn(d, '{n} day', '{n} days')}</option>)}
           </select>
         </div>
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-gap-scope">{t('Whose tickets')}</label>
           <select id="ab-gap-scope" className="ab-select" value={scope} disabled={loading} onChange={(e) => setScope(e.target.value)}>
-            <option value="all">Everything I can see{Number.isFinite(scopes.total) ? ` (${n(scopes.total)})` : ''}</option>
+            <option value="all">{Number.isFinite(scopes.total) ? t('Everything I can see ({count})', { count: n(scopes.total) }) : t('Everything I can see')}</option>
             <option value="mine">{t('My groups')}</option>
             {scopes.categories.map((c) => (
-              <option key={c.value} value={`cat:${c.value}`}>Category: {c.name} ({n(c.count)})</option>
+              <option key={c.value} value={`cat:${c.value}`}>{t('Category: {name} ({count})', { name: isolate(c.name), count: n(c.count) })}</option>
             ))}
           </select>
         </div>
       </div>
       <fieldset className="ab-field ab-fieldset">
         <legend className="ab-label">{t('Tickets to look at')}</legend>
-        <label className="ab-check"><input type="checkbox" checked={incidents} disabled={loading} onChange={(e) => setIncidents(e.target.checked)} /> Incidents</label>
-        <label className="ab-check"><input type="checkbox" checked={cases} disabled={loading} onChange={(e) => setCases(e.target.checked)} /> Customer service cases</label>
+        <label className="ab-check"><input type="checkbox" checked={incidents} disabled={loading} onChange={(e) => setIncidents(e.target.checked)} /> {t('Incidents')}</label>
+        <label className="ab-check"><input type="checkbox" checked={cases} disabled={loading} onChange={(e) => setCases(e.target.checked)} /> {t('Customer service cases')}</label>
       </fieldset>
       <div className="ab-row">
         <button type="button" className="ab-btn" disabled={!tables.length || loading} onClick={find}>{t('Find topics')}</button>
@@ -144,7 +152,7 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
 
       {loading && (
         <p className="ab-sub" role="status">
-          Reading resolved tickets…{' '}
+          {t('Reading resolved tickets…')}{' '}
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>{t('Stop')}</button>
         </p>
       )}
@@ -154,9 +162,9 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
         <section className="ab-kbx-results" aria-label={t('Topics without an article')}>
           <p className="ab-sub">
             {lookedAtText(data, scopeWords(data.scope, scopes.categories))}
-            {data.link.known ? ` ${n(data.withArticle)} already had an article.` : ''}
+            {data.link.known ? ` ${tn(data.withArticle, '{n} already had an article.', '{n} already had an article.', { n: n(data.withArticle) })}` : ''}
           </p>
-          {data.note && <p className="ab-note ab-note-warn" role="status">{data.note}</p>}
+          {data.note && <p className="ab-note ab-note-warn" role="status">{shownText(data.note)}</p>}
           <Notes access={data.access} />
           {data.clusters.length === 0 && data.scanned > 0 && <EmptyNote>{t('No topic came up more than once. Try a longer window or a wider scope.')}</EmptyNote>}
           {data.scanned === 0 && <EmptyNote>{t('No resolved tickets were found in that window and scope.')}</EmptyNote>}
@@ -166,9 +174,9 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
             render={(c) => (
               <div key={c.id} className="ab-kb-cluster">
                 <div className="ab-row">
-                  <strong>{c.label}</strong>
+                  <strong>{shownText(c.label)}</strong>
                   <span className="ab-spacer" />
-                  <span className="ab-tag">{c.count} ticket{c.count === 1 ? '' : 's'}</span>
+                  <span className="ab-tag">{tn(c.count, '{n} ticket', '{n} tickets')}</span>
                 </div>
                 <div className="ab-tags">
                   {c.withFix > 0 && <span className="ab-tag">{t('{withFix} with a written fix', { withFix: c.withFix })}</span>}

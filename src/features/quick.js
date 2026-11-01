@@ -12,6 +12,7 @@
 //   quickActions()  the worker, for the bar on the ServiceNow page: AI items only, { id, label } as before. It may pass `stage`.
 //   quickItems()    the side panel: both kinds, marked, for the state the ticket is in, minus what this record does not offer.
 import { isFeatureEnabled } from '../policy/policy.js';
+import { t } from '../i18n/core.js';
 
 export const MAX_QUICK = 4;
 
@@ -24,43 +25,111 @@ export const QUICK_MIN_LIST = 4;
 export const panelShowsBar = (actionCount) => actionCount >= QUICK_MIN_LIST;
 
 // A short label for every feature that can be pinned. (The full titles in the Actions list are sentences; a bar needs a word or two.)
+// (Getters: the words are looked up when they are read, so they follow the language. This file imports core.js, not index.js: the
+// service worker and the bar on the ServiceNow page use it and have no need of the whole Arabic catalogue; the panel registers it.)
 export const QUICK_LABELS = Object.freeze({
-  'record-summary': 'Summarise',
-  'reply-draft': 'Draft a reply',
-  'resolution-notes': 'Resolution notes',
-  'handoff-brief': 'Hand-off brief',
-  'missing-info': 'What is missing?',
-  'sentiment-risk': 'Sentiment and risk',
-  'next-best-action': 'Next best action',
-  'thread-summary': 'Summarise discussion',
-  'routing-hint': 'Where should this go?',
-  'kb-article-draft': 'Knowledge article',
-  'major-incident-comms': 'Major incident update',
-  'problem-rca': 'Problem statement and RCA',
-  'change-cab-brief': 'CAB brief',
-  'account-briefing': 'Brief me before the call',
-  'case-eng-escalation': 'Engineering escalation',
-  'hr-case-brief': 'HR case brief',
-  'article-optimise': 'Improve this article',
-  'chat-summary': 'Summarise chat',
-  'chat-reply': 'Suggest replies',
-  'request-explain': 'Status for the requester',
-  'resolution-improve': 'Improve my notes',
-  'fulfilment-checklist': 'Draft a checklist',
+  get 'record-summary'() {
+    return t('Summarise');
+  },
+  get 'reply-draft'() {
+    return t('Draft a reply');
+  },
+  get 'resolution-notes'() {
+    return t('Resolution notes');
+  },
+  get 'handoff-brief'() {
+    return t('Hand-off brief');
+  },
+  get 'missing-info'() {
+    return t('What is missing?');
+  },
+  get 'sentiment-risk'() {
+    return t('Sentiment and risk');
+  },
+  get 'next-best-action'() {
+    return t('Next best action');
+  },
+  get 'thread-summary'() {
+    return t('Summarise discussion');
+  },
+  get 'routing-hint'() {
+    return t('Where should this go?');
+  },
+  get 'kb-article-draft'() {
+    return t('Knowledge article');
+  },
+  get 'major-incident-comms'() {
+    return t('Major incident update');
+  },
+  get 'problem-rca'() {
+    return t('Problem statement and RCA');
+  },
+  get 'change-cab-brief'() {
+    return t('CAB brief');
+  },
+  get 'account-briefing'() {
+    return t('Brief me before the call');
+  },
+  get 'case-eng-escalation'() {
+    return t('Engineering escalation');
+  },
+  get 'hr-case-brief'() {
+    return t('HR case brief');
+  },
+  get 'article-optimise'() {
+    return t('Improve this article');
+  },
+  get 'chat-summary'() {
+    return t('Summarise chat');
+  },
+  get 'chat-reply'() {
+    return t('Suggest replies');
+  },
+  get 'request-explain'() {
+    return t('Status for the requester');
+  },
+  get 'resolution-improve'() {
+    return t('Improve my notes');
+  },
+  get 'fulfilment-checklist'() {
+    return t('Draft a checklist');
+  },
   // The email drafts moved to the Ticket screen in round 3 (AI Assist, Reply), so they can be pinned too.
-  'email-ask-info': 'Email: ask for info',
-  'email-status-update': 'Email: status update',
-  'email-resolution': 'Email: resolved',
-  'email-approval-nudge': 'Email: approval reminder',
-  'email-apology': 'Email: sorry for the wait',
-  'email-closure': 'Email: closed',
+  get 'email-ask-info'() {
+    return t('Email: ask for info');
+  },
+  get 'email-status-update'() {
+    return t('Email: status update');
+  },
+  get 'email-resolution'() {
+    return t('Email: resolved');
+  },
+  get 'email-approval-nudge'() {
+    return t('Email: approval reminder');
+  },
+  get 'email-apology'() {
+    return t('Email: sorry for the wait');
+  },
+  get 'email-closure'() {
+    return t('Email: closed');
+  },
 });
 
 // Insights items: a card of the Ticket screen's Insights half (src/sidepanel/ticket/cards/index.js INSIGHT_CARDS, by its id). The
 // panel offers one only where that card exists for the record and the person's profiles.
 export const QUICK_CARDS = Object.freeze({
-  'card:ready': Object.freeze({ card: 'ready', label: 'Ready to resolve?' }),
-  'card:related': Object.freeze({ card: 'related', label: 'Related tickets' }),
+  'card:ready': Object.freeze({
+    card: 'ready',
+    get label() {
+      return t('Ready to resolve?');
+    },
+  }),
+  'card:related': Object.freeze({
+    card: 'related',
+    get label() {
+      return t('Related tickets');
+    },
+  }),
 });
 
 // What the bar offers for a kind of record until the person pins their own, when the ticket's state is not known (the bar on the

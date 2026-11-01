@@ -12,6 +12,9 @@
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS, TICKET_FIELDS } from './constants.js';
 import { attempt } from './reader.js';
+import { tm } from './say.js';
+import { t } from '../../i18n/core.js';
+import { shown } from '../shown.js';
 import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn, verifiedCount, resolvedStates, notResolved } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { HOUR, daysBetween, timeOf } from './time.js';
@@ -165,7 +168,7 @@ async function readBreaches(ctx, tables, since) {
   const { reader, scope, now } = ctx;
   const base = andQuery('has_breached=true', `task.sys_class_nameIN${tables.map((t) => t.table).join(',')}`, scope.taskQuery, buildQuery([{ op: 'since', field: 'planned_end_time', ms: since }, { op: 'until', field: 'planned_end_time', ms: now }]));
   const total = await verifiedCount(reader, 'task_sla', base, { unseen: SLA_UNSEEN });
-  if (!total.ok) return { ok: false, status: total.status, note: total.status === 'denied' ? 'SLA information is not available to you, so breaches in this period are not shown.' : total.note };
+  if (!total.ok) return { ok: false, status: total.status, note: total.status === 'denied' ? tm('SLA information is not available to you, so breaches in this period are not shown.') : total.note };
   if (!total.value) return { ok: true, total: 0, tickets: [] };
   const rows = await attempt(() => reader.rows('task_sla', `${base}^ORDERBYDESCplanned_end_time`, SLA_FIELDS, { limit: HANDOVER_LIMITS.breachRows, displayValue: true }), 'task_sla');
   if (!rows.ok) return { ok: true, total: total.value, tickets: [], note: rows.note };
@@ -194,7 +197,7 @@ export async function handoverSection(ctx) {
   const hours = normalizeHours(ctx.params.hours);
   const tables = usableTables(ctx);
   if (!tables.length) {
-    return sectionResult('handover', 'Shift handover', ctx, { available: false, reason: 'No ticket table can be read with your access, so there is nothing to hand over.' });
+    return sectionResult('handover', tm('Shift handover'), ctx, { available: false, reason: tm('No ticket table can be read with your access, so there is nothing to hand over.') });
   }
   const since = ctx.now - hours * HOUR;
 
@@ -215,16 +218,16 @@ export async function handoverSection(ctx) {
   if (!sla.ok) ctx.access.push({ source: 'task_sla', status: sla.status, note: sla.note });
   if (!breaches.ok && breaches.status !== sla.status) ctx.access.push({ source: 'task_sla', status: breaches.status, note: breaches.note });
   [approvals.mine, approvals.team].forEach((r) => {
-    if (r && !r.ok) ctx.access.push({ source: 'sysapproval_approver', status: r.status, note: r.status === 'denied' ? 'Approvals are not available to you.' : r.note });
+    if (r && !r.ok) ctx.access.push({ source: 'sysapproval_approver', status: r.status, note: r.status === 'denied' ? tm('Approvals are not available to you.') : r.note });
   });
-  if (!parts.some((p) => p.canReassign)) ctx.notes.push('Reassignment counts are not available on these tables, so heavy hand-offs are not shown.');
-  if (!parts.some((p) => p.hasResolved)) ctx.notes.push('These tables have no resolved date, so tickets resolved in this period are not shown.');
+  if (!parts.some((p) => p.canReassign)) ctx.notes.push(tm('Reassignment counts are not available on these tables, so heavy hand-offs are not shown.'));
+  if (!parts.some((p) => p.hasResolved)) ctx.notes.push(tm('These tables have no resolved date, so tickets resolved in this period are not shown.'));
 
   // The tickets behind the most worrying SLAs and the breaches of the period, looked up together.
   const slaTop = sla.ok ? sla.tickets.slice(0, HANDOVER_LIMITS.slaTop) : [];
   const breachTop = breaches.ok ? breaches.tickets : [];
   const { details, failure } = await lookUp(ctx, [...slaTop, ...breachTop].map((t) => t.sysId));
-  if (failure) ctx.access.push({ source: 'task', status: failure.status, note: 'Ticket details are not available to you, so SLA lists show counts only.' });
+  if (failure) ctx.access.push({ source: 'task', status: failure.status, note: tm('Ticket details are not available to you, so SLA lists show counts only.') });
   const tableOf = (row) => tables.find((t) => t.table === raw(row.sys_class_name));
   const withDetails = (entries, extra) =>
     entries
@@ -272,7 +275,7 @@ export async function handoverSection(ctx) {
   const resolvedList = mergeLists(parts, (p) => p.resolvedUrgent, ctx, byUrgency, HANDOVER_LIMITS.list);
   const reassigned = mergeLists(parts, (p) => p.reassigned, ctx, (a, b) => (b.reassignments || 0) - (a.reassignments || 0) || a.number.localeCompare(b.number), HANDOVER_LIMITS.reassigned);
 
-  return sectionResult('handover', 'Shift handover', ctx, {
+  return sectionResult('handover', tm('Shift handover'), ctx, {
     available: true,
     hours,
     since,
@@ -312,7 +315,8 @@ export async function handoverSection(ctx) {
   });
 }
 
-const dash = (v) => (v === null || v === undefined ? 'n/a' : v);
+const dash = (v) => (v === null || v === undefined ? t('n/a') : v);
+const RISK_WORDS = () => ({ Breached: t('Breached'), 'At risk': t('At risk'), 'Due soon': t('Due soon') });
 
 /** Rows for CSV / print / copy. */
 export function handoverTables(result) {
@@ -321,41 +325,41 @@ export function handoverTables(result) {
   const s = d.snapshot;
   const out = [];
   const measures = [
-    ['Open', s.open],
-    ['SLA breached', s.breached],
-    ['SLA at risk', s.atRisk],
-    [`SLA due within ${s.dueSoonHours} hours`, s.dueSoon],
-    ...(s.unassigned !== undefined ? [['Unassigned', s.unassigned]] : []),
-    [`No update in ${s.staleDays}+ days`, s.stale],
-    ['Waiting (customer, approval or other)', s.waiting],
-    ['  waiting on the customer', d.waiting.customer],
-    ['  waiting on an approval', d.waiting.approval],
-    ['  on hold or pending (other)', d.waiting.other],
-    ['Approvals waiting for you', d.waiting.approvals.mine],
-    ...(d.waiting.approvals.team !== undefined ? [['Approvals waiting on requested items in scope', d.waiting.approvals.team]] : []),
-    [`Priority 1-2 opened in the last ${d.hours} hours`, d.events.opened.total],
-    [`Priority 1-2 resolved in the last ${d.hours} hours`, d.events.resolved.total],
-    [`SLAs breached in the last ${d.hours} hours`, d.events.breaches.total],
-    [`Tickets handed over ${LIMITS.pingPongMin}+ times and touched in the last ${d.hours} hours`, d.events.reassigned.total],
+    [shown('Open'), s.open],
+    [t('SLA breached'), s.breached],
+    [t('SLA at risk'), s.atRisk],
+    [t('SLA due within {hours} hours', { hours: s.dueSoonHours }), s.dueSoon],
+    ...(s.unassigned !== undefined ? [[t('Unassigned'), s.unassigned]] : []),
+    [t('No update in {days}+ days', { days: s.staleDays }), s.stale],
+    [t('Waiting (customer, approval or other)'), s.waiting],
+    [`  ${t('waiting on the customer')}`, d.waiting.customer],
+    [`  ${t('waiting on an approval')}`, d.waiting.approval],
+    [`  ${t('on hold or pending (other)')}`, d.waiting.other],
+    [t('Approvals waiting for you'), d.waiting.approvals.mine],
+    ...(d.waiting.approvals.team !== undefined ? [[t('Approvals waiting on requested items in scope'), d.waiting.approvals.team]] : []),
+    [t('Priority 1-2 opened in the last {hours} hours', { hours: d.hours }), d.events.opened.total],
+    [t('Priority 1-2 resolved in the last {hours} hours', { hours: d.hours }), d.events.resolved.total],
+    [t('SLAs breached in the last {hours} hours', { hours: d.hours }), d.events.breaches.total],
+    [t('Tickets handed over {n}+ times and touched in the last {hours} hours', { n: LIMITS.pingPongMin, hours: d.hours }), d.events.reassigned.total],
   ];
-  out.push({ title: 'Shift handover', columns: [{ key: 'measure', label: 'Measure' }, { key: 'value', label: 'Value' }], rows: measures.map(([measure, value]) => ({ measure, value: dash(value) })) });
+  out.push({ title: t('Shift handover'), columns: [{ key: 'measure', label: t('Measure') }, { key: 'value', label: t('Value') }], rows: measures.map(([measure, value]) => ({ measure, value: dash(value) })) });
 
   const ticketColumns = [
-    { key: 'number', label: 'Ticket' },
-    { key: 'title', label: 'Short description' },
-    { key: 'priority', label: 'Priority' },
-    { key: 'state', label: 'State' },
-    { key: 'owner', label: 'Assigned to', person: true },
-    { key: 'group', label: 'Group' },
+    { key: 'number', label: t('Ticket') },
+    { key: 'title', label: t('Short description') },
+    { key: 'priority', label: t('Priority') },
+    { key: 'state', label: t('State') },
+    { key: 'owner', label: t('Assigned to'), person: true },
+    { key: 'group', label: t('Group') },
   ];
-  const list = (title, items, extra = []) => items.length && out.push({ title, columns: [...ticketColumns, ...extra], rows: items.map((i) => ({ ...i, owner: i.owner || '(unassigned)' })) });
-  list('Closest to breaking', d.sla.top, [{ key: 'risk', label: 'SLA' }, { key: 'percent', label: 'Time used (%)' }, { key: 'plannedEnd', label: 'Due' }]);
-  list(`Priority 1-2 opened in the last ${d.hours} hours`, d.events.opened.items, [{ key: 'openedAt', label: 'Opened' }]);
-  list(`Priority 1-2 resolved in the last ${d.hours} hours`, d.events.resolved.items);
-  list(`SLAs breached in the last ${d.hours} hours`, d.events.breaches.items, [{ key: 'plannedEnd', label: 'Due' }]);
-  list(`Handed over ${LIMITS.pingPongMin}+ times`, d.events.reassigned.items, [{ key: 'reassignments', label: 'Reassignments' }]);
-  if (d.waiting.byState.length) out.push({ title: 'Waiting by state', columns: [{ key: 'label', label: 'State' }, { key: 'kind', label: 'Waiting for' }, { key: 'count', label: 'Tickets' }], rows: d.waiting.byState });
-  list('Oldest waiting', d.waiting.oldest, [{ key: 'ageDays', label: 'Age (days)' }]);
-  list('Oldest open', d.oldest, [{ key: 'ageDays', label: 'Age (days)' }]);
+  const list = (title, items, extra = []) => items.length && out.push({ title, columns: [...ticketColumns, ...extra], rows: items.map((i) => ({ ...i, owner: i.owner || t('(unassigned)'), ...(i.risk ? { risk: RISK_WORDS()[i.risk] || i.risk } : {}) })) });
+  list(t('Closest to breaking'), d.sla.top, [{ key: 'risk', label: t('SLA') }, { key: 'percent', label: t('Time used (%)') }, { key: 'plannedEnd', label: t('Due') }]);
+  list(t('Priority 1-2 opened in the last {hours} hours', { hours: d.hours }), d.events.opened.items, [{ key: 'openedAt', label: t('Opened') }]);
+  list(t('Priority 1-2 resolved in the last {hours} hours', { hours: d.hours }), d.events.resolved.items);
+  list(t('SLAs breached in the last {hours} hours', { hours: d.hours }), d.events.breaches.items, [{ key: 'plannedEnd', label: t('Due') }]);
+  list(t('Handed over {n}+ times', { n: LIMITS.pingPongMin }), d.events.reassigned.items, [{ key: 'reassignments', label: t('Reassignments') }]);
+  if (d.waiting.byState.length) out.push({ title: t('Waiting by state'), columns: [{ key: 'label', label: t('State') }, { key: 'kind', label: t('Waiting for') }, { key: 'count', label: t('Tickets') }], rows: d.waiting.byState.map((s2) => ({ ...s2, kind: { customer: t('The customer'), approval: t('An approval'), other: t('Other') }[s2.kind] || s2.kind })) });
+  list(t('Oldest waiting'), d.waiting.oldest, [{ key: 'ageDays', label: t('Age (days)') }]);
+  list(t('Oldest open'), d.oldest, [{ key: 'ageDays', label: t('Age (days)') }]);
   return out;
 }

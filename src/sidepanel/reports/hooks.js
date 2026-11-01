@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import { retryDelay } from './useReport.js';
+import { tm } from '../../i18n/index.js';
 import { DASHBOARDS_KEY, chromeLocalStorage, createDashboardStore, stateForInstance } from '../../reports/dashboards.js';
 
 /**
@@ -29,7 +30,7 @@ export function useReportContext({ tabId, blocked, refreshKey, allowSensitive = 
             await new Promise((resolve) => setTimeout(resolve, wait));
             continue;
           }
-          if (alive) setState((s) => ({ phase: 'error', data: s.data, error: err.code === 'SESSION_EXPIRED' ? 'Your ServiceNow session has expired. Log in again, then press Refresh.' : err.message, code: err.code || '' }));
+          if (alive) setState((s) => ({ phase: 'error', data: s.data, error: err.code === 'SESSION_EXPIRED' ? tm('Your ServiceNow session has expired. Log in again, then press Refresh.') : err.message, code: err.code || '' }));
           return;
         }
       }

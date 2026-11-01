@@ -19,26 +19,28 @@ import { diagnosticsText } from './diagnostics.js';
 import ProfilePicker from './ProfilePicker.jsx';
 import Tabs from '../sidepanel/Tabs.jsx';
 import { panelId, tabId } from '../sidepanel/tabKeys.js';
-import { t } from '../i18n/index.js';
+import { t, tm, tn, isolate, t as tr } from '../i18n/index.js';
+import { tx } from '../i18n/jsx.jsx';
 import { useLanguage } from '../i18n/useLanguage.js';
 import { LANGUAGES } from '../i18n/index.js';
 
+// (English texts marked with tm(); each is shown with tr(), the translation function, at the moment it is used)
 const KEY_MODE_TEXT = {
-  local: "Kept in Agent Buddy's own storage in this browser. ServiceNow pages cannot read it, but anyone who can read your browser profile on disk can. Use a key with a spend limit.",
-  session: 'Kept in memory only and forgotten when the browser closes. Nothing is written to disk. You enter it again next time.',
-  encrypted: 'Kept encrypted with a passphrase. You enter the passphrase once per browser session.',
+  local: tm("Kept in Agent Buddy's own storage in this browser. ServiceNow pages cannot read it, but anyone who can read your browser profile on disk can. Use a key with a spend limit."),
+  session: tm('Kept in memory only and forgotten when the browser closes. Nothing is written to disk. You enter it again next time.'),
+  encrypted: tm('Kept encrypted with a passphrase. You enter the passphrase once per browser session.'),
 };
-const KEY_MODE_LABEL = { local: 'This browser (simple)', session: 'Memory only (forgotten on close)', encrypted: 'Encrypted with a passphrase' };
-const KEY_WHERE = { local: 'this browser', session: 'memory only', encrypted: 'this browser, encrypted' };
+const KEY_MODE_LABEL = { local: tm('This browser (simple)'), session: tm('Memory only (forgotten on close)'), encrypted: tm('Encrypted with a passphrase') };
+const KEY_WHERE = { local: tm('this browser'), session: tm('memory only'), encrypted: tm('this browser, encrypted') };
 const SHOW_SAVED_MS = 20000; // a saved key that was shown in full hides itself again after this long
 const TEST_TIMEOUT_MS = 45000; // "Test connection" asks for one word; it should not keep the page waiting for minutes
 const PII_TEXT = {
-  standard: 'Masks detected personal data (names on the ticket, emails, phone and card numbers, IDs, secrets).',
-  strict: 'Also refuses sensitive fields and keeps HR free text out entirely.',
-  'local-only': 'Only allows an AI model running on this computer. Nothing leaves it.',
+  standard: tm('Masks detected personal data (names on the ticket, emails, phone and card numbers, IDs, secrets).'),
+  strict: tm('Also refuses sensitive fields and keeps HR free text out entirely.'),
+  'local-only': tm('Only allows an AI model running on this computer. Nothing leaves it.'),
 };
-const PREVIEW_TEXT = { always: 'Show the exact outgoing text every time', first: 'Show it the first time for each action', never: 'Do not show it' };
-const PII_LABEL = { standard: 'Standard', strict: 'Strict', 'local-only': 'Local model only' };
+const PREVIEW_TEXT = { always: tm('Show the exact outgoing text every time'), first: tm('Show it the first time for each action'), never: tm('Do not show it') };
+const PII_LABEL = { standard: tm('Standard'), strict: tm('Strict'), 'local-only': tm('Local model only') };
 
 /** 'granted' in a build whose hosts were granted at install (enterprise), 'prompt' when the browser asks site by site. */
 function hostAccess() {
@@ -129,9 +131,9 @@ function SavedKeyLine({ def, keyMode, wanted, apiKey, shown, onToggle }) {
   const { preview, length } = keyPreview(apiKey);
   return (
     <span className="ab-hint" id="key-saved">
-      Saved: {preview ? <code className="ab-mono">{preview}</code> : null} ({length} characters), kept in {KEY_WHERE[keyMode] || 'this browser'}.
-      {wanted && keyMode !== wanted ? ` That is not where you chose to keep it ("${KEY_MODE_LABEL[wanted]}"): see below.` : ''}{' '}
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onToggle} aria-pressed={shown} aria-controls="key-full">{shown ? 'Hide saved key' : 'Show saved key'}</button>
+      {tx('Saved: {preview} ({chars}), kept in {where}.', { preview: preview ? <code className="ab-mono">{preview}</code> : '', chars: tn(length, '{n} character', '{n} characters'), where: tr(KEY_WHERE[keyMode] || KEY_WHERE.local) })}
+      {wanted && keyMode !== wanted ? ` ${t('That is not where you chose to keep it ("{label}"): see below.', { label: tr(KEY_MODE_LABEL[wanted]) })}` : ''}{' '}
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onToggle} aria-pressed={shown} aria-controls="key-full">{shown ? t('Hide saved key') : t('Show saved key')}</button>
       {shown && <code className="ab-mono" id="key-full" style={{ display: 'block', marginTop: 4, wordBreak: 'break-all' }}>{apiKey}</code>}
     </span>
   );
@@ -166,12 +168,12 @@ function AzureFields({ eff, change, model, setStatus }) {
       ...(split.deployment ? { models: { ...v.models, azure: split.deployment } } : {}),
       azure: { ...(v.azure || {}), ...(split.form ? { form: split.form } : {}), ...(split.apiVersion ? { apiVersion: split.apiVersion } : {}) },
     });
-    setStatus({ kind: 'ok', text: 'The address you pasted was split into its parts: the resource address, the form, the version and the deployment below.' });
+    setStatus({ kind: 'ok', text: t('The address you pasted was split into its parts: the resource address, the form, the version and the deployment below.') });
   }
 
   async function saveDeployments(text) {
     const { ids, bad } = parseDeployments(text);
-    setDeploymentsError(bad.length ? `Not a deployment name Azure allows: ${bad.join(', ')}. Use letters, digits, - _ and .` : '');
+    setDeploymentsError(bad.length ? t('Not a deployment name Azure allows: {names}. Use letters, digits, - _ and .', { names: bad.join(', ') }) : '');
     await change({ modelLists: { ...v.modelLists, azure: ids } });
   }
 
@@ -192,9 +194,8 @@ function AzureFields({ eff, change, model, setStatus }) {
         />
         <FieldError id="baseurl-error" text={addressProblem} />
         <span className="ab-hint" id="baseurl-hint">
-          The &quot;Endpoint&quot; of your Azure OpenAI resource, from &quot;Keys and Endpoint&quot; in the Azure portal. You can also paste a whole
-          address that ends in ?api-version=...: it is split into the fields below.
-          {host && !isAzureHost(host) ? ' This is not an Azure OpenAI address (…openai.azure.com). That is fine for a company gateway in front of Azure.' : ''}
+          {t('The "Endpoint" of your Azure OpenAI resource, from "Keys and Endpoint" in the Azure portal. You can also paste a whole address that ends in ?api-version=...: it is split into the fields below.')}
+          {host && !isAzureHost(host) ? ` ${t('This is not an Azure OpenAI address (…openai.azure.com). That is fine for a company gateway in front of Azure.')}` : ''}
         </span>
         <Locked why={eff.locked.baseUrl} />
       </div>
@@ -210,8 +211,8 @@ function AzureFields({ eff, change, model, setStatus }) {
           </select>
           <span className="ab-hint" id="azure-form-hint">
             {az.form === 'v1'
-              ? 'Sends to <resource>/openai/v1/chat/completions with the deployment name as the model.'
-              : 'Sends to <resource>/openai/deployments/<deployment>/chat/completions?api-version=<version>.'}
+              ? t('Sends to <resource>/openai/v1/chat/completions with the deployment name as the model.')
+              : t('Sends to <resource>/openai/deployments/<deployment>/chat/completions?api-version=<version>.')}
           </span>
         </div>
 
@@ -227,7 +228,7 @@ function AzureFields({ eff, change, model, setStatus }) {
               aria-describedby={describedBy('azure-version-hint', !az.apiVersionOk && 'azure-version-error')}
               onSave={(text) => change({ azure: { ...(v.azure || {}), apiVersion: text.trim() } })}
             />
-            <FieldError id="azure-version-error" text={az.apiVersionOk ? '' : 'An API version looks like 2024-10-21 or 2025-04-01-preview.'} />
+            <FieldError id="azure-version-error" text={az.apiVersionOk ? '' : t('An API version looks like 2024-10-21 or 2025-04-01-preview.')} />
             <span className="ab-hint" id="azure-version-hint">{t('Leave empty for {AZURE_DEFAULT_API_VERSION}. Use the version your administrator gave you if it differs.', { AZURE_DEFAULT_API_VERSION })}</span>
           </div>
         )}
@@ -321,7 +322,7 @@ export function ProviderSection({ eff, reload }) {
       reload();
       return true;
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not save that change. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
       return false;
     }
   }
@@ -333,16 +334,16 @@ export function ProviderSection({ eff, reload }) {
     setStatus(null);
     // An empty box never removes a saved key by accident: that is what "Remove saved key" is for.
     if (!cleanKey(key)) {
-      setStatus({ kind: 'warn', text: keyMode === 'none' ? 'Paste your key in the key box first, then press Save key.' : 'The key box is empty. To remove the saved key, press "Remove saved key".' });
+      setStatus({ kind: 'warn', text: keyMode === 'none' ? t('Paste your key in the key box first, then press Save key.') : t('The key box is empty. To remove the saved key, press "Remove saved key".') });
       return;
     }
     setBusy('key');
     try {
-      if (v.keyStorage === 'encrypted' && passphrase.length < MIN_PASSPHRASE) throw new Error(`Choose a passphrase of at least ${MIN_PASSPHRASE} characters to encrypt the key.`);
+      if (v.keyStorage === 'encrypted' && passphrase.length < MIN_PASSPHRASE) throw new Error(t('Choose a passphrase of at least {min} characters to encrypt the key.', { min: MIN_PASSPHRASE }));
       await store().save({ provider: v.provider, key, mode: v.keyStorage, passphrase });
       setKey('');
       setPassphrase('');
-      setStatus({ kind: 'ok', text: `Key saved. (${cleanKey(key).length} characters)` });
+      setStatus({ kind: 'ok', text: t('Key saved. ({chars})', { chars: tn(cleanKey(key).length, '{n} character', '{n} characters') }) });
       setShowTyped(false);
       reload();
     } catch (err) {
@@ -356,10 +357,10 @@ export function ProviderSection({ eff, reload }) {
     setStatus(null);
     try {
       await store().remove(v.provider);
-      setStatus({ kind: 'ok', text: 'Key removed.' });
+      setStatus({ kind: 'ok', text: t('Key removed.') });
       reload();
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not let Agent Buddy remove the key. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not let Agent Buddy remove the key. Try again.') });
     }
   }
 
@@ -369,7 +370,7 @@ export function ProviderSection({ eff, reload }) {
     try {
       await store().unlock(v.provider, unlockPass);
       setUnlockPass('');
-      setStatus({ kind: 'ok', text: needsEncryption ? 'The saved key is now encrypted with your passphrase, and unlocked for this browser session.' : 'Unlocked for this browser session.' });
+      setStatus({ kind: 'ok', text: needsEncryption ? t('The saved key is now encrypted with your passphrase, and unlocked for this browser session.') : t('Unlocked for this browser session.') });
       reload();
     } catch (err) {
       setStatus({ kind: 'danger', text: err.message });
@@ -385,15 +386,15 @@ export function ProviderSection({ eff, reload }) {
     if (!(await change({ keyStorage: next }))) return;
     if (keyMode === 'none' || keyMode === next) return;
     if (next === 'encrypted') {
-      setStatus({ kind: 'warn', text: 'Your saved key is still kept as before. Choose a passphrase below and press "Encrypt the saved key".' });
+      setStatus({ kind: 'warn', text: t('Your saved key is still kept as before. Choose a passphrase below and press "Encrypt the saved key".') });
       return;
     }
     try {
       await store().changeMode({ provider: v.provider, mode: next });
-      setStatus({ kind: 'ok', text: `The saved key was moved: it is now kept in ${KEY_WHERE[next]}.` });
+      setStatus({ kind: 'ok', text: t('The saved key was moved: it is now kept in {where}.', { where: tr(KEY_WHERE[next]) }) });
       reload();
     } catch (err) {
-      setStatus({ kind: 'danger', text: `${err.message} The saved key was not moved.` });
+      setStatus({ kind: 'danger', text: t('{message} The saved key was not moved.', { message: err.message }) });
     }
   }
 
@@ -401,10 +402,10 @@ export function ProviderSection({ eff, reload }) {
     setStatus(null);
     setBusy('key');
     try {
-      if (passphrase.length < MIN_PASSPHRASE) throw new Error(`Choose a passphrase of at least ${MIN_PASSPHRASE} characters.`);
+      if (passphrase.length < MIN_PASSPHRASE) throw new Error(t('Choose a passphrase of at least {min} characters.', { min: MIN_PASSPHRASE }));
       await store().changeMode({ provider: v.provider, mode: 'encrypted', passphrase });
       setPassphrase('');
-      setStatus({ kind: 'ok', text: 'The saved key is now encrypted with your passphrase.' });
+      setStatus({ kind: 'ok', text: t('The saved key is now encrypted with your passphrase.') });
       reload();
     } catch (err) {
       setStatus({ kind: 'danger', text: err.message });
@@ -422,8 +423,8 @@ export function ProviderSection({ eff, reload }) {
     try {
       await work(controller.signal);
     } catch (err) {
-      if (err?.code === 'CANCELLED') setStatus({ kind: 'warn', text: 'Cancelled.' });
-      else setStatus({ kind: 'danger', text: err?.message || 'Something went wrong.' });
+      if (err?.code === 'CANCELLED') setStatus({ kind: 'warn', text: t('Cancelled.') });
+      else setStatus({ kind: 'danger', text: err?.message || t('Something went wrong.') });
     } finally {
       if (running.current === controller) running.current = null;
       setBusy('');
@@ -441,8 +442,8 @@ export function ProviderSection({ eff, reload }) {
       // the policy does not allow, and the browser is not even asked for permission to contact it.
       const permitted = checkProviderAllowed(cfg, eff.policy);
       if (!permitted.ok) throw new Error(permitted.reason);
-      if (def.azure && !cfg.model) throw new Error('Enter the name of your Azure deployment first.');
-      if (!useKey && !cfg.keyOptional) throw new Error(`There is no ${def.label} key yet. Paste it in the key box, press Save key, then test again.`);
+      if (def.azure && !cfg.model) throw new Error(t('Enter the name of your Azure deployment first.'));
+      if (!useKey && !cfg.keyOptional) throw new Error(t('There is no {label} key yet. Paste it in the key box, press Save key, then test again.', { label: def.label }));
       // A hosted provider needs the browser's permission for its address first (requested from this click).
       await ensureAiPermission(cfg);
       // The test goes through the same firewall as everything else: there is no side door to the provider.
@@ -450,9 +451,9 @@ export function ProviderSection({ eff, reload }) {
       const request = fw.buildRequest({ feature: 'connection-test', table: '', system: 'Reply with the single word OK.', userInstruction: 'ping', parts: [] });
       const reply = await sendChat(cfg, request, { kind: 'validate', skipBudget: true, signal, timeoutMs: cfg.local ? undefined : TEST_TIMEOUT_MS });
       const typed = cleanKey(key);
-      const unsaved = typed && typed !== eff.apiKey ? ' This key is not saved yet: press Save key to keep it.' : '';
+      const unsaved = typed && typed !== eff.apiKey ? ` ${t('This key is not saved yet: press Save key to keep it.')}` : '';
       const cut = reply.truncated ? ` ${truncationNote(reply)}` : '';
-      setStatus({ kind: 'ok', text: `Connected. The model answered: ${String(reply.content).slice(0, 40)}${unsaved}${cut}` });
+      setStatus({ kind: 'ok', text: `${t('Connected. The model answered: {answer}', { answer: isolate(String(reply.content).slice(0, 40)) })}${unsaved}${cut}` });
     });
 
   // The models the server offers, so one can be picked instead of typed. Only the key goes out (to the address chats go to).
@@ -465,13 +466,13 @@ export function ProviderSection({ eff, reload }) {
       // allowed models below), so allowedModels is left out of this check.
       const permitted = checkProviderAllowed({ provider: cfg.provider, baseUrl: cfg.baseUrl, model: '' }, { ...eff.policy, allowedModels: null });
       if (!permitted.ok) throw new Error(permitted.reason);
-      if (!cfg.apiKey && !cfg.keyOptional) throw new Error(`There is no ${def.label} key yet. Paste it in the key box, press Save key, then load the models.`);
+      if (!cfg.apiKey && !cfg.keyOptional) throw new Error(t('There is no {label} key yet. Paste it in the key box, press Save key, then load the models.', { label: def.label }));
       await ensureAiPermission(cfg);
       let ids = await listModels(cfg, undefined, { signal });
       const allowed = eff.policy?.allowedModels;
       if (allowed?.length) ids = ids.filter((id) => allowed.includes(id));
       if (!(await change({ modelLists: { ...v.modelLists, [v.provider]: ids } }))) return;
-      setStatus({ kind: 'ok', text: `Found ${ids.length} model${ids.length === 1 ? '' : 's'}. Pick one from the list, or type a name.` });
+      setStatus({ kind: 'ok', text: t('Found {models}. Pick one from the list, or type a name.', { models: tn(ids.length, '{n} model', '{n} models') }) });
     });
 
   const loadedModels = Array.isArray(v.modelLists?.[v.provider]) ? v.modelLists[v.provider] : [];
@@ -484,15 +485,15 @@ export function ProviderSection({ eff, reload }) {
   const saved = eff.savedProvider && PROVIDERS[eff.savedProvider] ? eff.savedProvider : '';
   let providerNote = '';
   if (Array.isArray(eff.policy?.allowedProviders) && !eff.locked.provider) {
-    if (!offered.length) providerNote = 'Your organisation allows no AI provider that this version of Agent Buddy knows. Ask your administrator.';
+    if (!offered.length) providerNote = t('Your organisation allows no AI provider that this version of Agent Buddy knows. Ask your administrator.');
     else if (saved && !offered.includes(saved)) {
-      providerNote = `Your organisation does not allow ${PROVIDERS[saved].label}, which you chose before. Agent Buddy uses ${def.label} instead; choose one of the providers in the list.`;
+      providerNote = t('Your organisation does not allow {blocked}, which you chose before. Agent Buddy uses {used} instead; choose one of the providers in the list.', { blocked: PROVIDERS[saved].label, used: def.label });
     }
   }
 
   const testButtons = (
     <>
-      <button type="button" className="ab-btn" onClick={test} disabled={Boolean(busy)}>{busy === 'test' ? 'Testing…' : 'Test connection'}</button>
+      <button type="button" className="ab-btn" onClick={test} disabled={Boolean(busy)}>{busy === 'test' ? t('Testing…') : t('Test connection')}</button>
       {busy === 'test' && (
         <button type="button" className="ab-btn ab-btn-quiet" onClick={() => running.current?.abort()}>{t('Cancel')}</button>
       )}
@@ -523,13 +524,13 @@ export function ProviderSection({ eff, reload }) {
             <details className="ab-more">
               <summary>{t('Technical details: the address requests go to')}</summary>
               <p className="ab-hint">
-                <span className="ab-mono">{def.baseUrl}</span> (the provider&apos;s own address). Only masked text is sent there, after you have seen it.
+                {tx("{address} (the provider's own address). Only masked text is sent there, after you have seen it.", { address: <span className="ab-mono">{def.baseUrl}</span> })}
               </p>
             </details>
           )}
           {def.userBaseUrl && (
             <div className="ab-field">
-              <label className="ab-label" htmlFor="baseurl">Address {def.userBaseUrl ? (needsAddress ? '(required)' : '(optional)') : ''}</label>
+              <label className="ab-label" htmlFor="baseurl">{needsAddress ? t('Address (required)') : t('Address (optional)')}</label>
               <DraftInput
                 id="baseurl"
                 className="ab-input ab-mono"
@@ -543,11 +544,11 @@ export function ProviderSection({ eff, reload }) {
               <FieldError id="baseurl-error" text={baseCheck.ok ? '' : baseCheck.error} />
               <span className="ab-hint" id="baseurl-hint">
                 {!def.userBaseUrl
-                  ? "This provider's own address."
+                  ? t("This provider's own address.")
                   : needsAddress
-                    ? 'The address of your OpenAI-compatible server, for example http://localhost:1234/v1.'
-                    : "Leave empty to use the provider's own API. A company gateway goes here (the address it gave out, usually ending in /v1)."}
-                {v.provider === 'openai' && isAzureHost(typedHost) ? ' This looks like an Azure OpenAI address: choose the provider "Azure OpenAI" so the key is sent the way Azure expects.' : ''}
+                    ? t('The address of your OpenAI-compatible server, for example http://localhost:1234/v1.')
+                    : t("Leave empty to use the provider's own API. A company gateway goes here (the address it gave out, usually ending in /v1).")}
+                {v.provider === 'openai' && isAzureHost(typedHost) ? ` ${t('This looks like an Azure OpenAI address: choose the provider "Azure OpenAI" so the key is sent the way Azure expects.')}` : ''}
               </span>
               <Locked why={eff.locked.baseUrl} />
             </div>
@@ -565,14 +566,14 @@ export function ProviderSection({ eff, reload }) {
                     {choices.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                   </select>
                 )}
-                <button type="button" id="load-models" className="ab-btn" onClick={loadModels} disabled={Boolean(busy)}>{busy === 'models' ? 'Loading…' : loadedModels.length ? 'Reload the list' : 'Load models from the server'}</button>
+                <button type="button" id="load-models" className="ab-btn" onClick={loadModels} disabled={Boolean(busy)}>{busy === 'models' ? t('Loading…') : loadedModels.length ? t('Reload the list') : t('Load models from the server')}</button>
                 {busy === 'models' && <button type="button" className="ab-btn ab-btn-quiet" onClick={() => running.current?.abort()}>{t('Cancel')}</button>}
               </div>
             )}
             <span className="ab-hint" id="model-hint">
               {listable
-                ? 'Your server may offer several models. Load the list to pick one, or type the exact name your administrator gave you.'
-                : 'Pick one from the list (start typing), or type the exact model id, for example claude-sonnet-5-5.'}
+                ? t('Your server may offer several models. Load the list to pick one, or type the exact name your administrator gave you.')
+                : t('Pick one from the list (start typing), or type the exact model id, for example claude-sonnet-5-5.')}
             </span>
             <Locked why={eff.locked.model} />
           </div>
@@ -589,18 +590,18 @@ export function ProviderSection({ eff, reload }) {
           <div className="ab-field">
             <label className="ab-label" htmlFor="keystorage">{t('Where to keep the key')}</label>
             <select id="keystorage" className="ab-select" value={v.keyStorage} disabled={Boolean(eff.locked.keyStorage)} aria-describedby="keystorage-hint" onChange={(e) => changeKeyStorage(e.target.value)}>
-              {KEY_STORAGE_MODES.map((m) => <option key={m} value={m}>{KEY_MODE_LABEL[m]}</option>)}
+              {KEY_STORAGE_MODES.map((m) => <option key={m} value={m}>{tr(KEY_MODE_LABEL[m])}</option>)}
             </select>
-            <span className="ab-hint" id="keystorage-hint">{KEY_MODE_TEXT[v.keyStorage]}</span>
+            <span className="ab-hint" id="keystorage-hint">{tr(KEY_MODE_TEXT[v.keyStorage])}</span>
             <Locked why={eff.locked.keyStorage} />
           </div>
 
           {eff.keyLocked && (
             <div className="ab-field">
-              <label className="ab-label" htmlFor="unlock">{needsEncryption ? 'Choose a passphrase to encrypt your saved key' : 'Passphrase to unlock the saved key'}</label>
+              <label className="ab-label" htmlFor="unlock">{needsEncryption ? t('Choose a passphrase to encrypt your saved key') : t('Passphrase to unlock the saved key')}</label>
               <div className="ab-row">
                 <input id="unlock" type="password" className="ab-input" value={unlockPass} onChange={(e) => setUnlockPass(e.target.value)} onKeyDown={onEnter(() => unlockPass && unlock())} autoComplete={needsEncryption ? 'new-password' : 'off'} aria-describedby={needsEncryption ? 'unlock-hint' : undefined} />
-                <button type="button" className="ab-btn" onClick={unlock} disabled={!unlockPass || Boolean(busy)}>{needsEncryption ? 'Encrypt' : 'Unlock'}</button>
+                <button type="button" className="ab-btn" onClick={unlock} disabled={!unlockPass || Boolean(busy)}>{needsEncryption ? t('Encrypt') : t('Unlock')}</button>
               </div>
               {needsEncryption && (
                 <span className="ab-hint" id="unlock-hint">
@@ -622,13 +623,13 @@ export function ProviderSection({ eff, reload }) {
                 onKeyDown={onEnter(() => cleanKey(key) && saveKey())}
                 autoComplete="off"
                 spellCheck={false}
-                placeholder={keyMode === 'none' ? def.keyPlaceholder || '' : 'A key is saved. Type a new one to replace it.'}
+                placeholder={keyMode === 'none' ? def.keyPlaceholder || '' : t('A key is saved. Type a new one to replace it.')}
                 aria-describedby="key-hint key-saved"
               />
-              <button type="button" className="ab-btn" onClick={() => setShowTyped((on) => !on)} aria-pressed={showTyped} aria-controls="key">{showTyped ? 'Hide' : 'Show'}</button>
+              <button type="button" className="ab-btn" onClick={() => setShowTyped((on) => !on)} aria-pressed={showTyped} aria-controls="key">{showTyped ? t('Hide') : t('Show')}</button>
             </div>
             <span className="ab-hint" id="key-hint">{def.keyHint}</span>
-            {cleanKey(key) && <span className="ab-hint" id="key-unsaved" role="status">Typed, not saved yet ({cleanKey(key).length} characters). Press Save key to keep it.</span>}
+            {cleanKey(key) && <span className="ab-hint" id="key-unsaved" role="status">{t('Typed, not saved yet ({chars}). Press Save key to keep it.', { chars: tn(cleanKey(key).length, '{n} character', '{n} characters') })}</span>}
             <SavedKeyLine def={def} keyMode={keyMode} wanted={v.keyStorage} apiKey={eff.apiKey} shown={showSaved} onToggle={() => setShowSaved((on) => !on)} />
           </div>
           {v.keyStorage === 'encrypted' && (
@@ -685,7 +686,7 @@ export function UsageSection({ eff }) {
       setStatus(null);
       load();
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not save the limit. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not save the limit. Try again.') });
     }
   }
 
@@ -694,8 +695,12 @@ export function UsageSection({ eff }) {
     <section className="ab-section" aria-labelledby="h-usage">
       <h2 className="ab-h" id="h-usage">{t('Usage and limits')}</h2>
       <p className="ab-sub">
-        Counted on this computer from the usage log (no text is kept). Today: {fmt(today.calls)} call{today.calls === 1 ? '' : 's'}, {fmt(today.tokens)} tokens.
-        This month: {fmt(month.calls)} calls, {fmt(month.tokens)} tokens.
+        {t('Counted on this computer from the usage log (no text is kept). Today: {todayCalls}, {todayTokens}. This month: {monthCalls}, {monthTokens}.', {
+          todayCalls: tn(today.calls, '{n} call', '{n} calls', { n: fmt(today.calls) }),
+          todayTokens: tn(today.tokens, '{n} token', '{n} tokens', { n: fmt(today.tokens) }),
+          monthCalls: tn(month.calls, '{n} call', '{n} calls', { n: fmt(month.calls) }),
+          monthTokens: tn(month.tokens, '{n} token', '{n} tokens', { n: fmt(month.tokens) }),
+        })}
       </p>
       <p className={`ab-note ${limit.left === 0 ? 'ab-note-warn' : ''}`} id="limit-applies" role="status">{limit.text}</p>
       <div className="ab-field" style={{ marginTop: 12 }}>
@@ -745,7 +750,7 @@ export function PrivacySection({ eff, reload }) {
       setStatus(null);
       reload();
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not save that change. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
     }
   };
   return (
@@ -762,10 +767,10 @@ export function PrivacySection({ eff, reload }) {
           aria-describedby={describedBy('pii-hint', piiFloor && 'pii-floor')}
           onChange={(e) => !looserThanFloor('piiMode', e.target.value, piiFloor) && change({ piiMode: e.target.value })}
         >
-          {PII_MODES.map((m) => <option key={m} value={m} disabled={looserThanFloor('piiMode', m, piiFloor)}>{PII_LABEL[m]}</option>)}
+          {PII_MODES.map((m) => <option key={m} value={m} disabled={looserThanFloor('piiMode', m, piiFloor)}>{tr(PII_LABEL[m])}</option>)}
         </select>
-        <span className="ab-hint" id="pii-hint">{PII_TEXT[v.piiMode]}</span>
-        {piiFloor ? <span className="ab-locked" id="pii-floor">Your organisation requires at least {PII_LABEL[piiFloor]}.</span> : <Locked why={eff.locked.piiMode} />}
+        <span className="ab-hint" id="pii-hint">{tr(PII_TEXT[v.piiMode])}</span>
+        {piiFloor ? <span className="ab-locked" id="pii-floor">{t('Your organisation requires at least {level}.', { level: tr(PII_LABEL[piiFloor]) })}</span> : <Locked why={eff.locked.piiMode} />}
       </div>
       <div className="ab-field">
         <label className="ab-label" htmlFor="preview">{t('Check what is sent')}</label>
@@ -777,9 +782,9 @@ export function PrivacySection({ eff, reload }) {
           aria-describedby={previewFloor ? 'preview-floor' : undefined}
           onChange={(e) => !looserThanFloor('previewMode', e.target.value, previewFloor) && change({ previewMode: e.target.value, previewSeen: [] })}
         >
-          {PREVIEW_MODES.map((m) => <option key={m} value={m} disabled={looserThanFloor('previewMode', m, previewFloor)}>{PREVIEW_TEXT[m]}</option>)}
+          {PREVIEW_MODES.map((m) => <option key={m} value={m} disabled={looserThanFloor('previewMode', m, previewFloor)}>{tr(PREVIEW_TEXT[m])}</option>)}
         </select>
-        {previewFloor ? <span className="ab-locked" id="preview-floor">Your organisation requires at least: {PREVIEW_TEXT[previewFloor]}.</span> : <Locked why={eff.locked.previewMode} />}
+        {previewFloor ? <span className="ab-locked" id="preview-floor">{t('Your organisation requires at least: {level}.', { level: tr(PREVIEW_TEXT[previewFloor]) })}</span> : <Locked why={eff.locked.previewMode} />}
       </div>
       <Status status={status} />
     </section>
@@ -795,7 +800,7 @@ function QuickBarSection({ eff, reload }) {
       setStatus(null);
       reload();
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not save that change. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
     }
   };
   return (
@@ -819,8 +824,7 @@ function QuickBarSection({ eff, reload }) {
 }
 
 // What Settings says when the browser did not turn a site on: the next step, for a refused question and for one that never appeared.
-export const SITE_REFUSED_TEXT =
-  'The browser did not turn Agent Buddy on for this site. Press Turn on again and choose Allow. If no question appears, your IT team may block it: ask them.';
+export const SITE_REFUSED_TEXT = tm('The browser did not turn Agent Buddy on for this site. Press Turn on again and choose Allow. If no question appears, your IT team may block it: ask them.');
 
 /** The sites the organisation turns on itself (exact addresses in its policy, already allowed by the browser), from the service worker. */
 function useManagedSites(eff) {
@@ -854,16 +858,16 @@ export function InstancesSection({ eff, reload }) {
     const origin = normalizeInstance(address);
     setBusy(true);
     try {
-      if (!origin) throw new Error('Enter the https address of your ServiceNow instance, for example https://acme.service-now.com');
-      if (!isInstanceAllowed(origin, eff.policy)) throw new Error('Your organisation has not approved this instance.');
+      if (!origin) throw new Error(t('Enter the https address of your ServiceNow instance, for example https://acme.service-now.com'));
+      if (!isInstanceAllowed(origin, eff.policy)) throw new Error(t('Your organisation has not approved this instance.'));
       let granted = false;
       try {
         granted = await chrome.permissions.request({ origins: [instancePattern(origin)] });
       } catch {
         // A build with fixed host access (enterprise) cannot ask for a site it was not built for.
-        throw new Error('This build of Agent Buddy cannot be turned on for that site. Your organisation decides which instances it works on.');
+        throw new Error(t('This build of Agent Buddy cannot be turned on for that site. Your organisation decides which instances it works on.'));
       }
-      if (!granted) throw new Error(SITE_REFUSED_TEXT);
+      if (!granted) throw new Error(tr(SITE_REFUSED_TEXT));
       const answer = await chrome.runtime.sendMessage({ type: MSG.ENABLE_INSTANCE, origin });
       if (answer?.error) throw new Error(answer.error.message);
       setAddress('');
@@ -881,7 +885,7 @@ export function InstancesSection({ eff, reload }) {
       const answer = await chrome.runtime.sendMessage({ type: MSG.DISABLE_INSTANCE, origin });
       if (answer?.error) throw new Error(answer.error.message);
     } catch (err) {
-      setError(`Could not turn off ${origin}: ${err.message}`);
+      setError(t('Could not turn off {origin}: {message}', { origin: isolate(origin), message: err.message }));
     }
     reload();
   }
@@ -891,15 +895,15 @@ export function InstancesSection({ eff, reload }) {
       <h2 className="ab-h" id="h-instances">{t('ServiceNow instances')}</h2>
       <p className="ab-sub">
         {hostAccess() === 'granted'
-          ? 'Agent Buddy only runs on instances you turn on. This build was given access to the instances your organisation approved when it was installed, so the browser does not ask.'
-          : 'Agent Buddy only runs on instances you turn on. The browser asks you to confirm each one the first time.'}
+          ? t('Agent Buddy only runs on instances you turn on. This build was given access to the instances your organisation approved when it was installed, so the browser does not ask.')
+          : t('Agent Buddy only runs on instances you turn on. The browser asks you to confirm each one the first time.')}
       </p>
       {instances.length === 0 && managed.length === 0 && <p className="ab-note">{t('No instance is turned on yet.')}</p>}
       <ul className="ab-sites">
         {instances.map((o) => (
           <li key={o} className="ab-row ab-site">
             <span className="ab-mono">{o}</span>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => remove(o)} aria-label={`Turn off ${o}`}>{t('Turn off')}</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => remove(o)} aria-label={t('Turn off {site}', { site: o })}>{t('Turn off')}</button>
           </li>
         ))}
         {managed.map((o) => (
@@ -941,13 +945,14 @@ export function PolicySection({ eff }) {
       <h2 className="ab-h" id="h-policy">{t("Your organisation's policy")}</h2>
       {known.length > 0 && (
         <p className="ab-sub">
-          Switched off by your organisation: <span className="ab-mono">{known.join(', ')}</span>.
+          {tx('Switched off by your organisation: {features}.', { features: <span className="ab-mono">{known.join(', ')}</span> })}
         </p>
       )}
       {unknown.length > 0 && (
         <p className="ab-note ab-note-warn" id="policy-unknown-features">
-          The policy&apos;s disabledFeatures names {unknown.length === 1 ? 'an id' : 'ids'} that match{unknown.length === 1 ? 'es' : ''} no feature, so nothing is switched off
-          by {unknown.length === 1 ? 'it' : 'them'}: <span className="ab-mono">{unknown.join(', ')}</span>. Check the spelling against the list in the deployment guide.
+          {unknown.length === 1
+            ? tx("The policy's disabledFeatures names an id that matches no feature, so nothing is switched off by it: {ids}. Check the spelling against the list in the deployment guide.", { ids: <span className="ab-mono">{unknown.join(', ')}</span> })
+            : tx("The policy's disabledFeatures names ids that match no feature, so nothing is switched off by them: {ids}. Check the spelling against the list in the deployment guide.", { ids: <span className="ab-mono">{unknown.join(', ')}</span> })}
         </p>
       )}
     </section>
@@ -973,9 +978,9 @@ function AuditSection({ eff }) {
   async function clear() {
     try {
       await clearAudit();
-      setStatus({ kind: 'ok', text: 'The activity log was cleared.' });
+      setStatus({ kind: 'ok', text: t('The activity log was cleared.') });
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not let Agent Buddy clear the log. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not let Agent Buddy clear the log. Try again.') });
     }
     load();
   }
@@ -997,13 +1002,19 @@ function AuditSection({ eff }) {
           <thead><tr><th scope="col">{t('Time')}</th><th scope="col">{t('Action')}</th><th scope="col">{t('Table')}</th><th scope="col">{t('Masked')}</th><th scope="col">{t('Outcome')}</th></tr></thead>
           <tbody>
             {log.slice(0, 40).map((e, i) => (
-              <tr key={i}><td>{String(e.time || '').replace('T', ' ').slice(0, 16)}</td><td>{e.feature}</td><td>{e.table}</td><td>{e.masked}</td><td>{e.outcome}{e.reason ? ` (${e.reason})` : ''}</td></tr>
+              <tr key={i}><td>{String(e.time || '').replace('T', ' ').slice(0, 16)}</td><td><code data-ltr>{e.feature}</code></td><td><code data-ltr>{e.table}</code></td><td>{e.masked}</td><td>{OUTCOME_WORDS[e.outcome] ? t(OUTCOME_WORDS[e.outcome]) : e.outcome}{e.reason ? <> (<code data-ltr>{e.reason}</code>)</> : ''}</td></tr>
             ))}
           </tbody>
         </table>
       )}
     </section>
   );
+}
+
+// "saved now", "nothing saved", and for what lives in memory only "..., memory only"
+function storedState(item) {
+  const state = item.present ? t('saved now') : t('nothing saved');
+  return item.area === 'session' ? t('{state}, memory only', { state }) : state;
 }
 
 function StoredDataSection({ eff, onCleared }) {
@@ -1050,10 +1061,10 @@ function StoredDataSection({ eff, onCleared }) {
         { local: chrome.storage.local, session: chrome.storage.session, vault: keyVault() },
         { keep: budgeted ? [USAGE_KEY] : [] }
       );
-      const kept = done.kept?.length ? " The AI usage log was kept: your organisation's daily limit is counted from it." : '';
-      setResult(done.remaining.length ? { kind: 'danger', text: 'Some things could not be removed. Try again, or remove the extension.' } : { kind: 'ok', text: `Everything stored by Agent Buddy was removed.${kept}` });
+      const kept = done.kept?.length ? ` ${t("The AI usage log was kept: your organisation's daily limit is counted from it.")}` : '';
+      setResult(done.remaining.length ? { kind: 'danger', text: t('Some things could not be removed. Try again, or remove the extension.') } : { kind: 'ok', text: `${t('Everything stored by Agent Buddy was removed.')}${kept}` });
     } catch {
-      setResult({ kind: 'danger', text: 'The browser did not let Agent Buddy remove everything. Try again.' });
+      setResult({ kind: 'danger', text: t('The browser did not let Agent Buddy remove everything. Try again.') });
     } finally {
       setConfirming(false);
       setBusy(false);
@@ -1069,12 +1080,12 @@ function StoredDataSection({ eff, onCleared }) {
         {t("This is everything Agent Buddy keeps in this browser. It never keeps ticket text, names or the AI's answers.")}
       </p>
       {items === null ? <p className="ab-sub">{t('Loading…')}</p> : (
-        <ul style={{ paddingLeft: 18 }}>
+        <ul style={{ paddingInlineStart: 18 }}>
           {items.map((item) => (
             <li key={item.id}>
-              <strong>{item.title}</strong>{' '}
-              <span className="ab-sub">({item.present ? 'saved now' : 'nothing saved'}{item.area === 'session' ? ', memory only' : ''})</span>
-              <div className="ab-hint">{item.detail}</div>
+              <strong>{tr(item.title)}</strong>{' '}
+              <span className="ab-sub">({storedState(item)})</span>
+              <div className="ab-hint">{tr(item.detail)}</div>
             </li>
           ))}
         </ul>
@@ -1087,11 +1098,11 @@ function StoredDataSection({ eff, onCleared }) {
         <div className="ab-note ab-note-warn" role="alertdialog" aria-labelledby="clear-title" aria-describedby="clear-text">
           <strong id="clear-title">{t('Remove everything?')}</strong>{' '}
           <span id="clear-text">
-            Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards and checklist ticks are deleted, and the ServiceNow
-            sites you turned on are turned off. This cannot be undone.{budgeted ? " The AI usage log stays while your organisation sets a daily limit." : ''}
+            {t('Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards and checklist ticks are deleted, and the ServiceNow sites you turned on are turned off. This cannot be undone.')}
+            {budgeted ? ` ${t('The AI usage log stays while your organisation sets a daily limit.')}` : ''}
           </span>
           <div className="ab-row" style={{ marginTop: 8 }}>
-            <button type="button" ref={confirmButton} className="ab-btn ab-btn-danger ab-btn-sm" onClick={clearEverything} disabled={busy}>{busy ? 'Removing…' : 'Yes, remove everything'}</button>
+            <button type="button" ref={confirmButton} className="ab-btn ab-btn-danger ab-btn-sm" onClick={clearEverything} disabled={busy}>{busy ? t('Removing…') : t('Yes, remove everything')}</button>
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => setConfirming(false)} disabled={busy}>{t('Cancel')}</button>
           </div>
         </div>
@@ -1115,7 +1126,7 @@ export function ProfilesSection({ eff, reload }) {
       setStatus(null);
       reload();
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not save that change. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
     }
   };
   return (
@@ -1178,6 +1189,57 @@ export function LanguageSection({ eff, reload }) {
   );
 }
 
+// What the activity log says happened to a run (src/audit/auditLog.js OUTCOMES); the action and the table are codes, shown as they are.
+const OUTCOME_WORDS = { sent: tm('sent'), blocked: tm('blocked'), error: tm('error'), cancelled: tm('cancelled'), inserted: tm('inserted'), copied: tm('copied') };
+
+// The keyboard shortcuts of the manifest (src/background/commands.js): the name each one is shown by.
+const SHORTCUT_NAMES = { 'open-panel': tm('Open Agent Buddy'), summarise: tm('Summarise this ticket'), reply: tm('Draft a reply') };
+
+/** The keyboard shortcuts as the browser has them now (the person may have changed them), and the way to the browser's own page to change them. */
+export function ShortcutsSection() {
+  const [commands, setCommands] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const all = await chrome.commands.getAll();
+        if (alive) setCommands(all.filter((c) => SHORTCUT_NAMES[c.name]));
+      } catch {
+        if (alive) setCommands([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const edge = typeof navigator !== 'undefined' && /\bEdg\//.test(navigator.userAgent);
+  const openBrowserPage = () => {
+    try {
+      chrome.tabs.create({ url: edge ? 'edge://extensions/shortcuts' : 'chrome://extensions/shortcuts' });
+    } catch {
+      /* the browser did not open it: the address is in the hint */
+    }
+  };
+  return (
+    <section className="ab-section" aria-labelledby="h-shortcuts">
+      <h2 className="ab-h" id="h-shortcuts">{t('Keyboard shortcuts')}</h2>
+      <p className="ab-sub">{t('Summarise and Draft a reply open the panel and start on the ticket that is open. You still see what will be sent before anything is.')}</p>
+      {commands && commands.length > 0 && (
+        <ul className="ab-shortcut-list">
+          {commands.map((c) => (
+            <li key={c.name}>
+              <span>{t(SHORTCUT_NAMES[c.name])}</span>{' '}
+              {c.shortcut ? <kbd data-ltr className="ab-mono">{c.shortcut}</kbd> : <span className="ab-hint">{t('Not set')}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" className="ab-btn ab-btn-sm" onClick={openBrowserPage}>{t('Change the shortcuts in the browser')}</button>
+      <span className="ab-hint">{t('The browser keeps your own choice when Agent Buddy updates.')}</span>
+    </section>
+  );
+}
+
 export const FOLLOW_UP_CHOICES = Object.freeze([2, 3, 5, 7]);
 
 /** My work: after how many days a customer who is waiting (or has not answered) counts as a follow-up due. */
@@ -1193,7 +1255,7 @@ export function FollowUpSection({ eff, reload }) {
       setStatus(null);
       reload();
     } catch {
-      setStatus({ kind: 'danger', text: 'The browser did not save that change. Try again.' });
+      setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
     }
   }
   return (
@@ -1203,7 +1265,7 @@ export function FollowUpSection({ eff, reload }) {
         <label className="ab-label" htmlFor="follow-up-days">{t('Follow-ups due after')}</label>
         <select id="follow-up-days" className="ab-select" value={String(value)} aria-describedby="follow-up-hint" onChange={(e) => change(e.target.value)}>
           {FOLLOW_UP_CHOICES.map((d) => (
-            <option key={d} value={String(d)}>{t('{d} days', { d })}</option>
+            <option key={d} value={String(d)}>{tn(d, '{n} day', '{n} days')}</option>
           ))}
         </select>
         <span className="ab-hint" id="follow-up-hint">{t('A customer who has not had an update, or has not answered, for this long shows under follow-ups in My work.')}</span>
@@ -1244,9 +1306,9 @@ export function DiagnosticsSection({ eff }) {
       const made = await build();
       setText(made);
       await navigator.clipboard.writeText(made);
-      setStatus({ kind: 'ok', text: 'Copied. Paste it into your message to support. It holds no key and no ticket content.' });
+      setStatus({ kind: 'ok', text: t('Copied. Paste it into your message to support. It holds no key and no ticket content.') });
     } catch {
-      setStatus({ kind: 'warn', text: 'The browser did not let Agent Buddy copy it. Select the text below and copy it yourself.' });
+      setStatus({ kind: 'warn', text: t('The browser did not let Agent Buddy copy it. Select the text below and copy it yourself.') });
     }
   }
 
@@ -1271,9 +1333,10 @@ export function DiagnosticsSection({ eff }) {
 /** Which page of Settings the address asks for: '#ai' is AI Assist, anything else Basics. */
 export const settingsPageFromHash = (hash) => (String(hash || '').replace(/^#/, '').toLowerCase() === 'ai' ? 'ai' : 'basics');
 
-const PAGES = [
-  { id: 'basics', label: 'Basics' },
-  { id: 'ai', label: 'AI Assist' },
+// (made when the page is drawn, so the labels follow the language)
+const pages = () => [
+  { id: 'basics', label: t('Basics') },
+  { id: 'ai', label: t('AI Assist') },
 ];
 
 /** The AI Assist page: the provider, its key, the model and the limits; when the organisation switched AI off, only that. */
@@ -1291,8 +1354,8 @@ export function AiAssistPage({ eff, reload, epoch }) {
   return (
     <>
       <p className="ab-sub ab-page-intro">
-        AI Assist writes summaries, replies and notes with the AI provider you choose. Personal data is masked first, and you can see what is sent.
-        {eff.values.aiSkipped ? ' You chose to skip AI for now: untick it under Basics, "What you work on", to use it.' : ''}
+        {t('AI Assist writes summaries, replies and notes with the AI provider you choose. Personal data is masked first, and you can see what is sent.')}
+        {eff.values.aiSkipped ? ` ${t('You chose to skip AI for now: untick it under Basics, "What you work on", to use it.')}` : ''}
       </p>
       <ProviderSection eff={eff} reload={reload} />
       <UsageSection key={`usage-${epoch}`} eff={eff} />
@@ -1303,6 +1366,9 @@ export function AiAssistPage({ eff, reload, epoch }) {
 export default function Options() {
   const [eff, setEff] = useState(null);
   const lang = useLanguage(eff?.values?.language); // before anything below draws a text
+  useEffect(() => {
+    document.title = t('Agent Buddy settings'); // the tab's name, in the language of the page
+  }, [lang]);
   const [failed, setFailed] = useState('');
   const [epoch, setEpoch] = useState(0); // bumped after "clear everything" so every section shows what is left
   const reload = useCallback(async () => {
@@ -1315,7 +1381,7 @@ export default function Options() {
       // floors: the policy's minimum for a setting the person may still raise; savedProvider: the person's own choice, before policy.
       setEff({ values: e.values, locked: e.locked, floors: e.floors || {}, policy: e.policy, apiKey, keyLocked, savedProvider: String(raw?.provider || '') });
     } catch (err) {
-      setFailed(err?.message || 'The settings could not be read.');
+      setFailed(err?.message || t('The settings could not be read.'));
     }
   }, []);
   useEffect(() => { reload(); }, [reload]);
@@ -1367,7 +1433,7 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
   const managedNote = Object.keys(eff.locked).some((k) => !eff.floors?.[k]);
   return (
     <>
-      <Tabs idBase="ab-settings" label={t('Settings pages')} className="ab-row ab-settings-tabs" tabs={PAGES} value={page} onChange={choose} />
+      <Tabs idBase="ab-settings" label={t('Settings pages')} className="ab-row ab-settings-tabs" tabs={pages()} value={page} onChange={choose} />
       {managedNote && <p className="ab-note ab-note-warn">{t('Some settings are managed by your organisation and cannot be changed.')}</p>}
       <div id={panelId('ab-settings', 'basics')} role="tabpanel" aria-labelledby={tabId('ab-settings', 'basics')} hidden={page !== 'basics'}>
         <p className="ab-sub ab-page-intro">{t('Where Agent Buddy works, what you work on, how personal data is protected, and what it keeps on this computer.')}</p>
@@ -1375,6 +1441,7 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
         <InstancesSection eff={eff} reload={reload} />
         <ProfilesSection eff={eff} reload={reload} />
         <FollowUpSection eff={eff} reload={reload} />
+        <ShortcutsSection />
         <QuickBarSection eff={eff} reload={reload} />
         {Object.keys(eff.floors || {}).length > 0 && <p className="ab-note">{t('Your organisation sets a minimum for some privacy settings. You can always choose a stricter one.')}</p>}
         <PrivacySection eff={eff} reload={reload} />

@@ -89,6 +89,23 @@ no Arabic entry.
 | workload / backlog | حجم العمل / الأعمال المتراكمة |
 | breached / due / overdue | متجاوز / مستحق / متأخر |
 | today / yesterday / ago | اليوم / أمس / منذ |
+| passphrase / token / call (a request to the AI) | عبارة المرور / رمز / استدعاء |
+| instance (a ServiceNow site) / deployment / endpoint | مثيل / النشر / نقطة النهاية |
 
 When a term is not here, use the word ServiceNow itself uses in its Arabic interface if you know it, otherwise the plainest Arabic word.
 Add the term to this table so the next text uses the same one.
+
+## Text that is written in the ServiceNow page
+
+Some code runs inside the ServiceNow page (the content script: `src/content`, `src/mywork/read.js`, the reports engine in
+`src/reports/engine`). It has no language of its own except the one the panel sends with each request (`language`), and part of what it
+writes is also read by the AI, which must see English labels.
+
+- Text that only a person reads (rows of My work, the notes about what you cannot see): written with `t()` in the page script. The
+  panel sends its language with each request, and the build gives the content script the Arabic entries it can ask for, so the text comes
+  back in Arabic.
+- Text of the reports engine (`src/reports/engine`): written in English with `say(tm('No update in {days}+ days'), { days })`
+  (`src/reports/engine/say.js`), because the AI reads it too; where the panel draws it, it goes through `shown(text)`
+  (`src/reports/shown.js`), which finds the Arabic by the exact English text or by its {name} pattern. "Open" for tickets has its own key,
+  `Open (tickets)`, because the word is not the same as the button "افتح".
+- Never translate what is sent to the AI: parts, labels and field names stay English.

@@ -9,6 +9,7 @@
 // touched for longest). A table the person cannot read is skipped with a note, never an error.
 import { SYS_ID_RE, disp, raw, parseSnTime } from '../context/util.js';
 import { classifyReadError, confirmEmptyIsReallyEmpty, STATUS } from '../context/access.js';
+import { tm } from './engine/say.js';
 
 export const MY_DAY_TABLES = ['incident', 'sc_task', 'sc_req_item', 'sn_customerservice_case', 'problem', 'change_task'];
 const FIELDS = ['sys_id', 'number', 'short_description', 'priority', 'state', 'sys_updated_on', 'opened_at', 'sys_class_name'];
@@ -84,7 +85,7 @@ export function rankMyDay(items) {
  *   'unread' (no table could be read at all).
  */
 export async function readMyDay({ userId }, deps, { tables = MY_DAY_TABLES, perTable = 25, now = Date.now() } = {}) {
-  if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
+  if (!SYS_ID_RE.test(userId || '')) throw new Error(tm('Agent Buddy could not tell who is signed in. Reload the page and try again.'));
   const access = [];
   const items = [];
   const answered = []; // tables whose read worked, even with no rows
@@ -113,12 +114,12 @@ export async function readMyDay({ userId }, deps, { tables = MY_DAY_TABLES, perT
         // Not every agent can read every table (no case access, no change role): that is normal, not a failure.
         if (err?.code === 'SESSION_EXPIRED') throw err;
         const { status } = classifyReadError(err, table);
-        access.push({ source: table, status, note: status === 'denied' ? 'You cannot read this table.' : String(err?.message || 'Could not be read.') });
+        access.push({ source: table, status, note: status === 'denied' ? tm('You cannot read this table.') : String(err?.message || tm('Could not be read.')) });
       }
     })
   );
 
-  const NO_SLA = 'SLA information is not available to you, so tickets are ordered by priority only.';
+  const NO_SLA = tm('SLA information is not available to you, so tickets are ordered by priority only.');
   // One read for every ticket's SLAs instead of one per ticket.
   const ids = items.map((i) => i.sysId).filter(Boolean);
   if (ids.length) {

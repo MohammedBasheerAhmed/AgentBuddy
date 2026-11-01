@@ -3,6 +3,7 @@ import { SYS_ID_RE, oneLine } from '../../context/util.js';
 import { LIMITS, SCOPE_KINDS } from './constants.js';
 import { attempt, raw, disp } from './reader.js';
 import { andQuery, buildQuery } from './queryBuilder.js';
+import { say, tm } from './say.js';
 
 /** Clean a scope that arrived from the panel: a known kind, valid group ids, short display names. Throws on nonsense. */
 export function normalizeScope(input) {
@@ -19,7 +20,7 @@ export function normalizeScope(input) {
     const n = oneLine(names[id] || '', 80);
     if (n) groupNames[id] = n;
   });
-  if (kind === 'chosen' && !groupIds.length) throw new Error('Pick at least one group.');
+  if (kind === 'chosen' && !groupIds.length) throw new Error(tm('Pick at least one group.'));
   return { kind, groupIds: kind === 'chosen' ? groupIds : [], groupNames: kind === 'chosen' ? groupNames : {} };
 }
 
@@ -37,8 +38,14 @@ export function pickTeamGroups(groups, { work = null, max = LIMITS.maxGroups } =
 /** "25 of 41 groups used: ..." for a scope that had to leave groups out, or '' when every group fits. Pure. */
 export function teamNote({ used, total, ranked, more }) {
   if (!(total > used)) return '';
-  const of = more ? `${total} or more` : String(total);
-  return `${used} of ${of} groups used: ${ranked ? 'the ones with the most open work' : 'the first ones in your memberships'}. Choose groups to see others.`;
+  if (ranked) {
+    return more
+      ? say(tm('{used} of {total} or more groups used: the ones with the most open work. Choose groups to see others.'), { used, total })
+      : say(tm('{used} of {total} groups used: the ones with the most open work. Choose groups to see others.'), { used, total });
+  }
+  return more
+    ? say(tm('{used} of {total} or more groups used: the first ones in your memberships. Choose groups to see others.'), { used, total })
+    : say(tm('{used} of {total} groups used: the first ones in your memberships. Choose groups to see others.'), { used, total });
 }
 
 /** Open tickets per group across the tables, for ranking: a Map, or null when nothing could be counted. */
@@ -69,7 +76,7 @@ async function openWorkByGroup(reader, ids, tables) {
  * Throws a read failure; the caller decides what to say.
  */
 export async function readMyTeam(reader, userId, { tables = [] } = {}) {
-  if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
+  if (!SYS_ID_RE.test(userId || '')) throw new Error(tm('Agent Buddy could not tell who is signed in. Reload the page and try again.'));
   // group.active: a group that was retired keeps its members, and its old tickets would make the numbers look busier than they are.
   const rows = await reader.rows('sys_user_grmember', `user=${userId}^group.active=true`, ['group'], { limit: LIMITS.membershipMax, displayValue: true });
   const seen = new Set();
@@ -142,7 +149,7 @@ async function inferGroups(reader, userId, tables) {
  */
 export async function resolveScope(input, { reader, userId, tables = [] }) {
   const scope = normalizeScope(input);
-  if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
+  if (!SYS_ID_RE.test(userId || '')) throw new Error(tm('Agent Buddy could not tell who is signed in. Reload the page and try again.'));
   if (scope.kind === 'mine') {
     return { kind: 'mine', label: 'Mine', userId, groups: [], inferred: false, empty: false, note: '', query: `assigned_to=${userId}`, taskQuery: `task.assigned_to=${userId}`, unassignedMeaningful: false };
   }
@@ -155,9 +162,10 @@ export async function resolveScope(input, { reader, userId, tables = [] }) {
     const checked = await checkChosenGroups(reader, scope.groupIds.map((id) => ({ id, name: scope.groupNames[id] || 'Group' })));
     groups = checked.groups;
     const n = checked.missing.length;
-    if (n && !groups.length) note = 'None of the chosen groups exists on this instance (they may have been chosen on another one). Choose groups again.';
-    else if (n) note = `${n} of the chosen groups ${n === 1 ? 'does' : 'do'} not exist on this instance, so ${n === 1 ? 'it is' : 'they are'} left out. Choose groups again.`;
-    if (checked.inactive.length) note = [note, `No longer active: ${checked.inactive.map((g) => g.name).join(', ')}.`].filter(Boolean).join(' ');
+    if (n && !groups.length) note = tm('None of the chosen groups exists on this instance (they may have been chosen on another one). Choose groups again.');
+    else if (n === 1) note = tm('1 of the chosen groups does not exist on this instance, so it is left out. Choose groups again.');
+    else if (n) note = say(tm('{n} of the chosen groups do not exist on this instance, so they are left out. Choose groups again.'), { n });
+    if (checked.inactive.length) note = [note, say(tm('No longer active: {names}.'), { names: checked.inactive.map((g) => g.name).join(', ') })].filter(Boolean).join(' ');
   } else {
     const mine = await attempt(() => readMyTeam(reader, userId, { tables }), 'sys_user_grmember');
     if (mine.ok) {
@@ -168,10 +176,10 @@ export async function resolveScope(input, { reader, userId, tables = [] }) {
       groups = await inferGroups(reader, userId, tables);
       inferred = groups.length > 0;
       note = inferred
-        ? 'Your group memberships are not visible to you, so "my groups" are the groups of the tickets assigned to you.'
-        : 'Your group memberships are not visible to you, and none of your open tickets names a group.';
+        ? tm('Your group memberships are not visible to you, so "my groups" are the groups of the tickets assigned to you.')
+        : tm('Your group memberships are not visible to you, and none of your open tickets names a group.');
     }
-    if (!groups.length && !note) note = 'You are not a member of any group that you can see. Pick groups instead.';
+    if (!groups.length && !note) note = tm('You are not a member of any group that you can see. Pick groups instead.');
   }
 
   const ids = groups.map((g) => g.id);

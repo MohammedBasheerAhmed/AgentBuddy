@@ -3,6 +3,8 @@
 //
 // It is a hint, not a rule. With fewer than two look-alikes that name a group there is no vote, and a split vote says so.
 
+import { isolate, t } from '../i18n/index.js';
+
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 const key = (v) => text(v).toLowerCase().replace(/\s+/g, ' ');
 
@@ -42,10 +44,12 @@ export function routingVote(hits, current = {}) {
   const currentGroup = text(current.group);
   const matchesGroup = currentGroup ? key(currentGroup) === key(group.name) : null;
   const line = tie
-    ? `Solved look-alikes went to different groups (${groups.slice(0, 3).map((g) => `${g.name} ${g.count}`).join(', ')})`
-    : `${group.count} of ${total} solved look-alikes went to ${group.name}${category ? `, category ${category.name}` : ''}`;
+    ? t('Solved look-alikes went to different groups ({groups})', { groups: groups.slice(0, 3).map((g) => `${isolate(g.name)} ${g.count}`).join(t(', ')) })
+    : category
+      ? t('{count} of {total} solved look-alikes went to {group}, category {category}', { count: group.count, total, group: isolate(group.name), category: isolate(category.name) })
+      : t('{count} of {total} solved look-alikes went to {group}', { count: group.count, total, group: isolate(group.name) });
   let detail = '';
-  if (currentGroup && !tie) detail = matchesGroup ? `This ticket is already with ${group.name}.` : `This ticket is with ${currentGroup}.`;
-  else if (!currentGroup && !tie) detail = 'This ticket has no assignment group yet.';
+  if (currentGroup && !tie) detail = matchesGroup ? t('This ticket is already with {group}.', { group: isolate(group.name) }) : t('This ticket is with {group}.', { group: isolate(currentGroup) });
+  else if (!currentGroup && !tie) detail = t('This ticket has no assignment group yet.');
   return { enough: true, total, group, category, strong, matchesGroup, line, detail, groups };
 }

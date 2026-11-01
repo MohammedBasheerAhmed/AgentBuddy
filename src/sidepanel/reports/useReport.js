@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { read } from '../ask.js';
+import { tm } from '../../i18n/index.js';
 
-const SESSION_TEXT = 'Your ServiceNow session has expired. Log in again, then press Refresh.';
+// Kept in English and drawn with shown() (src/reports/shown.js), like every other text of a report: the language can change while it is on screen.
+const SESSION_TEXT = tm('Your ServiceNow session has expired. Log in again, then press Refresh.');
 const STALE = Symbol('stale');
 
 // When the ServiceNow tab moves to another page while a widget is reading, the page's content script goes away with the old page
@@ -56,7 +58,7 @@ export function useReport({ tabId, request, refreshKey = 0, limiter }) {
           continue;
         }
         const expired = err.code === 'SESSION_EXPIRED';
-        setState((s) => ({ phase: 'error', result: expired ? null : s.result, error: expired ? SESSION_TEXT : err.message || 'This report could not be read.', code: err.code || '' }));
+        setState((s) => ({ phase: 'error', result: expired ? null : s.result, error: expired ? SESSION_TEXT : err.message || tm('This report could not be read.'), code: err.code || '' }));
         return;
       }
     }

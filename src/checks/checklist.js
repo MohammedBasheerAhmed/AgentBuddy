@@ -10,6 +10,8 @@
 // A step's id is a short hash of its normalised text, so the same step keeps the same id each time the task is opened
 // (and a reworded step is a new, unticked one). Only these ids are ever stored, never the text.
 
+import { t } from '../i18n/index.js';
+
 export const MAX_STEPS = 40;
 export const MAX_STEP_CHARS = 200;
 
@@ -189,7 +191,7 @@ export function checklistProgress(steps, doneIds) {
   const done = new Set(doneIds || []);
   const total = steps.length;
   const n = steps.filter((s) => done.has(s.id)).length;
-  return { done: n, total, percent: total ? Math.round((n / total) * 100) : 0, complete: total > 0 && n === total, text: total ? `${n} of ${total} done` : 'No steps' };
+  return { done: n, total, percent: total ? Math.round((n / total) * 100) : 0, complete: total > 0 && n === total, text: total ? t('{n} of {total} done', { n, total }) : t('No steps') };
 }
 
 /** A new list of done ids with `id` switched on or off (the argument is not changed). */

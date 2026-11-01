@@ -15,7 +15,7 @@ import { madeWithoutText } from '../../../../features/parts.js';
 import ReviewHints from '../../../ReviewHints.jsx';
 import InsertEditor from './InsertEditor.jsx';
 import { LANGUAGES, ago, answerPrimary, baseFeatureOf, plainOf, refineChoices, titleOf } from './logic.js';
-import { t } from '../../../../i18n/index.js';
+import { t, t as tr } from '../../../../i18n/index.js';
 
 const NO_TEXTS = [];
 const sendToTab = (tabId, message) => chrome.tabs.sendMessage(tabId, message);
@@ -96,17 +96,17 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   // Low findings (another person's name, an IP address) are shown, never hidden; they block nothing.
   // The same review the insert runs (reviewInsert): in resolution notes, words shared with the work notes are a hint, not a stop.
   const hints = useMemo(() => {
-    const visible = targets.find((t) => isCustomerVisible(t.field));
+    const visible = targets.find((x) => isCustomerVisible(x.field));
     return visible ? reviewInsert(visible.field, plain, review).hints : [];
   }, [targets, plain, review]);
 
   async function copy(why = '', value = plain) {
     try {
       await navigator.clipboard.writeText(value);
-      setNote({ kind: 'ok', text: why ? `${why} Copied to the clipboard instead.` : 'Copied to the clipboard.' });
+      setNote({ kind: 'ok', text: why ? t('{why} Copied to the clipboard instead.', { why }) : t('Copied to the clipboard.') });
       audit('copied');
     } catch {
-      setNote({ kind: 'danger', text: 'The browser blocked copying. Select the text and copy it by hand.' });
+      setNote({ kind: 'danger', text: t('The browser blocked copying. Select the text and copy it by hand.') });
     }
   }
 
@@ -134,7 +134,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     } else if (outcome.status === 'blocked') {
       setNote({ kind: 'warn', text: outcome.why });
     } else if (outcome.status === 'empty') {
-      setNote({ kind: 'danger', text: 'That part is not in the text, so there is nothing to insert. Use Copy instead.' });
+      setNote({ kind: 'danger', text: t('That part is not in the text, so there is nothing to insert. Use Copy instead.') });
     } else {
       await copy(outcome.why, text);
     }
@@ -144,7 +144,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   const insertNow = (target) => {
     const text = textFor(target);
     if (!text) {
-      setNote({ kind: 'danger', text: 'That part is not in the text, so there is nothing to insert. Use Copy instead.' });
+      setNote({ kind: 'danger', text: t('That part is not in the text, so there is nothing to insert. Use Copy instead.') });
       return;
     }
     insert(target, text, target.mode, false);
@@ -169,7 +169,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
       model: config.model,
     });
     if (!draft || !setPending(draft)) {
-      setNote({ kind: 'warn', text: 'Agent Buddy could not keep the draft for the email form. Copy the body instead.' });
+      setNote({ kind: 'warn', text: t('Agent Buddy could not keep the draft for the email form. Copy the body instead.') });
       return;
     }
     // A NEW tab, as the Insights email card does: the ticket stays open as it is (with anything typed on it and not saved), its
@@ -177,10 +177,10 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     // in the tab's history. The side panel follows the tab in front, so it shows the email form, where the draft is waiting.
     if (!openInNewTab(page, emailUrl)) {
       clearPending();
-      setNote({ kind: 'warn', text: 'Agent Buddy could not open the email form. Copy the body instead.' });
+      setNote({ kind: 'warn', text: t('Agent Buddy could not open the email form. Copy the body instead.') });
       return;
     }
-    setNote({ kind: 'ok', text: 'The email form opened in a new tab. The draft waits there, at the top of this panel, for 15 minutes.' });
+    setNote({ kind: 'ok', text: t('The email form opened in a new tab. The draft waits there, at the top of this panel, for 15 minutes.') });
   };
   const startEdit = (target, text) => {
     setMenu('');
@@ -195,7 +195,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
         <button type="button" className="ab-answer-fold" aria-expanded="false" onClick={() => onToggle(true)}>
           <span className="ab-cardx-chevron" aria-hidden="true" />
           <span className="ab-answer-fold-text">{t('Earlier: {title}', { title })}</span>
-          <span className="ab-answer-when">· {when}{answer.unseen ? ' · new' : ''}</span>
+          <span className="ab-answer-when">· {when}{answer.unseen ? ` · ${t('new')}` : ''}</span>
         </button>
       </section>
     );
@@ -212,7 +212,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
         title={target.blocked || target.where || ''}
         onClick={() => insertNow(target)}
       >
-        {inserted ? 'Inserted' : target.label}
+        {inserted ? t('Inserted') : target.label}
       </button>
     );
   };
@@ -228,10 +228,10 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   const hint = wrongRecord
     ? ''
     : email && emailUrl
-      ? 'Open the email form to insert the subject and body there. Nothing is sent until you press Send.'
+      ? t('Open the email form to insert the subject and body there. Nothing is sent until you press Send.')
       : primary === 'insert' && first
         ? first.blocked || `${first.where} ${first.next}`
-        : 'AI can be wrong: check it before you use it.';
+        : t('AI can be wrong: check it before you use it.');
   const question = answer.meta?.question || '';
   // What the request was made without (the pipeline's list, src/features/parts.js; else the pack's own access entries).
   const gapsLine = Array.isArray(answer.lastPack?.madeWithout) ? madeWithoutText(answer.lastPack.madeWithout) : madeWithoutLine(answer.lastPack?.gaps);
@@ -257,7 +257,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
             {choices.map((c, i) => (
               <li key={i}>
                 <SafeText text={c} />
-                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={`Copy reply ${i + 1}`}>
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={t('Copy reply {number}', { number: i + 1 })}>
                   {t('Copy this')}
                 </button>
               </li>
@@ -273,7 +273,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
 
       {findings && (
         <div className="ab-note ab-note-warn" role="alert">
-          <strong>{isCustomerVisible(findings.target.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
+          <strong>{isCustomerVisible(findings.target.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
           <ul className="ab-findings">
             {findings.items.map((f, i) => (
               <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
@@ -290,7 +290,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
 
       {editing ? (
         <InsertEditor
-          targets={[...targets.filter((t) => t.key === editing.key), ...targets.filter((t) => t.key !== editing.key)]}
+          targets={[...targets.filter((x) => x.key === editing.key), ...targets.filter((x) => x.key !== editing.key)]}
           initial={editing.text}
           textFor={textFor}
           review={review}
@@ -344,7 +344,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                     type="button"
                     className="ab-menu-item"
                     disabled={!email.subject}
-                    title={email.subject ? '' : 'The draft has no subject line.'}
+                    title={email.subject ? '' : t('The draft has no subject line.')}
                     onClick={() => {
                       setMenu('');
                       copy('', email.subject);
@@ -369,19 +369,19 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                   {t('Edit before inserting')}
                 </button>
               )}
-              {otherTargets.map((t) => (
+              {otherTargets.map((x) => (
                 <button
-                  key={t.key}
+                  key={x.key}
                   type="button"
                   className="ab-menu-item"
-                  disabled={inserting || Boolean(done[t.key]) || Boolean(t.blocked) || (wrongRecord && !t.table)}
-                  title={t.blocked || t.where || ''}
+                  disabled={inserting || Boolean(done[x.key]) || Boolean(x.blocked) || (wrongRecord && !x.table)}
+                  title={x.blocked || x.where || ''}
                   onClick={() => {
                     setMenu('');
-                    insertNow(t);
+                    insertNow(x);
                   }}
                 >
-                  {done[t.key] ? `${t.label}: inserted` : t.label}
+                  {done[x.key] ? t('{label}: inserted', { label: x.label }) : x.label}
                 </button>
               ))}
               {canOpen && (
@@ -392,13 +392,13 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                     setMenu('');
                     // The tab is about to leave this record: the draft waits (in memory, this site only, 15 minutes) for the blank form.
                     if (!setPending({ feature: base, text: answer.text, people: answer.people, scan: answer.scan, internalTexts: review.internalTexts, origin: originOf(page.href) })) {
-                      setNote({ kind: 'warn', text: 'Agent Buddy could not keep the draft for the new form. Copy it first.' });
+                      setNote({ kind: 'warn', text: t('Agent Buddy could not keep the draft for the new form. Copy it first.') });
                       return;
                     }
-                    if (!openNewRecord(page, base.open.table)) setNote({ kind: 'warn', text: 'Agent Buddy could not open that form. Copy the text instead.' });
+                    if (!openNewRecord(page, base.open.table)) setNote({ kind: 'warn', text: t('Agent Buddy could not open that form. Copy the text instead.') });
                   }}
                 >
-                  {base.open.label || 'Open a new form'}
+                  {base.open.label ? tr(base.open.label) : t('Open a new form')}
                 </button>
               )}
               <button
@@ -482,7 +482,7 @@ function RefineMenu({ id, eff, busy, onPick, onClose }) {
       <div className="ab-menu-row">
         {simple.map((p) => (
           <button key={p.id} type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => onPick(p)}>
-            {p.label}
+            {tr(p.label)}
           </button>
         ))}
       </div>
@@ -491,7 +491,7 @@ function RefineMenu({ id, eff, busy, onPick, onClose }) {
           <label className="ab-sub" htmlFor={`${ids}-lang`}>{t('Translate to')}</label>
           <select id={`${ids}-lang`} className="ab-select ab-refine-lang" value={language} onChange={(e) => setLanguage(e.target.value)}>
             {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>{l.name}</option>
+              <option key={l.code} value={l.code}>{tr(l.name)}</option>
             ))}
           </select>
           <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => onPick(translate, { language })}>

@@ -4,7 +4,7 @@ import ReviewHints from '../ReviewHints.jsx';
 import { ShowMore } from '../ui/primitives.jsx';
 import { FORM_FIELDS, MAX_FORM_TEXT } from '../../compose/formFields.js';
 import { checkTypedText, internalTextsOf } from '../../safeSend/review.js';
-import { t } from '../../i18n/index.js';
+import { isolate, t, tn, t as tr } from '../../i18n/index.js';
 
 // N22 "Check my comment": the safe-to-send check on what the agent TYPED into the form, before they press Post or Save. The same
 // review an insert gets (src/safeSend/review.js): personal data and secrets, another person's name or email, markup, links, words
@@ -17,17 +17,17 @@ import { t } from '../../i18n/index.js';
 export const CHECK_FIELDS = FORM_FIELDS.filter((f) => f.customerVisible && !f.singleLine);
 export const SEND_CHECK_FEATURE = 'send-check';
 
-const buttonLabel = (field) => (field.name === 'comments' ? 'Check my comment' : `Check my ${field.label.toLowerCase()}`);
+const buttonLabel = (field) => (field.name === 'comments' ? t('Check my comment') : t('Check my {field}', { field: tr(field.label).toLowerCase() }));
 
 /** One line for the card's title row, and how much attention it needs. */
 export function checkSummary(state) {
   const result = state?.result;
   if (!result) return { text: '', attention: '' };
-  if (result.status === 'clean') return { text: 'Nothing found', attention: '' };
+  if (result.status === 'clean') return { text: t('Nothing found'), attention: '' };
   if (result.status === 'findings') {
     const n = result.serious.length;
-    if (n) return { text: `${n} to check before sending`, attention: 'warn' };
-    return { text: `${result.hints.length} worth a look`, attention: '' };
+    if (n) return { text: tn(n, '{n} to check before sending', '{n} to check before sending'), attention: 'warn' };
+    return { text: tn(result.hints.length, '{n} worth a look', '{n} worth a look'), attention: '' };
   }
   return { text: '', attention: '' };
 }
@@ -79,14 +79,19 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
       const [answer, context] = await Promise.all([read(page.tabId, 'formValues', { names: [field.name], ...(expect ? { expect } : {}) }), recordContext()]);
       if (mine !== token.current) return;
       if (answer?.wrongForm) {
-        setState({ phase: 'note', note: `The form on the page is not ${record?.number || 'the ticket open here'}. Open that ticket again, or paste the text below.` });
+        setState({
+          phase: 'note',
+          note: record?.number
+            ? t('The form on the page is not {number}. Open that ticket again, or paste the text below.', { number: isolate(record.number) })
+            : t('The form on the page is not the ticket open here. Open that ticket again, or paste the text below.'),
+        });
         setPasteOpen(true);
       } else if (!answer?.available) {
-        setState({ phase: 'note', note: 'Agent Buddy cannot read the form on this page (Workspace and portal pages keep it out of reach). Paste the text below instead.' });
+        setState({ phase: 'note', note: t('Agent Buddy cannot read the form on this page (Workspace and portal pages keep it out of reach). Paste the text below instead.') });
         setPasteOpen(true);
       } else setState(check(String(answer.values?.[field.name] ?? ''), context, 'form'));
     } catch (err) {
-      if (mine === token.current) setState({ phase: 'note', note: plainError(err, 'The form could not be read. Paste the text below instead.') });
+      if (mine === token.current) setState({ phase: 'note', note: plainError(err, t('The form could not be read. Paste the text below instead.')) });
     }
   }
 
@@ -99,7 +104,7 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
   }
 
   const result = state?.phase === 'done' ? state.result : null;
-  const where = state?.from === 'pasted' ? 'The pasted text' : `Your ${field.label.toLowerCase()}`;
+  const where = state?.from === 'pasted' ? t('The pasted text') : t('Your {field}', { field: tr(field.label).toLowerCase() });
 
   return (
     <div className="ab-write-check">
@@ -107,7 +112,7 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
         <label className="ab-sub" htmlFor="ab-check-field">{t('Field')}</label>
         <select id="ab-check-field" className="ab-select ab-compose-select" value={field.name} onChange={(e) => { setFieldName(e.target.value); setState(null); }}>
           {CHECK_FIELDS.map((f) => (
-            <option key={f.name} value={f.name}>{f.label}</option>
+            <option key={f.name} value={f.name}>{tr(f.label)}</option>
           ))}
         </select>
         <button type="button" className="ab-btn ab-btn-primary ab-btn-sm" disabled={!active || state?.phase === 'reading'} onClick={checkForm}>
@@ -116,12 +121,12 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
       </div>
       <p className="ab-hint">{t('Checks what you typed for personal data, passwords and internal wording before the customer sees it.')}</p>
 
-      {state?.phase === 'reading' && <p className="ab-sub" role="status">{state.from === 'form' ? 'Reading the form…' : 'Checking…'}</p>}
+      {state?.phase === 'reading' && <p className="ab-sub" role="status">{state.from === 'form' ? t('Reading the form…') : t('Checking…')}</p>}
       {state?.phase === 'note' && <p className="ab-note ab-note-warn" role="status">{state.note}</p>}
 
       {result?.status === 'empty' && (
         <p className="ab-note" role="status">
-          {state.from === 'pasted' ? 'There is nothing to check yet.' : `The ${field.label.toLowerCase()} field is empty. Type your message in the form first, or paste it below.`}
+          {state.from === 'pasted' ? t('There is nothing to check yet.') : t('The {field} field is empty. Type your message in the form first, or paste it below.', { field: tr(field.label).toLowerCase() })}
         </p>
       )}
       {result?.status === 'clean' && (

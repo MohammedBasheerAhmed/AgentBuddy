@@ -10,6 +10,7 @@
 
 import { detect } from '../pii/detectors.js';
 import { createDictionary, fold } from '../pii/dictionary.js';
+import { tm, t as tr } from '../i18n/index.js';
 
 /** Phrases that suggest the text was meant to stay internal. Replace them with options.internalPhrases. */
 export const DEFAULT_INTERNAL_PHRASES = Object.freeze([
@@ -40,21 +41,22 @@ const KIND_SEVERITY = {
   MAC: 'low',
 };
 
+// (English texts marked with tm(); each finding carries its advice through tr(), in the language of the panel)
 const ADVICE = {
-  SECRET: 'This looks like a password, key or token. Never put credentials in a customer-visible message; share them through the approved secure channel.',
-  URL_CREDENTIALS: 'This link contains a username and password. Remove the credentials before sending.',
-  CARD: 'This looks like a payment card number. Do not send card numbers; ask the customer to use the secure payment route.',
-  IBAN: 'This looks like a bank account number. Check it belongs to the customer you are writing to and that it must be shared.',
-  NATIONAL_ID: 'This looks like a national identity number. Remove it unless the customer asked for exactly this.',
-  DOB: 'This looks like a date of birth. Share it only with the person it belongs to.',
-  ADDRESS: 'This looks like a postal address. Check it is the customer\'s own.',
-  EMPLOYEE_ID: 'This looks like an employee or staff id. Check it is the customer\'s own.',
-  PHONE: 'This looks like a phone number. Check it is the customer\'s own or a published support number.',
-  EMAIL: 'This email address is not one of the people on this record. Check you may share it with this customer.',
-  IP: 'This looks like an IP address. Internal addresses are rarely useful to a customer.',
-  MAC: 'This looks like a device (MAC) address. Check it is the customer\'s own device.',
-  OTHER_PERSON: 'This looks like the name of someone who is not on this record. Check you may mention them to this customer.',
-  INTERNAL_PHRASE: 'This wording suggests the text was meant to stay internal. Move it to a work note or rephrase it for the customer.',
+  SECRET: tm('This looks like a password, key or token. Never put credentials in a customer-visible message; share them through the approved secure channel.'),
+  URL_CREDENTIALS: tm('This link contains a username and password. Remove the credentials before sending.'),
+  CARD: tm('This looks like a payment card number. Do not send card numbers; ask the customer to use the secure payment route.'),
+  IBAN: tm('This looks like a bank account number. Check it belongs to the customer you are writing to and that it must be shared.'),
+  NATIONAL_ID: tm('This looks like a national identity number. Remove it unless the customer asked for exactly this.'),
+  DOB: tm('This looks like a date of birth. Share it only with the person it belongs to.'),
+  ADDRESS: tm('This looks like a postal address. Check it is the customer\'s own.'),
+  EMPLOYEE_ID: tm('This looks like an employee or staff id. Check it is the customer\'s own.'),
+  PHONE: tm('This looks like a phone number. Check it is the customer\'s own or a published support number.'),
+  EMAIL: tm('This email address is not one of the people on this record. Check you may share it with this customer.'),
+  IP: tm('This looks like an IP address. Internal addresses are rarely useful to a customer.'),
+  MAC: tm('This looks like a device (MAC) address. Check it is the customer\'s own device.'),
+  OTHER_PERSON: tm('This looks like the name of someone who is not on this record. Check you may mention them to this customer.'),
+  INTERNAL_PHRASE: tm('This wording suggests the text was meant to stay internal. Move it to a work note or rephrase it for the customer.'),
 };
 
 /** Hide a value but keep enough to recognise it: "abel.tuter@x.com" -> "ab****@x.com". Never returns the whole value. */
@@ -116,7 +118,7 @@ export function checkOutgoing(text, options = {}) {
       start: f.start,
       end: f.end,
       excerpt: maskExcerpt(f.value),
-      advice: ADVICE[f.kind] || ADVICE.SECRET,
+      advice: tr(ADVICE[f.kind] || ADVICE.SECRET),
     });
   }
 
@@ -128,7 +130,7 @@ export function checkOutgoing(text, options = {}) {
     const words = m[1].split(/\s+/);
     if (words.some((w) => NOT_NAMES.has(fold(w)))) continue;
     if (known.some((k) => k.start < end && start < k.end)) continue;
-    findings.push({ kind: 'OTHER_PERSON', severity: 'low', start, end, excerpt: maskExcerpt(m[1]), advice: ADVICE.OTHER_PERSON });
+    findings.push({ kind: 'OTHER_PERSON', severity: 'low', start, end, excerpt: maskExcerpt(m[1]), advice: tr(ADVICE.OTHER_PERSON) });
   }
 
   // 3. Internal-only wording.
@@ -136,7 +138,7 @@ export function checkOutgoing(text, options = {}) {
   for (const rule of phrases) {
     rule.re.lastIndex = 0;
     while ((m = rule.re.exec(text)) !== null) {
-      findings.push({ kind: 'INTERNAL_PHRASE', severity: rule.severity, start: m.index, end: m.index + m[0].length, excerpt: m[0], advice: ADVICE.INTERNAL_PHRASE });
+      findings.push({ kind: 'INTERNAL_PHRASE', severity: rule.severity, start: m.index, end: m.index + m[0].length, excerpt: m[0], advice: tr(ADVICE.INTERNAL_PHRASE) });
     }
   }
 

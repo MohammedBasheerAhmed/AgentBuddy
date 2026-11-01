@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t } from '../../i18n/index.js';
 
 /**
  * Run an async read when a tab opens (and again on demand). A newer run, or leaving the tab, makes an older answer that is
@@ -23,7 +24,7 @@ export function useLoader(load, deps, { active = true } = {}) {
       const data = await load();
       if (mine === token.current) setState({ phase: 'ready', data, error: '' });
     } catch (err) {
-      if (mine === token.current) setState({ phase: 'error', data: null, error: err?.message || 'Something went wrong.' });
+      if (mine === token.current) setState({ phase: 'error', data: null, error: err?.message || t('Something went wrong.') });
     }
     // `load` is a fresh closure on every render; the caller names what it really depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps

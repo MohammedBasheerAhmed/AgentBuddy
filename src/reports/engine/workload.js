@@ -3,6 +3,9 @@
 // Counts come from the Aggregate API, so the board is exact however long the queue is.
 import { LIMITS, AGE_BUCKETS } from './constants.js';
 import { attempt } from './reader.js';
+import { tm } from './say.js';
+import { t } from '../../i18n/core.js';
+import { shown, placeholderName } from '../shown.js';
 import { andQuery, byCountDesc, clampInt, raw, disp, sectionResult, stateClass, STATE_CLASSES, sumResults, topWithOthers, usableTables, resolvedStates, notResolved } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { DAY } from './time.js';
@@ -113,8 +116,8 @@ export async function workloadSection(ctx) {
     const usable = parts.filter((p) => p[key]?.ok);
     return foldByOwner(usable.map((p) => ({ table: p.t.table, groups: p[key].value })), emptyName);
   };
-  const assigneeRows = scope.kind === 'mine' ? [] : fold('byAssignee', '(unassigned)');
-  const groupRows = scope.kind === 'mine' ? [] : fold('byGroup', '(no group)');
+  const assigneeRows = scope.kind === 'mine' ? [] : fold('byAssignee', tm('(unassigned)'));
+  const groupRows = scope.kind === 'mine' ? [] : fold('byGroup', tm('(no group)'));
   // For a click on a row: the query that lists exactly that person's (or group's) open tickets, per table.
   const ownerQueries = (row, field) =>
     Object.fromEntries(Object.keys(row.byTable).map((table) => [table, andQuery(scope.query, 'active=true', row.id ? buildQuery([{ op: 'eq', field, value: row.id }]) : `${field}ISEMPTY`)]));
@@ -143,12 +146,12 @@ export async function workloadSection(ctx) {
       .sort((a, b) => b.reassignments - a.reassignments)
       .slice(0, 5),
   };
-  if (!pingPong.available) ctx.notes.push('Reassignment counts are not available on these tables, so hand-offs are not shown.');
+  if (!pingPong.available) ctx.notes.push(tm('Reassignment counts are not available on these tables, so hand-offs are not shown.'));
 
   const staleDays = clampInt(ctx.params.staleDays, 1, 60, LIMITS.staleDays);
   const topN = clampInt(ctx.params.top, 3, 30, 12);
 
-  return sectionResult('workload', 'Workload and ageing', ctx, {
+  return sectionResult('workload', tm('Workload and ageing'), ctx, {
     totals: {
       open: openSum.value,
       openPartial: openSum.partial,
@@ -159,8 +162,8 @@ export async function workloadSection(ctx) {
     },
     staleDays,
     classes: STATE_CLASSES,
-    byAssignee: topWithOthers(assigneeRows, topN, 'Other people'),
-    byGroup: topWithOthers(groupRows, topN, 'Other groups'),
+    byAssignee: topWithOthers(assigneeRows, topN, tm('Other people ({n})')),
+    byGroup: topWithOthers(groupRows, topN, tm('Other groups ({n})')),
     assigneeCount: assigneeRows.length,
     groupCount: groupRows.length,
     ageing: { buckets: ageTotal, byTable: ageTables, open: ageTables.reduce((n, a) => n + a.open, 0), queries: ageQueries(ctx), queriesByTable: Object.fromEntries(parts.map((p) => [p.t.table, ageQueries(ctx, p.doneValues)])) },
@@ -171,30 +174,30 @@ export async function workloadSection(ctx) {
 
 export function workloadTables(result) {
   const d = result.data;
-  if (!d) return [];
-  const classCols = d.classes.map((c) => ({ key: c.key, label: c.label }));
-  const ownerRow = (r) => ({ name: r.name, total: r.count, ...r.classes });
+  if (!d || d.available === false) return []; // an empty scope or a table list with nothing to read has no tables
+  const classCols = d.classes.map((c) => ({ key: c.key, label: shown(c.label) }));
+  const ownerRow = (r) => ({ name: placeholderName(r.name), total: r.count, ...r.classes });
   const out = [];
   if (d.detail.assignees.length) {
-    out.push({ title: 'Open work by person', columns: [{ key: 'name', label: 'Person', person: true }, { key: 'total', label: 'Open' }, ...classCols], rows: d.detail.assignees.map(ownerRow) });
+    out.push({ title: t('Open work by person'), columns: [{ key: 'name', label: t('Person'), person: true }, { key: 'total', label: shown('Open') }, ...classCols], rows: d.detail.assignees.map(ownerRow) });
   }
   if (d.detail.groups.length) {
-    out.push({ title: 'Open work by group', columns: [{ key: 'name', label: 'Group' }, { key: 'total', label: 'Open' }, ...classCols], rows: d.detail.groups.map(ownerRow) });
+    out.push({ title: t('Open work by group'), columns: [{ key: 'name', label: t('Group') }, { key: 'total', label: shown('Open') }, ...classCols], rows: d.detail.groups.map(ownerRow) });
   }
   out.push({
-    title: 'Ageing of open work',
-    columns: [{ key: 'label', label: 'Age' }, { key: 'count', label: 'Open tickets' }],
-    rows: d.ageing.buckets,
+    title: t('Ageing of open work'),
+    columns: [{ key: 'label', label: t('Age') }, { key: 'count', label: t('Open tickets') }],
+    rows: d.ageing.buckets.map((b) => ({ ...b, label: shown(b.label) })),
   });
   if (d.pingPong.items.length) {
     out.push({
-      title: `Tickets reassigned ${d.pingPong.threshold}+ times`,
+      title: t('Tickets reassigned {n}+ times', { n: d.pingPong.threshold }),
       columns: [
-        { key: 'number', label: 'Ticket' },
-        { key: 'title', label: 'Short description' },
-        { key: 'reassignments', label: 'Reassignments' },
-        { key: 'owner', label: 'Assigned to', person: true },
-        { key: 'group', label: 'Group' },
+        { key: 'number', label: t('Ticket') },
+        { key: 'title', label: t('Short description') },
+        { key: 'reassignments', label: t('Reassignments') },
+        { key: 'owner', label: t('Assigned to'), person: true },
+        { key: 'group', label: t('Group') },
       ],
       rows: d.pingPong.items,
     });

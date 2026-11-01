@@ -2,6 +2,7 @@ import React from 'react';
 import ChartFrame from './ChartFrame.jsx';
 import { markerIsLine, markerPath, seriesToTable, summarizeSeries, toneClass, toneForIndex, trendLayout } from './geometry.js';
 import { useWidth } from './useWidth.js';
+import { t } from '../../i18n/index.js';
 
 const HEIGHT = 170;
 
@@ -29,7 +30,7 @@ function LineSample({ index, shape }) {
  *   series  [{ key, label, tone, points: [{ label, value }] }]
  *   area    fill under the lines
  */
-export default function TrendChart({ title, series, area = false, unit = '', emptyText = 'Nothing to show.', labelHeader, defaultTable = false, note = '' }) {
+export default function TrendChart({ title, series, area = false, unit = '', emptyText = t('Nothing to show.'), labelHeader, defaultTable = false, note = '' }) {
   const [ref, width] = useWidth();
   const list = (Array.isArray(series) ? series : []).filter((s) => s && typeof s === 'object').map((s, i) => ({ ...s, tone: s.tone || toneForIndex(i) }));
   const L = trendLayout(list, { width, height: HEIGHT, area });
@@ -51,11 +52,11 @@ export default function TrendChart({ title, series, area = false, unit = '', emp
     <ChartFrame title={title} summary={summary} note={note} defaultTable={defaultTable} empty={L.length === 0} emptyText={emptyText} legend={legend} table={{ ...seriesToTable(list, { labelHeader }), caption: title }}>
       <div ref={ref} className="ab-trend">
         <svg className="ab-trend-svg" width={L.width} height={L.height} viewBox={`0 0 ${L.width} ${L.height}`} aria-hidden="true" focusable="false">
-          {L.ticks.map((t) => (
-            <g key={t.value}>
-              <line className="ab-chart-gridline" x1={x0} x2={x1} y1={t.y} y2={t.y} />
-              <text className="ab-chart-tick" x={x0 - 6} y={t.y} dy="0.35em" textAnchor="end">
-                {t.label}
+          {L.ticks.map((tick) => (
+            <g key={tick.value}>
+              <line className="ab-chart-gridline" x1={x0} x2={x1} y1={tick.y} y2={tick.y} />
+              <text className="ab-chart-tick" x={x0 - 6} y={tick.y} dy="0.35em" textAnchor="end">
+                {tick.label}
               </text>
             </g>
           ))}

@@ -1,6 +1,7 @@
 // Storage side of AI usage and spend caps (the arithmetic is in src/lib/aiUsage.js). Runs in the side panel, the only page that
 // makes model calls. Everything here fails soft: a storage problem must never stop a chat, so only
 // a cap that is really reached refuses a call.
+import { t } from '../i18n/index.js';
 import { USAGE_KEY, PRICES_KEY, CAPS_KEY, appendEntry, makeEntry, checkCaps, priceKey, normalizeCaps } from '../lib/aiUsage.js';
 
 const hasStorage = () => typeof chrome !== 'undefined' && Boolean(chrome.storage?.local);
@@ -39,7 +40,7 @@ export async function assertWithinCaps(provider, now = new Date()) {
  * Returns the caps as they are now. Throws when the browser does not let it save (Settings shows that next to the field).
  */
 export async function saveCaps(patch) {
-  if (!hasStorage()) throw new Error('Settings cannot be saved here.');
+  if (!hasStorage()) throw new Error(t('Settings cannot be saved here.'));
   return withLock(async () => {
     const stored = (await chrome.storage.local.get(CAPS_KEY))[CAPS_KEY];
     const next = normalizeCaps({ ...(stored && typeof stored === 'object' ? stored : {}), ...patch });

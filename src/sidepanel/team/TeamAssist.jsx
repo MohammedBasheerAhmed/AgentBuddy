@@ -18,11 +18,12 @@ import { hrReportsAllowed, scopeChipText } from '../reports/ReportsDashboard.jsx
 import { readLabel } from '../reports/format.js';
 import { teamShare } from './teamShare.js';
 import { t } from '../../i18n/index.js';
+import { shown } from '../../reports/shown.js';
 
 // Results this half read itself carry ids starting with this, so they never take the place of what the Insights half loaded.
 const ASSIST = 'assist:';
 const HANDOVER_ID = `${ASSIST}handover`;
-const SESSION_TEXT = 'Your ServiceNow session has ended. Sign in again in the ServiceNow tab, then press Try again.';
+const sessionText = () => t('Your ServiceNow session has ended. Sign in again in the ServiceNow tab, then press Try again.');
 const AS_OF_REUSE_MS = 9 * 60 * 1000; // the engine ignores an "as of" older than ten minutes
 
 /**
@@ -72,8 +73,8 @@ export default function TeamAssist({ page, eff, active }) {
   const [hoursChosen, setHours] = useState(null); // null: the period the Insights half's hand-over uses, else 12
 
   const dash = ready ? state.dashboards.find((d) => d.id === state.activeId) || state.dashboards[0] : null;
-  const usable = (context.data?.tables || []).filter((t) => t.usable).map((t) => t.table);
-  const tables = dash ? (dash.tables ? dash.tables.filter((t) => usable.includes(t)) : usable) : [];
+  const usable = (context.data?.tables || []).filter((x) => x.usable).map((x) => x.table);
+  const tables = dash ? (dash.tables ? dash.tables.filter((id) => usable.includes(id)) : usable) : [];
 
   // The same "as of" as the dashboard's current load, so a read here asks the same questions (answered from the page's cache).
   const asOfRef = useRef({ key: null, at: 0 });
@@ -128,7 +129,7 @@ export default function TeamAssist({ page, eff, active }) {
   const handoverOn = featureState('shift-handover', policy).available;
   const gate = coachingGate(eff);
   const scopeText = scopeChipText(dash.scope, context.data);
-  const handoverRead = handover?.readAt ? `From the hand-over numbers for ${scopeText}, read at ${readLabel(handover.readAt)}.` : '';
+  const handoverRead = handover?.readAt ? t('From the hand-over numbers for {scope}, read at {time}.', { scope: scopeText, time: readLabel(handover.readAt) }) : '';
   const retry = () => {
     setSessionLost(false);
     setOwnRefresh((k) => k + 1);
@@ -141,21 +142,21 @@ export default function TeamAssist({ page, eff, active }) {
       ))}
       {sessionLost && (
         <div className="ab-note ab-note-warn ab-dash-session" role="alert">
-          <p>{SESSION_TEXT}</p>
+          <p>{sessionText()}</p>
           <button type="button" className="ab-btn ab-btn-sm" onClick={retry}>{t('Try again')}</button>
         </div>
       )}
 
-      <CardFrame id="team-handover" title={t('Hand-over note')} summary={`Last ${hours} hours · ${scopeText}`} actions={<AiBadge />}>
+      <CardFrame id="team-handover" title={t('Hand-over note')} summary={`${t('Last {hours} hours', { hours })} · ${scopeText}`} actions={<AiBadge />}>
         <HoursPicker hours={hours} onChange={setHours} label={t('Period of the hand-over')} />
         {handover ? (
           handover.data?.available === false ? (
-            <p className="ab-note">{handover.data.reason || 'There is nothing to hand over.'}</p>
+            <p className="ab-note">{shown(handover.data.reason) || t('There is nothing to hand over.')}</p>
           ) : (
             <p className="ab-hint">{handoverRead}</p>
           )
         ) : own.phase === 'error' && own.code !== 'SESSION_EXPIRED' ? (
-          <ErrorNote error={own.error} onRetry={own.reload} />
+          <ErrorNote error={shown(own.error)} onRetry={own.reload} />
         ) : !sessionLost && woke && tables.length ? (
           <p className="ab-note" role="status">{t('Reading the hand-over numbers…')}</p>
         ) : context.data && !tables.length ? (
@@ -164,13 +165,13 @@ export default function TeamAssist({ page, eff, active }) {
         <HandoverAi result={handover?.data?.available === false ? null : handover} page={page} eff={eff} hours={hours} primary={handoverOn} />
       </CardFrame>
 
-      <CardFrame id="team-explain" title={t('Explain this dashboard')} summary={`${dash.name} · ${scopeText}`} actions={<AiBadge />}>
+      <CardFrame id="team-explain" title={t('Explain this dashboard')} summary={`${shown(dash.name)} · ${scopeText}`} actions={<AiBadge />}>
         <ExplainBody entries={explainEntries(entries)} page={page} eff={eff} primary={!handoverOn} />
       </CardFrame>
 
       {gate ? (
         <p className="ab-hint ab-team-coach-off">
-          Coaching snapshot: {gate === 'off' ? 'turned off by your organisation.' : 'off until your organisation switches coaching on.'}
+          {gate === 'off' ? t('Coaching snapshot: turned off by your organisation.') : t('Coaching snapshot: off until your organisation switches coaching on.')}
         </p>
       ) : (
         <CardFrame id="team-coaching" title={t('Coaching snapshot')} summary={t('One group, a sample of resolved tickets')} actions={<AiBadge />} defaultOpen={false}>

@@ -56,3 +56,19 @@ export function rulesFor(audience) {
       return LANGUAGE_AGENT;
   }
 }
+
+/** The names the answer language is given by, in English: this is fixed prompt text, never shown to a person. */
+const ANSWER_LANGUAGE_NAMES = Object.freeze({ en: 'English', ar: 'Arabic' });
+
+/**
+ * One fixed sentence for the system message when the person chose "The language of the panel" for AI answers (Settings > Language): the
+ * answer is written in that language whatever language the ticket is in. With the default ("The language of the ticket") it is empty and
+ * the prompts' own language rules above apply. It names no ticket data: only a language from a fixed list.
+ * @param {string} setting  settings.answerLanguage: 'ticket' | 'panel'
+ * @param {string} panelLanguage  the language the panel is in now: 'en' | 'ar'
+ */
+export function answerLanguageRule(setting, panelLanguage) {
+  const name = ANSWER_LANGUAGE_NAMES[panelLanguage];
+  if (setting !== 'panel' || !name) return '';
+  return `Write the whole answer in ${name}, whatever language the ticket data is written in. This replaces any earlier instruction about the language. Keep every label and heading named in these instructions exactly as written, in English, and keep every redaction token, record number, address and name exactly as it is in the data.`;
+}

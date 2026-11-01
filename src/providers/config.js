@@ -1,5 +1,7 @@
 // Single source of truth for providers and models. Do not hardcode a model name anywhere else in the codebase.
 import { validateBaseUrl, azureOptions, isAzureDeployment } from '../lib/aiUsage.js';
+// (core.js: this file is also in the service worker's bundle, which carries no Arabic catalogue; the labels are read in the panel)
+import { t, isolate } from '../i18n/core.js';
 
 export const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 export const OPENAI_MODEL = 'gpt-5-mini';
@@ -18,22 +20,32 @@ export const PROVIDERS = {
     userBaseUrl: true,
     label: 'Anthropic (Claude)',
     short: 'Anthropic',
-    keyLabel: 'Anthropic API key',
-    keyHint: 'Starts with sk-ant-. Create one in the Anthropic Console.',
+    get keyLabel() {
+      return t('Anthropic API key');
+    },
+    get keyHint() {
+      return t('Starts with sk-ant-. Create one in the Anthropic Console.');
+    },
     defaultModel: 'claude-sonnet-5-5',
     models: [
-      { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 - fast and capable' },
-      { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 - cheapest' },
-      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 - best quality' },
+      { id: 'claude-sonnet-5-5', get label() { return t('Claude Sonnet 5.5 - fast and capable'); } },
+      { id: 'claude-haiku-5-5', get label() { return t('Claude Haiku 5.5 - cheapest'); } },
+      { id: 'claude-opus-5-5', get label() { return t('Claude Opus 5.5 - best quality'); } },
     ],
   },
   openai: {
     api: 'openai',
     userBaseUrl: true,
-    label: 'OpenAI / company gateway',
+    get label() {
+      return t('OpenAI / company gateway');
+    },
     short: 'OpenAI',
-    keyLabel: 'API key',
-    keyHint: 'Starts with sk-. For a company gateway, enter its address below. For Azure OpenAI, choose the provider "Azure OpenAI".',
+    get keyLabel() {
+      return t('API key');
+    },
+    get keyHint() {
+      return t('Starts with sk-. For a company gateway, enter its address below. For Azure OpenAI, choose the provider "Azure OpenAI".');
+    },
     defaultModel: OPENAI_MODEL,
     freeModel: true,
     models: [
@@ -48,8 +60,12 @@ export const PROVIDERS = {
     freeModel: true,
     label: 'Azure OpenAI',
     short: 'Azure OpenAI',
-    keyLabel: 'Azure OpenAI key',
-    keyHint: 'KEY 1 or KEY 2 from "Keys and Endpoint" of your Azure OpenAI resource. It is sent in the api-key header, only to that resource.',
+    get keyLabel() {
+      return t('Azure OpenAI key');
+    },
+    get keyHint() {
+      return t('KEY 1 or KEY 2 from "Keys and Endpoint" of your Azure OpenAI resource. It is sent in the api-key header, only to that resource.');
+    },
     // The model is the name of a deployment the organisation created in Azure, so there is no sensible default.
     defaultModel: '',
     models: [],
@@ -60,13 +76,17 @@ export const PROVIDERS = {
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     label: 'Google Gemini',
     short: 'Google Gemini',
-    keyLabel: 'Gemini API key',
-    keyHint: 'Starts with AIza. Create one in Google AI Studio.',
+    get keyLabel() {
+      return t('Gemini API key');
+    },
+    get keyHint() {
+      return t('Starts with AIza. Create one in Google AI Studio.');
+    },
     defaultModel: 'gemini-2.5-flash',
     models: [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash - fast and capable' },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite - cheapest' },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro - best quality' },
+      { id: 'gemini-2.5-flash', get label() { return t('Gemini 2.5 Flash - fast and capable'); } },
+      { id: 'gemini-2.5-flash-lite', get label() { return t('Gemini 2.5 Flash-Lite - cheapest'); } },
+      { id: 'gemini-2.5-pro', get label() { return t('Gemini 2.5 Pro - best quality'); } },
     ],
   },
   mistral: {
@@ -75,8 +95,12 @@ export const PROVIDERS = {
     baseUrl: 'https://api.mistral.ai/v1',
     label: 'Mistral',
     short: 'Mistral',
-    keyLabel: 'Mistral API key',
-    keyHint: 'Create one in the Mistral console.',
+    get keyLabel() {
+      return t('Mistral API key');
+    },
+    get keyHint() {
+      return t('Create one in the Mistral console.');
+    },
     defaultModel: 'mistral-large-latest',
     models: [{ id: 'mistral-large-latest', label: 'Mistral Large' }],
   },
@@ -86,10 +110,14 @@ export const PROVIDERS = {
     baseUrl: 'https://api.groq.com/openai/v1',
     label: 'Groq',
     short: 'Groq',
-    keyLabel: 'Groq API key',
-    keyHint: 'Starts with gsk_. Create one in the Groq console.',
+    get keyLabel() {
+      return t('Groq API key');
+    },
+    get keyHint() {
+      return t('Starts with gsk_. Create one in the Groq console.');
+    },
     defaultModel: 'llama-3.3-70b-versatile',
-    models: [{ id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B - very fast' }],
+    models: [{ id: 'llama-3.3-70b-versatile', get label() { return t('Llama 3.3 70B - very fast'); } }],
   },
   deepseek: {
     api: 'openai',
@@ -97,12 +125,16 @@ export const PROVIDERS = {
     baseUrl: 'https://api.deepseek.com/v1',
     label: 'DeepSeek',
     short: 'DeepSeek',
-    keyLabel: 'DeepSeek API key',
-    keyHint: 'Starts with sk-. Create one on the DeepSeek platform (platform.deepseek.com).',
+    get keyLabel() {
+      return t('DeepSeek API key');
+    },
+    get keyHint() {
+      return t('Starts with sk-. Create one on the DeepSeek platform (platform.deepseek.com).');
+    },
     defaultModel: 'deepseek-chat',
     models: [
-      { id: 'deepseek-chat', label: 'DeepSeek Chat - fast and cheap' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner - slower, thinks first' },
+      { id: 'deepseek-chat', get label() { return t('DeepSeek Chat - fast and cheap'); } },
+      { id: 'deepseek-reasoner', get label() { return t('DeepSeek Reasoner - slower, thinks first'); } },
     ],
   },
   openrouter: {
@@ -111,13 +143,17 @@ export const PROVIDERS = {
     baseUrl: 'https://openrouter.ai/api/v1',
     label: 'OpenRouter',
     short: 'OpenRouter',
-    keyLabel: 'OpenRouter API key',
-    keyHint: 'Starts with sk-or-. One key for many vendors.',
+    get keyLabel() {
+      return t('OpenRouter API key');
+    },
+    get keyHint() {
+      return t('Starts with sk-or-. One key for many vendors.');
+    },
     // OpenRouter writes a minor version with a dot (anthropic/claude-sonnet-4.5), unlike Anthropic's own ids.
     defaultModel: 'anthropic/claude-sonnet-5.5',
     models: [
-      { id: 'anthropic/claude-sonnet-5.5', label: 'Claude Sonnet 5.5 via OpenRouter' },
-      { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash via OpenRouter' },
+      { id: 'anthropic/claude-sonnet-5.5', get label() { return t('Claude Sonnet 5.5 via OpenRouter'); } },
+      { id: 'google/gemini-2.5-flash', get label() { return t('Gemini 2.5 Flash via OpenRouter'); } },
     ],
   },
   ollama: {
@@ -126,10 +162,16 @@ export const PROVIDERS = {
     keyOptional: true,
     local: true,
     baseUrl: 'http://localhost:11434/v1',
-    label: 'Ollama (on this computer, nothing leaves it)',
+    get label() {
+      return t('Ollama (on this computer, nothing leaves it)');
+    },
     short: 'Ollama',
-    keyLabel: 'Key (not needed for Ollama)',
-    keyHint: 'Leave empty. Start Ollama first and pull a model, for example: ollama pull llama3.1.',
+    get keyLabel() {
+      return t('Key (not needed for Ollama)');
+    },
+    get keyHint() {
+      return t('Leave empty. Start Ollama first and pull a model, for example: ollama pull llama3.1.');
+    },
     defaultModel: 'llama3.1',
     models: [{ id: 'llama3.1', label: 'Llama 3.1' }],
   },
@@ -137,9 +179,15 @@ export const PROVIDERS = {
     api: 'openai',
     userBaseUrl: true,
     freeModel: true,
-    label: 'Other (OpenAI-compatible server)',
-    keyLabel: 'API key',
-    keyHint: 'The key your provider gave you. Leave empty for a server on this computer that needs none.',
+    get label() {
+      return t('Other (OpenAI-compatible server)');
+    },
+    get keyLabel() {
+      return t('API key');
+    },
+    get keyHint() {
+      return t('The key your provider gave you. Leave empty for a server on this computer that needs none.');
+    },
     defaultModel: '',
     models: [],
   },
@@ -159,23 +207,34 @@ export const effectiveBaseUrl = (provider, typed = '') => validateBaseUrl(PROVID
  */
 export function providerName(config = {}) {
   const def = PROVIDERS[config.provider] || {};
-  if (def.short && (def.baseUrl || def.azure || !config.baseUrl)) return def.short;
+  const host = endpointHost(config);
+  if (host === null) return def.short;
+  return host ? t('The endpoint {host}', { host: isolate(host) }) : t('The AI endpoint');
+}
+
+/**
+ * The host a gateway or a server of the person's own is named by, '' when it has an address that cannot be read or no name, and
+ * null when the provider has a name of its own (providerName says "DeepSeek", not a host).
+ */
+export function endpointHost(config = {}) {
+  const def = PROVIDERS[config.provider] || {};
+  if (def.short && (def.baseUrl || def.azure || !config.baseUrl)) return null;
   if (config.baseUrl) {
     try {
-      return `The endpoint ${new URL(config.baseUrl).host}`;
+      return new URL(config.baseUrl).host;
     } catch {
-      return 'The AI endpoint';
+      return '';
     }
   }
-  return def.short || 'The AI endpoint';
+  return def.short ? null : '';
 }
 
 // Why an Azure set-up cannot be used yet ('' when it can). Reported through `invalidBaseUrl`, which every send checks
 // (connectionProblem in src/lib/pipeline.js, and the Settings test).
 function azureProblem({ baseUrl, model, options }) {
-  if (!baseUrl) return 'Azure OpenAI needs the address of your resource (https://<name>.openai.azure.com). Enter it in Settings.';
-  if (!options.apiVersionOk) return 'The Azure API version must look like 2024-10-21 (or 2025-04-01-preview).';
-  if (model && !isAzureDeployment(model)) return 'The Azure deployment name may only use letters, digits, - _ and . (up to 64 characters).';
+  if (!baseUrl) return t('Azure OpenAI needs the address of your resource (https://<name>.openai.azure.com). Enter it in Settings.');
+  if (!options.apiVersionOk) return t('The Azure API version must look like 2024-10-21 (or 2025-04-01-preview).');
+  if (model && !isAzureDeployment(model)) return t('The Azure deployment name may only use letters, digits, - _ and . (up to 64 characters).');
   return '';
 }
 

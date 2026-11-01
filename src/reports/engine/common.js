@@ -4,6 +4,7 @@ import { raw, disp } from '../../context/util.js';
 import { REPORT_TABLES, LIMITS, isSensitiveReportTable } from './constants.js';
 import { andQuery, buildQuery } from './queryBuilder.js';
 import { attempt } from './reader.js';
+import { say, tm } from './say.js';
 
 export { raw, disp, andQuery };
 
@@ -17,13 +18,13 @@ export const clampInt = (value, min, max, fallback) => {
 // they mean, judged from the label the instance shows, so a customised state list still lands in the right column.
 
 export const STATE_CLASSES = Object.freeze([
-  { key: 'new', label: 'New' },
-  { key: 'working', label: 'Open or in progress' },
-  { key: 'waiting', label: 'Waiting or on hold' },
+  { key: 'new', label: tm('New') },
+  { key: 'working', label: tm('Open or in progress') },
+  { key: 'waiting', label: tm('Waiting or on hold') },
   // Resolved but still active: an incident or a case stays active after Resolved until it is closed (by the caller or after a few
   // days). Counted on its own, so it neither inflates "Open" nor fills "No update in 3+ days" while it waits to close.
-  { key: 'resolved', label: 'Resolved, not closed' },
-  { key: 'other', label: 'Other' },
+  { key: 'resolved', label: tm('Resolved, not closed') },
+  { key: 'other', label: tm('Other') },
 ]);
 
 export function stateClass(label) {
@@ -125,10 +126,10 @@ export function tableAccess(tables) {
 
 function statusNote(table, label, vis) {
   if (vis.status === 'ok') return '';
-  if (vis.status === 'denied') return `${label}: not available to you.`;
-  if (vis.status === 'hidden') return `${label}: you can see no rows in this table, so its numbers would prove nothing. It may be empty, or an access rule may hide it.`;
-  if (vis.status === 'blocked') return `${label}: your organisation does not allow reports to read this table.`;
-  return `${label}: could not be read${vis.note ? ` (${vis.note})` : ''}.`;
+  if (vis.status === 'denied') return say(tm('{table}: not available to you.'), { table: label });
+  if (vis.status === 'hidden') return say(tm('{table}: you can see no rows in this table, so its numbers would prove nothing. It may be empty, or an access rule may hide it.'), { table: label });
+  if (vis.status === 'blocked') return say(tm('{table}: your organisation does not allow reports to read this table.'), { table: label });
+  return vis.note ? say(tm('{table}: could not be read ({note}).'), { table: label, note: vis.note }) : say(tm('{table}: could not be read.'), { table: label });
 }
 
 // ---- Numbers -------------------------------------------------------------------------------------------------------
@@ -159,10 +160,12 @@ export function sumResults(results) {
 export const byCountDesc = (a, b) => b.count - a.count || String(a.name).localeCompare(String(b.name));
 
 /** The first `n` entries plus one "others" entry that sums the rest (omitted when nothing is left). */
-export function topWithOthers(list, n, othersLabel = 'Others') {
+export function topWithOthers(list, n, othersLabel = tm('Others ({n})')) {
   if (list.length <= n) return list;
   const rest = list.slice(n);
-  return [...list.slice(0, n), { key: '__others', id: '', name: `${othersLabel} (${rest.length})`, count: rest.reduce((s, x) => s + x.count, 0), others: true }];
+  // The label is a text with {n} ('Other people ({n})'), or a plain word that "(n)" is added to.
+  const name = othersLabel.includes('{n}') ? say(othersLabel, { n: rest.length }) : `${othersLabel} (${rest.length})`;
+  return [...list.slice(0, n), { key: '__others', id: '', name, count: rest.reduce((s, x) => s + x.count, 0), others: true }];
 }
 
 /** A cap note when a read stopped before the end: "first 3000 of 4210". */
@@ -172,7 +175,7 @@ export function capNote(source, read) {
     source,
     fetched: read.fetched,
     total: read.total,
-    note: read.total ? `Only the first ${read.fetched} of ${read.total} were read.` : `Only the first ${read.fetched} were read; there are more.`,
+    note: read.total ? say(tm('Only the first {fetched} of {total} were read.'), { fetched: read.fetched, total: read.total }) : say(tm('Only the first {fetched} were read; there are more.'), { fetched: read.fetched }),
   };
 }
 

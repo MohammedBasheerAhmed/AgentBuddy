@@ -5,6 +5,7 @@ import ErrorNote from '../../ErrorNote.jsx';
 import Notes from '../../knowledge/Notes.jsx';
 import { readFailure } from '../../plainAccess.js';
 import { EmptyNote } from '../../ui/primitives.jsx';
+import { t } from '../../../i18n/index.js';
 
 export { EmptyNote, Notes };
 
@@ -23,11 +24,11 @@ export function ReadState({ state, what = 'ServiceNow', onRetry }) {
       setSlow(false);
       return undefined;
     }
-    const t = setTimeout(() => setSlow(true), SLOW_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setSlow(true), SLOW_MS);
+    return () => clearTimeout(timer);
   }, [waiting, state.data]);
   if (state.data && state.phase !== 'error') return null;
-  if (waiting) return <p className="ab-hint" role="status">{slow ? `Still waiting for ${what} from ServiceNow…` : 'Looking…'}</p>;
+  if (waiting) return <p className="ab-hint" role="status">{slow ? t('Still waiting for {what} from ServiceNow…', { what }) : t('Looking…')}</p>;
   if (state.phase === 'error') {
     const failure = readFailure(state.error, what.charAt(0).toUpperCase() + what.slice(1));
     if (failure.kind !== 'error') return <p className="ab-hint">{failure.text}</p>;
@@ -102,19 +103,19 @@ export async function copyText(value) {
 }
 
 /** A Copy button that says "Copied" for a moment. */
-export function CopyButton({ value, label = 'Copy', title }) {
+export function CopyButton({ value, label = t('Copy'), title }) {
   const [note, setNote] = useState('');
   useEffect(() => {
     if (!note) return undefined;
-    const t = setTimeout(() => setNote(''), 2500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setNote(''), 2500);
+    return () => clearTimeout(timer);
   }, [note]);
   return (
     <QuietButton
       title={title}
       onClick={async () => {
         const ok = await copyText(typeof value === 'function' ? value() : value);
-        setNote(ok ? 'Copied' : 'Copy failed');
+        setNote(ok ? t('Copied') : t('Copy failed'));
       }}
     >
       <span aria-live="polite">{note || label}</span>

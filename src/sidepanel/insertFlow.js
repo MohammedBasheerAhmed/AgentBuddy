@@ -26,6 +26,7 @@
 import { buildFillMessage, describeInsert, expectForInsert, fillModeFor, fillModesFor, fillReasonText, insertedNote, isFillable, wrongRecordText } from '../lib/fillable.js';
 import { insertsFor } from '../features/registry.js';
 import { reviewForInsert } from '../safeSend/review.js';
+import { t, tm, t as tr } from '../i18n/index.js';
 
 export function createGuard() {
   let busy = false;
@@ -60,13 +61,13 @@ export function createGuard() {
 // Resolution notes are written FROM the work notes: words they share with a work note are expected there, so for these boxes the
 // "copied from an internal note" finding is a hint to look at, not a stop. Everywhere else the review is unchanged.
 const NOTES_FROM_WORK = new Set(['close_notes', 'fix_notes', 'cause_notes']);
-export const OVERLAP_HINT = 'This repeats words from a work note. That is normal for resolution notes; check nothing internal or personal is in it.';
+export const OVERLAP_HINT = tm('This repeats words from a work note. That is normal for resolution notes; check nothing internal or personal is in it.');
 
 /** reviewForInsert, with the work-note overlap turned into a hint for resolution-note boxes. { serious, hints } */
 export function reviewInsert(field, text, review = {}) {
   const found = reviewForInsert(field, text, review);
   if (!NOTES_FROM_WORK.has(field)) return found;
-  const overlap = found.serious.filter((f) => f.kind === 'INTERNAL_NOTE').map((f) => ({ ...f, severity: 'low', advice: OVERLAP_HINT }));
+  const overlap = found.serious.filter((f) => f.kind === 'INTERNAL_NOTE').map((f) => ({ ...f, severity: 'low', advice: tr(OVERLAP_HINT) }));
   if (!overlap.length) return found;
   return { serious: found.serious.filter((f) => f.kind !== 'INTERNAL_NOTE'), hints: [...found.hints, ...overlap].sort((a, b) => a.start - b.start) };
 }
@@ -130,7 +131,7 @@ export function choicesOf(feature, plain) {
   if (typeof feature?.choices !== 'function') return [];
   try {
     const list = feature.choices(String(plain ?? ''));
-    return Array.isArray(list) ? list.filter((t) => typeof t === 'string' && t.trim()).slice(0, 6) : [];
+    return Array.isArray(list) ? list.filter((item) => typeof item === 'string' && item.trim()).slice(0, 6) : [];
   } catch {
     return [];
   }
@@ -170,8 +171,10 @@ export function describeTarget(target, mode, { page, record } = {}) {
   return describeInsert({ field: target.field, fieldLabel: target.fieldLabel, mode, kind: record?.kind || page?.record?.kind || '', surface: page?.surface || 'classic', table: target.table });
 }
 
-const NOT_ON_FORM = (name) => `${name || 'This box'} is not on this form, so this cannot be inserted here. Use Copy.`;
-const READ_ONLY = (name) => `${name || 'This box'} cannot be changed on this form right now. Use Copy.`;
+// (the box is named by its label, which is an English text marked in the feature: `tr` shows it in the panel's language)
+const boxName = (name) => (name ? tr(name) : t('This box'));
+const NOT_ON_FORM = (name) => t('{box} is not on this form, so this cannot be inserted here. Use Copy.', { box: boxName(name) });
+const READ_ONLY = (name) => t('{box} cannot be changed on this form right now. Use Copy.', { box: boxName(name) });
 
 /**
  * Ask the open page which of the targets' boxes it has (READ op `insertTargets`, src/content/fill.js). Fail-soft: anything that goes
@@ -182,12 +185,12 @@ const READ_ONLY = (name) => `${name || 'This box'} cannot be changed on this for
  * @param {object|null} [expect] the record the answer was written for ({ table, sysId }); another record open = not known
  */
 export async function readFieldStates(page, targets, read, expect = null) {
-  const own = (Array.isArray(targets) ? targets : []).filter((t) => !t.table && isFillable(t.field));
+  const own = (Array.isArray(targets) ? targets : []).filter((item) => !item.table && isFillable(item.field));
   const unknown = { known: false, form: 'none', fields: {} };
   if (!own.length || !page || typeof read !== 'function') return unknown;
   try {
     const fields = [];
-    for (const t of own) if (!fields.some((f) => f.name === t.field)) fields.push({ name: t.field, label: t.fieldLabel || '' });
+    for (const item of own) if (!fields.some((f) => f.name === item.field)) fields.push({ name: item.field, label: item.fieldLabel || '' });
     const answer = await read(page.tabId, 'insertTargets', { fields, ...(expect ? { expect } : {}) });
     if (!answer || typeof answer !== 'object' || answer.match === false) return unknown;
     return { known: true, form: typeof answer.form === 'string' ? answer.form : 'none', fields: answer.fields && typeof answer.fields === 'object' ? answer.fields : {} };
@@ -199,12 +202,12 @@ export async function readFieldStates(page, targets, read, expect = null) {
 /** The targets with what the page said: `blocked` (why Insert is not offered) and `box` (the label of the box an insert will use). */
 export function applyFieldStates(targets, states) {
   const fields = states?.known ? states.fields || {} : {};
-  return (Array.isArray(targets) ? targets : []).map((t) => {
-    const found = Object.prototype.hasOwnProperty.call(fields, t.field) ? fields[t.field] : null;
+  return (Array.isArray(targets) ? targets : []).map((item) => {
+    const found = Object.prototype.hasOwnProperty.call(fields, item.field) ? fields[item.field] : null;
     const state = found && typeof found.state === 'string' ? found.state : 'unknown';
-    const blocked = t.table ? '' : state === 'missing' ? NOT_ON_FORM(t.fieldLabel) : state === 'read-only' ? READ_ONLY(t.fieldLabel) : '';
+    const blocked = item.table ? '' : state === 'missing' ? NOT_ON_FORM(item.fieldLabel) : state === 'read-only' ? READ_ONLY(item.fieldLabel) : '';
     const box = found && typeof found.label === 'string' ? found.label.slice(0, 80) : '';
-    return { ...t, blocked, box };
+    return { ...item, blocked, box };
   });
 }
 
@@ -237,7 +240,7 @@ export async function insertText({ page, target, text, mode, source = null, pinn
   // An insert for another kind of form (an article's title and body) only goes into a form of that table.
   const here = page?.record?.table || page?.newRecord?.table || '';
   if (target.table && here !== target.table) {
-    return { status: 'blocked', why: `This goes into a ${target.table === 'kb_knowledge' ? 'knowledge article' : target.table} form. Open that form first, then insert. Copy works now.` };
+    return { status: 'blocked', why: t('This goes into a {form} form. Open that form first, then insert. Copy works now.', { form: target.table === 'kb_knowledge' ? t('knowledge article') : target.table }) };
   }
   const chosen = fillModeFor(target.field, mode || target.mode);
   // The swap is for "Try again, then Insert" in the box's usual mode. A person who chose the other mode on purpose ("Add below" on

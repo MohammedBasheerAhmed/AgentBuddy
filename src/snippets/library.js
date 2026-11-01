@@ -7,6 +7,7 @@
 
 import { SNIPPETS_KEY } from '../lib/storage.js';
 import { LIMITS, normalizeSnippet } from './store.js';
+import { t } from '../i18n/index.js';
 
 const ID_OK = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -55,11 +56,14 @@ export function changeSnippets(area, apply, key = SNIPPETS_KEY) {
   });
 }
 
-/** Three plain examples for an empty library, so the first visit shows how variables and fallbacks look. */
+/**
+ * Three plain examples for an empty library, so the first visit shows how variables and fallbacks look. They become the person's own
+ * snippets, so they are written in the panel's language at the moment they are added (the search words stay a-z, as they must).
+ */
 export function starterSnippets() {
   return [
-    { title: 'Greeting', shortcut: 'hi', body: 'Hello {{caller.first_name | there}},\n\nThank you for contacting the service desk about {{number}}.' },
-    { title: 'Asking for details', shortcut: 'info', body: 'Hello {{caller.first_name | there}},\n\nTo move {{number}} forward, could you please share:\n1. The exact error message you see\n2. When it started\n\nThank you.' },
-    { title: 'Closing note', shortcut: 'bye', body: 'Hello {{caller.first_name | there}},\n\nI am glad {{number}} is sorted. If the problem comes back, reply to this message and we will pick it up again.' },
+    { title: t('Greeting'), shortcut: 'hi', body: t('Hello {{caller.first_name | there}},\n\nThank you for contacting the service desk about {{number}}.') },
+    { title: t('Asking for details'), shortcut: 'info', body: t('Hello {{caller.first_name | there}},\n\nTo move {{number}} forward, could you please share:\n1. The exact error message you see\n2. When it started\n\nThank you.') },
+    { title: t('Closing note'), shortcut: 'bye', body: t('Hello {{caller.first_name | there}},\n\nI am glad {{number}} is sorted. If the problem comes back, reply to this message and we will pick it up again.') },
   ];
 }

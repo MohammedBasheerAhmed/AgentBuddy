@@ -12,6 +12,7 @@
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
+const { collect, loadCatalogue } = require('./scripts/lib/i18nCheck.js');
 
 const rootDir = __dirname;
 
@@ -169,6 +170,29 @@ function checkBaked() {
   if (!carrying.includes('sidepanel.bundle.js') || empty.length) fail(`the policy was not compiled into ${empty.join(', ') || 'the side panel'}; the build in ${outdir} is not usable.`);
 }
 
+// Each bundle carries only the Arabic texts its own code can ask for (the texts written as t('...'), tn(), tm(), tx() in the files that
+// end up in it), not the whole catalogue: the script that runs on every ServiceNow page would otherwise grow by about 700 KB. The files
+// that end up in a bundle are found with a first, throw-away build; the catalogue module is then replaced by that subset.
+const AR_INDEX = /(^|[\\/])i18n[\\/]ar[\\/]index\.js$|^\.\/ar\/index\.js$/;
+const catalogueModule = (table) => ({
+  name: 'ab-i18n-catalogue',
+  setup(b) {
+    b.onResolve({ filter: /ar[\\/]index\.js$/ }, (a) => (AR_INDEX.test(a.path) && /i18n/.test(a.importer) ? { path: 'ar-catalogue', namespace: 'ab-i18n' } : undefined));
+    b.onLoad({ filter: /.*/, namespace: 'ab-i18n' }, () => ({ contents: `export const AR = Object.freeze(${JSON.stringify(table)});`, loader: 'js' }));
+  },
+});
+let fullCatalogue = null;
+async function buildOne(b) {
+  if (isWatch) return esbuild.build(b); // (watching builds with the whole catalogue: the subset is for what is shipped)
+  fullCatalogue = fullCatalogue || loadCatalogue('ar');
+  const probe = await esbuild.build({ ...b, write: false, metafile: true, logLevel: 'silent', plugins: [...(b.plugins || []), catalogueModule({})] });
+  const files = Object.keys(probe.metafile.inputs).map((p) => path.join(rootDir, p)).filter((p) => /[\\/]src[\\/].*\.(js|jsx)$/.test(p));
+  const { keys } = collect(files);
+  const subset = {};
+  for (const key of [...keys.keys()].sort()) if (fullCatalogue[key] !== undefined) subset[key] = fullCatalogue[key];
+  return esbuild.build({ ...b, plugins: [...(b.plugins || []), catalogueModule(subset)] });
+}
+
 const shownOut = (path.relative(rootDir, outdir) || outdir).split(path.sep).join('/');
 
 async function main() {
@@ -179,7 +203,7 @@ async function main() {
     console.log('Watching for changes. Static files (manifest, html, css) are copied once; rebuild to refresh them.');
     return;
   }
-  await Promise.all(builds.map((b) => esbuild.build(b)));
+  await Promise.all(builds.map((b) => buildOne(b)));
   if (enterprise) {
     checkBaked();
     const { plan } = enterprise;

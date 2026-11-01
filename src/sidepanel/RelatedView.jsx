@@ -4,7 +4,7 @@ import RecordLink from './RecordLink.jsx';
 import Notes from './knowledge/Notes.jsx';
 import ErrorNote from './ErrorNote.jsx';
 import { readFailure } from './plainAccess.js';
-import { t } from '../i18n/index.js';
+import { t, tn, isolate } from '../i18n/index.js';
 
 // A2, A3, C4 and the outage check (E2): what happened before for this person, tickets solved like this one, open tickets on
 // the same service, and knowledge that may help. All of it is read with the person's own session and ranked locally: no AI
@@ -77,15 +77,15 @@ export default function RelatedView({ page, eff }) {
         );
       await Promise.all([
         caller
-          ? settle(ask(page.tabId, 'history', { callerSysId: caller.sysId, excludeSysId: pack.sysId, allowSensitive }), 'history', 'Earlier tickets from this person')
+          ? settle(ask(page.tabId, 'history', { callerSysId: caller.sysId, excludeSysId: pack.sysId, allowSensitive }), 'history', t('Earlier tickets from this person'))
           : settle(Promise.resolve({ items: [], signals: null, access: [] }), 'history', ''),
-        settle(ask(page.tabId, 'similar', { pack: slim, resolvedOnly: true, allowSensitive }), 'similar', 'Solved tickets like this one'),
-        settle(ask(page.tabId, 'duplicates', { pack: slim, windowHours: 24, allowSensitive }), 'duplicates', 'Open tickets on the same service'),
-        settle(ask(page.tabId, 'knowledge', { pack: slim }), 'knowledge', 'Knowledge articles'),
+        settle(ask(page.tabId, 'similar', { pack: slim, resolvedOnly: true, allowSensitive }), 'similar', t('Solved tickets like this one')),
+        settle(ask(page.tabId, 'duplicates', { pack: slim, windowHours: 24, allowSensitive }), 'duplicates', t('Open tickets on the same service')),
+        settle(ask(page.tabId, 'knowledge', { pack: slim }), 'knowledge', t('Knowledge articles')),
       ]);
       apply((s) => ({ ...s, phase: 'ready' }));
     } catch (err) {
-      apply((s) => ({ ...s, phase: 'error', error: readFailure(err, 'This ticket') }));
+      apply((s) => ({ ...s, phase: 'error', error: readFailure(err, t('This ticket')) }));
     }
   }, [page.tabId, record.table, record.sysId, allowSensitive]);
 
@@ -115,24 +115,31 @@ export default function RelatedView({ page, eff }) {
 
       {openHits.length > 0 && (
         <p className="ab-note ab-note-warn" role="status">
-          {openHits.length} other open ticket{openHits.length === 1 ? '' : 's'} on the same service in the last {duplicates.value.windowHours} hours. This could be a wider issue.
+          {tn(openHits.length, '{n} other open ticket on the same service in the last {hours} hours. This could be a wider issue.', '{n} other open tickets on the same service in the last {hours} hours. This could be a wider issue.', { hours: duplicates.value.windowHours })}
         </p>
       )}
       {duplicates?.failure && (
         <p className={duplicates.failure.kind === 'error' ? 'ab-note ab-note-warn' : 'ab-hint'} role="status">
-          {duplicates.failure.kind === 'error' ? 'Open tickets on the same service could not be checked. Press Refresh to try again.' : duplicates.failure.text}
+          {duplicates.failure.kind === 'error' ? t('Open tickets on the same service could not be checked. Press Refresh to try again.') : duplicates.failure.text}
         </p>
       )}
 
       {history && (
-        <Section title={callerName ? `Earlier tickets from ${callerName}` : 'Earlier tickets from this person'} count={history.value ? items(history, 'items').length : undefined}>
+        <Section title={callerName ? t('Earlier tickets from {name}', { name: isolate(callerName) }) : t('Earlier tickets from this person')} count={history.value ? items(history, 'items').length : undefined}>
           <Failed failure={history.failure} />
           {sig && (
             <p className="ab-sub">
-              {items(history, 'items').length} earlier · {sig.openCount} still open{sig.daysSinceLast !== null ? ` · last one ${sig.daysSinceLast === 0 ? 'today' : `${sig.daysSinceLast} day${sig.daysSinceLast === 1 ? '' : 's'} ago`}` : ''}
+              {t('{count} earlier · {open} still open', { count: items(history, 'items').length, open: sig.openCount })}
+              {sig.daysSinceLast !== null ? ` · ${t('last one {when}', { when: sig.daysSinceLast === 0 ? t('today') : tn(sig.daysSinceLast, '{n} day ago', '{n} days ago') })}` : ''}
             </p>
           )}
-          {sig?.reopenedHint?.later && <p className="ab-note ab-note-warn">Looks like a repeat: {sig.reopenedHint.later}{sig.reopenedHint.earlier ? ` came ${sig.reopenedHint.days} days after ${sig.reopenedHint.earlier} was resolved` : ' was reopened'}.</p>}
+          {sig?.reopenedHint?.later && (
+            <p className="ab-note ab-note-warn">
+              {sig.reopenedHint.earlier
+                ? tn(sig.reopenedHint.days, 'Looks like a repeat: {later} came {n} days after {earlier} was resolved.', 'Looks like a repeat: {later} came {n} days after {earlier} was resolved.', { later: isolate(sig.reopenedHint.later), earlier: isolate(sig.reopenedHint.earlier) })
+                : t('Looks like a repeat: {later} was reopened.', { later: isolate(sig.reopenedHint.later) })}
+            </p>
+          )}
           {sig?.repeats?.length > 0 && (
             <div className="ab-tags">
               {sig.repeats.slice(0, 4).map((r) => <span key={`${r.kind}:${r.key}`} className="ab-tag">{r.key} ×{r.count}</span>)}
@@ -144,7 +151,7 @@ export default function RelatedView({ page, eff }) {
             </div>
           )}
           {[...items(history, 'items')].reverse().slice(0, 6).map((item) => (
-            <Item key={item.sysId} page={page} item={item} line={`${item.state}${item.opened_at ? ` · opened ${item.opened_at.slice(0, 10)}` : ''}`} />
+            <Item key={item.sysId} page={page} item={item} line={`${item.state}${item.opened_at ? ` · ${t('opened {date}', { date: item.opened_at.slice(0, 10) })}` : ''}`} />
           ))}
           {history.value && items(history, 'items').length === 0 && <p className="ab-hint">{t('No earlier tickets found for this person.')}</p>}
           <Notes access={history.value?.access} />
@@ -155,7 +162,7 @@ export default function RelatedView({ page, eff }) {
         <Section title={t('Solved before')} count={similar.value ? items(similar, 'hits').length : undefined}>
           <Failed failure={similar.failure} />
           {items(similar, 'hits').map((h) => (
-            <Item key={h.sysId} page={page} item={h} line={Array.isArray(h.why) ? h.why.join('; ') : ''} extra={h.close_notes ? `Fix: ${clip(h.close_notes, 200)}` : ''} />
+            <Item key={h.sysId} page={page} item={h} line={Array.isArray(h.why) ? h.why.join('; ') : ''} extra={h.close_notes ? t('Fix: {text}', { text: isolate(clip(h.close_notes, 200)) }) : ''} />
           ))}
           {similar.value && items(similar, 'hits').length === 0 && <p className="ab-hint">{t('No similar solved tickets found.')}</p>}
           <Notes access={similar.value?.access} />
@@ -165,7 +172,7 @@ export default function RelatedView({ page, eff }) {
       {openHits.length > 0 && (
         <Section title={t('Same service, still open')} count={openHits.length}>
           {openHits.map((h) => (
-            <Item key={h.sysId} page={page} item={h} line={`${h.state} · ${h.hoursAgo}h ago${h.assignment_group ? ` · ${h.assignment_group}` : ''}`} />
+            <Item key={h.sysId} page={page} item={h} line={`${h.state} · ${t('{hours}h ago', { hours: h.hoursAgo })}${h.assignment_group ? ` · ${h.assignment_group}` : ''}`} />
           ))}
           <Notes access={duplicates.value.access} />
         </Section>

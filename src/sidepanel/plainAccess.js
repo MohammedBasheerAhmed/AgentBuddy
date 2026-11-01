@@ -1,43 +1,45 @@
 import { plainError } from './ask.js';
+import { t, tm, t as tr } from '../i18n/index.js';
 
 // "What could not be read", in words a fulfiller can act on. The context engine reports the table it tried (kb_use, m2m_kb_task,
 // task_sla...) and puts the same name inside its notes; nobody at a service desk knows those names, so they become plain phrases
-// here, at the last step before the screen. The data itself (access entries) is not changed.
+// here, at the last step before the screen. The data itself (access entries) is not changed. WORDS holds English texts marked with
+// tm(); plainSource shows them in the language of the panel (plainNote works inside the engine's English sentence, so it keeps English).
 
 const WORDS = {
-  journal: 'notes and comments',
-  sys_journal_field: 'notes and comments',
-  record: 'this record',
-  tickets: 'tickets',
-  'caller-history': 'earlier tickets from this person',
-  chat: 'chat messages',
-  interaction: 'chats',
-  live_message: 'chat messages',
-  sys_cs_conversation: 'chats',
-  sys_cs_message: 'chat messages',
-  kb_knowledge: 'knowledge articles',
-  kb_use: 'article links',
+  journal: tm('notes and comments'),
+  sys_journal_field: tm('notes and comments'),
+  record: tm('this record'),
+  tickets: tm('tickets'),
+  'caller-history': tm('earlier tickets from this person'),
+  chat: tm('chat messages'),
+  interaction: tm('chats'),
+  live_message: tm('chat messages'),
+  sys_cs_conversation: tm('chats'),
+  sys_cs_message: tm('chat messages'),
+  kb_knowledge: tm('knowledge articles'),
+  kb_use: tm('article links'),
   m2m_kb_task: 'article links',
-  kb_knowledge_base: 'knowledge bases',
-  kb_category: 'knowledge categories',
-  task_sla: 'SLAs',
-  sysapproval_approver: 'approvals',
-  incident: 'incidents',
-  problem: 'problems',
-  change_request: 'changes',
-  change_task: 'change tasks',
-  task: 'tasks',
-  sc_request: 'requests',
-  sc_req_item: 'requested items',
-  sc_task: 'catalog tasks',
-  sc_item_option_mtom: 'request answers',
-  sc_item_option: 'request answers',
-  item_option_new: 'request questions',
-  sys_user: 'people',
-  sys_user_group: 'groups',
-  sn_customerservice_case: 'customer service cases',
-  sn_hr_core_case: 'HR cases',
-  cmdb_ci: 'configuration items',
+  kb_knowledge_base: tm('knowledge bases'),
+  kb_category: tm('knowledge categories'),
+  task_sla: tm('SLAs'),
+  sysapproval_approver: tm('approvals'),
+  incident: tm('incidents'),
+  problem: tm('problems'),
+  change_request: tm('changes'),
+  change_task: tm('change tasks'),
+  task: tm('tasks'),
+  sc_request: tm('requests'),
+  sc_req_item: tm('requested items'),
+  sc_task: tm('catalog tasks'),
+  sc_item_option_mtom: tm('request answers'),
+  sc_item_option: tm('request answers'),
+  item_option_new: tm('request questions'),
+  sys_user: tm('people'),
+  sys_user_group: tm('groups'),
+  sn_customerservice_case: tm('customer service cases'),
+  sn_hr_core_case: tm('HR cases'),
+  cmdb_ci: tm('configuration items'),
 };
 
 // Inside a sentence only the names with an underscore are replaced (kb_use, task_sla): single words such as "task" or "incident" already
@@ -57,8 +59,9 @@ export const plainNote = (text) =>
 /** The start of a line about one source: "Article links", "Notes and comments"; a table nobody knows becomes "Some information". */
 export function plainSource(source) {
   const name = String(source ?? '');
-  const words = WORDS[name] || (GENERIC_NAME_RE.test(name) ? 'some information' : name);
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  const known = WORDS[name] || (GENERIC_NAME_RE.test(name) ? tm('some information') : '');
+  const said = known ? tr(known) : name; // a name nobody knows is shown as it is
+  return said.charAt(0).toUpperCase() + said.slice(1);
 }
 
 // ('blocked' is the organisation's policy, not the person's access: it is said too, in the engine's own words.)
@@ -68,7 +71,7 @@ const SHOWN = new Set(['denied', 'error', 'empty-or-hidden', 'blocked']);
 export function describeAccess(access) {
   return (access || [])
     .filter((a) => a && SHOWN.has(a.status))
-    .map((a) => (a.note ? `${plainSource(a.source)}: ${plainNote(a.note)}` : `${plainSource(a.source)}: not available to you.`));
+    .map((a) => (a.note ? `${plainSource(a.source)}: ${plainNote(a.note)}` : t('{source}: not available to you.', { source: plainSource(a.source) })));
 }
 
 /**
@@ -80,8 +83,8 @@ export function describeAccess(access) {
  */
 export function readFailure(err, what) {
   const code = String(err?.code || '');
-  const thing = String(what || 'This');
-  if (code === 'ACCESS_DENIED' || code === 'NOT_FOUND') return { kind: 'denied', text: `${thing}: not available to you.` };
-  if (code === 'BLOCKED_TABLE') return { kind: 'blocked', text: `${thing}: your organisation does not let Agent Buddy read this.` };
-  return { kind: 'error', text: plainError(err, `${thing} could not be read.`) };
+  const thing = String(what || t('This'));
+  if (code === 'ACCESS_DENIED' || code === 'NOT_FOUND') return { kind: 'denied', text: t('{thing}: not available to you.', { thing }) };
+  if (code === 'BLOCKED_TABLE') return { kind: 'blocked', text: t('{thing}: your organisation does not let Agent Buddy read this.', { thing }) };
+  return { kind: 'error', text: plainError(err, t('{thing} could not be read.', { thing })) };
 }

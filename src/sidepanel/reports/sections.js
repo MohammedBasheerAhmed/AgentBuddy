@@ -9,6 +9,7 @@
 // To add a section: add an entry below, give the engine a section with the same id (or have the View call its own reader), and add
 // the id to SECTION_IDS in src/reports/engine/constants.js so a saved dashboard can hold it. Nothing else in the dashboard changes.
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
+import { tm } from '../../i18n/index.js';
 import OverviewView from './OverviewView.jsx';
 import WorkloadView from './WorkloadView.jsx';
 import SlaView from './SlaView.jsx';
@@ -19,17 +20,17 @@ import CoachingView from './CoachingView.jsx';
 import InsightsView from './InsightsView.jsx';
 
 export const REPORT_SECTIONS = [
-  { id: 'overview', label: 'Overview tiles', description: 'Open, due soon, breached, unassigned, stale, waiting, opened and resolved today.', View: OverviewView },
-  { id: 'workload', label: 'Workload and ageing', description: 'Open work by person and group, ageing, stale and reassigned tickets.', View: WorkloadView },
-  { id: 'sla', label: 'SLA risk radar', description: 'Breached and at-risk SLAs by owner and group, the ten closest to breaking.', View: SlaView },
-  { id: 'quality', label: 'Quality and trend', description: 'Opened against resolved, time to resolve, reopen rate, top categories, repeat callers.', View: QualityView },
-  { id: 'fulfilment', label: 'Request fulfilment', description: 'Requested items and catalog tasks by state, approvals, oldest open items.', View: FulfilmentView },
+  { id: 'overview', label: tm('Overview tiles'), description: tm('Open, due soon, breached, unassigned, stale, waiting, opened and resolved today.'), View: OverviewView },
+  { id: 'workload', label: tm('Workload and ageing'), description: tm('Open work by person and group, ageing, stale and reassigned tickets.'), View: WorkloadView },
+  { id: 'sla', label: tm('SLA risk radar'), description: tm('Breached and at-risk SLAs by owner and group, the ten closest to breaking.'), View: SlaView },
+  { id: 'quality', label: tm('Quality and trend'), description: tm('Opened against resolved, time to resolve, reopen rate, top categories, repeat callers.'), View: QualityView },
+  { id: 'fulfilment', label: tm('Request fulfilment'), description: tm('Requested items and catalog tasks by state, approvals, oldest open items.'), View: FulfilmentView },
   // 'handover' is Insights (the tables, N16); its AI note lives in the Team screen's AI Assist half (src/sidepanel/team, AI28).
   // 'insights' and 'coaching' are AI only (`ai: true`): the Insights half never draws them and Customize never offers them (no AI
   // element on Insights, TRACKER.md 2.3); they are under AI Assist. A dashboard saved earlier that holds one gets a one-line pointer.
-  { id: 'handover', label: 'Shift handover', description: 'Open, at risk, waiting on others and recent events for the next shift.', View: HandoverView, feature: 'shift-handover' },
-  { id: 'insights', label: 'Explain this dashboard', description: 'AI: what stands out in the numbers on this dashboard, likely reasons as hypotheses, and three actions.', View: InsightsView, feature: 'dashboard-insights', hideWhenOff: true, ai: true },
-  { id: 'coaching', label: 'Coaching snapshot (opt-in)', description: 'AI, for one group: a rubric review of a sample of resolved tickets. Off unless your organisation switches coaching on.', View: CoachingView, feature: 'coaching-snapshot', hideWhenOff: true, ai: true },
+  { id: 'handover', label: tm('Shift handover'), description: tm('Open, at risk, waiting on others and recent events for the next shift.'), View: HandoverView, feature: 'shift-handover' },
+  { id: 'insights', label: tm('Explain this dashboard'), description: tm('AI: what stands out in the numbers on this dashboard, likely reasons as hypotheses, and three actions.'), View: InsightsView, feature: 'dashboard-insights', hideWhenOff: true, ai: true },
+  { id: 'coaching', label: tm('Coaching snapshot (opt-in)'), description: tm('AI, for one group: a rubric review of a sample of resolved tickets. Off unless your organisation switches coaching on.'), View: CoachingView, feature: 'coaching-snapshot', hideWhenOff: true, ai: true },
 ];
 
 export const sectionById = (id) => REPORT_SECTIONS.find((s) => s.id === id) || null;

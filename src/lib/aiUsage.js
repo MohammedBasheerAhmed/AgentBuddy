@@ -5,6 +5,8 @@
 // million that the USER entered (no vendor prices are built in, so cost shows "set prices" until they are); caps are
 // per day and per month in the user's own time zone, warn from 80% and refuse at 100%. Caps for calls and tokens work
 // without any prices.
+// (core.js, not index.js: the service worker's bundle carries this file, and it has no Arabic catalogue to carry)
+import { t, tn } from '../i18n/core.js';
 
 export const USAGE_KEY = 'agentbuddy_ai_usage';
 export const PRICES_KEY = 'agentbuddy_ai_prices';
@@ -32,14 +34,14 @@ export function validateBaseUrl(input) {
   try {
     parsed = new URL(text);
   } catch {
-    return { ...empty, ok: false, error: 'That is not a web address. Start with https://' };
+    return { ...empty, ok: false, error: t('That is not a web address. Start with https://') };
   }
   const local = LOCAL_HOSTS.has(parsed.hostname);
   if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && local)) {
-    return { ...empty, ok: false, error: 'Use https://. Plain http:// is only allowed for localhost or 127.0.0.1.' };
+    return { ...empty, ok: false, error: t('Use https://. Plain http:// is only allowed for localhost or 127.0.0.1.') };
   }
-  if (parsed.username || parsed.password) return { ...empty, ok: false, error: 'Do not put a user name or password in the address. The key goes in the key field.' };
-  if (parsed.search || parsed.hash || /[?#]/.test(text)) return { ...empty, ok: false, error: 'Leave off the ?query and #fragment.' };
+  if (parsed.username || parsed.password) return { ...empty, ok: false, error: t('Do not put a user name or password in the address. The key goes in the key field.') };
+  if (parsed.search || parsed.hash || /[?#]/.test(text)) return { ...empty, ok: false, error: t('Leave off the ?query and #fragment.') };
   const path = parsed.pathname.replace(/\/+$/, '');
   return { ok: true, url: `${parsed.origin}${path}`, host: parsed.host, origin: parsed.origin, local };
 }
@@ -108,16 +110,16 @@ export function splitAzureAddress(input) {
     return null;
   }
   const keys = [...url.searchParams.keys()];
-  if (url.hash || keys.some((k) => k !== 'api-version')) return { ok: false, error: 'Only api-version may follow the ? in an Azure address. Leave off everything else.' };
+  if (url.hash || keys.some((k) => k !== 'api-version')) return { ok: false, error: t('Only api-version may follow the ? in an Azure address. Leave off everything else.') };
   const root = validateBaseUrl(`${url.origin}${url.pathname.replace(/\/openai\/.*$/i, '')}`);
   if (!root.ok) return { ok: false, error: root.error };
-  if (url.username || url.password) return { ok: false, error: 'Do not put a user name or password in the address. The key goes in the key field.' };
+  if (url.username || url.password) return { ok: false, error: t('Do not put a user name or password in the address. The key goes in the key field.') };
   const deployment = (url.pathname.match(/\/openai\/deployments\/([^/]+)/i) || [])[1];
   const apiVersion = url.searchParams.get('api-version') || '';
-  if (apiVersion && !isAzureApiVersion(apiVersion)) return { ok: false, error: 'The api-version in that address does not look like 2024-10-21.' };
+  if (apiVersion && !isAzureApiVersion(apiVersion)) return { ok: false, error: t('The api-version in that address does not look like 2024-10-21.') };
   if (deployment) {
     const name = decodeURIComponent(deployment);
-    if (!isAzureDeployment(name)) return { ok: false, error: 'The deployment name in that address has characters Azure does not allow.' };
+    if (!isAzureDeployment(name)) return { ok: false, error: t('The deployment name in that address has characters Azure does not allow.') };
     return { ok: true, base: root.url, form: 'deployment', deployment: name, apiVersion: apiVersion || AZURE_DEFAULT_API_VERSION };
   }
   // A v1 address, or only an api-version after a resource address (form '' = keep the form chosen in Settings).
@@ -256,7 +258,7 @@ export function normalizeCaps(caps) {
 
 const PROVIDER_LABEL = { anthropic: 'Anthropic', openai: 'OpenAI-compatible' };
 const money = (n) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
-const where = 'Agent Buddy settings > Usage and limits';
+const where = () => t('Agent Buddy settings > Usage and limits'); // where the caps are set, said when the message is made
 
 /**
  * Where the spend stands against every cap that applies to a call to `provider`.
@@ -276,19 +278,25 @@ export function checkCaps(log, capsInput, provider, now = new Date()) {
   };
   const usd = (entries) => entries.reduce((total, e) => total + (typeof e.costUsd === 'number' ? e.costUsd : 0), 0);
   const label = PROVIDER_LABEL[provider] || provider;
-  add(`${label} daily spend`, usd(mine.filter((e) => dayKey(e.time) === today)), caps[provider]?.dailyUsd, (n) => money(n), 'day');
-  add(`${label} monthly spend`, usd(mine.filter((e) => monthKey(e.time) === month)), caps[provider]?.monthlyUsd, (n) => money(n), 'month');
+  add(t('{provider} daily spend', { provider: label }), usd(mine.filter((e) => dayKey(e.time) === today)), caps[provider]?.dailyUsd, (n) => money(n), 'day');
+  add(t('{provider} monthly spend', { provider: label }), usd(mine.filter((e) => monthKey(e.time) === month)), caps[provider]?.monthlyUsd, (n) => money(n), 'month');
   const todayAll = list.filter((e) => dayKey(e.time) === today);
-  add('Daily calls', todayAll.length, caps.dailyCalls, (n) => `${Math.round(n)} calls`, 'day');
-  add('Daily tokens', todayAll.reduce((total, e) => total + totalTokens(e), 0), caps.dailyTokens, (n) => `${Math.round(n).toLocaleString('en-US')} tokens`, 'day');
+  add(t('Daily calls'), todayAll.length, caps.dailyCalls, (n) => tn(Math.round(n), '{n} call', '{n} calls'), 'day');
+  add(t('Daily tokens'), todayAll.reduce((total, e) => total + totalTokens(e), 0), caps.dailyTokens, (n) => tn(Math.round(n), '{n} token', '{n} tokens', { n: Math.round(n).toLocaleString('en-US') }), 'day');
 
   const worst = items.length ? [...items].sort((a, b) => b.pct - a.pct)[0] : null;
   const status = !worst ? 'ok' : worst.pct >= 1 ? 'blocked' : worst.pct >= WARN_AT ? 'warn' : 'ok';
   let message = '';
   if (status === 'blocked') {
-    message = `${worst.name} cap reached (${worst.format(worst.used)} of ${worst.format(worst.limit)}). It resets at the start of the next ${worst.period}, or raise the cap in ${where}.`;
+    message = t('{name} cap reached ({used} of {limit}). It resets at the start of the next {period}, or raise the cap in {where}.', {
+      name: worst.name,
+      used: worst.format(worst.used),
+      limit: worst.format(worst.limit),
+      period: worst.period === 'day' ? t('day') : t('month'),
+      where: where(),
+    });
   } else if (status === 'warn') {
-    message = `${worst.name}: ${Math.round(worst.pct * 100)}% of the ${worst.format(worst.limit)} cap used.`;
+    message = t('{name}: {percent}% of the {limit} cap used.', { name: worst.name, percent: Math.round(worst.pct * 100), limit: worst.format(worst.limit) });
   }
   return { status, items, worst, message };
 }
@@ -360,10 +368,10 @@ export function usageChip(log, caps, provider, now = new Date()) {
   const { today } = summarize(log, now);
   const check = checkCaps(log, caps, provider, now);
   const quiet = { show: false, status: 'ok', text: '', title: '' };
-  if (check.status === 'blocked') return { show: true, status: 'blocked', text: 'Limit reached', title: check.message };
-  if (check.status === 'warn') return { show: true, status: 'warn', text: 'Near limit', title: check.message };
+  if (check.status === 'blocked') return { show: true, status: 'blocked', text: t('Limit reached'), title: check.message };
+  if (check.status === 'warn') return { show: true, status: 'warn', text: t('Near limit'), title: check.message };
   const real = (Array.isArray(log) ? log : []).some((e) => e && e.kind !== 'validate' && dayKey(e.time) === dayKey(now));
   if (!real || !today.calls) return quiet;
   const cost = today.priced ? ` · ${today.complete ? '' : '≥'}$${today.cost.toFixed(2)}` : '';
-  return { show: true, status: 'ok', text: `${today.calls} call${today.calls === 1 ? '' : 's'} today${cost}`, title: 'AI calls today. Open the settings page for usage, prices and limits.' };
+  return { show: true, status: 'ok', text: `${tn(today.calls, '{n} call today', '{n} calls today')}${cost}`, title: t('AI calls today. Open the settings page for usage, prices and limits.') };
 }

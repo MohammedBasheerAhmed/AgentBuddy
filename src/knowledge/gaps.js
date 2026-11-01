@@ -7,6 +7,7 @@
 // category, then by configuration item, when at least two share one.
 
 import { STOP_TICKET, keywordsOf, wordsOf } from './text.js';
+import { tm } from '../i18n/core.js';
 
 export const MIN_CLUSTER = 2;
 export const MAX_CLUSTERS = 15;
@@ -127,7 +128,7 @@ export function clusterTickets(tickets, { minSize = MIN_CLUSTER, maxClusters = M
   }
 
   // Leftovers that share a category, then a configuration item.
-  for (const [basis, pick, noun] of [['category', (t) => t.category, 'Category'], ['ci', (t) => t.ci, 'Configuration item']]) {
+  for (const [basis, pick, noun] of [['category', (t) => t.category, tm('Category')], ['ci', (t) => t.ci, tm('Configuration item')]]) {
     const groups = new Map();
     for (const item of free) {
       const key = lower(pick(item.ticket));
@@ -167,6 +168,7 @@ export function buildGapRadar({ tickets, linked = new Set(), linkKnown = false }
     candidates: candidates.length,
     unclustered: Math.max(0, candidates.length - grouped),
     linkKnown,
-    note: linkKnown || !all.length ? '' : 'Could not tell which tickets had an article, so every recent resolved ticket is counted. The list ranks repeated wording, category and configuration item.',
+    // (English: this runs in the page script; the panel shows it translated)
+    note: linkKnown || !all.length ? '' : tm('Could not tell which tickets had an article, so every recent resolved ticket is counted. The list ranks repeated wording, category and configuration item.'),
   };
 }

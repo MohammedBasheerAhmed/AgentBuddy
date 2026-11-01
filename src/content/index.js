@@ -24,6 +24,7 @@ import { contentMessageAction } from '../lib/senderCheck.js';
 import { handleFillField } from './fill.js';
 import { policyGuard } from './policyGuard.js';
 import { startBar } from './bar.js';
+import { SUPPORTED, setLanguage } from '../i18n/index.js';
 import { TAKEOVER_EVENT, contentTakeover, runtimeAlive } from './barLogic.js';
 
 // After an extension update, the copy of this script injected before it keeps running in the open tabs, cut off from the extension
@@ -209,6 +210,8 @@ if (decision !== 'skip') {
       return false;
     }
     if (action !== 'answer') return false;
+    // The panel says which language it is in; the texts built here (rows of My work, the form fields ...) are written in it.
+    if (SUPPORTED.includes(message?.language)) setLanguage(message.language);
     (async () => {
       switch (message?.type) {
         case MSG.PING:

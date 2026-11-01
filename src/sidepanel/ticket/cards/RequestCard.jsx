@@ -5,7 +5,7 @@ import { Facts, Hints, Tag } from '../../checks/Bits.jsx';
 import { allowSensitiveOf, read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { Group, QuietButton, ReadState } from './bits.jsx';
-import { t } from '../../../i18n/index.js';
+import { t, isolate } from '../../../i18n/index.js';
 
 // N5, request status: who to chase, in one line on top; then what it is waiting for, the due date and SLA, the approvals, the tasks
 // and the answers to the request questions (folded). On a catalog task the status is the requested item's. No AI: the message for
@@ -27,7 +27,7 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
       } catch (err) {
         if (target.table === record.table || !isNotVisible(err)) throw err;
         const own = { table: record.table, sysId: record.sysId };
-        return { target: { ...own, note: 'You cannot see the requested item this task belongs to. Showing the task on its own.' }, pack: await readPack(own) };
+        return { target: { ...own, note: t('You cannot see the requested item this task belongs to. Showing the task on its own.') }, pack: await readPack(own) };
       }
     },
     active,
@@ -39,17 +39,17 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
   useReport(setSummary, chase ? chase.text : '');
   useReport(setAttention, view && (view.status.state === 'rejected' || view.status.due?.overdue) ? 'warn' : '');
 
-  if (!view) return <ReadState state={state} what="the request" onRetry={state.reload} />;
+  if (!view) return <ReadState state={state} what={t('the request')} onRetry={state.reload} />;
   const { status, answers, approvals, chain } = view;
   return (
     <>
       <p className={`ab-ins-chase${chase.tone ? ` ab-ins-chase-${chase.tone}` : ''}`}>{chase.text}</p>
       {data.target.note && <p className="ab-note ab-note-warn">{data.target.note}</p>}
-      {data.target.table !== record.table && <p className="ab-hint">This task belongs to {data.pack.fields?.number || 'a requested item'}; the status is for that item.</p>}
+      {data.target.table !== record.table && <p className="ab-hint">{t('This task belongs to {number}; the status is for that item.', { number: data.pack.fields?.number ? isolate(data.pack.fields.number) : t('a requested item') })}</p>}
       <p className="ab-ins-line">{status.line}</p>
       <Facts
         tight
-        rows={[status.due && { label: 'Due', value: status.due.overdue ? `${status.due.text} (past due)` : status.due.text }, status.sla && { label: 'SLA', value: status.sla.text }].filter(Boolean)}
+        rows={[status.due && { label: t('Due'), value: status.due.overdue ? t('{date} (past due)', { date: status.due.text }) : status.due.text }, status.sla && { label: t('SLA'), value: status.sla.text }].filter(Boolean)}
       />
       {status.caveats.length > 0 && <p className="ab-hint">{status.caveats.join(' ')}</p>}
 
@@ -73,10 +73,10 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
             <div key={`${r.number}:${i}`} className={`ab-ins-kv${r.current ? ' ab-ins-current' : ''}`}>
               <span>
                 <span className="ab-record-number">{r.number}</span> {r.label}
-                {r.current ? ' (this one)' : ''}
+                {r.current ? ` ${t('(this one)')}` : ''}
               </span>
               <span className="ab-ins-kv-side">
-                <Tag tone={r.done ? 'ok' : r.open ? '' : 'warn'}>{r.state}</Tag> {r.owner || 'not assigned'}
+                <Tag tone={r.done ? 'ok' : r.open ? '' : 'warn'}>{r.state}</Tag> {r.owner || t('not assigned')}
               </span>
             </div>
           ))}

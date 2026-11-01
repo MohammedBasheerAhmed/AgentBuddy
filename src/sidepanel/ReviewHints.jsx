@@ -10,7 +10,7 @@ export default function ReviewHints({ hints }) {
   return (
     <div className="ab-note" role="note" style={{ marginTop: 8 }}>
       <strong>{t('Worth a look:')}</strong>
-      <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+      <ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>
         {hints.map((f, i) => (
           <li key={i}>
             {f.advice} <span className="ab-mono">{f.excerpt}</span>

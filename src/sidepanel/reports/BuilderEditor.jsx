@@ -6,19 +6,20 @@ import { BuilderChart } from './BuilderView.jsx';
 import { useReport } from './useReport.js';
 import ErrorNote from '../ErrorNote.jsx';
 import { t } from '../../i18n/index.js';
+import { shown, shownList } from '../../reports/shown.js';
 
 const WINDOW = ['last_7', 'last_30', 'last_90'];
 
 function Preview({ config, env }) {
   const state = useReport({ tabId: env.page.tabId, request: { kind: 'builder', config, blocked: env.blocked }, refreshKey: env.refreshKey });
   const d = state.result?.data;
-  if (state.phase === 'error') return <ErrorNote error={state.error} onRetry={state.reload} />;
+  if (state.phase === 'error') return <ErrorNote error={shown(state.error)} onRetry={state.reload} />;
   if (!d) return <p className="ab-note" role="status">{t('Reading the numbers…')}</p>;
-  if (d.available === false) return <p className="ab-note ab-note-warn">{d.reason}</p>;
+  if (d.available === false) return <p className="ab-note ab-note-warn">{shown(d.reason)}</p>;
   return (
     <div aria-busy={state.busy}>
       <BuilderChart data={d} env={env} />
-      <p className="ab-widget-foot">{[d.filter, d.basedOn || `${d.total} in total`].join(' · ')}</p>
+      <p className="ab-widget-foot">{[shownList(d.filter), d.basedOn ? shown(d.basedOn) : t('{n} in total', { n: d.total })].join(' · ')}</p>
     </div>
   );
 }
@@ -44,7 +45,7 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
   return (
     <section className="ab-card ab-widget ab-builder" aria-label={t('Report builder')}>
       <div className="ab-widget-head">
-        <h2 className="ab-h">{initial ? 'Edit custom report' : 'New custom report'}</h2>
+        <h2 className="ab-h">{initial ? t('Edit custom report') : t('New custom report')}</h2>
       </div>
       <p className="ab-sub">{t('Pick a table, filter it, group it and choose how to draw it. Nothing is typed into a query.')}</p>
 
@@ -56,8 +57,8 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
       <div className="ab-field">
         <label className="ab-label" htmlFor="ab-b-table">{t('Table')}</label>
         <select id="ab-b-table" className="ab-select" value={draft.table} onChange={(e) => change({ table: e.target.value })}>
-          {tableChoices.map((t) => (
-            <option key={t} value={t}>{REPORT_TABLES[t]?.label || t}</option>
+          {tableChoices.map((id) => (
+            <option key={id} value={id}>{REPORT_TABLES[id] ? shown(REPORT_TABLES[id].label) : id}</option>
           ))}
         </select>
         {!usableTables.length && <span className="ab-hint">{t('No ticket table is available to you.')}</span>}
@@ -68,14 +69,14 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
         {FILTER_PRESETS.filter((p) => !p.exclusive).map((p) => (
           <label key={p.id} className="ab-check">
             <input type="checkbox" checked={draft.presets.includes(p.id)} onChange={() => togglePreset(p.id)} />
-            <span>{p.label}</span>
+            <span>{shown(p.label)}</span>
           </label>
         ))}
         <label className="ab-label" htmlFor="ab-b-window">{t('Opened')}</label>
         <select id="ab-b-window" className="ab-select" value={windowValue} onChange={(e) => setWindow(e.target.value)}>
           <option value="">{t('At any time')}</option>
           {FILTER_PRESETS.filter((p) => p.exclusive).map((p) => (
-            <option key={p.id} value={p.id}>{p.label.replace('Opened in', 'In')}</option>
+            <option key={p.id} value={p.id}>{t('In the last {days} days', { days: Number(p.id.split('_')[1]) })}</option>
           ))}
         </select>
       </fieldset>
@@ -84,7 +85,7 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
         <label className="ab-label" htmlFor="ab-b-group">{t('Group by')}</label>
         <select id="ab-b-group" className="ab-select" value={draft.groupBy} onChange={(e) => change({ groupBy: e.target.value })}>
           {GROUP_BY.map((g) => (
-            <option key={g.id} value={g.id}>{g.label}</option>
+            <option key={g.id} value={g.id}>{shown(g.label)}</option>
           ))}
         </select>
       </div>
@@ -93,7 +94,7 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
         <label className="ab-label" htmlFor="ab-b-metric">{t('Measure')}</label>
         <select id="ab-b-metric" className="ab-select" value={draft.metric} onChange={(e) => change({ metric: e.target.value })}>
           {METRICS.map((m) => (
-            <option key={m.id} value={m.id} disabled={timeGroup && m.id !== 'count'}>{m.label}</option>
+            <option key={m.id} value={m.id} disabled={timeGroup && m.id !== 'count'}>{shown(m.label)}</option>
           ))}
         </select>
         {draft.metric !== 'count' && <span className="ab-hint">{t('Averages are worked out from up to 3000 tickets read here; the report says how many.')}</span>}
@@ -103,14 +104,14 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
         <label className="ab-label" htmlFor="ab-b-chart">{t('Chart')}</label>
         <select id="ab-b-chart" className="ab-select" value={draft.chart} onChange={(e) => change({ chart: e.target.value })}>
           {CHARTS.map((c) => (
-            <option key={c.id} value={c.id} disabled={(c.id === 'line' && !timeGroup) || (c.id === 'donut' && timeGroup)}>{c.label}</option>
+            <option key={c.id} value={c.id} disabled={(c.id === 'line' && !timeGroup) || (c.id === 'donut' && timeGroup)}>{shown(c.label)}</option>
           ))}
         </select>
       </div>
 
       <div className="ab-row">
         <button type="button" className="ab-btn" onClick={() => setShown(draft)}>{t('Preview')}</button>
-        <button type="button" className="ab-btn ab-btn-primary" onClick={() => onSave(draft)}>{initial ? 'Save changes' : 'Add to dashboard'}</button>
+        <button type="button" className="ab-btn ab-btn-primary" onClick={() => onSave(draft)}>{initial ? t('Save changes') : t('Add to dashboard')}</button>
         <button type="button" className="ab-btn ab-btn-quiet" onClick={onCancel}>{t('Cancel')}</button>
       </div>
 

@@ -3,6 +3,7 @@
 // Reports read only aggregates and a few columns per table, always with the person's own session (ACLs decide what comes
 // back). This is the whole list of columns they ever ask for; nothing here is sent anywhere.
 import { AT_RISK_PERCENT } from '../myDay.js';
+import { tm } from './say.js';
 
 /**
  * The ticket tables a report can cover. `resolvedFields` are tried in order: the first one that exists on the instance is
@@ -10,42 +11,42 @@ import { AT_RISK_PERCENT } from '../myDay.js';
  */
 export const REPORT_TABLES = Object.freeze({
   incident: {
-    label: 'Incidents',
+    label: tm('Incidents'),
     singular: 'incident',
     resolvedFields: ['resolved_at', 'closed_at'],
     quality: { category: 'category', ci: 'cmdb_ci', caller: 'caller_id', reopen: 'reopen_count', reassign: 'reassignment_count' },
     optional: ['reassignment_count', 'reopen_count', 'resolved_at', 'closed_at', 'category', 'cmdb_ci', 'caller_id'],
   },
   sc_req_item: {
-    label: 'Requested items',
+    label: tm('Requested items'),
     singular: 'requested item',
     resolvedFields: ['closed_at'],
     quality: {},
     optional: ['closed_at', 'reassignment_count'],
   },
   sc_task: {
-    label: 'Catalog tasks',
+    label: tm('Catalog tasks'),
     singular: 'catalog task',
     resolvedFields: ['closed_at'],
     quality: {},
     optional: ['closed_at', 'reassignment_count'],
   },
   sn_customerservice_case: {
-    label: 'Cases',
+    label: tm('Cases'),
     singular: 'case',
     resolvedFields: ['resolved_at', 'closed_at'],
     quality: { category: 'category' },
     optional: ['reassignment_count', 'resolved_at', 'closed_at', 'category'],
   },
   problem: {
-    label: 'Problems',
+    label: tm('Problems'),
     singular: 'problem',
     resolvedFields: ['resolved_at', 'closed_at'],
     quality: { category: 'category', ci: 'cmdb_ci' },
     optional: ['reassignment_count', 'resolved_at', 'closed_at', 'category', 'cmdb_ci'],
   },
   change_request: {
-    label: 'Changes',
+    label: tm('Changes'),
     singular: 'change',
     resolvedFields: ['closed_at'],
     quality: { category: 'category', ci: 'cmdb_ci' },
@@ -53,7 +54,7 @@ export const REPORT_TABLES = Object.freeze({
   },
   // The work a change is split into: what implementers and change leads hold day to day.
   change_task: {
-    label: 'Change tasks',
+    label: tm('Change tasks'),
     singular: 'change task',
     resolvedFields: ['closed_at'],
     quality: {},
@@ -63,7 +64,7 @@ export const REPORT_TABLES = Object.freeze({
   // person works with the HR profile and the organisation's policy allows HR content (the panel asks with allowSensitive, the
   // content script lowers that unless the managed policy agrees). Never offered to coaching.
   sn_hr_core_case: {
-    label: 'HR cases',
+    label: tm('HR cases'),
     singular: 'HR case',
     resolvedFields: ['closed_at'],
     quality: {},
@@ -97,11 +98,11 @@ export const TICKET_FIELDS = Object.freeze(['sys_id', 'number', 'short_descripti
 
 // Ageing buckets by whole days since a ticket was opened. `from` is inclusive, `to` exclusive (null = no end).
 export const AGE_BUCKETS = Object.freeze([
-  { key: 'd0-1', label: '0-1 days', from: 0, to: 2 },
-  { key: 'd2-3', label: '2-3 days', from: 2, to: 4 },
-  { key: 'd4-7', label: '4-7 days', from: 4, to: 8 },
-  { key: 'd8-14', label: '8-14 days', from: 8, to: 15 },
-  { key: 'd15+', label: '15+ days', from: 15, to: null },
+  { key: 'd0-1', label: tm('0-1 days'), from: 0, to: 2 },
+  { key: 'd2-3', label: tm('2-3 days'), from: 2, to: 4 },
+  { key: 'd4-7', label: tm('4-7 days'), from: 4, to: 8 },
+  { key: 'd8-14', label: tm('8-14 days'), from: 8, to: 15 },
+  { key: 'd15+', label: tm('15+ days'), from: 15, to: null },
 ]);
 
 export const LIMITS = Object.freeze({

@@ -10,9 +10,11 @@
 import { toCsv } from '../lib/export.js';
 import { detectProseNames } from '../pii/names.js';
 import { resolveOverlaps } from '../pii/detectors.js';
+import { t } from '../i18n/core.js';
 
 const EMAIL_RE = /[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const KEEP = new Set(['', '(unassigned)', '(no group)', 'n/a', 'Unknown']);
+// What a person column holds when there is nobody: kept as it is, not turned into "Person N" (in English and in the language of the panel).
+const keepWords = () => new Set(['', '(unassigned)', '(no group)', 'n/a', 'Unknown', t('(unassigned)'), t('(no group)'), t('n/a'), t('Unknown')]);
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const text = (value) => (value === null || value === undefined ? '' : String(value));
@@ -25,6 +27,7 @@ const nameKey = (name) => name.replace(/\s+/g, ' ').trim().toLowerCase();
  *   names with no cue in front of them (see src/pii/names.js).
  */
 export function maskTables(tables, { mode = 'standard' } = {}) {
+  const KEEP = keepWords();
   const people = new Map(); // lower-cased trimmed name -> "Person N"
   const personOf = (name) => {
     const key = nameKey(name);

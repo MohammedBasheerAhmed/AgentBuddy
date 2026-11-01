@@ -5,12 +5,14 @@ import { isAiReady } from './aiReady.js';
 import { plainError } from './ask.js';
 import { firstRunSteps } from './firstRun.js';
 import { useActiveInstances, useSiteCheck } from './usePage.js';
-import { t } from '../i18n/index.js';
+import { t, tm, t as tr } from '../i18n/index.js';
+import { tx } from '../i18n/jsx.jsx';
 
 // What the browser said when it did not turn the site on, and the next step. A refused prompt and a prompt that never appeared (an
 // organisation's browser policy can block site access) look the same from here, so both are named.
-export const REFUSED_TEXT =
-  'The browser did not turn Agent Buddy on for this site. Press the button again and choose Allow. If no question appears, your IT team may block it: ask them, or add the address in Settings.';
+export const REFUSED_TEXT = tm(
+  'The browser did not turn Agent Buddy on for this site. Press the button again and choose Allow. If no question appears, your IT team may block it: ask them, or add the address in Settings.',
+);
 
 /**
  * Turn Agent Buddy on for the site of the active tab: one button straight from the click (the browser asks for the site), then the
@@ -37,7 +39,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
         granted = false; // a build with fixed sites, or a browser policy that blocks the prompt
       }
       if (!granted) {
-        setError(REFUSED_TEXT);
+        setError(tr(REFUSED_TEXT));
         return;
       }
       const answer = await chrome.runtime.sendMessage({ type: MSG.ENABLE_INSTANCE, origin: page.origin });
@@ -67,7 +69,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
     return (
       <div className="ab-turnon">
         <p className="ab-sub">
-          Agent Buddy reads only what you can already see on <span className="ab-mono">{host}</span>, including its portal pages. Nothing is written to ServiceNow.
+          {tx('Agent Buddy reads only what you can already see on {host}, including its portal pages. Nothing is written to ServiceNow.', { host: <span className="ab-mono">{host}</span> })}
         </p>
         <div className="ab-row">
           <button type="button" className={`ab-btn${primary ? ' ab-btn-primary' : ''}`} disabled={busy} onClick={enable}>
@@ -81,11 +83,11 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
   return (
     <div className="ab-turnon">
       <p className="ab-sub">
-        {verdict === 'other' ? 'This does not look like ServiceNow.' : 'Agent Buddy could not check this page.'} Open your ServiceNow instance in this tab, then click
-        the Agent Buddy button in the browser toolbar.
+        {verdict === 'other' ? t('This does not look like ServiceNow.') : t('Agent Buddy could not check this page.')}{' '}
+        {t('Open your ServiceNow instance in this tab, then click the Agent Buddy button in the browser toolbar.')}
       </p>
       <p className="ab-hint ab-turnon-anyway">
-        Is <span className="ab-mono">{host}</span> your ServiceNow on its own web address?{' '}
+        {tx('Is {host} your ServiceNow on its own web address?', { host: <span className="ab-mono">{host}</span> })}{' '}
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={busy} onClick={enable}>
           {t('Turn on anyway')}
         </button>
@@ -113,8 +115,8 @@ export default function SetupView({ page, eff, lastSeen = null, onChanged = () =
         <h2 className="ab-h">{t('Open a ticket')}</h2>
         <p className="ab-sub">
           {page.surface === 'portal'
-            ? 'Open a ticket, request or case on this portal and Agent Buddy offers help for it here.'
-            : 'Open an incident, request, catalog task or case and Agent Buddy offers help for it here.'}
+            ? t('Open a ticket, request or case on this portal and Agent Buddy offers help for it here.')
+            : t('Open an incident, request, catalog task or case and Agent Buddy offers help for it here.')}
         </p>
         {onOpenScreen && (
           <div className="ab-row">

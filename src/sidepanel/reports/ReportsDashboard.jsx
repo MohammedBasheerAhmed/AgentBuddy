@@ -24,12 +24,13 @@ import BuilderEditor from './BuilderEditor.jsx';
 import MoreMenu from './MoreMenu.jsx';
 import ExportPanel from './ExportPanel.jsx';
 import { dashboardNotes } from './SectionShell.jsx';
-import { t } from '../../i18n/index.js';
+import { isolate, t, tm, tn } from '../../i18n/index.js';
+import { shown } from '../../reports/shown.js';
 
 const AUTO_MS = 5 * 60 * 1000;
 // Coming back to the Team screen after this long reads the numbers again (TRACKER.md 2.4: fast and honest).
 const STALE_MS = 5 * 60 * 1000;
-const SESSION_TEXT = 'Your ServiceNow session has ended. Sign in again in the ServiceNow tab, then press Try again.';
+const sessionText = () => t('Your ServiceNow session has ended. Sign in again in the ServiceNow tab, then press Try again.');
 
 const readAuto = () => {
   try {
@@ -44,12 +45,12 @@ export const hrReportsAllowed = (eff) => activeProfiles(eff).includes('hr') && e
 
 /** The scope chip's words: 'Mine', 'My groups (3)', 'My groups (25 of 41)', 'Chosen groups (2)'. Pure. */
 export function scopeChipText(scope, context) {
-  if (!scope || scope.kind === 'mine') return 'Mine';
-  if (scope.kind === 'chosen') return `Chosen groups (${scope.groupIds?.length || 0})`;
+  if (!scope || scope.kind === 'mine') return t('Mine');
+  if (scope.kind === 'chosen') return t('Chosen groups ({count})', { count: scope.groupIds?.length || 0 });
   const n = context?.groups?.length;
-  if (!Number.isFinite(n)) return 'My groups';
+  if (!Number.isFinite(n)) return t('My groups');
   const total = context?.groupsTotal;
-  return `My groups (${Number.isFinite(total) && total > n ? `${n} of ${total}` : n})`;
+  return Number.isFinite(total) && total > n ? t('My groups ({n} of {total})', { n, total }) : t('My groups ({n})', { n });
 }
 
 /** Name editing keeps its own text until Enter or leaving the field, so the field can be emptied while typing. */
@@ -67,7 +68,7 @@ function NameField({ value, onCommit, disabled }) {
 
 function WidgetTools({ index, count, onMove, onEdit, onRemove, label }) {
   return (
-    <div className="ab-widget-tools" role="group" aria-label={`Change ${label}`}>
+    <div className="ab-widget-tools" role="group" aria-label={t('Change {name}', { name: label })}>
       <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(-1)} disabled={index === 0}>{t('Move up')}</button>
       <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(1)} disabled={index === count - 1}>{t('Move down')}</button>
       {onEdit && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onEdit}>{t('Edit')}</button>}
@@ -117,8 +118,8 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
   const focus = layout === 'page';
 
   const tableList = context.data?.tables || [];
-  const usableIds = tableList.filter((t) => t.usable).map((t) => t.table);
-  const selected = dash ? (dash.tables ? dash.tables.filter((t) => usableIds.includes(t)) : usableIds) : [];
+  const usableIds = tableList.filter((x) => x.usable).map((x) => x.table);
+  const selected = dash ? (dash.tables ? dash.tables.filter((id) => usableIds.includes(id)) : usableIds) : [];
 
   const refresh = useCallback(async () => {
     setSessionLost(false);
@@ -137,14 +138,14 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
 
   // A section that is not on screen (another screen, or the AI Assist half) must not keep working: the timer runs only while shown.
   const sectionVisible = useSectionVisible();
-  const shown = sectionVisible && active !== false;
+  const onScreen = sectionVisible && active !== false;
   useEffect(() => {
-    if (!auto || !shown) return undefined;
+    if (!auto || !onScreen) return undefined;
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
     }, AUTO_MS);
     return () => clearInterval(timer);
-  }, [auto, shown, refresh]);
+  }, [auto, onScreen, refresh]);
 
   const toggleAuto = (on) => {
     setAuto(on);
@@ -236,11 +237,11 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
   const oldest = times.length ? Math.min(...times) : null;
 
   // Shown again after a while: read again, so what is on screen is not old news.
-  const wasShown = useRef(shown);
+  const wasShown = useRef(onScreen);
   useEffect(() => {
-    if (shown && !wasShown.current && oldest && Date.now() - oldest > STALE_MS) refresh();
-    wasShown.current = shown;
-  }, [shown, oldest, refresh]);
+    if (onScreen && !wasShown.current && oldest && Date.now() - oldest > STALE_MS) refresh();
+    wasShown.current = onScreen;
+  }, [onScreen, oldest, refresh]);
 
   if (disabled) {
     return (
@@ -257,10 +258,12 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
     ...(context.data?.zone?.source === 'browser' && context.data.zone.note ? [context.data.zone.note] : []),
     ...(dash.scope.kind === 'groups' && groupsNote ? [groupsNote] : []),
     ...dashboardNotes(loadedEntries, widgetIds),
-  ].filter((n, i, all) => n && all.indexOf(n) === i);
+  ]
+    .filter((n, i, all) => n && all.indexOf(n) === i)
+    .map(shown);
 
   const setup = (patch) => update((s) => setDashboardSetup(s, dash.id, patch));
-  const onTables = (list) => setup({ tables: list.length === usableIds.length && usableIds.every((t) => list.includes(t)) ? null : list });
+  const onTables = (list) => setup({ tables: list.length === usableIds.length && usableIds.every((id) => list.includes(id)) ? null : list });
   const missingPresets = PRESETS.filter((p) => !state.dashboards.some((d) => d.id === p.id));
   const editingWidget = editing?.widgetId ? dash.widgets.find((w) => w.id === editing.widgetId) : null;
 
@@ -268,21 +271,21 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
     const file = exportLayout(dash);
     if (!file) return;
     downloadText(layoutFileName(dash.name), JSON.stringify(file, null, 2), 'application/json;charset=utf-8');
-    say(`Layout of "${dash.name}" saved to your downloads. It holds no numbers and no tickets.`);
+    say(t('Layout of "{name}" saved to your downloads. It holds no numbers and no tickets.', { name: isolate(shown(dash.name)) }));
   };
   const loadLayout = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
     if (file.size > CAPS.file) {
-      say('The file is too big to be a dashboard layout.');
+      say(t('The file is too big to be a dashboard layout.'));
       return;
     }
     let text = '';
     try {
       text = await file.text();
     } catch {
-      say('The file could not be read.');
+      say(t('The file could not be read.'));
       return;
     }
     let outcome = null;
@@ -290,7 +293,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       outcome = importLayout(text, s);
       return outcome.ok ? outcome.state : s;
     });
-    say(outcome?.ok ? `Added "${outcome.name}". Its groups are checked against this instance when it loads.` : outcome?.reason || 'The file could not be loaded.');
+    say(outcome?.ok ? t('Added "{name}". Its groups are checked against this instance when it loads.', { name: isolate(outcome.name) }) : outcome?.reason || t('The file could not be loaded.'));
   };
   // Never a lock: the added dashboard is the person's own copy, to change or remove like any other.
   const addOrg = () => {
@@ -299,17 +302,17 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       outcome = addOrgDashboard(s, org);
       return outcome.ok ? outcome.state : s;
     });
-    say(outcome?.ok ? `Added "${outcome.name}", your organisation's dashboard. It is your own copy: change or remove it as you like.` : outcome?.reason || 'The dashboard could not be added.');
+    say(outcome?.ok ? t('Added "{name}", your organisation\'s dashboard. It is your own copy: change or remove it as you like.', { name: isolate(outcome.name) }) : outcome?.reason || t('The dashboard could not be added.'));
   };
 
   const menu = [
-    { id: 'refresh', label: 'Refresh', onSelect: refresh },
-    { id: 'auto', label: 'Refresh every 5 minutes', checked: auto, onSelect: () => toggleAuto(!auto) },
-    canEdit && { id: 'customize', label: customize ? 'Stop customizing' : 'Customize', onSelect: () => setCustomize((c) => !c) },
-    canEdit && offerOrgDashboard(state, org) && { id: 'org-dashboard', label: "Add your organisation's dashboard", onSelect: addOrg },
-    { id: 'export', label: 'Export…', onSelect: () => setExporting(true) },
-    { id: 'print', label: 'Print or save as PDF', onSelect: () => window.print() },
-    layout === 'panel' && { id: 'page', label: 'Open full page', onSelect: () => chrome.tabs.create({ url: chrome.runtime.getURL(`dashboard.html?tab=${page.tabId}`) }) },
+    { id: 'refresh', label: t('Refresh'), onSelect: refresh },
+    { id: 'auto', label: t('Refresh every 5 minutes'), checked: auto, onSelect: () => toggleAuto(!auto) },
+    canEdit && { id: 'customize', label: customize ? t('Stop customizing') : t('Customize'), onSelect: () => setCustomize((c) => !c) },
+    canEdit && offerOrgDashboard(state, org) && { id: 'org-dashboard', label: t('Add your organisation\'s dashboard'), onSelect: addOrg },
+    { id: 'export', label: t('Export…'), onSelect: () => setExporting(true) },
+    { id: 'print', label: t('Print or save as PDF'), onSelect: () => window.print() },
+    layout === 'panel' && { id: 'page', label: t('Open full page'), onSelect: () => chrome.tabs.create({ url: chrome.runtime.getURL(`dashboard.html?tab=${page.tabId}`) }) },
   ];
   const noTables = context.data && !selected.length;
   const hrWanted = activeProfiles(eff).includes('hr') && !hrOk;
@@ -318,7 +321,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
     <div className={`ab-dash ab-dash-${layout}`}>
       {sessionLost && (
         <div className="ab-note ab-note-warn ab-dash-session" role="alert">
-          <p>{SESSION_TEXT}</p>
+          <p>{sessionText()}</p>
           <button type="button" className="ab-btn ab-btn-sm" onClick={refresh}>{t('Try again')}</button>
         </div>
       )}
@@ -328,7 +331,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
           <span className="ab-chart-sr">{t('Dashboard')}</span>
           <select className="ab-select ab-select-quiet" value={dash.id} onChange={(e) => update((s) => setActive(s, e.target.value))}>
             {state.dashboards.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>{shown(d.name)}</option>
             ))}
           </select>
         </label>
@@ -339,9 +342,9 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       </div>
       <p className="ab-statusline" role="status">
         {notice ? `${notice} ` : ''}
-        {oldest ? `Read at ${clock(oldest)}` : 'Reading the numbers…'}
-        {oldest && selected.length ? ` · ${selected.length} ${selected.length === 1 ? 'table' : 'tables'}` : ''}
-        {auto ? ' · refreshes every 5 minutes' : ''}
+        {oldest ? t('Read at {time}', { time: clock(oldest) }) : t('Reading the numbers…')}
+        {oldest && selected.length ? ` · ${tn(selected.length, '{n} table', '{n} tables')}` : ''}
+        {auto ? ` · ${t('refreshes every 5 minutes')}` : ''}
       </p>
 
       {status === 'newer' && <p className="ab-note ab-note-warn">{t('Your saved dashboards were made by a newer version of Agent Buddy, so the ready-made ones are shown and nothing is saved.')}</p>}
@@ -356,7 +359,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
 
       {notes.length > 0 && (
         <details className="ab-details ab-dash-notes">
-          <summary>{notes.length === 1 ? '1 note about these numbers' : `${notes.length} notes about these numbers`}</summary>
+          <summary>{tn(notes.length, '{n} note about these numbers', '{n} notes about these numbers')}</summary>
           <ul className="ab-dash-notes-list">
             {notes.map((n) => (
               <li key={n}>{n}</li>
@@ -375,7 +378,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
               <span className="ab-chart-sr">{t('Section to add')}</span>
               <select className="ab-select" value={adding} onChange={(e) => setAdding(e.target.value)}>
                 {addableSections(policy).map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
+                  <option key={s.id} value={s.id}>{shown(s.label)}</option>
                 ))}
               </select>
             </label>
@@ -383,13 +386,13 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => setEditing({})} disabled={dash.widgets.length >= CAPS.widgets}>{t('Add custom report')}</button>
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => setCustomize(false)}>{t('Done')}</button>
           </div>
-          <p className="ab-hint">{sectionById(adding)?.description}</p>
+          <p className="ab-hint">{shown(sectionById(adding)?.description)}</p>
           <details className="ab-details">
             <summary>{t('More')}</summary>
             <div className="ab-row">
-              <button type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addDashboard(s, { name: 'New dashboard', scope: dash.scope }))} disabled={state.dashboards.length >= CAPS.dashboards}>{t('New dashboard')}</button>
+              <button type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addDashboard(s, { name: tm('New dashboard'), scope: dash.scope }))} disabled={state.dashboards.length >= CAPS.dashboards}>{t('New dashboard')}</button>
               {missingPresets.map((p) => (
-                <button key={p.id} type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addPresetDashboard(s, p.id))}>{t('Add "{name}"', { name: p.name })}</button>
+                <button key={p.id} type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addPresetDashboard(s, p.id))}>{t('Add "{name}"', { name: isolate(shown(p.name)) })}</button>
               ))}
               <button type="button" className="ab-btn ab-btn-sm" onClick={saveLayout}>{t('Save layout as a file')}</button>
               <button type="button" className="ab-btn ab-btn-sm" onClick={() => fileInput.current?.click()} disabled={state.dashboards.length >= CAPS.dashboards}>{t('Load a layout file')}</button>
@@ -397,7 +400,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
               {state.dashboards.length > 1 &&
                 (confirmRemove ? (
                   <>
-                    <span className="ab-hint">{t('Remove "{name}"?', { name: dash.name })}</span>
+                    <span className="ab-hint">{t('Remove "{name}"?', { name: isolate(shown(dash.name)) })}</span>
                     <button type="button" className="ab-btn ab-btn-danger ab-btn-sm" onClick={() => { update((s) => removeDashboard(s, dash.id)); setConfirmRemove(false); }}>{t('Yes, remove')}</button>
                     <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setConfirmRemove(false)}>{t('Keep it')}</button>
                   </>
@@ -422,12 +425,12 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
         />
       )}
 
-      {context.phase === 'error' && !context.data && context.code !== 'SESSION_EXPIRED' && <ErrorNote error={context.error} onRetry={refresh} />}
+      {context.phase === 'error' && !context.data && context.code !== 'SESSION_EXPIRED' && <ErrorNote error={shown(context.error)} onRetry={refresh} />}
       {context.phase === 'loading' && !context.data && <p className="ab-note" role="status">{t('Checking which tables you can read…')}</p>}
       {noTables && (
         <p className="ab-note ab-note-warn">
-          No ticket table is available for this dashboard. {usableIds.length ? 'Turn a table on under the scope above.' : 'You cannot read incidents, requests, cases, problems, changes or change tasks with your roles.'}
-          {hrWanted ? ' HR cases are shown when your organisation allows HR content in Agent Buddy.' : ''}
+          {t('No ticket table is available for this dashboard.')} {usableIds.length ? t('Turn a table on under the scope above.') : t('You cannot read incidents, requests, cases, problems, changes or change tasks with your roles.')}
+          {hrWanted ? ` ${t('HR cases are shown when your organisation allows HR content in Agent Buddy.')}` : ''}
         </p>
       )}
 
@@ -435,7 +438,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
         <div className="ab-widgets">
           {widgets.map((w) => {
             const section = w.type === 'section' ? sectionById(w.section) : null;
-            const label = w.type === 'builder' ? w.builder.title || 'custom report' : section?.label || 'section';
+            const label = w.type === 'builder' ? w.builder.title || t('custom report') : section ? shown(section.label) : t('section');
             const tools = customize && canEdit && (
               <WidgetTools
                 index={dash.widgets.indexOf(w)}
@@ -466,8 +469,8 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
               return (
                 <div key={w.id} className="ab-widget-slot">
                   {tools}
-                  <section className="ab-card ab-widget" aria-label={section.label}>
-                    <h2 className="ab-h">{section.label}</h2>
+                  <section className="ab-card ab-widget" aria-label={shown(section.label)}>
+                    <h2 className="ab-h">{shown(section.label)}</h2>
                     <p className="ab-hint">{t('This is under AI Assist now. Remove it from this dashboard.')}</p>
                   </section>
                 </div>
@@ -483,7 +486,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
             );
           })}
           {!dash.widgets.length && <p className="ab-sub">{t('This dashboard is empty. Choose Customize in the ⋯ menu to add sections.')}</p>}
-          {aiSections.length > 0 && <p className="ab-hint">{andList(aiSections)} {aiSections.length === 1 ? 'is' : 'are'} under AI Assist.</p>}
+          {aiSections.length > 0 && <p className="ab-hint">{tn(aiSections.length, '{list} is under AI Assist.', '{list} are under AI Assist.', { list: andList(aiSections.map(shown)) })}</p>}
         </div>
       )}
     </div>

@@ -9,7 +9,7 @@ import { LANGUAGES, REWRITE_PRESETS, buildComposePack, formReadRefusal, mergePeo
 import { currentFromPage, expectFromPage, matchesExpect, wrongRecordText } from '../../lib/fillable.js';
 import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, readRecordPeople, useFill } from './shared.js';
 import { AiBadge } from '../ui/primitives.jsx';
-import { t } from '../../i18n/index.js';
+import { formatNumber, isolate, t, tm, t as tr } from '../../i18n/index.js';
 
 const isRewriteFeature = (feature) => Boolean(feature?.id) && REWRITE_PRESETS.some((p) => p.featureId === feature.id);
 const SIMPLE = REWRITE_PRESETS.filter((p) => !p.needsLanguage);
@@ -47,15 +47,15 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
     try {
       const answer = await read(page.tabId, 'formValues', { names: [target] });
       const value = answer?.values?.[target] || '';
-      if (!answer?.available) setStatus({ kind: 'warn', text: 'Agent Buddy cannot read the form on this page (Workspace and portal pages keep it out of reach). Paste the text here instead.' });
-      else if (!value.trim()) setStatus({ kind: 'warn', text: `The ${field.label.toLowerCase()} field is empty. Type something in the form first, or paste the text here.` });
+      if (!answer?.available) setStatus({ kind: 'warn', text: t('Agent Buddy cannot read the form on this page (Workspace and portal pages keep it out of reach). Paste the text here instead.') });
+      else if (!value.trim()) setStatus({ kind: 'warn', text: t('The {field} field is empty. Type something in the form first, or paste the text here.', { field: tr(field.label).toLowerCase() }) });
       else {
         setText(value);
         setProvenance({ field: target, expect: expectFromPage(page), number: page.record?.number || '' });
-        setStatus({ kind: 'ok', text: `Took the ${field.label.toLowerCase()} from the form.` });
+        setStatus({ kind: 'ok', text: t('Took the {field} from the form.', { field: tr(field.label).toLowerCase() }) });
       }
     } catch (err) {
-      setStatus({ kind: 'danger', text: err?.message || 'The form could not be read. Paste the text here instead.' });
+      setStatus({ kind: 'danger', text: err?.message || t('The form could not be read. Paste the text here instead.') });
     } finally {
       setReading(false);
     }
@@ -66,7 +66,12 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
     if (!feature || !available || !hasText) return;
     // Text read from a form belongs to that record: another record's policy (or HR gate) would not have applied to it.
     if (provenance && !matchesExpect(provenance.expect, currentFromPage(page))) {
-      setStatus({ kind: 'warn', text: `This text was read from ${provenance.number || 'another record'}. Open that ticket again, or paste the text here.` });
+      setStatus({
+        kind: 'warn',
+        text: provenance.number
+          ? t('This text was read from {number}. Open that ticket again, or paste the text here.', { number: isolate(provenance.number) })
+          : t('This text was read from another record. Open that ticket again, or paste the text here.'),
+      });
       return;
     }
     setMade({ expect: expectFromPage(page), number: page.record?.number || '' });
@@ -78,7 +83,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
       // their names are masked precisely; the text itself is never in a prompt.
       getPack: async () => {
         const known = await readRecordPeople(page, eff);
-        if (!known.ok) setStatus({ kind: 'warn', text: "The ticket's people could not be read, so only the names you list are hidden. Check the preview." });
+        if (!known.ok) setStatus({ kind: 'warn', text: t("The ticket's people could not be read, so only the names you list are hidden. Check the preview.") });
         // The pack carries the real table of this page and the form field the text came from, so the table policy, the HR gate
         // and blockedFields apply to it like to any action on this record.
         return buildComposePack({ text, people: mergePeople(known.people, peopleFromNames(names)), table: pageTable(page), field: provenance?.field || 'text' });
@@ -94,10 +99,10 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
         type="button"
         className="ab-btn ab-btn-sm"
         disabled={!aiReady || !hasText || !available || run.busy}
-        title={available ? '' : 'Switched off by your organisation.'}
+        title={available ? '' : t('Switched off by your organisation.')}
         onClick={() => go(preset)}
       >
-        {label || preset.label}
+        {label || tr(preset.label)}
       </button>
     );
   };
@@ -109,7 +114,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
 
   return (
     <div className="ab-compose-stack">
-      {showKeyNote && <AiKeyNote eff={eff} what="this" />}
+      {showKeyNote && <AiKeyNote eff={eff} what={tm('this')} />}
 
       <section className="ab-compose-input" aria-label={t('Text to rewrite')}>
         <div className="ab-field">
@@ -126,7 +131,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
             }}
             placeholder={t('Paste or type the text here')}
           />
-          <span className="ab-hint">{text.length.toLocaleString()} of {MAX_FORM_TEXT.toLocaleString()} characters</span>
+          <span className="ab-hint">{t('{count} of {max} characters', { count: formatNumber(text.length), max: formatNumber(MAX_FORM_TEXT) })}</span>
         </div>
 
         <div className="ab-field">
@@ -134,7 +139,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
           <div className="ab-row">
             <select id="ab-rewrite-field" className="ab-select ab-compose-select" value={target} onChange={(e) => setTarget(e.target.value)}>
               {FORM_FIELDS.map((f) => (
-                <option key={f.name} value={f.name}>{f.label}</option>
+                <option key={f.name} value={f.name}>{tr(f.label)}</option>
               ))}
             </select>
             <button type="button" className="ab-btn ab-btn-sm" disabled={reading} onClick={useForm}>
@@ -154,7 +159,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
         </div>
 
         <div className="ab-label ab-write-ailabel">
-          Rewrite it <AiBadge title={'Sends the masked text to the AI you chose, after a preview.'} />
+          {t('Rewrite it')} <AiBadge title={t('Sends the masked text to the AI you chose, after a preview.')} />
         </div>
         <div className="ab-row ab-compose-presets" role="group" aria-label={t('Rewrite presets')}>
           {SIMPLE.map((p) => button(p))}
@@ -163,14 +168,14 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
           <label className="ab-sub" htmlFor="ab-rewrite-language">{t('Language')}</label>
           <select id="ab-rewrite-language" className="ab-select ab-compose-select" value={language} onChange={(e) => setLanguage(e.target.value)}>
             {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>{l.name}</option>
+              <option key={l.code} value={l.code}>{tr(l.name)}</option>
             ))}
           </select>
-          {WITH_LANGUAGE.map((p) => button(p, p.id === 'translate' ? 'Translate' : 'Bilingual'))}
+          {WITH_LANGUAGE.map((p) => button(p, p.id === 'translate' ? t('Translate') : t('Bilingual')))}
         </div>
       </section>
 
-      <RunPanel run={run} eff={eff} page={page} readingText="Getting ready…" />
+      <RunPanel run={run} eff={eff} page={page} readingText={t('Getting ready…')} />
 
       {showResult && (
         <RewriteResultActions
@@ -203,25 +208,26 @@ export function RewriteResultActions({ field, fill, made, wrongRecord, hints, on
     <section className="ab-card ab-compose-actions" aria-label={t('Use the rewrite')}>
       <h3 className="ab-h">{t('Use it in the form')}</h3>
       <p className="ab-hint">
-        Goes into: {field.label}
-        {made?.number ? ` of ${made.number}` : ''}. Change the field above if you need another one.
+        {made?.number
+          ? t('Goes into: {field} of {number}. Change the field above if you need another one.', { field: tr(field.label), number: isolate(made.number) })
+          : t('Goes into: {field}. Change the field above if you need another one.', { field: tr(field.label) })}
       </p>
       <ReviewHints hints={hints} />
       {wrongRecord && <p className="ab-note ab-note-warn" role="status">{wrongRecordText(made)}</p>}
       <div className="ab-row">
         {!field.singleLine && (
           <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={fill.busy || wrongRecord || Boolean(fill.inserted[`${field.name}:append`])} onClick={() => onPut('append')}>
-            {fill.inserted[`${field.name}:append`] ? 'Inserted' : 'Add below'}
+            {fill.inserted[`${field.name}:append`] ? t('Inserted') : t('Add below')}
           </button>
         )}
         <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy || wrongRecord || Boolean(fill.inserted[`${field.name}:replace`])} onClick={() => onPut('replace')}>
-          {fill.inserted[`${field.name}:replace`] ? 'Inserted' : 'Replace what is in the form'}
+          {fill.inserted[`${field.name}:replace`] ? t('Inserted') : t('Replace what is in the form')}
         </button>
         <button type="button" className="ab-btn ab-btn-sm ab-btn-quiet" disabled={fill.busy} onClick={onUseAsText}>
           {t('Use as my text')}
         </button>
       </div>
-      <p className="ab-hint">{field.singleLine ? 'This replaces what is in the form: it is a one-line field.' : 'This replaces what is in the form if you choose Replace. Add below keeps it.'}</p>
+      <p className="ab-hint">{field.singleLine ? t('This replaces what is in the form: it is a one-line field.') : t('This replaces what is in the form if you choose Replace. Add below keeps it.')}</p>
       <FillFeedback fill={fill} />
       <p className="ab-hint">{t('Nothing is saved or sent. You press Save in the form yourself.')}</p>
     </section>

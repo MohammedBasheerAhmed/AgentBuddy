@@ -3,6 +3,7 @@
 // Pure: the pack is passed in, nothing is read here.
 
 import { BUILTIN_VARIABLES, buildVariables, listVariables, renderSnippet } from './render.js';
+import { t, t as tr } from '../i18n/index.js';
 
 export const KNOWN_VARIABLE_NAMES = Object.freeze(BUILTIN_VARIABLES.map((v) => v.name));
 
@@ -12,13 +13,14 @@ export const KNOWN_VARIABLE_NAMES = Object.freeze(BUILTIN_VARIABLES.map((v) => v
  */
 export const SNIPPET_FEATURE = 'snippet-fill';
 
-// The example column of BUILTIN_VARIABLES as the nested object renderSnippet reads.
+// The example column of BUILTIN_VARIABLES as the nested object renderSnippet reads (the examples that are words in the panel's language).
 function exampleVariables() {
   const vars = {};
   for (const v of BUILTIN_VARIABLES) {
     const [head, tail] = v.name.split('.');
-    if (tail === undefined) vars[head] = v.example;
-    else (vars[head] = vars[head] || {})[tail] = v.example;
+    const example = tr(v.example);
+    if (tail === undefined) vars[head] = example;
+    else (vars[head] = vars[head] || {})[tail] = example;
   }
   return vars;
 }
@@ -37,20 +39,21 @@ export function previewSnippet(body, { pack = null, agent = null, now, examples 
   return { text, missing, source: examples ? 'examples' : 'record' };
 }
 
-const HINTS = [
-  [/^caller\./, 'No caller is known for this record.'],
-  [/^agent\./, 'Your name is not available on this page.'],
-  [/^assigned_to\./, 'The record is not assigned to anyone.'],
-  [/^sla\./, 'The record has no open service level.'],
-  [/^(number|short_description|state|priority)$/, 'The record has no value for this.'],
-];
+// Why a known variable has no value, said in the panel's language.
+function missingHint(name) {
+  if (/^caller\./.test(name)) return t('No caller is known for this record.');
+  if (/^agent\./.test(name)) return t('Your name is not available on this page.');
+  if (/^assigned_to\./.test(name)) return t('The record is not assigned to anyone.');
+  if (/^sla\./.test(name)) return t('The record has no open service level.');
+  if (/^(number|short_description|state|priority)$/.test(name)) return t('The record has no value for this.');
+  return t('There is no value for it.');
+}
 
 /** One plain line per missing variable, so none is dropped silently. */
 export function describeMissing(names) {
   return (Array.isArray(names) ? names : []).map((name) => {
-    if (!KNOWN_VARIABLE_NAMES.includes(name)) return { name, hint: 'Agent Buddy does not know this variable. Check the spelling, or add a fallback after a bar: {{name | fallback}}.' };
-    const hint = HINTS.find(([re]) => re.test(name));
-    return { name, hint: hint ? hint[1] : 'There is no value for it.' };
+    if (!KNOWN_VARIABLE_NAMES.includes(name)) return { name, hint: t('Agent Buddy does not know this variable. Check the spelling, or add a fallback after a bar: {example}.', { example: '{{name | fallback}}' }) };
+    return { name, hint: missingHint(name) };
   });
 }
 

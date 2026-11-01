@@ -6,6 +6,7 @@ import { sendAnthropic } from './anthropic.js';
 import { assertSealed } from '../pii/seal.js';
 import { assertWithinCaps, recordCall } from './budget.js';
 import { AiError, DEFAULT_TIMEOUT_MS, LOCAL_TIMEOUT_MS } from './http.js';
+import { t } from '../i18n/index.js';
 
 // The sentence for an answer that stopped part-way (messages.js); the run pipeline shows it next to the answer.
 export { truncationNote } from './messages.js';
@@ -25,14 +26,14 @@ export async function sendChat(config, sealed, { host = '', kind = 'chat', skipB
   // First line of defence: anything that did not come through the firewall is refused before it can leave the browser.
   assertSealed(sealed);
   // 'custom' is "my own server". With no address the OpenAI adapter would fall back to api.openai.com and send the key there.
-  if (config.provider === 'custom' && !config.baseUrl) throw new AiError('Enter the address of your AI server in Settings first.', 'BAD_URL');
+  if (config.provider === 'custom' && !config.baseUrl) throw new AiError(t('Enter the address of your AI server in Settings first.'), 'BAD_URL');
   // An address that did not pass the check (or an Azure set-up that is not complete) leaves baseUrl empty: never let that fall back
   // to the vendor's public API with this key.
-  if (config.invalidBaseUrl) throw new AiError(`The AI address is not valid: ${config.invalidBaseUrl}`, 'BAD_URL');
-  if (config.azure && !config.model) throw new AiError('Enter the name of your Azure deployment in Settings first.', 'NO_MODEL');
+  if (config.invalidBaseUrl) throw new AiError(t('The AI address is not valid: {reason}', { reason: config.invalidBaseUrl }), 'BAD_URL');
+  if (config.azure && !config.model) throw new AiError(t('Enter the name of your Azure deployment in Settings first.'), 'NO_MODEL');
   // A spend cap that is reached refuses the call here too.
   if (!skipBudget) await assertWithinCaps(config.provider);
-  if (signal?.aborted) throw new AiError('Cancelled. Nothing was sent.', 'CANCELLED');
+  if (signal?.aborted) throw new AiError(t('Cancelled. Nothing was sent.'), 'CANCELLED');
   const limit = timeoutMs || (config.local ? LOCAL_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
   const common = { apiKey: config.apiKey, model: config.model, messages: sealed.messages, baseUrl: config.baseUrl || '', name: providerName(config), signal, timeoutMs: limit, fetchFn, sleep };
   const started = Date.now();

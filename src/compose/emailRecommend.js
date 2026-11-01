@@ -8,17 +8,19 @@
 // kind allows) just means that signal is not available, never an error.
 
 import { SYS_ID_RE, TABLE_RE, parseSnTime } from '../context/util.js';
+import { isolate, t, tm, tn } from '../i18n/index.js';
 
+// label and blurb are shown to the person: marked with tm() here, shown with t() on the property.
 export const EMAIL_TYPES = Object.freeze([
-  Object.freeze({ id: 'ask-info', featureId: 'email-ask-info', label: 'Ask for information', blurb: 'Ask the person for what is still needed, or remind them.' }),
-  Object.freeze({ id: 'status-update', featureId: 'email-status-update', label: 'Status update', blurb: 'Tell the person where things stand and what happens next.' }),
-  Object.freeze({ id: 'resolution', featureId: 'email-resolution', label: 'Resolution', blurb: 'Tell the person it is resolved and ask them to confirm.' }),
-  Object.freeze({ id: 'approval-nudge', featureId: 'email-approval-nudge', label: 'Approval reminder', blurb: 'Remind someone that an approval is still waiting.' }),
-  Object.freeze({ id: 'apology', featureId: 'email-apology', label: 'Apology for the wait', blurb: 'Say sorry for the delay and what is being done.' }),
-  Object.freeze({ id: 'closure', featureId: 'email-closure', label: 'Closure', blurb: 'Let the person know the ticket is closed.' }),
+  Object.freeze({ id: 'ask-info', featureId: 'email-ask-info', label: tm('Ask for information'), blurb: tm('Ask the person for what is still needed, or remind them.') }),
+  Object.freeze({ id: 'status-update', featureId: 'email-status-update', label: tm('Status update'), blurb: tm('Tell the person where things stand and what happens next.') }),
+  Object.freeze({ id: 'resolution', featureId: 'email-resolution', label: tm('Resolution'), blurb: tm('Tell the person it is resolved and ask them to confirm.') }),
+  Object.freeze({ id: 'approval-nudge', featureId: 'email-approval-nudge', label: tm('Approval reminder'), blurb: tm('Remind someone that an approval is still waiting.') }),
+  Object.freeze({ id: 'apology', featureId: 'email-apology', label: tm('Apology for the wait'), blurb: tm('Say sorry for the delay and what is being done.') }),
+  Object.freeze({ id: 'closure', featureId: 'email-closure', label: tm('Closure'), blurb: tm('Let the person know the ticket is closed.') }),
 ]);
 
-export const emailTypeById = (id) => EMAIL_TYPES.find((t) => t.id === id) || null;
+export const emailTypeById = (id) => EMAIL_TYPES.find((type) => type.id === id) || null;
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -42,8 +44,8 @@ function nameKey(name) {
 }
 
 function ms(when) {
-  const t = parseSnTime(text(when));
-  return Number.isFinite(t) ? t : null;
+  const at = parseSnTime(text(when));
+  return Number.isFinite(at) ? at : null;
 }
 
 // Which clock the notes' times are on. Read from sys_journal_field they are stored UTC; read from the record's own comments and
@@ -71,6 +73,24 @@ export function ago(milliseconds) {
   }
   const n = Math.floor(hours / 24);
   return `${n} days ago`;
+}
+
+// The same two phrases for the person to read ("3 hours ago" and "3 hours"). `ago` above stays English: it goes into the
+// status lines that are sent to the AI, which must not change with the language of the panel.
+function agoShown(milliseconds) {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '';
+  const hours = milliseconds / HOUR;
+  if (hours < 1) return t('less than an hour ago');
+  if (hours < 48) return tn(Math.round(hours), '{n} hour ago', '{n} hours ago');
+  return tn(Math.floor(hours / 24), '{n} day ago', '{n} days ago');
+}
+
+function spanShown(milliseconds) {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '';
+  const hours = milliseconds / HOUR;
+  if (hours < 1) return t('less than an hour');
+  if (hours < 48) return tn(Math.round(hours), '{n} hour', '{n} hours');
+  return tn(Math.floor(hours / 24), '{n} day', '{n} days');
 }
 
 // ---- Reading the pack ----------------------------------------------------------------------------------------------
@@ -108,7 +128,7 @@ function approvalState(pack, now) {
   const pending = list.filter((a) => a && /^(requested|waiting|pending)/i.test(text(a.state)));
   const rejected = list.some((a) => a && /reject/i.test(text(a.state)));
   const fieldValue = text(pack.fields?.approval);
-  const ages = pending.map((a) => ms(a.updated)).filter((t) => t !== null).map((t) => Math.max(0, now - t));
+  const ages = pending.map((a) => ms(a.updated)).filter((at) => at !== null).map((at) => Math.max(0, now - at));
   return {
     pending: pending.length || (list.length === 0 && /^(requested|waiting)/i.test(fieldValue) ? 1 : 0),
     rejected: rejected || (list.length === 0 && /reject/i.test(fieldValue)),
@@ -167,15 +187,21 @@ export function readSignals(pack, now = Date.now()) {
 function factsFor(s) {
   const facts = [];
   if (s.state) facts.push(s.hold ? `${s.state}: ${s.hold}` : s.state);
-  if (s.resolved && s.resolvedMs !== null) facts.push(`Resolved ${ago(s.resolvedMs)}`);
+  if (s.resolved && s.resolvedMs !== null) facts.push(t('Resolved {when}', { when: agoShown(s.resolvedMs) }));
   const m = s.message;
-  if (m.direction === 'none') facts.push('No message to the person yet');
-  else if (m.direction === 'customer') facts.push(m.ageMs !== null ? `They wrote ${ago(m.ageMs)}` : 'They wrote last');
-  else if (m.direction === 'agent') facts.push(m.ageMs !== null ? `You wrote ${ago(m.ageMs)}` : 'You wrote last');
-  if (s.approval.pending) facts.push(`${s.approval.pending} approval${s.approval.pending === 1 ? '' : 's'} waiting${s.approval.oldestMs !== null ? ` (${ago(s.approval.oldestMs).replace(' ago', '')})` : ''}`);
-  if (s.approval.rejected) facts.push('An approval was rejected');
-  if (s.sla.breached) facts.push('Service level missed');
-  else if (s.sla.atRisk) facts.push(`Service level ${Math.round(s.sla.worstPercent)}% used`);
+  if (m.direction === 'none') facts.push(t('No message to the person yet'));
+  else if (m.direction === 'customer') facts.push(m.ageMs !== null ? t('They wrote {when}', { when: agoShown(m.ageMs) }) : t('They wrote last'));
+  else if (m.direction === 'agent') facts.push(m.ageMs !== null ? t('You wrote {when}', { when: agoShown(m.ageMs) }) : t('You wrote last'));
+  if (s.approval.pending) {
+    facts.push(
+      s.approval.oldestMs !== null
+        ? tn(s.approval.pending, '{n} approval waiting ({span})', '{n} approvals waiting ({span})', { span: spanShown(s.approval.oldestMs) })
+        : tn(s.approval.pending, '{n} approval waiting', '{n} approvals waiting'),
+    );
+  }
+  if (s.approval.rejected) facts.push(t('An approval was rejected'));
+  if (s.sla.breached) facts.push(t('Service level missed'));
+  else if (s.sla.atRisk) facts.push(t('Service level {percent}% used', { percent: Math.round(s.sla.worstPercent) }));
   return facts;
 }
 
@@ -218,91 +244,100 @@ export function recommendEmails(pack, { now = Date.now(), max = MAX_PICKS, minSc
   const openDays = s.openMs === null ? null : s.openMs / DAY;
 
   if (s.closed) {
-    add('closure', s.cancelled ? 45 : 50, s.cancelled ? 'The ticket was cancelled. Tell the person so they are not left waiting.' : 'The ticket is closed. A short note confirms the outcome.');
+    add('closure', s.cancelled ? 45 : 50, s.cancelled ? t('The ticket was cancelled. Tell the person so they are not left waiting.') : t('The ticket is closed. A short note confirms the outcome.'));
   } else if (s.resolved) {
     // Has the person been told? Only an agent message written after the resolution counts.
     const told = m.direction === 'agent' && m.atMs !== null && s.resolvedAtMs !== null && m.atMs >= s.resolvedAtMs - HOUR;
     const maybeTold = m.direction === 'agent' && !told && (m.atMs === null || s.resolvedAtMs === null);
     if (m.direction === 'customer' && m.atMs !== null && s.resolvedAtMs !== null && m.atMs > s.resolvedAtMs) {
-      note = 'The person wrote after it was resolved. A reply (the Draft a reply action on This page) may fit better than a new email.';
+      note = t('The person wrote after it was resolved. A reply (the Draft a reply action on This page) may fit better than a new email.');
     }
-    if (told) add('resolution', 35, 'The person was already told after it was resolved. Send another only if needed.');
-    else if (maybeTold) add('resolution', 60, 'It is marked resolved. Check that the person knows.');
-    else add('resolution', 90, 'It is marked resolved and the person has not been told yet.');
+    if (told) add('resolution', 35, t('The person was already told after it was resolved. Send another only if needed.'));
+    else if (maybeTold) add('resolution', 60, t('It is marked resolved. Check that the person knows.'));
+    else add('resolution', 90, t('It is marked resolved and the person has not been told yet.'));
 
     if (s.resolvedMs !== null && s.resolvedMs >= 3 * DAY && m.direction !== 'customer') {
-      add('closure', 80, `Resolved ${ago(s.resolvedMs)} with no reply from the person. A closing note is due.`);
+      add('closure', 80, t('Resolved {when} with no reply from the person. A closing note is due.', { when: agoShown(s.resolvedMs) }));
     } else if (m.direction !== 'customer') {
-      add('closure', 45, 'When it is time to close, a closing note helps.');
+      add('closure', 45, t('When it is time to close, a closing note helps.'));
     }
   } else {
     // ---- waiting on the person ----
     if (s.waitingOnCustomer) {
       if (m.direction === 'agent') {
-        if (hours !== null && hours >= 48) add('ask-info', 85, `You are waiting for the person's reply. Your last message was ${ago(m.ageMs)}. A friendly reminder may help.`);
-        else if (hours !== null) add('ask-info', 55, `You are waiting for the person's reply (you wrote ${ago(m.ageMs)}). A reminder may be early.`);
-        else add('ask-info', 60, "You are waiting for the person's reply.");
+        if (hours !== null && hours >= 48) add('ask-info', 85, t("You are waiting for the person's reply. Your last message was {when}. A friendly reminder may help.", { when: agoShown(m.ageMs) }));
+        else if (hours !== null) add('ask-info', 55, t("You are waiting for the person's reply (you wrote {when}). A reminder may be early.", { when: agoShown(m.ageMs) }));
+        else add('ask-info', 60, t("You are waiting for the person's reply."));
       } else if (m.direction === 'none') {
-        add('ask-info', 70, 'The ticket is waiting for the person, but no message has gone to them yet.');
+        add('ask-info', 70, t('The ticket is waiting for the person, but no message has gone to them yet.'));
       } else if (m.direction === 'customer') {
-        add('status-update', 45, 'The person replied. Tell them what happens next.');
+        add('status-update', 45, t('The person replied. Tell them what happens next.'));
       } else {
-        add('ask-info', 55, "The ticket is waiting for the person's reply.");
+        add('ask-info', 55, t("The ticket is waiting for the person's reply."));
       }
     } else if (s.onHold) {
-      add('status-update', 75, `The ticket is on hold${s.hold ? ` (${s.hold})` : ''}. Let the person know why it is waiting.`);
+      add(
+        'status-update',
+        75,
+        s.hold
+          ? t('The ticket is on hold ({reason}). Let the person know why it is waiting.', { reason: isolate(s.hold) })
+          : t('The ticket is on hold. Let the person know why it is waiting.'),
+      );
     }
 
     // A thin description on a fresh ticket: ask before work starts.
     const thinKinds = ['incident', 'case', 'task'];
     if (!s.waitingOnCustomer && !s.onHold && thinKinds.includes(s.kind) && s.descriptionLength < 40 && m.direction === 'none') {
-      add('ask-info', 60, 'The description is short. Ask for what is needed to start.');
+      add('ask-info', 60, t('The description is short. Ask for what is needed to start.'));
     }
 
     // ---- approvals ----
     if (s.approval.pending) {
       const n = s.approval.pending;
-      const what = `${n} approval${n === 1 ? ' is' : 's are'}`;
-      if (s.approval.oldestMs !== null && s.approval.oldestMs >= 2 * DAY) add('approval-nudge', 85, `${what} still waiting after ${ago(s.approval.oldestMs).replace(' ago', '')}.`);
-      else if (s.approval.oldestMs !== null) add('approval-nudge', 45, `${what} waiting since ${ago(s.approval.oldestMs)}. A reminder may be early.`);
-      else add('approval-nudge', 65, `${what} still waiting.`);
+      if (s.approval.oldestMs !== null && s.approval.oldestMs >= 2 * DAY) {
+        add('approval-nudge', 85, tn(n, '{n} approval is still waiting after {span}.', '{n} approvals are still waiting after {span}.', { span: spanShown(s.approval.oldestMs) }));
+      } else if (s.approval.oldestMs !== null) {
+        add('approval-nudge', 45, tn(n, '{n} approval is waiting since {when}. A reminder may be early.', '{n} approvals are waiting since {when}. A reminder may be early.', { when: agoShown(s.approval.oldestMs) }));
+      } else {
+        add('approval-nudge', 65, tn(n, '{n} approval is still waiting.', '{n} approvals are still waiting.'));
+      }
     }
-    if (s.approval.rejected) add('status-update', 80, 'An approval was rejected. Tell the person what happens next.');
+    if (s.approval.rejected) add('status-update', 80, t('An approval was rejected. Tell the person what happens next.'));
 
     // ---- service levels ----
-    if (s.sla.breached) add('apology', 85, 'A service level target was missed. A short apology and a clear next step help.');
-    else if (s.sla.atRisk) add('status-update', 65, `A service level target is close (${Math.round(s.sla.worstPercent)}% used). A progress update helps.`);
+    if (s.sla.breached) add('apology', 85, t('A service level target was missed. A short apology and a clear next step help.'));
+    else if (s.sla.atRisk) add('status-update', 65, t('A service level target is close ({percent}% used). A progress update helps.', { percent: Math.round(s.sla.worstPercent) }));
 
     // ---- how long since the last message ----
     if (m.direction === 'customer' && hours !== null) {
-      if (hours >= 48) add('apology', 75, `The person wrote ${ago(m.ageMs)} and has had no reply.`);
-      else if (hours >= 24) add('status-update', 60, `The person wrote ${ago(m.ageMs)} and is waiting for an answer.`);
+      if (hours >= 48) add('apology', 75, t('The person wrote {when} and has had no reply.', { when: agoShown(m.ageMs) }));
+      else if (hours >= 24) add('status-update', 60, t('The person wrote {when} and is waiting for an answer.', { when: agoShown(m.ageMs) }));
     }
     if (m.direction === 'agent' && !s.waitingOnCustomer && hours !== null && hours >= 72) {
-      add('status-update', 70, `Your last message was ${ago(m.ageMs)}. A short update keeps the person informed.`);
+      add('status-update', 70, t('Your last message was {when}. A short update keeps the person informed.', { when: agoShown(m.ageMs) }));
     }
     if (m.direction === 'none' && !s.waitingOnCustomer && openDays !== null && openDays >= 1) {
-      add('status-update', 60, 'No message has gone to the person yet.');
+      add('status-update', 60, t('No message has gone to the person yet.'));
     }
     if (openDays !== null && openDays >= 14) {
       const days = Math.floor(openDays);
-      add('apology', 50, `The ticket has been open for ${days} days. Acknowledge the wait.`);
-      add('status-update', 65, `The ticket has been open for ${days} days. The person will want an update.`);
+      add('apology', 50, t('The ticket has been open for {days} days. Acknowledge the wait.', { days }));
+      add('status-update', 65, t('The ticket has been open for {days} days. The person will want an update.', { days }));
     }
-    add('status-update', 40, 'A short update keeps the person informed.');
+    add('status-update', 40, t('A short update keeps the person informed.'));
   }
 
   // The best reason per kind of email, strongest first; ties keep the order of EMAIL_TYPES.
   const best = new Map();
   for (const c of candidates) if (!best.has(c.id) || c.score > best.get(c.id).score) best.set(c.id, c);
-  const order = EMAIL_TYPES.map((t) => t.id);
+  const order = EMAIL_TYPES.map((type) => type.id);
   const picks = [...best.values()]
     .filter((c) => c.score >= minScore)
     .sort((a, b) => b.score - a.score || order.indexOf(a.id) - order.indexOf(b.id))
     .slice(0, Math.max(0, max))
     .map((c) => ({ ...emailTypeById(c.id), why: c.why, score: c.score }));
   const picked = new Set(picks.map((c) => c.id));
-  return { picks, others: EMAIL_TYPES.filter((t) => !picked.has(t.id)), facts: factsFor(s), note };
+  return { picks, others: EMAIL_TYPES.filter((type) => !picked.has(type.id)), facts: factsFor(s), note };
 }
 
 // ---- The draft ---------------------------------------------------------------------------------------------------

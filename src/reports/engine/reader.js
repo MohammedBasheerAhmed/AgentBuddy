@@ -6,6 +6,7 @@
 //   - honest failure results: a table you cannot read is { ok: false, status: 'denied' }, never a zero
 // A lost session is not a read problem: it is thrown so the whole report can say "log in again".
 import { classifyReadError, confirmEmptyIsReallyEmpty, STATUS } from '../../context/access.js';
+import { say, tm } from './say.js';
 import { raw, disp } from '../../context/util.js';
 import { LIMITS } from './constants.js';
 
@@ -25,7 +26,7 @@ export async function attempt(fn, what = 'this') {
     return { ok: true, value: await fn() };
   } catch (err) {
     if (isSessionExpired(err)) throw err;
-    if (err?.code === 'TIMEOUT' || err?.name === 'AbortError') return { ok: false, status: 'timeout', note: 'It took too long to read.' };
+    if (err?.code === 'TIMEOUT' || err?.name === 'AbortError') return { ok: false, status: 'timeout', note: tm('It took too long to read.') };
     if (err?.code === 'BLOCKED') return { ok: false, status: 'blocked', note: err.message };
     if (err?.code === 'NO_COLUMN') return { ok: false, status: 'error', note: err.message };
     const { status, note } = classifyReadError(err, what);
@@ -79,7 +80,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
   };
 
   const aborted = () => Boolean(signal?.aborted);
-  const timeoutError = () => new ReportError('TIMEOUT', 'It took too long to read this.');
+  const timeoutError = () => new ReportError('TIMEOUT', tm('It took too long to read this.'));
   // A shared request that stopped because ANOTHER section gave up on it (its own time limit), not because of this one.
   const gaveUp = (err) => err?.code === 'TIMEOUT' || err?.name === 'AbortError';
 
@@ -94,7 +95,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
 
   function check(table) {
     if (aborted()) throw timeoutError();
-    if (blocks(table)) throw new ReportError('BLOCKED', `Your organisation does not allow reports to read ${table}.`);
+    if (blocks(table)) throw new ReportError('BLOCKED', say(tm('Your organisation does not allow reports to read {table}.'), { table }));
   }
 
   const limited = (fn) => limiter.run(() => (abortion ? Promise.race([Promise.resolve().then(fn), abortion]) : fn()));
@@ -129,7 +130,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
         limited(async () => {
           const result = await deps.aggregate(table, { query, signal });
           const n = Number(result?.stats?.count);
-          if (!Number.isFinite(n)) throw new ReportError('BAD_ANSWER', `The instance returned no count for ${table}.`);
+          if (!Number.isFinite(n)) throw new ReportError('BAD_ANSWER', say(tm('The instance returned no count for {table}.'), { table }));
           return n;
         })
       );
@@ -150,7 +151,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
           const result = await deps.aggregate(table, { query, groupBy: columns, avgFields: avg, signal, ...(having ? { having } : {}) });
           const groups = normalizeGroups(result);
           // A column the table does not have may be ignored by the instance: the answer is then not grouped at all.
-          if (!groups) throw new ReportError('NO_COLUMN', `${columns.join(' and ')} is not available on ${table}.`);
+          if (!groups) throw new ReportError('NO_COLUMN', say(tm('{columns} is not available on {table}.'), { columns: columns.join(' and '), table }));
           return groups;
         })
       );
@@ -163,7 +164,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
         limited(async () => {
           const result = await deps.aggregate(table, { query, avgFields: columns, signal });
           const stats = result?.stats;
-          if (!stats) throw new ReportError('BAD_ANSWER', `The instance returned no average for ${table}.`);
+          if (!stats) throw new ReportError('BAD_ANSWER', say(tm('The instance returned no average for {table}.'), { table }));
           const out = { count: Number(stats.count) || 0 };
           columns.forEach((c) => {
             const n = Number(stats.avg?.[c]);
@@ -221,8 +222,8 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
      * zero from this table proves nothing (confirmEmptyIsReallyEmpty, as everywhere else in Agent Buddy).
      */
     async visibility(table) {
-      if (blocks(table)) return { status: 'blocked', note: `Your organisation does not allow reports to read ${table}.` };
-      if (aborted()) return { status: 'error', note: 'It took too long to read this.' };
+      if (blocks(table)) return { status: 'blocked', note: say(tm('Your organisation does not allow reports to read {table}.'), { table }) };
+      if (aborted()) return { status: 'error', note: tm('It took too long to read this.') };
       try {
         return await cached(`visible|${table}`, async () => {
           const reads = { queryTable: (t, q, f, o) => api.rows(t, q, f, o) };

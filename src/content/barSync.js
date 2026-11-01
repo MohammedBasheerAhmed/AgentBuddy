@@ -26,6 +26,7 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
   let table = '';
   let askedAt = NaN;
   let actions = [];
+  let language = ''; // what the worker said the bar should speak
 
   // One question to the worker. null when the answer ended the bar (the site is off).
   async function ask(message, at) {
@@ -36,6 +37,7 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
       return null;
     }
     checkedAt = at;
+    if (typeof answer?.language === 'string') language = answer.language;
     return answer || {};
   }
 
@@ -77,7 +79,8 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
       if (barOn !== true) return NOTHING;
     }
     const shown = { table: record.table, sysId: record.sysId };
-    return actions.length ? { status: 'shown', record: shown, actions } : { ...NOTHING, record: shown };
+    const said = language ? { language } : {};
+    return actions.length ? { status: 'shown', record: shown, actions, ...said } : { ...NOTHING, record: shown, ...said };
   }
 
   async function tick() {

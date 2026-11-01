@@ -3,18 +3,19 @@ import React from 'react';
 import { Facts, Hints, Section, Tag } from './Bits.jsx';
 import { t } from '../../i18n/index.js';
 
-const HEADLINE = {
-  done: ['Finished', 'ok'],
-  ended: ['Closed', 'warn'],
-  rejected: ['Rejected', 'danger'],
-  approval: ['Waiting for approval', 'warn'],
-  hold: ['On hold', 'warn'],
-  task: ['Waiting on work', ''],
-  progress: ['In progress', 'ok'],
-};
+const headlineFor = (state) =>
+  ({
+    done: [t('Finished'), 'ok'],
+    ended: [t('Closed'), 'warn'],
+    rejected: [t('Rejected'), 'danger'],
+    approval: [t('Waiting for approval'), 'warn'],
+    hold: [t('On hold'), 'warn'],
+    task: [t('Waiting on work'), ''],
+    progress: [t('In progress'), 'ok'],
+  })[state] || [t('Status'), ''];
 
 export function StatusCard({ status }) {
-  const [label, tone] = HEADLINE[status.state] || ['Status', ''];
+  const [label, tone] = headlineFor(status.state);
   return (
     <section className="ab-card ab-chk-status" aria-label={t('What it is waiting for')}>
       <div className="ab-row">
@@ -24,9 +25,9 @@ export function StatusCard({ status }) {
       <p className="ab-chk-line">{status.line}</p>
       <Facts
         rows={[
-          status.owner && { label: 'Who to ask', value: status.owner },
-          status.due && { label: 'Due', value: status.due.overdue ? `${status.due.text} (past due)` : status.due.text },
-          status.sla && { label: 'SLA', value: status.sla.text },
+          status.owner && { label: t('Who to ask'), value: status.owner },
+          status.due && { label: t('Due'), value: status.due.overdue ? t('{date} (past due)', { date: status.due.text }) : status.due.text },
+          status.sla && { label: t('SLA'), value: status.sla.text },
         ].filter(Boolean)}
         tight
       />
@@ -92,7 +93,7 @@ export function RequestBody({ view }) {
                   </span>
                   <span className="ab-row">
                     <Tag tone={r.done ? 'ok' : r.open ? '' : 'warn'}>{r.state}</Tag>
-                    <span className="ab-sub">{r.owner || 'not assigned'}</span>
+                    <span className="ab-sub">{r.owner || t('not assigned')}</span>
                     {r.due && <span className="ab-sub">{t('due {due}', { due: r.due })}</span>}
                   </span>
                 </li>

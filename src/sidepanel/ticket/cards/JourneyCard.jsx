@@ -5,7 +5,7 @@ import { relativeText } from '../../../insights/time.js';
 import { useRecordRead, useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ReadState } from './bits.jsx';
-import { t } from '../../../i18n/index.js';
+import { t, tn, isolate } from '../../../i18n/index.js';
 
 // N24, the ticket journey: opened, assigned and passed between groups, state changes, the conversation's key moments, SLA events,
 // resolved. Newest first, three then "Show all". The path between groups needs the field history, which many users may not read;
@@ -23,19 +23,23 @@ export default function JourneyCard({ page, eff, record, active, setSummary, set
   useReport(setSummary, journey ? journeySummary(journey) : '');
   useReport(setAttention, journey && journey.reassignments !== null && journey.reassignments >= 3 ? 'warn' : '');
 
-  if (!journey) return <ReadState state={ticket} what="this ticket" onRetry={ticket.reload} />;
+  if (!journey) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   const now = Date.now();
   const newestFirst = [...journey.events].reverse();
   return (
     <>
       {journey.path.length > 1 && (
         <p className="ab-ins-line">
-          Path: {journey.path.join(' > ')}
+          {t('Path: {path}', { path: isolate(journey.path.join(' > ')) })}
         </p>
       )}
       {(journey.reassignments !== null || journey.reopens) && (
         <p className="ab-hint">
-          {[journey.reassignments !== null && `Reassigned ${journey.reassignments} time${journey.reassignments === 1 ? '' : 's'}`, journey.reopens ? `reopened ${journey.reopens} time${journey.reopens === 1 ? '' : 's'}` : '', journey.now.group && `now with ${journey.now.group}${journey.now.owner ? ` (${journey.now.owner})` : ''}`]
+          {[
+            journey.reassignments !== null && tn(journey.reassignments, 'Reassigned {n} time', 'Reassigned {n} times'),
+            journey.reopens ? tn(journey.reopens, 'reopened {n} time', 'reopened {n} times') : '',
+            journey.now.group && (journey.now.owner ? t('now with {group} ({owner})', { group: isolate(journey.now.group), owner: isolate(journey.now.owner) }) : t('now with {group}', { group: isolate(journey.now.group) })),
+          ]
             .filter(Boolean)
             .join(' · ')}
         </p>
@@ -46,7 +50,7 @@ export default function JourneyCard({ page, eff, record, active, setSummary, set
           className="ab-ins-timeline"
           render={(e, i) => (
             <div key={`${e.kind}:${e.at}:${i}`} className="ab-ins-event">
-              <span className="ab-ins-when">{e.approx ? `about ${relativeText(e.at, now)}` : relativeText(e.at, now)}</span>
+              <span className="ab-ins-when">{e.approx ? t('about {when}', { when: relativeText(e.at, now) }) : relativeText(e.at, now)}</span>
               <span className="ab-ins-what">
                 {e.label}
                 {e.detail && <span className="ab-ins-detail"> {e.detail}</span>}

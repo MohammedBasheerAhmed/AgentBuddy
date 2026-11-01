@@ -3,6 +3,7 @@
 
 import { parseSnTime } from '../context/util.js';
 import { TIME, agoText, shortSpan } from './time.js';
+import { t } from '../i18n/index.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -13,9 +14,9 @@ const text = (v) => (typeof v === 'string' ? v.trim() : '');
 export function changeTiming(change, now) {
   const start = parseSnTime(change?.startUtc);
   const end = parseSnTime(change?.endUtc);
-  if (Number.isFinite(end) && end <= now) return { when: 'past', line: `ended ${agoText(now - end)}`, at: end };
-  if (Number.isFinite(start) && start <= now) return { when: 'now', line: 'in its window now', at: start };
-  if (Number.isFinite(start)) return { when: 'next', line: `starts in ${shortSpan(start - now)}`, at: start };
+  if (Number.isFinite(end) && end <= now) return { when: 'past', line: t('ended {ago}', { ago: agoText(now - end) }), at: end };
+  if (Number.isFinite(start) && start <= now) return { when: 'now', line: t('in its window now'), at: start };
+  if (Number.isFinite(start)) return { when: 'next', line: t('starts in {span}', { span: shortSpan(start - now) }), at: start };
   return { when: 'unknown', line: '', at: NaN };
 }
 
@@ -30,7 +31,7 @@ export function arrangeChanges(changes, now) {
     .map((c) => ({ ...c, timing: changeTiming(c, now) }))
     .sort((a, b) => order[a.timing.when] - order[b.timing.when] || (a.timing.when === 'next' ? a.timing.at - b.timing.at : b.timing.at - a.timing.at));
   const recent = items.filter((c) => c.timing.when === 'now' || (c.timing.when === 'past' && now - c.timing.at <= 3 * TIME.DAY)).length;
-  const summary = !items.length ? '' : recent ? `${recent} in the last 3 days` : `${items.length} nearby`;
+  const summary = !items.length ? '' : recent ? t('{n} in the last 3 days', { n: recent }) : t('{n} nearby', { n: items.length });
   return { items, recent, summary };
 }
 

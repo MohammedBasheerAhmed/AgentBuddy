@@ -7,8 +7,9 @@ import { mergeAccountCases, accountCasesFailed } from '../../domain/accountCases
 import { sectionPicker } from '../../domain/sections.js';
 import { notClosed } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
+import { t, tm } from '../../i18n/index.js';
 
-const workNotes = () => ({ field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' });
+const workNotes = () => ({ field: 'work_notes', get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes') });
 
 // ---- G1: HR case brief ---------------------------------------------------------------------------------------------
 //
@@ -34,8 +35,12 @@ const HR_PEOPLE = ['subject_person', 'opened_for', 'opened_by', 'assigned_to'];
 
 const hrCaseBrief = {
   id: 'hr-case-brief',
-  title: 'Brief me on this HR case',
-  description: 'Request type, status and due date, what was done, what is pending and the next steps. Needs Strict privacy mode.',
+  get title() {
+    return t('Brief me on this HR case');
+  },
+  get description() {
+    return t('Request type, status and due date, what was done, what is pending and the next steps. Needs Strict privacy mode.');
+  },
   wave: 2,
   kinds: ['hr_case'],
   group: 'understand',
@@ -72,8 +77,12 @@ const hrCaseBrief = {
 
 const accountBriefing = {
   id: 'account-briefing',
-  title: 'Brief me before the call',
-  description: 'Who the customer is, their entitlement, this case, the account\'s history and what to watch out for.',
+  get title() {
+    return t('Brief me before the call');
+  },
+  get description() {
+    return t('Who the customer is, their entitlement, this case, the account\'s history and what to watch out for.');
+  },
   wave: 2,
   kinds: ['case'],
   group: 'understand',
@@ -112,8 +121,12 @@ const accountBriefing = {
 
 const caseEngEscalation = {
   id: 'case-eng-escalation',
-  title: 'Draft an engineering escalation',
-  description: 'A bug-report style hand-off: summary, impact, environment, steps, evidence and what has been tried.',
+  get title() {
+    return t('Draft an engineering escalation');
+  },
+  get description() {
+    return t('A bug-report style hand-off: summary, impact, environment, steps, evidence and what has been tried.');
+  },
   wave: 3,
   kinds: ['case'],
   group: 'work',
@@ -148,8 +161,12 @@ export const PROBLEM_HEADINGS = ['Problem statement', 'Timeline', 'Probable caus
 
 const problemRca = {
   id: 'problem-rca',
-  title: 'Draft the problem statement and RCA',
-  description: 'Problem statement, timeline from the linked incidents, probable cause (as a hypothesis), workaround and fix options.',
+  get title() {
+    return t('Draft the problem statement and RCA');
+  },
+  get description() {
+    return t('Problem statement, timeline from the linked incidents, probable cause (as a hypothesis), workaround and fix options.');
+  },
   wave: 3,
   kinds: ['problem'],
   group: 'work',
@@ -157,9 +174,9 @@ const problemRca = {
   journal: 20,
   // One button per part of the answer: each fills one field and the person presses Save.
   insert: [
-    { field: 'description', label: 'Insert problem statement', fieldLabel: 'Description', pick: sectionPicker('Problem statement', PROBLEM_HEADINGS) },
-    { field: 'cause_notes', label: 'Insert probable cause', fieldLabel: 'Cause notes', pick: sectionPicker('Probable cause', PROBLEM_HEADINGS) },
-    { field: 'workaround', label: 'Insert workaround', fieldLabel: 'Workaround', pick: sectionPicker('Workaround', PROBLEM_HEADINGS) },
+    { field: 'description', get label() { return t('Insert problem statement'); }, fieldLabel: tm('Description'), pick: sectionPicker('Problem statement', PROBLEM_HEADINGS) },
+    { field: 'cause_notes', get label() { return t('Insert probable cause'); }, fieldLabel: tm('Cause notes'), pick: sectionPicker('Probable cause', PROBLEM_HEADINGS) },
+    { field: 'workaround', get label() { return t('Insert workaround'); }, fieldLabel: tm('Workaround'), pick: sectionPicker('Workaround', PROBLEM_HEADINGS) },
   ],
   parts: (pack) => domainParts(pack, { journal: 20, skipFields: ['assigned_to'], related: ['linkedIncidents', 'childTasks'] }),
   system:
@@ -181,8 +198,12 @@ const problemRca = {
 
 const changeCabBrief = {
   id: 'change-cab-brief',
-  title: 'Prepare the CAB brief',
-  description: 'What changes, why, when, who is affected, risk, plans, approvals, conflicts and the questions the CAB should ask.',
+  get title() {
+    return t('Prepare the CAB brief');
+  },
+  get description() {
+    return t('What changes, why, when, who is affected, risk, plans, approvals, conflicts and the questions the CAB should ask.');
+  },
   wave: 3,
   kinds: ['change'],
   group: 'work',

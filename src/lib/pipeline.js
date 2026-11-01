@@ -16,18 +16,21 @@ import { NOT_AVAILABLE_FIELD, isJournalPart, journalCut, madeWithout, notAvailab
 import { NEVER_REHYDRATE, RULES_PREAMBLE } from '../pii/firewall.js';
 import { truncationNote } from '../providers/messages.js';
 import { estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
+import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
+import { answerLanguageRule } from '../prompts/rules.js';
 
 // A placeholder of a kind that is never put back (a password, a card, an IBAN, an ID number), as the tokenizer writes it.
 const KEPT_PLACEHOLDER = new RegExp(`\\[(?:${NEVER_REHYDRATE.join('|')})_\\d{1,6}\\]`);
-export const KEPT_NOTE =
-  'Passwords, card and ID numbers stay hidden in answers (shown as [SECRET_1], [CARD_1]...). Add the real value yourself only if it really belongs there.';
+export const KEPT_NOTE = tm(
+  'Passwords, card and ID numbers stay hidden in answers (shown as [SECRET_1], [CARD_1]...). Add the real value yourself only if it really belongs there.'
+); // an English text: keptNote() shows it in the panel's language
 
 /** The sentence shown above an answer that still carries a never-put-back placeholder; '' when it carries none. */
-export const keptNote = (text) => (KEPT_PLACEHOLDER.test(String(text || '')) ? KEPT_NOTE : '');
+export const keptNote = (text) => (KEPT_PLACEHOLDER.test(String(text || '')) ? tr(KEPT_NOTE) : '');
 
 // Privacy modes from least to most protective (see src/policy/policy.js).
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
-const MODE_LABEL = { strict: 'Strict', 'local-only': 'Local-only' };
+const MODE_LABEL = { strict: tm('Strict'), 'local-only': tm('Local-only') };
 
 export class RunBlocked extends Error {
   constructor(message, code) {
@@ -75,8 +78,8 @@ export function previewRequired(previewMode, featureId, seen = [], pack = null) 
  * person's key (and the masked ticket text) there.
  */
 export function connectionProblem(config) {
-  if (config.invalidBaseUrl) return `The AI address is not valid: ${config.invalidBaseUrl}`;
-  if (config.provider === 'custom' && !config.baseUrl) return 'Enter the address of your AI server in Settings first.';
+  if (config.invalidBaseUrl) return t('The AI address is not valid: {reason}', { reason: config.invalidBaseUrl });
+  if (config.provider === 'custom' && !config.baseUrl) return t('Enter the address of your AI server in Settings first.');
   return '';
 }
 
@@ -87,27 +90,27 @@ export function connectionProblem(config) {
  *   their pack 'compose'). The blocked-table and HR rules apply to it as well as to `pack.table`.
  */
 export function assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable = '' }) {
-  if (!isFeatureEnabled(feature.id, policy)) throw new RunBlocked('Your organisation has switched this feature off.', 'FEATURE_OFF');
+  if (!isFeatureEnabled(feature.id, policy)) throw new RunBlocked(t('Your organisation has switched this feature off.'), 'FEATURE_OFF');
   // A feature that stays off until the organisation turns it on (the coaching snapshot).
-  if (!isFeatureAvailable(feature, policy)) throw new RunBlocked('Your organisation has not switched this feature on.', 'FEATURE_OFF');
+  if (!isFeatureAvailable(feature, policy)) throw new RunBlocked(t('Your organisation has not switched this feature on.'), 'FEATURE_OFF');
   // A feature can ask for a stricter privacy mode than the person chose (the HR case brief needs Strict).
   const needed = feature.requires?.minMode;
   if (needed && (MODE_RANK[values.piiMode] ?? 0) < (MODE_RANK[needed] ?? 0)) {
-    throw new RunBlocked(`This needs ${MODE_LABEL[needed] || needed} privacy mode. Change it in Settings.`, 'MODE_TOO_LOW');
+    throw new RunBlocked(t('This needs {mode} privacy mode. Change it in Settings.', { mode: tr(MODE_LABEL[needed] || needed) }), 'MODE_TOO_LOW');
   }
   const page = String(pageTable || '').trim();
   for (const table of [pack.table, page]) {
-    if (table && !isTableAllowed(table, policy)) throw new RunBlocked(`Your organisation does not allow Agent Buddy to use ${table} records.`, 'TABLE_BLOCKED');
+    if (table && !isTableAllowed(table, policy)) throw new RunBlocked(t('Your organisation does not allow Agent Buddy to use {table} records.', { table }), 'TABLE_BLOCKED');
   }
   if (isSensitivePack(pack, policy) || (page && isSensitiveByPolicy(page, policy))) {
     if (!policy?.allowHrContent) {
-      throw new RunBlocked('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.', 'HR_BLOCKED');
+      throw new RunBlocked(t('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.'), 'HR_BLOCKED');
     }
     // Allowing HR content is not enough on its own: the text may only go to an endpoint the organisation has approved, which means
     // the policy pins the AI provider or address, or the model runs on this computer.
     if (!(policy?.aiProvider || policy?.aiBaseUrl || config?.local)) {
       throw new RunBlocked(
-        'HR case content can only be sent to an AI endpoint your organisation has approved. Ask your administrator to set the AI provider in the policy, or use a model that runs on this computer.',
+        t('HR case content can only be sent to an AI endpoint your organisation has approved. Ask your administrator to set the AI provider in the policy, or use a model that runs on this computer.'),
         'HR_BLOCKED'
       );
     }
@@ -115,7 +118,7 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey, 
     // cue in front of them and refuses sensitive fields (src/pii/firewall.js). Keyed on the table (isSensitivePack), not on the record
     // kind, so an HR child table (sn_hr_core_case_payroll...) or a policy prefix is covered whatever kind it is mapped to.
     if ((MODE_RANK[values?.piiMode] ?? 0) < MODE_RANK.strict) {
-      throw new RunBlocked('HR records need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.', 'MODE_TOO_LOW');
+      throw new RunBlocked(t('HR records need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.'), 'MODE_TOO_LOW');
     }
   }
   const problem = connectionProblem(config);
@@ -123,10 +126,10 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey, 
   const allowed = checkProviderAllowed(config, policy);
   if (!allowed.ok) throw new RunBlocked(allowed.reason, 'PROVIDER_BLOCKED');
   if (values.piiMode === 'local-only' && !config.local) {
-    throw new RunBlocked('Your privacy mode only allows an AI model running on this computer. Choose Ollama or another local server in Settings.', 'NOT_LOCAL');
+    throw new RunBlocked(t('Your privacy mode only allows an AI model running on this computer. Choose Ollama or another local server in Settings.'), 'NOT_LOCAL');
   }
-  if (!config.apiKey && !config.keyOptional) throw new RunBlocked('Add your AI key in Settings first.', 'NO_KEY');
-  if (!config.model) throw new RunBlocked('Choose an AI model in Settings first.', 'NO_MODEL');
+  if (!config.apiKey && !config.keyOptional) throw new RunBlocked(t('Add your AI key in Settings first.'), 'NO_KEY');
+  if (!config.model) throw new RunBlocked(t('Choose an AI model in Settings first.'), 'NO_MODEL');
 }
 
 /**
@@ -150,8 +153,12 @@ export function prepareRun({ feature, pack, values, policy, config, hasKey = tru
   const budget = promptBudget(config);
   const built = partsFor(feature, pack);
   let fit = fitToModel({ feature, pack, parts: built, budget: budget.prompt, source: budget.source });
+  // Settings > Language of AI answers: with "The language of the panel" one fixed sentence is added to the task; nothing from the ticket.
+  const languageRule = answerLanguageRule(values.answerLanguage, getLanguage());
+  const system = languageRule ? `${feature.system}
+${languageRule}` : feature.system;
   const make = (parts) =>
-    Object.freeze({ feature: feature.id, table: pack.table, system: feature.system, userInstruction: feature.instruction, parts: Object.freeze(parts) });
+    Object.freeze({ feature: feature.id, table: pack.table, system, userInstruction: feature.instruction, parts: Object.freeze(parts) });
   let input = make(fit.parts);
   let request = firewall.buildRequest(input);
   // The estimate made before masking is generous; this is the one that counts: the finished text, rules and wrappers included.
@@ -189,11 +196,10 @@ const RULES_TOKENS = estimateTokens(RULES_PREAMBLE);
 const NOT_AVAILABLE_SLACK = 40;
 
 function tooLong(tokens, budget) {
-  const local = budget.source === 'local-default' ? ' A model on this computer reads about 4,000 tokens unless its server was set up for more.' : '';
-  return new RunBlocked(
-    `This is too long for the chosen AI model, even with only the newest note: about ${tokens.toLocaleString('en-US')} tokens, and the model reads about ${budget.prompt.toLocaleString('en-US')}.${local} Choose a model that reads more in Settings.`,
-    'TOO_LONG'
-  );
+  const local = budget.source === 'local-default' ? t('A model on this computer reads about 4,000 tokens unless its server was set up for more.') : '';
+  const head = t('This is too long for the chosen AI model, even with only the newest note: about {tokens} tokens, and the model reads about {budget}.', { tokens: tokens.toLocaleString('en-US'), budget: budget.prompt.toLocaleString('en-US') });
+  // (three whole sentences, joined by a space)
+  return new RunBlocked([head, local, t('Choose a model that reads more in Settings.')].filter(Boolean).join(' '), 'TOO_LONG');
 }
 
 /**
@@ -322,7 +328,7 @@ export async function assertWithinPolicyBudget({ policy, tokensUsedToday, featur
     used = 0;
   }
   if (used < cap) return;
-  const err = new RunBlocked(`Your organisation's daily limit of ${cap.toLocaleString('en-US')} AI tokens has been reached. It starts again tomorrow.`, 'BUDGET');
+  const err = new RunBlocked(t("Your organisation's daily limit of {cap} AI tokens has been reached. It starts again tomorrow.", { cap: cap.toLocaleString('en-US') }), 'BUDGET');
   await auditBlocked({ feature, pack, config, values, err, logAudit });
   throw err;
 }

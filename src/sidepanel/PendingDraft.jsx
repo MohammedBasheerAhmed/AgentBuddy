@@ -9,7 +9,7 @@ import { read } from './ask.js';
 import { applyFieldStates, createGuard, insertTargets, insertText, readFieldStates, reviewInsert } from './insertFlow.js';
 import { auditInsert } from '../lib/storage.js';
 import { EMAIL_NEXT, insertedNote, isCustomerVisible } from '../lib/fillable.js';
-import { t } from '../i18n/index.js';
+import { t, isolate, t as tr } from '../i18n/index.js';
 
 const NO_TEXTS = [];
 const sendToTab = (tabId, message) => chrome.tabs.sendMessage(tabId, message);
@@ -37,7 +37,7 @@ export default function PendingDraft({ page, eff }) {
     if (inserted?.email) {
       return pendingFits(inserted, page) ? (
         <p className="ab-note ab-note-ok" role="status">
-          The draft is in the email form. Review it. {EMAIL_NEXT}{' '}
+          {t('The draft is in the email form. Review it.')} {tr(EMAIL_NEXT)}{' '}
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setInserted(null)}>{t('Close')}</button>
         </p>
       ) : null;
@@ -152,10 +152,10 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
   async function copy(why = '', value = draft.body) {
     try {
       await navigator.clipboard.writeText(value);
-      setNote({ kind: 'ok', text: why ? `${why} Copied to the clipboard instead.` : 'Copied to the clipboard.' });
+      setNote({ kind: 'ok', text: why ? t('{why} Copied to the clipboard instead.', { why }) : t('Copied to the clipboard.') });
       audit('copied');
     } catch {
-      setNote({ kind: 'danger', text: 'The browser blocked copying. Select the text and copy it by hand.' });
+      setNote({ kind: 'danger', text: t('The browser blocked copying. Select the text and copy it by hand.') });
     }
   }
 
@@ -187,7 +187,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
     } else if (outcome.status === 'blocked') {
       setNote({ kind: 'warn', text: outcome.why });
     } else if (outcome.status === 'empty') {
-      setNote({ kind: 'danger', text: 'That part is not in the draft, so there is nothing to insert. Use Copy instead.' });
+      setNote({ kind: 'danger', text: t('That part is not in the draft, so there is nothing to insert. Use Copy instead.') });
     } else {
       await copy(outcome.why, text);
     }
@@ -197,17 +197,17 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
   const insertNow = (target) => {
     const text = textFor(target);
     if (!text) {
-      setNote({ kind: 'danger', text: 'That part is not in the draft, so there is nothing to insert. Use Copy instead.' });
+      setNote({ kind: 'danger', text: t('That part is not in the draft, so there is nothing to insert. Use Copy instead.') });
       return;
     }
     insert(target, text, target.mode, false);
   };
 
-  const subject = targets.find((t) => t.field === 'subject') || null;
-  const body = targets.find((t) => t.field === 'body') || null;
-  const blocked = targets.map((t) => t.blocked).find(Boolean) || '';
+  const subject = targets.find((item) => item.field === 'subject') || null;
+  const body = targets.find((item) => item.field === 'body') || null;
+  const blocked = targets.map((item) => item.blocked).find(Boolean) || '';
   // One line before the click: where each part lands, and that nothing is sent from here.
-  const hint = blocked || `${subject ? 'The subject replaces the one on the form; the body goes below what is in it.' : 'The draft goes below what is in the email body.'} ${EMAIL_NEXT}`;
+  const hint = blocked || `${subject ? t('The subject replaces the one on the form; the body goes below what is in it.') : t('The draft goes below what is in the email body.')} ${tr(EMAIL_NEXT)}`;
   const button = (target, main) =>
     target && (
       <button
@@ -217,7 +217,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
         title={target.blocked || target.where || ''}
         onClick={() => insertNow(target)}
       >
-        {done[target.key] ? `${target.fieldLabel} inserted` : target.label}
+        {done[target.key] ? t('{field} inserted', { field: tr(target.fieldLabel) }) : target.label}
       </button>
     );
 
@@ -226,7 +226,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
       <div className="ab-pending-email-head">
         <AiBadge title={t('Written by AI. It can be wrong: check it before you send it.')} />
         <h2 className="ab-h ab-pending-email-title" id={headId}>
-          Email draft for {draft.number || 'this ticket'}
+          {t('Email draft for {number}', { number: draft.number ? isolate(draft.number) : t('this ticket') })}
         </h2>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={clearPending}>{t('Close')}</button>
       </div>
@@ -235,7 +235,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
       </div>
       {findings && (
         <div className="ab-note ab-note-warn" role="alert">
-          <strong>{isCustomerVisible(findings.target.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
+          <strong>{isCustomerVisible(findings.target.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
           <ul className="ab-findings">
             {findings.items.map((f, i) => (
               <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
@@ -263,7 +263,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
       {note && <p className={`ab-note ab-note-${note.kind}`} role="status">{note.text}</p>}
       {editing ? (
         <InsertEditor
-          targets={[...targets.filter((t) => t.key === editing.key), ...targets.filter((t) => t.key !== editing.key)]}
+          targets={[...targets.filter((item) => item.key === editing.key), ...targets.filter((item) => item.key !== editing.key)]}
           initial={editing.text}
           textFor={textFor}
           review={review}

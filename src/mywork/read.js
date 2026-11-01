@@ -27,6 +27,7 @@ import { workState } from './states.js';
 import { pickSla } from './sla.js';
 import { entriesByTicket, markerFor, windowStart, UNKNOWN_MARKER } from './markers.js';
 import { rankQueue } from './rank.js';
+import { say, tm } from '../reports/engine/say.js';
 
 export const LIMITS = Object.freeze({
   perClass: 200, // rows of my queue read per class (in pages)
@@ -89,11 +90,12 @@ export function failureOf(err, table) {
 const capFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /** One plain access line about `what` ("incidents", "SLAs"): never the API's own text. */
-export function accessNote(status, what) {
-  if (status === STATUS.DENIED) return `You cannot read ${what}.`;
-  if (status === STATUS.BLOCKED) return `Your organisation does not allow Agent Buddy to read ${what}.`;
-  if (status === 'timeout') return `${capFirst(what)} took too long to read.`;
-  return `${capFirst(what)} could not be read just now.`;
+export function accessNote(status, what, capitalised = capFirst(what)) {
+  // (written in English, as the page script has no language: the panel shows it translated, src/reports/shown.js)
+  if (status === STATUS.DENIED) return say(tm('You cannot read {what}.'), { what });
+  if (status === STATUS.BLOCKED) return say(tm('Your organisation does not allow Agent Buddy to read {what}.'), { what });
+  if (status === 'timeout') return say(tm('{what} took too long to read.'), { what: capitalised });
+  return say(tm('{what} could not be read just now.'), { what: capitalised });
 }
 
 const lowerPlural = (table, names) => pluralOf(table, names?.[table]).toLowerCase().replace(/^hr /, 'HR ');
@@ -211,9 +213,12 @@ function skipEntry(decision, table, count, names) {
   const n = Number.isFinite(count) && count > 0 ? count : 0;
   if (decision === 'blocked') return { source: table, status: STATUS.BLOCKED, note: accessNote(STATUS.BLOCKED, what) };
   const one = singularOf(table, names?.[table]).replace(/^(?!HR )./, (c) => c.toLowerCase());
-  const head = n === 1 ? `1 ${one} is` : n ? `${n} ${what} are` : `${capFirst(what)} are`;
-  if (decision === 'hr-profile') return { source: table, status: STATUS.SKIPPED, note: `${head} not listed: turn on the HR profile in Settings to see them.` };
-  return { source: table, status: STATUS.SKIPPED, note: `${head} not listed: your organisation keeps this content out of Agent Buddy.` };
+  const profile = decision === 'hr-profile';
+  let note;
+  if (n === 1) note = profile ? say(tm('1 {what} is not listed: turn on the HR profile in Settings to see them.'), { what: one }) : say(tm('1 {what} is not listed: your organisation keeps this content out of Agent Buddy.'), { what: one });
+  else if (n) note = profile ? say(tm('{n} {what} are not listed: turn on the HR profile in Settings to see them.'), { n, what }) : say(tm('{n} {what} are not listed: your organisation keeps this content out of Agent Buddy.'), { n, what });
+  else note = profile ? say(tm('{what} are not listed: turn on the HR profile in Settings to see them.'), { what: capFirst(what) }) : say(tm('{what} are not listed: your organisation keeps this content out of Agent Buddy.'), { what: capFirst(what) });
+  return { source: table, status: STATUS.SKIPPED, note };
 }
 
 /**
@@ -227,7 +232,7 @@ async function readClasses(deps, counted, { query, order, cap, pageSize, group, 
   const totals = {};
   const answered = [];
   const classes = [...counted.counts.entries()].filter(([, n]) => n === null || n > 0).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
-  if (classes.length > max) access.push({ source: 'task', status: STATUS.SKIPPED, note: `Only the ${max} biggest kinds of ticket are listed.` });
+  if (classes.length > max) access.push({ source: 'task', status: STATUS.SKIPPED, note: say(tm('Only the {max} biggest kinds of ticket are listed.'), { max }) });
   await Promise.all(
     classes.slice(0, max).map(async ([table, total]) => {
       const decision = readDecision(table, policy);
@@ -259,7 +264,7 @@ async function readClasses(deps, counted, { query, order, cap, pageSize, group, 
 
 // ---- SLAs and comments --------------------------------------------------------------------------------------------------------
 
-const NO_SLA = 'SLA information is not available to you, so tickets are ordered by priority.';
+const NO_SLA = tm('SLA information is not available to you, so tickets are ordered by priority.');
 
 async function addSlas(deps, items, { run, now, limits }) {
   const ids = [...new Set(items.map((i) => i.sysId))];
@@ -291,12 +296,12 @@ async function addSlas(deps, items, { run, now, limits }) {
   return [];
 }
 
-const NO_JOURNAL = 'Who wrote last is not visible to you, so "customer replied" and the follow-ups are not shown.';
+const NO_JOURNAL = tm('Who wrote last is not visible to you, so "customer replied" and the follow-ups are not shown.');
 
 async function addMarkers(deps, items, logins, me, { run, limits }) {
   const targets = items.filter((i) => i.work !== 'resolved');
   if (!targets.length) return [];
-  if (!me) return [{ source: 'sys_journal_field', status: STATUS.SKIPPED, note: 'Agent Buddy could not tell your user name, so "customer replied" and the follow-ups are not shown.' }];
+  if (!me) return [{ source: 'sys_journal_field', status: STATUS.SKIPPED, note: tm('Agent Buddy could not tell your user name, so "customer replied" and the follow-ups are not shown.') }];
   try {
     for (let i = 0; i < targets.length; i += limits.journalChunk) {
       const chunk = targets.slice(i, i + limits.journalChunk);
@@ -368,7 +373,7 @@ async function readApprovals(deps, userId, { policy, run, limits }) {
     rows = await run(() => deps.queryTable('sysapproval_approver', `${query}^ORDERBYsys_created_on`, [...APPROVAL_COLUMNS], { limit: limits.approvals, displayValue: true }));
   } catch (err) {
     const f = failureOf(err, 'sysapproval_approver');
-    return { items: [], total: 0, listQuery: query, access: f.missing ? [] : [{ source: 'sysapproval_approver', status: f.status, note: accessNote(f.status, 'your approvals') }] };
+    return { items: [], total: 0, listQuery: query, access: f.missing ? [] : [{ source: 'sysapproval_approver', status: f.status, note: accessNote(f.status, tm('your approvals'), tm('Your approvals')) }] };
   }
   const list = Array.isArray(rows) ? rows : [];
   let total = list.length;
@@ -412,7 +417,7 @@ async function readApprovals(deps, userId, { policy, run, limits }) {
   return { items: items.map(({ taskId, ...rest }) => rest), total, listQuery: query, access: [] };
 }
 
-const NO_GROUPS = 'Your group memberships are not visible to you, so the unassigned tickets of your groups cannot be listed.';
+const NO_GROUPS = tm('Your group memberships are not visible to you, so the unassigned tickets of your groups cannot be listed.');
 
 async function readGroupQueue(deps, userId, { profiles, policy, run, limits }) {
   // The Team screen's reading of "my groups" (src/reports/engine/scope.js): active groups only; over its cap, the ones with the most open
@@ -469,7 +474,7 @@ async function readGroupQueue(deps, userId, { profiles, policy, run, limits }) {
  */
 export async function readMyWork({ userId, userName = '' }, deps, { profiles = [], allowSensitive = false, now = Date.now(), limits: given = {} } = {}) {
   const limits = { ...LIMITS, ...given };
-  if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
+  if (!SYS_ID_RE.test(userId || '')) throw new Error(tm('Agent Buddy could not tell who is signed in. Reload the page and try again.'));
   const me = userId.toLowerCase();
   const run = createLimiter(limits.parallel);
   const policy = { isBlocked: deps.isBlocked, sensitivePrefixes: deps.sensitivePrefixes, allowSensitive: allowSensitive === true, profiles };

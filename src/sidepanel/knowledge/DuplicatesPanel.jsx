@@ -12,7 +12,8 @@ import ErrorNote from '../ErrorNote.jsx';
 import { plainNote } from '../plainAccess.js';
 import { compareLocked, compareStillCurrent, selectionKey } from './duplicatesState.js';
 import { DUPLICATE_COLUMNS, duplicateRows, exportFileName } from '../knowledgeScreen/articleInfo.js';
-import { t } from '../../i18n/index.js';
+import { formatNumber, isolate, t, tn } from '../../i18n/index.js';
+import { tx } from '../../i18n/jsx.jsx';
 
 // N18 Duplicate article finder (Insights, no AI): pick a knowledge base (and, if you like, a category), see groups of published
 // articles whose titles read alike, page through more titles, pick one group and compare the TEXT of its articles. Titles and counts
@@ -39,8 +40,8 @@ export function mergePages(pages) {
 /** "Compared 300 of 1,240 titles." / "Compared 12 titles." */
 export function comparedText(scanned, total) {
   const n = Number(scanned) || 0;
-  if (Number.isFinite(total) && total > n) return `Compared ${n.toLocaleString('en')} of ${Number(total).toLocaleString('en')} titles.`;
-  return `Compared ${n.toLocaleString('en')} title${n === 1 ? '' : 's'}.`;
+  if (Number.isFinite(total) && total > n) return t('Compared {n} of {total} titles.', { n: formatNumber(n), total: formatNumber(Number(total)) });
+  return tn(n, 'Compared {n} title.', 'Compared {n} titles.', { n: formatNumber(n) });
 }
 
 export default function DuplicatesPanel({ page, active = true, onCompared = () => {} }) {
@@ -64,7 +65,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
     setScopes({ phase: 'loading', items: [], access: [], error: '' });
     read(page.tabId, 'kbScopes', {})
       .then((out) => mine === scopeToken.current && setScopes({ phase: 'ready', items: out.items || [], access: out.access || [], error: '' }))
-      .catch((err) => mine === scopeToken.current && setScopes({ phase: 'error', items: [], access: [], error: err?.message || 'The knowledge bases could not be listed.' }));
+      .catch((err) => mine === scopeToken.current && setScopes({ phase: 'error', items: [], access: [], error: err?.message || t('The knowledge bases could not be listed.') }));
   }, [page.tabId]);
 
   // The knowledge bases are listed the first time the tool is on show (not while it is folded away).
@@ -136,7 +137,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
       }));
     } catch (err) {
       if (mine !== token.current) return;
-      setFound((f) => (offset > 0 && f ? { ...f, phase: 'ready', error: err?.message || 'The next titles could not be read.' } : { phase: 'error', pages: [], access: [], error: err?.message || 'The articles could not be compared.' }));
+      setFound((f) => (offset > 0 && f ? { ...f, phase: 'ready', error: err?.message || t('The next titles could not be read.') } : { phase: 'error', pages: [], access: [], error: err?.message || t('The articles could not be compared.') }));
     }
   }
 
@@ -191,16 +192,16 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
       onCompared({ cluster: pickedNow.current.cluster, texts, at: Date.now() });
       setPicked((p) => (stillMine(p) ? { ...p, phase: 'compared', texts } : p));
     } catch (err) {
-      setPicked((p) => (stillMine(p) ? { ...p, phase: 'choosing', error: err?.message || 'The articles could not be read.' } : p));
+      setPicked((p) => (stillMine(p) ? { ...p, phase: 'choosing', error: err?.message || t('The articles could not be read.') } : p));
     }
   }
 
   function exportGroups() {
     try {
       downloadText(exportFileName('duplicate-articles'), toCsv(duplicateRows(clusters), DUPLICATE_COLUMNS));
-      setNote(`Saved ${clusters.length} group${clusters.length === 1 ? '' : 's'} as a CSV file in your downloads.`);
+      setNote(tn(clusters.length, 'Saved {n} group as a CSV file in your downloads.', 'Saved {n} groups as a CSV file in your downloads.'));
     } catch {
-      setNote('The browser did not save the file.');
+      setNote(t('The browser did not save the file.'));
     }
   }
 
@@ -246,7 +247,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
 
       {reading && (
         <p className="ab-sub" role="status">
-          Comparing titles…{' '}
+          {t('Comparing titles…')}{' '}
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>{t('Stop')}</button>
         </p>
       )}
@@ -256,13 +257,13 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
         <section className="ab-kbx-results" aria-label={t('Duplicate groups')}>
           <p className="ab-sub">
             {comparedText(articles.length, found.total)}{' '}
-            {clusters.length ? `${clusters.length} group${clusters.length === 1 ? '' : 's'} read alike.` : 'No near-duplicates found.'}
+            {clusters.length ? tn(clusters.length, '{n} group read alike.', '{n} groups read alike.') : t('No near-duplicates found.')}
           </p>
           <Notes access={found.access} />
           {found.error && <ErrorNote error={found.error} onRetry={more} />}
           {canPage && (
             <div className="ab-row">
-              <button type="button" className="ab-btn ab-btn-sm" onClick={more}>Compare {Math.min(KB_MAX_ARTICLES, (found.total || Infinity) - articles.length).toLocaleString('en')} more</button>
+              <button type="button" className="ab-btn ab-btn-sm" onClick={more}>{t('Compare {count} more', { count: formatNumber(Math.min(KB_MAX_ARTICLES, (found.total || Infinity) - articles.length)) })}</button>
             </div>
           )}
           {okNote && !canPage && found.truncated && <p className="ab-hint">{plainNote(okNote)}</p>}
@@ -272,7 +273,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
             render={(c) => (
               <div key={c.id} className={`ab-kb-cluster${picked?.cluster.id === c.id ? ' ab-kb-picked' : ''}`}>
                 <div className="ab-row">
-                  <strong>{c.articles.length} articles{c.exactTitle ? ' with the same title' : ' that read alike'}</strong>
+                  <strong>{c.exactTitle ? tn(c.articles.length, '{n} article with the same title', '{n} articles with the same title') : tn(c.articles.length, '{n} article that reads alike', '{n} articles that read alike')}</strong>
                   <span className="ab-spacer" />
                   <button type="button" className="ab-btn ab-btn-sm" disabled={locked} onClick={() => pick(c)}>{t('Compare')}</button>
                 </div>
@@ -283,11 +284,11 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
                       <RecordLink page={page} item={{ table: 'kb_knowledge', sysId: a.sysId }} className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open">
                         <span className="ab-record-number">{a.number}</span> {a.title}
                       </RecordLink>
-                      <span className="ab-hint">{a.views} view{a.views === 1 ? '' : 's'}{a.updated ? ` · changed ${a.updated.slice(0, 10)}` : ''}</span>
+                      <span className="ab-hint">{tn(Number(a.views) || 0, '{n} view', '{n} views')}{a.updated ? ` · ${t('changed {date}', { date: isolate(a.updated.slice(0, 10)) })}` : ''}</span>
                     </li>
                   ))}
                 </ul>
-                <p className="ab-hint">{t('Most read: {number}', { number: c.keep.number })}</p>
+                <p className="ab-hint">{t('Most read: {number}', { number: isolate(c.keep.number) })}</p>
               </div>
             )}
           />
@@ -317,7 +318,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
           {picked.error && <ErrorNote error={picked.error} onRetry={compare} />}
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" disabled={sel < 2 || picked.phase === 'loading'} onClick={compare}>
-              {picked.phase === 'loading' ? 'Reading…' : 'Compare their text'}
+              {picked.phase === 'loading' ? t('Reading…') : t('Compare their text')}
             </button>
           </div>
           {picked.phase === 'compared' && picked.texts && (
@@ -325,7 +326,12 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
               <ul className="ab-kb-pairs">
                 {(picked.texts.pairs || []).map((p) => (
                   <li key={`${p.a}:${p.b}`}>
-                    <strong>{p.a}</strong> and <strong>{p.b}</strong>: {pct(p.containment)} of the shorter text also appears in the other ({pct(p.jaccard)} of all the wording is shared).
+                    {tx('{a} and {b}: {contained} of the shorter text also appears in the other ({shared} of all the wording is shared).', {
+                      a: <strong>{isolate(p.a)}</strong>,
+                      b: <strong>{isolate(p.b)}</strong>,
+                      contained: pct(p.containment),
+                      shared: pct(p.jaccard),
+                    })}
                   </li>
                 ))}
               </ul>

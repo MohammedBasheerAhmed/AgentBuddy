@@ -7,6 +7,7 @@
 // "On Hold" is 3, which `task` would show as "Closed Complete").
 import { TABLE_RE } from '../context/util.js';
 import { isSensitiveTable } from '../context/kinds.js';
+import { tm } from '../i18n/core.js';
 
 // Columns every task-derived table has. Nothing here is free text except the title (short_description).
 //   sys_id, number, short_description   the row, its number, the one line a person recognises it by
@@ -24,19 +25,20 @@ export const COMMON_COLUMNS = Object.freeze(['sys_id', 'number', 'short_descript
  *   hold       the table has a hold reason (On hold: Awaiting caller / vendor / change...). A column the table does not have is
  *              ignored by the Table API, so asking for it on an older release costs nothing.
  */
+// (one and many are shown to the person, in sentences too: marked with tm(), translated where they are drawn)
 export const KNOWN_TABLES = Object.freeze({
-  incident: { one: 'Incident', many: 'Incidents', customer: 'caller_id', hold: true },
-  incident_task: { one: 'Incident task', many: 'Incident tasks' },
-  problem: { one: 'Problem', many: 'Problems' },
-  problem_task: { one: 'Problem task', many: 'Problem tasks' },
-  change_request: { one: 'Change', many: 'Changes', customer: 'requested_by' },
-  change_task: { one: 'Change task', many: 'Change tasks' },
-  sc_req_item: { one: 'Requested item', many: 'Requested items', customer: 'requested_for', hold: true },
-  sc_task: { one: 'Catalog task', many: 'Catalog tasks', customer: 'request_item.requested_for', hold: true },
-  sn_customerservice_case: { one: 'Case', many: 'Cases', customer: 'contact', hold: true },
-  sn_customerservice_task: { one: 'Case task', many: 'Case tasks' },
-  sn_hr_core_case: { one: 'HR case', many: 'HR cases', customer: 'opened_for' },
-  sn_hr_core_task: { one: 'HR task', many: 'HR tasks' },
+  incident: { one: tm('Incident'), many: tm('Incidents'), customer: 'caller_id', hold: true },
+  incident_task: { one: tm('Incident task'), many: tm('Incident tasks') },
+  problem: { one: tm('Problem'), many: tm('Problems') },
+  problem_task: { one: tm('Problem task'), many: tm('Problem tasks') },
+  change_request: { one: tm('Change'), many: tm('Changes'), customer: 'requested_by' },
+  change_task: { one: tm('Change task'), many: tm('Change tasks') },
+  sc_req_item: { one: tm('Requested item'), many: tm('Requested items'), customer: 'requested_for', hold: true },
+  sc_task: { one: tm('Catalog task'), many: tm('Catalog tasks'), customer: 'request_item.requested_for', hold: true },
+  sn_customerservice_case: { one: tm('Case'), many: tm('Cases'), customer: 'contact', hold: true },
+  sn_customerservice_task: { one: tm('Case task'), many: tm('Case tasks') },
+  sn_hr_core_case: { one: tm('HR case'), many: tm('HR cases'), customer: 'opened_for' },
+  sn_hr_core_task: { one: tm('HR task'), many: tm('HR tasks') },
 });
 
 // The tables each work profile reads when the one-read count on `task` is not available (the person may not read `task`, or the
@@ -66,14 +68,14 @@ export function pluralOf(table, display = '') {
   if (known) return known.many;
   const name = String(display || '').trim();
   if (name && !/^[a-z0-9_]+$/.test(name)) return /s$/i.test(name) ? name : `${name}s`;
-  return 'Other tickets';
+  return tm('Other tickets');
 }
 
 export function singularOf(table, display = '') {
   const known = KNOWN_TABLES[table];
   if (known) return known.one;
   const name = String(display || '').trim();
-  return name && !/^[a-z0-9_]+$/.test(name) ? name : 'Ticket';
+  return name && !/^[a-z0-9_]+$/.test(name) ? name : tm('Ticket');
 }
 
 /** The columns read from one table: the common ones, the hold reason where there is one, the customer's login where known. */

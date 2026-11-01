@@ -8,6 +8,7 @@
 import { identities, roleOfEntry } from '../itsm/sentiment.js';
 import { parseSnTime } from '../context/util.js';
 import { noteInstant, storedTime } from './time.js';
+import { isolate, t, tn } from '../i18n/index.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 const countOf = (value) => {
@@ -31,7 +32,7 @@ export function groupPath(changes) {
   return path;
 }
 
-const FIELD_LABEL = { assignment_group: 'Assigned to', state: 'State', priority: 'Priority', assigned_to: 'Owner' };
+const fieldLabel = (field) => ({ assignment_group: t('Assigned to'), state: t('State'), priority: t('Priority'), assigned_to: t('Owner') })[field];
 
 /**
  * @param {{ pack: object, slas?: object[]|null, audit?: { available: boolean, changes?: object[], note?: string }|null, now: number }} input
@@ -48,14 +49,14 @@ export function buildJourney({ pack, slas = null, audit = null, now }) {
   };
 
   const opener = nameOf(pack, 'opened_by');
-  add(storedTime(pack, 'opened_at'), 'Opened', opener ? `by ${opener}` : '', 'opened');
+  add(storedTime(pack, 'opened_at'), t('Opened'), opener ? t('by {name}', { name: isolate(opener) }) : '', 'opened');
 
   const changes = audit?.available && Array.isArray(audit.changes) ? audit.changes : [];
   for (const c of changes) {
-    const label = FIELD_LABEL[c?.field];
+    const label = fieldLabel(c?.field);
     if (!label) continue;
-    const to = text(c.to) || '(empty)';
-    add(parseSnTime(c.atUtc), c.field === 'assignment_group' ? `Assigned to ${to}` : `${label}: ${to}`, text(c.from) ? `was ${text(c.from)}` : '', c.field);
+    const to = isolate(text(c.to)) || t('(empty)');
+    add(parseSnTime(c.atUtc), c.field === 'assignment_group' ? t('Assigned to {name}', { name: to }) : t('{field}: {value}', { field: label, value: to }), text(c.from) ? t('was {value}', { value: isolate(text(c.from)) }) : '', c.field);
   }
 
   // The conversation: the first reply from support, and the customer's last message.
@@ -65,35 +66,35 @@ export function buildJourney({ pack, slas = null, audit = null, now }) {
     const firstReply = comments.find((e) => roleOfEntry(e, ids) === 'support');
     const lastCustomer = [...comments].reverse().find((e) => roleOfEntry(e, ids) === 'customer');
     if (firstReply) {
-      const t = noteInstant(firstReply, pack);
-      add(t.ms, 'First reply to the customer', text(firstReply.by) ? `by ${text(firstReply.by)}` : '', 'reply', t.approx);
+      const when = noteInstant(firstReply, pack);
+      add(when.ms, t('First reply to the customer'), text(firstReply.by) ? t('by {name}', { name: isolate(text(firstReply.by)) }) : '', 'reply', when.approx);
     }
     if (lastCustomer) {
-      const t = noteInstant(lastCustomer, pack);
-      add(t.ms, 'Last message from the customer', '', 'customer', t.approx);
+      const when = noteInstant(lastCustomer, pack);
+      add(when.ms, t('Last message from the customer'), '', 'customer', when.approx);
     }
   } else if (comments.length) {
     const last = comments[comments.length - 1];
-    const t = noteInstant(last, pack);
-    add(t.ms, 'Last customer-visible comment', text(last.by) ? `by ${text(last.by)}` : '', 'comment', t.approx);
+    const when = noteInstant(last, pack);
+    add(when.ms, t('Last customer-visible comment'), text(last.by) ? t('by {name}', { name: isolate(text(last.by)) }) : '', 'comment', when.approx);
   }
 
   for (const s of Array.isArray(slas) ? slas : []) {
     if (!s || /cancel/i.test(`${s.stage} ${s.stageValue}`)) continue;
-    const name = text(s.name) || 'SLA';
-    if (s.breached) add(parseSnTime(s.plannedEndUtc), `SLA breached: ${name}`, '', 'sla');
-    else if (/pause/i.test(`${s.stage} ${s.stageValue}`)) add(parseSnTime(s.startUtc), `SLA started: ${name}`, 'paused now', 'sla');
+    const name = isolate(text(s.name)) || 'SLA';
+    if (s.breached) add(parseSnTime(s.plannedEndUtc), t('SLA breached: {name}', { name }), '', 'sla');
+    else if (/pause/i.test(`${s.stage} ${s.stageValue}`)) add(parseSnTime(s.startUtc), t('SLA started: {name}', { name }), t('paused now'), 'sla');
   }
 
-  add(storedTime(pack, 'resolved_at'), 'Resolved', '', 'resolved');
-  add(storedTime(pack, 'closed_at'), 'Closed', '', 'closed');
+  add(storedTime(pack, 'resolved_at'), t('Resolved'), '', 'resolved');
+  add(storedTime(pack, 'closed_at'), t('Closed'), '', 'closed');
 
   events.sort((a, b) => a.at - b.at);
   const path = groupPath(changes);
   const reassignments = countOf(f.reassignment_count);
   const reopens = countOf(f.reopen_count);
   let note = '';
-  if (!audit?.available) note = text(audit?.note) || 'The field history is not readable for your user, so the path between groups is not shown.';
+  if (!audit?.available) note = text(audit?.note) || t('The field history is not readable for your user, so the path between groups is not shown.');
   return {
     events: events.filter((e) => e.at <= now + 60000),
     path,
@@ -108,9 +109,9 @@ export function buildJourney({ pack, slas = null, audit = null, now }) {
 /** The one-line summary: "Reassigned 3 times · Service Desk > Network > Desktop" or "Opened 3 d ago · 2 changes of hands". */
 export function journeySummary(journey) {
   const bits = [];
-  if (journey.reassignments !== null) bits.push(journey.reassignments === 0 ? 'Never reassigned' : `Reassigned ${journey.reassignments} time${journey.reassignments === 1 ? '' : 's'}`);
-  if (journey.reopens) bits.push(`reopened ${journey.reopens} time${journey.reopens === 1 ? '' : 's'}`);
+  if (journey.reassignments !== null) bits.push(journey.reassignments === 0 ? t('Never reassigned') : tn(journey.reassignments, 'Reassigned {n} time', 'Reassigned {n} times'));
+  if (journey.reopens) bits.push(tn(journey.reopens, 'reopened {n} time', 'reopened {n} times'));
   if (journey.path.length > 1) bits.push(journey.path.slice(-3).join(' > '));
-  else if (journey.now.group) bits.push(`now with ${journey.now.group}`);
-  return bits.join(' · ') || `${journey.events.length} event${journey.events.length === 1 ? '' : 's'}`;
+  else if (journey.now.group) bits.push(t('now with {group}', { group: isolate(journey.now.group) }));
+  return bits.join(' · ') || tn(journey.events.length, '{n} event', '{n} events');
 }

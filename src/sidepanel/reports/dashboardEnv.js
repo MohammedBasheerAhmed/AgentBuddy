@@ -1,6 +1,7 @@
 // Pure decisions the Team dashboard makes (src/sidepanel/reports/ReportsDashboard.jsx), kept here so they are tested without a browser
 // (tests/reports-dashboard-env.test.js).
 import { sectionById } from './sections.js';
+import { shown } from '../../reports/shown.js';
 
 /**
  * What about the ServiceNow page the widgets depend on: the tab, the instance, and the kind of page links are built for. NOT the
@@ -51,7 +52,7 @@ export function dashboardTables(entries, order, tablesOf) {
       tablesOf(e.result)
         .filter((t) => t.rows.length)
         .map((t) => {
-          const from = String(e.result.title || '');
+          const from = shown(String(e.result.title || ''));
           return { ...t, title: !from || String(t.title).startsWith(from) ? t.title : `${from}: ${t.title}` };
         })
     );

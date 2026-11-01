@@ -1,7 +1,9 @@
 import { MSG } from '../lib/messages.js';
+import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
 
-export const LOST_TOUCH = 'Agent Buddy lost touch with this page. Reload the ServiceNow page and try again.';
-export const PANEL_UPDATED = 'Agent Buddy was updated. Close this panel and open it again.';
+// English constants (the tests and the callers compare them); every use below shows them in the language of the panel.
+export const LOST_TOUCH = tm('Agent Buddy lost touch with this page. Reload the ServiceNow page and try again.');
+export const PANEL_UPDATED = tm('Agent Buddy was updated. Close this panel and open it again.');
 
 // What the browser says when the page's content script is not there to answer: the tab was open before the site was turned on,
 // the page is reloading, the tab closed, or the extension was reloaded. None of it is fit to show a person.
@@ -17,22 +19,25 @@ const LOST_TOUCH_RE = [
 const UPDATED_RE = /extension context invalidated/i;
 
 /** The browser-level text for a failed message, or '' when this is some other error. */
-const browserProblem = (message) => (UPDATED_RE.test(message) ? PANEL_UPDATED : LOST_TOUCH_RE.some((rx) => rx.test(message)) ? LOST_TOUCH : '');
+const browserProblem = (message) => (UPDATED_RE.test(message) ? tr(PANEL_UPDATED) : LOST_TOUCH_RE.some((rx) => rx.test(message)) ? tr(LOST_TOUCH) : '');
 
 /**
  * The words to show a person for an error: the browser's own text about a lost connection becomes one plain sentence; any other
- * message is already ours (or the page's) and passes through.
+ * message is already ours (or the page's) and passes through. A text that comes from another part of the extension (the service
+ * worker, the page) in English is looked up like t(): it is shown in Arabic when the catalogue has the same text (tm() marks it there).
  */
-export function plainError(err, fallback = 'Something went wrong.') {
+export function plainError(err, fallback = t('Something went wrong.')) {
   const message = String(err?.message ?? err ?? '').trim();
-  return browserProblem(message) || message || fallback;
+  return browserProblem(message) || (message ? tr(message) : tr(fallback));
 }
 
 /** Send one message to the content script of a tab and unwrap its answer; errors from the page come back as Error with .code. */
 export async function ask(tabId, message) {
   let answer;
   try {
-    answer = await chrome.tabs.sendMessage(tabId, message);
+    // The page script builds some texts the panel shows (My work, the gaps, the form fields): it speaks the panel's language, so each
+    // request says which one it is.
+    answer = await chrome.tabs.sendMessage(tabId, { ...message, language: getLanguage() });
   } catch (err) {
     const text = browserProblem(String(err?.message ?? ''));
     if (!text) throw err;
@@ -42,7 +47,7 @@ export async function ask(tabId, message) {
   }
   // Nobody answered (the page was replaced while the message was on its way).
   if (answer === undefined || answer === null) {
-    const lost = new Error(LOST_TOUCH);
+    const lost = new Error(tr(LOST_TOUCH));
     lost.code = 'LOST_TOUCH';
     throw lost;
   }

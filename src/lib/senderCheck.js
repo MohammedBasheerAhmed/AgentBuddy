@@ -6,8 +6,10 @@
 // sender.url), never the tab's top-level URL: a ServiceNow tab can hold frames from anywhere.
 
 import { MSG } from './messages.js';
+import { tm } from '../i18n/core.js';
 
-export const EXTENSION_ONLY = "This request is only allowed from Agent Buddy's own pages.";
+// (an English text marked for the catalogue; it crosses to the panel as a message, and plainError there shows it in Arabic)
+export const EXTENSION_ONLY = tm("This request is only allowed from Agent Buddy's own pages.");
 
 function originOfUrl(url) {
   let parsed;

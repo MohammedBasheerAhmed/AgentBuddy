@@ -6,5 +6,6 @@ import { AR_WRITE } from './write.js';
 import { AR_SHELL } from './shell.js';
 import { AR_LANGUAGE } from './language.js';
 import { AR_POLICY } from './policy.js';
+import { AR_BAR } from './bar.js';
 
-export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS });
+export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS });

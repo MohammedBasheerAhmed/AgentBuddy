@@ -27,5 +27,8 @@ export const MSG = Object.freeze({
 // browser's permission taken away, the organisation's list changed, "Clear everything"). The content script then retires.
 export const SITE_OFF_CODE = 'SITE_OFF';
 
+import { tm } from '../i18n/core.js';
+
 /** Errors that cross the message boundary travel as { error: { message, code } } so the panel can show plain text. */
-export const toWireError = (err) => ({ error: { message: String(err?.message || err || 'Something went wrong.'), code: err?.code || '' } });
+// (tm: this file is in the page script's bundle, which has no catalogue; the panel shows the text through plainError, which translates it)
+export const toWireError = (err) => ({ error: { message: String(err?.message || err || tm('Something went wrong.')), code: err?.code || '' } });

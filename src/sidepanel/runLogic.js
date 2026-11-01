@@ -1,7 +1,8 @@
 // The decisions inside useRun that are not about React: kept here as plain functions so tests/panel-run-logic.test.js can pin them.
 import { plainSource } from './plainAccess.js';
+import { t, tm, tn, t as tr } from '../i18n/index.js';
 
-export const EMPTY_ANSWER = 'The AI sent back nothing. Try again.';
+export const EMPTY_ANSWER = tm('The AI sent back nothing. Try again.');
 
 /**
  * Run tokens. Every run (and every reset) takes a new number; an answer that arrives for an older number is dropped. After
@@ -47,23 +48,23 @@ export function seenAfterConfirm({ previewMode, feature, seen = [] }) {
 
 // What "Mask" in the preview says, by the result of maskMore (src/lib/pipeline.js). Plain and short; never quotes the text.
 const MASK_MESSAGES = Object.freeze({
-  EMPTY: 'Select or type the text to hide first.',
-  SHORT: 'Use at least 2 letters or digits.',
-  LONG: 'That is too long. Select a shorter piece.',
-  PLACEHOLDER: 'Select plain text only, not a highlighted part.',
-  NOT_FOUND: 'That text is not in what will be sent.',
-  NOT_DATA: "That is Agent Buddy's own wording, not ticket text. Nothing changed.",
-  FAILED: 'That could not be hidden. If it must not be sent, press Cancel.',
-  GONE: 'This check has closed.',
+  EMPTY: tm('Select or type the text to hide first.'),
+  SHORT: tm('Use at least 2 letters or digits.'),
+  LONG: tm('That is too long. Select a shorter piece.'),
+  PLACEHOLDER: tm('Select plain text only, not a highlighted part.'),
+  NOT_FOUND: tm('That text is not in what will be sent.'),
+  NOT_DATA: tm("That is Agent Buddy's own wording, not ticket text. Nothing changed."),
+  FAILED: tm('That could not be hidden. If it must not be sent, press Cancel.'),
+  GONE: tm('This check has closed.'),
 });
 
 /** The line the preview shows after "Mask": how many places were masked, or why nothing changed. */
 export function maskMessage(out) {
   if (out?.ok) {
     const n = Number(out.masked) || 0;
-    return `Masked in ${n} ${n === 1 ? 'place' : 'places'}. Read the text again before you send.`;
+    return t('Masked in {places}. Read the text again before you send.', { places: tn(n, '{n} place', '{n} places') });
   }
-  return MASK_MESSAGES[out?.problem] || MASK_MESSAGES.FAILED;
+  return tr(MASK_MESSAGES[out?.problem] || MASK_MESSAGES.FAILED);
 }
 
 /**
@@ -81,7 +82,7 @@ export function startedOnAfter(previousPhase, phase, current, take) {
 
 /** '' when the model's text is usable; otherwise what to tell the person. */
 export function answerProblem(text) {
-  return typeof text === 'string' && text.trim() ? '' : EMPTY_ANSWER;
+  return typeof text === 'string' && text.trim() ? '' : tr(EMPTY_ANSWER);
 }
 
 /**
@@ -119,15 +120,16 @@ export function previewStyle({ previewMode, feature, pack, seen = [], others = '
 // The parts that carry text from other records, by their `field` (src/features/partColumns.js), and how to count them. A part per
 // row counts its parts; a part that holds a whole list counts the rows of that list in the pack (`related[key]`).
 const OTHER_RECORD_PARTS = [
-  { fields: ['reference_ticket', 'reference_ticket_routing'], one: 'solved ticket', many: 'solved tickets' },
-  { fields: ['kb_article'], one: 'article', many: 'articles' },
-  { fields: ['linked_incidents'], rows: 'linkedIncidents', one: 'linked incident', many: 'linked incidents' },
-  { fields: ['schedule_conflicts'], rows: 'conflicts', one: 'overlapping change', many: 'overlapping changes' },
-  { fields: ['recent_changes'], rows: 'recentChanges', one: 'recent change', many: 'recent changes' },
-  { fields: ['account_cases'], rows: 'accountCases', one: 'other case of the account', many: 'other cases of the account' },
+  { fields: ['reference_ticket', 'reference_ticket_routing'], say: (n) => tn(n, '{n} solved ticket', '{n} solved tickets') },
+  { fields: ['kb_article'], say: (n) => tn(n, '{n} article', '{n} articles') },
+  { fields: ['linked_incidents'], rows: 'linkedIncidents', say: (n) => tn(n, '{n} linked incident', '{n} linked incidents') },
+  { fields: ['schedule_conflicts'], rows: 'conflicts', say: (n) => tn(n, '{n} overlapping change', '{n} overlapping changes') },
+  { fields: ['recent_changes'], rows: 'recentChanges', say: (n) => tn(n, '{n} recent change', '{n} recent changes') },
+  { fields: ['account_cases'], rows: 'accountCases', say: (n) => tn(n, '{n} other case of the account', '{n} other cases of the account') },
 ];
 
-const joinWords = (list) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`);
+// "a, b and c": the list separator and the last "and" are the language's own.
+const joinWords = (list) => (list.length < 2 ? list.join('') : t('{list} and {last}', { list: list.slice(0, -1).join(t(', ')), last: list[list.length - 1] }));
 
 /**
  * "3 solved tickets and 2 articles": the parts of a prepared run that come from other records, counted. '' when there is none (then
@@ -142,7 +144,7 @@ export function otherRecordsSummary(prepared) {
     const mine = parts.filter((p) => kind.fields.includes(String(p?.field || '')));
     if (!mine.length) continue;
     const n = kind.rows ? (Array.isArray(related[kind.rows]) ? related[kind.rows].length : 0) : mine.length;
-    if (n > 0) words.push(`${n} ${n === 1 ? kind.one : kind.many}`);
+    if (n > 0) words.push(kind.say(n));
   }
   return words.length ? joinWords(words) : '';
 }
@@ -194,7 +196,8 @@ export function madeWithoutLine(gaps) {
   if (!list.length) return '';
   const shown = list.slice(0, 5);
   const more = list.length - shown.length;
-  return `Made without: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}.`;
+  const listed = shown.join(t(', '));
+  return more > 0 ? t('Made without: {list} and {more} more.', { list: listed, more }) : t('Made without: {list}.', { list: listed });
 }
 
 // Errors that "Try again" cannot fix (the organisation's policy, the privacy filter, the set-up, a record the person cannot read),
@@ -221,8 +224,8 @@ export const errorCodeOf = (err) => (err && typeof err === 'object' && typeof er
  */
 export function waitingText({ since, now, attempt = 1, attempts = 3 }) {
   const seconds = since > 0 && now >= since ? Math.floor((now - since) / 1000) : 0;
-  const time = seconds >= 1 ? ` · ${seconds} s` : '';
-  if (attempt > 1) return `Waiting for the AI${time}. It was busy, so Agent Buddy is trying again (try ${Math.min(attempt, attempts)} of ${attempts}).`;
-  if (seconds >= 30) return `Waiting for the AI${time}. Long tickets and busy services take longer.`;
-  return `Waiting for the AI${time}…`;
+  const time = seconds >= 1 ? t(' · {seconds} s', { seconds }) : '';
+  if (attempt > 1) return t('Waiting for the AI{time}. It was busy, so Agent Buddy is trying again (try {attempt} of {attempts}).', { time, attempt: Math.min(attempt, attempts), attempts });
+  if (seconds >= 30) return t('Waiting for the AI{time}. Long tickets and busy services take longer.', { time });
+  return t('Waiting for the AI{time}…', { time });
 }

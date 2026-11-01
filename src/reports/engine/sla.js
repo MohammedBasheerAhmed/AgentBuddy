@@ -6,13 +6,16 @@ import { worstSla, riskOf, isPaused, SLA_COLUMNS } from '../myDay.js';
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS } from './constants.js';
 import { attempt } from './reader.js';
+import { say, tm } from './say.js';
+import { t } from '../../i18n/core.js';
+import { placeholderName } from '../shown.js';
 import { andQuery, raw, disp, capNote, sectionResult, usableTables, byCountDesc, clampInt, verifiedCount } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { HOUR, snLiteral, timeOf } from './time.js';
 
 const SLA_FIELDS = [...SLA_COLUMNS];
 const TASK_FIELDS = ['sys_id', 'number', 'short_description', 'priority', 'state', 'assigned_to', 'assignment_group', 'sys_class_name'];
-export const SLA_UNSEEN = 'You can see no SLA records at all, so SLA numbers would prove nothing: there may be none, or an access rule may hide them.';
+export const SLA_UNSEEN = tm('You can see no SLA records at all, so SLA numbers would prove nothing: there may be none, or an access rule may hide them.');
 
 const isTrue = (v) => ['true', '1', 'yes'].includes(raw(v).toLowerCase());
 
@@ -89,14 +92,14 @@ export async function readSlaSnapshot(ctx) {
   ctx.slaMemo = (async () => {
     const { reader, scope, now } = ctx;
     const usable = usableTables(ctx).map((t) => t.table);
-    if (!usable.length) return { ok: false, status: 'error', note: 'No ticket table can be read.' };
+    if (!usable.length) return { ok: false, status: 'error', note: tm('No ticket table can be read.') };
     const dueUntil = now + LIMITS.dueSoonHours * HOUR;
     const base = andQuery('active=true', `task.sys_class_nameIN${usable.join(',')}`, scope.taskQuery);
     const worrying = worryingQuery(LIMITS.slaAtRiskPercent, dueUntil);
 
     // "0 breached" is only said when this person can see SLA records at all.
     const total = await verifiedCount(reader, 'task_sla', base, { unseen: SLA_UNSEEN });
-    if (!total.ok) return { ok: false, status: total.status, note: total.status === 'denied' ? 'SLA information is not available to you.' : total.note };
+    if (!total.ok) return { ok: false, status: total.status, note: total.status === 'denied' ? tm('SLA information is not available to you.') : total.note };
     const read = await attempt(
       () => reader.pages('task_sla', `${base}^${worrying}^ORDERBYDESChas_breached^ORDERBYDESCpercentage`, SLA_FIELDS, { max: LIMITS.slaRowsMax, pageSize: 500, displayValue: true }),
       'task_sla'
@@ -142,13 +145,13 @@ async function lookUpTickets(ctx, tickets) {
 export async function slaSection(ctx) {
   const snap = await readSlaSnapshot(ctx);
   if (!snap.ok) {
-    return sectionResult('sla', 'SLA risk radar', ctx, { available: false, reason: snap.note, status: snap.status });
+    return sectionResult('sla', tm('SLA risk radar'), ctx, { available: false, reason: snap.note, status: snap.status });
   }
   if (snap.cap) ctx.caps.push(snap.cap);
 
   const { details, failure, looked } = await lookUpTickets(ctx, snap.tickets);
-  if (failure) ctx.access.push({ source: 'task', status: failure.status, note: 'Ticket details are not available to you, so only the counts are shown.' });
-  if (snap.tickets.length > looked) ctx.notes.push(`Names and owners were looked up for the ${looked} most worrying tickets of ${snap.tickets.length}.`);
+  if (failure) ctx.access.push({ source: 'task', status: failure.status, note: tm('Ticket details are not available to you, so only the counts are shown.') });
+  if (snap.tickets.length > looked) ctx.notes.push(say(tm('Names and owners were looked up for the {looked} most worrying tickets of {total}.'), { looked, total: snap.tickets.length }));
 
   const tickets = snap.tickets.slice(0, looked).map((t) => {
     const d = details.get(t.sysId);
@@ -168,14 +171,14 @@ export async function slaSection(ctx) {
   const known = tickets.filter((t) => t.number);
   const topN = clampInt(ctx.params.top, 1, 25, LIMITS.topN);
 
-  return sectionResult('sla', 'SLA risk radar', ctx, {
+  return sectionResult('sla', tm('SLA risk radar'), ctx, {
     available: true,
     counts: snap.counts,
     ticketsAtIssue: snap.tickets.length,
     activeSlas: snap.activeSlas,
     top: known.slice(0, topN),
-    byOwner: tallyBy(known, 'ownerId', 'owner', '(unassigned)').slice(0, 15),
-    byGroup: tallyBy(known, 'groupId', 'group', '(no group)').slice(0, 15),
+    byOwner: tallyBy(known, 'ownerId', 'owner', tm('(unassigned)')).slice(0, 15),
+    byGroup: tallyBy(known, 'groupId', 'group', tm('(no group)')).slice(0, 15),
     detailsMissing: Boolean(failure),
     dueSoonHours: LIMITS.dueSoonHours,
     atRiskPercent: LIMITS.slaAtRiskPercent,
@@ -186,40 +189,41 @@ export async function slaSection(ctx) {
 export function slaTables(result) {
   const d = result.data;
   if (!d?.available) return [];
+  const named = (r) => ({ ...r, name: placeholderName(r.name) });
   return [
     {
-      title: 'Closest to breaking',
+      title: t('Closest to breaking'),
       columns: [
-        { key: 'number', label: 'Ticket' },
-        { key: 'title', label: 'Short description' },
-        { key: 'priority', label: 'Priority' },
-        { key: 'risk', label: 'SLA' },
-        { key: 'percent', label: 'Time used (%)' },
-        { key: 'due', label: 'Due' },
-        { key: 'owner', label: 'Owner', person: true },
-        { key: 'group', label: 'Group' },
+        { key: 'number', label: t('Ticket') },
+        { key: 'title', label: t('Short description') },
+        { key: 'priority', label: t('Priority') },
+        { key: 'risk', label: t('SLA') },
+        { key: 'percent', label: t('Time used (%)') },
+        { key: 'due', label: t('Due') },
+        { key: 'owner', label: t('Owner'), person: true },
+        { key: 'group', label: t('Group') },
       ],
-      rows: d.top.map((t) => ({ number: t.number, title: t.title, priority: t.priority, risk: t.breached ? 'Breached' : 'At risk', percent: t.sla.percentage, due: t.sla.plannedEnd, owner: t.owner || '(unassigned)', group: t.group })),
+      rows: d.top.map((x) => ({ number: x.number, title: x.title, priority: x.priority, risk: x.breached ? t('Breached') : t('At risk'), percent: x.sla.percentage, due: x.sla.plannedEnd, owner: x.owner || t('(unassigned)'), group: x.group })),
     },
     {
-      title: 'SLA risk by owner',
+      title: t('SLA risk by owner'),
       columns: [
-        { key: 'name', label: 'Owner', person: true },
-        { key: 'breached', label: 'Breached' },
-        { key: 'atRisk', label: 'At risk' },
-        { key: 'dueSoon', label: 'Due soon' },
+        { key: 'name', label: t('Owner'), person: true },
+        { key: 'breached', label: t('Breached') },
+        { key: 'atRisk', label: t('At risk') },
+        { key: 'dueSoon', label: t('Due soon') },
       ],
-      rows: d.byOwner,
+      rows: d.byOwner.map(named),
     },
     {
-      title: 'SLA risk by group',
+      title: t('SLA risk by group'),
       columns: [
-        { key: 'name', label: 'Group' },
-        { key: 'breached', label: 'Breached' },
-        { key: 'atRisk', label: 'At risk' },
-        { key: 'dueSoon', label: 'Due soon' },
+        { key: 'name', label: t('Group') },
+        { key: 'breached', label: t('Breached') },
+        { key: 'atRisk', label: t('At risk') },
+        { key: 'dueSoon', label: t('Due soon') },
       ],
-      rows: d.byGroup,
+      rows: d.byGroup.map(named),
     },
   ];
 }

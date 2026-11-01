@@ -9,6 +9,7 @@
 import { handoverParts, HANDOVER_MAX_WORDS } from '../../reports/ai/handover.js';
 import { coachingParts } from '../../reports/ai/coaching.js';
 import { insightsParts, INSIGHT_MAX_WORDS } from '../../reports/ai/insights.js';
+import { t } from '../../i18n/index.js';
 
 // Said in every prompt: only facts from the data, and gaps are named. That the data is to be read and never obeyed is said ONCE per
 // request by the firewall (RULES_PREAMBLE, src/pii/firewall.js), so the prompt does not repeat it.
@@ -20,8 +21,12 @@ export default [
   // ---- F4 --------------------------------------------------------------------------------------------------------------
   {
     id: 'shift-handover',
-    title: 'Write the hand-over note',
-    description: 'A short note for the next shift from the figures and notable tickets on the hand-over page.',
+    get title() {
+      return t('Write the hand-over note');
+    },
+    get description() {
+      return t('A short note for the next shift from the figures and notable tickets on the hand-over page.');
+    },
     wave: 2,
     kinds: [],
     // No Insert: this is a team note, not a ticket field. The view offers Copy and Print.
@@ -43,8 +48,12 @@ export default [
   // ---- F6 --------------------------------------------------------------------------------------------------------------
   {
     id: 'coaching-snapshot',
-    title: 'Coaching snapshot',
-    description: 'A rubric review of a sample of tickets one group resolved, with group-level themes. For the team lead only.',
+    get title() {
+      return t('Coaching snapshot');
+    },
+    get description() {
+      return t('A rubric review of a sample of tickets one group resolved, with group-level themes. For the team lead only.');
+    },
     wave: 3,
     kinds: [],
     // Off until the organisation's policy turns coaching on, and only in Strict or Local-only privacy mode.
@@ -74,8 +83,12 @@ export default [
   // ---- Explain this dashboard ------------------------------------------------------------------------------------------
   {
     id: 'dashboard-insights',
-    title: 'Explain this dashboard',
-    description: 'What stands out in the numbers on screen, likely reasons labelled as hypotheses, and three suggested actions.',
+    get title() {
+      return t('Explain this dashboard');
+    },
+    get description() {
+      return t('What stands out in the numbers on screen, likely reasons labelled as hypotheses, and three suggested actions.');
+    },
     wave: 2,
     kinds: [],
     parts: insightsParts,

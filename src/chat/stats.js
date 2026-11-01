@@ -2,6 +2,7 @@
 // they said last. Pure: it reads a ContextPack of kind 'chat' (src/context/chat.js puts the messages in pack.journal).
 
 import { parseSnTime } from '../context/util.js';
+import { t, tn } from '../i18n/core.js'; // core, not index: the content script imports this file and has no need of the whole catalogue
 
 const MINUTE = 60000;
 const ENDED_STATE = /closed|complete|ended|resolved|abandon|cancel/i;
@@ -68,13 +69,13 @@ export function chatOverview(pack, { now = Date.now() } = {}) {
 /** "3 minutes", "1 hour 5 minutes", "2 days" for a number of minutes. */
 export function describeMinutes(minutes) {
   if (!Number.isFinite(minutes)) return '';
-  if (minutes < 1) return 'less than a minute';
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  if (minutes < 1) return t('less than a minute');
+  if (minutes < 60) return tn(minutes, '{n} minute', '{n} minutes');
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
     const rest = minutes % 60;
-    return `${hours} hour${hours === 1 ? '' : 's'}${rest ? ` ${rest} minute${rest === 1 ? '' : 's'}` : ''}`;
+    const hoursText = tn(hours, '{n} hour', '{n} hours');
+    return rest ? t('{hours} {minutes}', { hours: hoursText, minutes: tn(rest, '{n} minute', '{n} minutes') }) : hoursText;
   }
-  const days = Math.floor(hours / 24);
-  return `${days} day${days === 1 ? '' : 's'}`;
+  return tn(Math.floor(hours / 24), '{n} day', '{n} days');
 }

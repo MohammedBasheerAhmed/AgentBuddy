@@ -10,6 +10,7 @@
 // blocks to be sent back unchanged within a tool loop, so the adapter replays
 // `raw` when it came from the same provider instead of rebuilding the turn.
 import { AiError } from './http.js';
+import { t } from '../i18n/index.js';
 
 function parseJsonObject(text) {
   if (text && typeof text === 'object') return text;
@@ -46,9 +47,9 @@ export function toOpenAIMessages(messages) {
 }
 
 export function toOpenAITools(tools) {
-  return tools.map((t) => ({
+  return tools.map((tool) => ({
     type: 'function',
-    function: { name: t.name, description: t.description, parameters: t.inputSchema },
+    function: { name: tool.name, description: tool.description, parameters: tool.inputSchema },
   }));
 }
 
@@ -64,10 +65,10 @@ function openAIUsage(usage) {
 const OPENAI_STOP = { length: 'max_tokens', content_filter: 'content_filter', tool_calls: 'tool_use', function_call: 'tool_use' };
 
 /** `who` names the provider in the messages ("Azure OpenAI could not..."); the neutral shape is the same for every provider. */
-export function fromOpenAIResponse(data, who = 'The AI service') {
+export function fromOpenAIResponse(data, who = t('The AI service')) {
   const choice = data?.choices?.[0];
   const message = choice?.message;
-  if (!message) throw new AiError(`${who} sent an answer without a message. Check the address and the model in Settings.`, 'BAD_ANSWER');
+  if (!message) throw new AiError(t('{who} sent an answer without a message. Check the address and the model in Settings.', { who }), 'BAD_ANSWER');
   const toolCalls = (message.tool_calls || []).map((c) => ({
     id: c.id,
     name: c.function?.name,
@@ -76,11 +77,11 @@ export function fromOpenAIResponse(data, who = 'The AI service') {
   const content = typeof message.content === 'string' ? message.content : '';
   const stopReason = OPENAI_STOP[choice.finish_reason] || (toolCalls.length ? 'tool_use' : 'end_turn');
   if (!content && !toolCalls.length) {
-    if (stopReason === 'content_filter') throw new AiError(`${who} stopped the answer with its content filter. Change the text, or ask your administrator about the filter.`, 'CONTENT_FILTER');
+    if (stopReason === 'content_filter') throw new AiError(t('{who} stopped the answer with its content filter. Change the text, or ask your administrator about the filter.', { who }), 'CONTENT_FILTER');
     // A reasoning model can spend the whole output limit thinking and return nothing.
-    if (stopReason === 'max_tokens') throw new AiError('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.', 'CUT_SHORT');
-    if (typeof message.refusal === 'string' && message.refusal) throw new AiError('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.', 'REFUSED');
-    throw new AiError(`${who} sent an empty answer. Try again.`, 'EMPTY_ANSWER');
+    if (stopReason === 'max_tokens') throw new AiError(t('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.'), 'CUT_SHORT');
+    if (typeof message.refusal === 'string' && message.refusal) throw new AiError(t('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.'), 'REFUSED');
+    throw new AiError(t('{who} sent an empty answer. Try again.', { who }), 'EMPTY_ANSWER');
   }
   return {
     content,
@@ -99,14 +100,14 @@ export function fromOpenAIResponse(data, who = 'The AI service') {
 export const truncationNote = (reply) =>
   reply?.truncated
     ? reply.stopReason === 'content_filter'
-      ? "The answer stops part-way: the AI service's content filter cut it off. Check it carefully before you use it."
-      : 'The answer was cut short because it reached the length limit. Check the end before you use it, or try again with less text.'
+      ? t("The answer stops part-way: the AI service's content filter cut it off. Check it carefully before you use it.")
+      : t('The answer was cut short because it reached the length limit. Check the end before you use it, or try again with less text.')
     : '';
 
 // ---- Anthropic ---------------------------------------------------------------
 
 export function toAnthropicTools(tools) {
-  return tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
+  return tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.inputSchema }));
 }
 
 /** { system, messages } in the Messages API shape. */
@@ -156,7 +157,9 @@ export function fromAnthropicResponse(data) {
     const raw = data.stop_details?.category;
     const category = typeof raw === 'string' && /^[a-z_]{1,40}$/.test(raw) ? raw : '';
     throw new AiError(
-      `The model declined this request${category ? ` (${category})` : ''}. Rephrase it or try a different model in Agent Buddy settings.`,
+      category
+        ? t('The model declined this request ({category}). Rephrase it or try a different model in Agent Buddy settings.', { category })
+        : t('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.'),
       'REFUSED'
     );
   }
@@ -170,8 +173,8 @@ export function fromAnthropicResponse(data) {
     .map((b) => ({ id: b.id, name: b.name, args: parseJsonObject(b.input) }));
   const cut = ANTHROPIC_CUT.has(data?.stop_reason);
   if (!content && !toolCalls.length) {
-    if (cut) throw new AiError('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.', 'CUT_SHORT');
-    throw new AiError('The model returned no content. Try again.', 'EMPTY_ANSWER');
+    if (cut) throw new AiError(t('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.'), 'CUT_SHORT');
+    throw new AiError(t('The model returned no content. Try again.'), 'EMPTY_ANSWER');
   }
   return {
     content,

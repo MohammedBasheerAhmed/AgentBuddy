@@ -14,10 +14,11 @@ import { openNewRecord } from '../openRecord.js';
 import { AiBadge } from '../ui/primitives.jsx';
 import { shownFor } from '../../profiles/profiles.js';
 import NotesHints from './NotesHints.jsx';
-import { t } from '../../i18n/index.js';
+import { isolate, t, tm, t as tr } from '../../i18n/index.js';
+import { tx } from '../../i18n/jsx.jsx';
 
 const FEATURE_ID = 'notes-to-ticket';
-const FIELD_NAMES = { short_description: 'Short description', description: 'Description', impact: 'Impact', urgency: 'Urgency', contact_type: 'Contact type' };
+const FIELD_NAMES = { short_description: tm('Short description'), description: tm('Description'), impact: tm('Impact'), urgency: tm('Urgency'), contact_type: tm('Contact type') };
 const CASE_TABLE = 'sn_customerservice_case';
 
 /** The blank forms this person may want to open: an incident (IT), a case (customer service). Both when neither profile is on. */
@@ -25,8 +26,8 @@ export function blankFormsFor(eff) {
   const incident = shownFor(['it'], eff);
   const csCase = shownFor(['csm'], eff);
   const out = [];
-  if (incident || !csCase) out.push({ table: 'incident', label: 'Open a blank incident' });
-  if (csCase) out.push({ table: CASE_TABLE, label: 'Open a blank case' });
+  if (incident || !csCase) out.push({ table: 'incident', label: tm('Open a blank incident') });
+  if (csCase) out.push({ table: CASE_TABLE, label: tm('Open a blank case') });
   return out;
 }
 
@@ -111,7 +112,9 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
         const textFields = plan.fields.map((f) => f.field).filter((n) => n === 'short_description' || n === 'description');
         const current = textFields.length ? await read(page.tabId, 'formValues', { names: textFields }) : null;
         if (current?.available) {
-          for (const n of textFields) if ((current.values[n] || '').trim()) found.push(`The ${FIELD_NAMES[n].toLowerCase()} field already has text. Filling replaces it.`);
+          for (const n of textFields) {
+            if ((current.values[n] || '').trim()) found.push(n === 'short_description' ? t('The short description field already has text. Filling replaces it.') : t('The description field already has text. Filling replaces it.'));
+          }
         }
       } catch {
         /* the fill below reports what it could not do */
@@ -129,17 +132,18 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
     for (const f of plan.fields) {
       // eslint-disable-next-line no-await-in-loop -- one field at a time, in a fixed order
       const answer = await fillField(page, { field: f.field, value: f.value, label: f.label, mode: 'replace', expect });
-      if (answer.ok) done.push(FIELD_NAMES[f.field]);
-      else failed.push(`${FIELD_NAMES[f.field]} (${fillReason(answer.reason).replace(/\.$/, '').toLowerCase()})`);
+      if (answer.ok) done.push(tr(FIELD_NAMES[f.field]));
+      else failed.push(`${tr(FIELD_NAMES[f.field])} (${fillReason(answer.reason).replace(/\.$/, '').toLowerCase()})`);
     }
     if (done.length && !failed.length) setFilled(true);
     if (done.length) fill.audit('inserted');
-    if (done.length && !failed.length) setOutcome({ kind: 'ok', text: `Filled: ${done.join(', ')}. Review the form, then save the record yourself.` });
-    else if (done.length) setOutcome({ kind: 'warn', text: `Filled: ${done.join(', ')}. Not filled: ${failed.join('; ')}. Copy those values instead.` });
-    else setOutcome({ kind: 'danger', text: `Nothing was filled: ${failed.join('; ')}. Use Copy instead.` });
+    if (done.length && !failed.length) setOutcome({ kind: 'ok', text: t('Filled: {fields}. Review the form, then save the record yourself.', { fields: done.join(t(', ')) }) });
+    else if (done.length) setOutcome({ kind: 'warn', text: t('Filled: {fields}. Not filled: {failed}. Copy those values instead.', { fields: done.join(t(', ')), failed: failed.join(t('; ')) }) });
+    else setOutcome({ kind: 'danger', text: t('Nothing was filled: {failed}. Use Copy instead.', { failed: failed.join(t('; ')) }) });
   }
 
   const showReview = run.phase === 'done' && run.active?.id === FEATURE_ID && values && proposal;
+  // What "Copy all" puts on the clipboard stays English: it is a block of form values to paste, labelled with ServiceNow's field names.
   const allText = values
     ? [
         `Short description: ${values.shortDescription}`,
@@ -154,7 +158,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
 
   return (
     <div className="ab-compose-stack">
-      {showKeyNote && <AiKeyNote eff={eff} what="this" />}
+      {showKeyNote && <AiKeyNote eff={eff} what={tm('this')} />}
 
       <section className="ab-compose-input" aria-label={t('Rough notes')}>
         <div className="ab-field">
@@ -175,14 +179,14 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
         </div>
         <div className="ab-row">
           {/* filled only while it is the next step (notes typed, no proposal yet): one filled button on the screen at a time */}
-          <button type="button" className={notes.trim() && !values ? 'ab-btn ab-wk-aibtn' : 'ab-btn ab-wk-aibtn-quiet'} disabled={!aiReady || !available || !notes.trim() || run.busy} onClick={write} title={available ? 'Sends the masked notes to the AI you chose, after a preview.' : 'Switched off by your organisation.'}>
-            <AiBadge label="" title="" /> Write the ticket
+          <button type="button" className={notes.trim() && !values ? 'ab-btn ab-wk-aibtn' : 'ab-btn ab-wk-aibtn-quiet'} disabled={!aiReady || !available || !notes.trim() || run.busy} onClick={write} title={available ? t('Sends the masked notes to the AI you chose, after a preview.') : t('Switched off by your organisation.')}>
+            <AiBadge label="" title="" /> {t('Write the ticket')}
           </button>
         </div>
         <BlankForms page={page} eff={eff} />
       </section>
 
-      <RunPanel run={run} eff={eff} page={page} readingText="Getting ready…" />
+      <RunPanel run={run} eff={eff} page={page} readingText={t('Getting ready…')} />
 
       {showReview && (
         <section className="ab-card ab-compose-actions" aria-label={t('Review before filling the form')}>
@@ -201,7 +205,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
               <select id="ab-notes-impact" className="ab-select" value={values.impact} onChange={set('impact')}>
                 <option value="">{t('Leave as is')}</option>
                 {LEVELS.map((l) => (
-                  <option key={l.value} value={l.label}>{l.label}</option>
+                  <option key={l.value} value={l.label}>{tr(l.label)}</option>
                 ))}
               </select>
             </div>
@@ -210,7 +214,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
               <select id="ab-notes-urgency" className="ab-select" value={values.urgency} onChange={set('urgency')}>
                 <option value="">{t('Leave as is')}</option>
                 {LEVELS.map((l) => (
-                  <option key={l.value} value={l.label}>{l.label}</option>
+                  <option key={l.value} value={l.label}>{tr(l.label)}</option>
                 ))}
               </select>
             </div>
@@ -219,22 +223,22 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
               <select id="ab-notes-contact" className="ab-select" value={values.contactType} onChange={set('contactType')}>
                 <option value="">{t('Leave as is')}</option>
                 {CONTACT_TYPES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>{tr(c.label)}</option>
                 ))}
               </select>
             </div>
           </div>
           {(proposal.impactText && !proposal.impact) || (proposal.urgencyText && !proposal.urgency) || (proposal.contactTypeText && !proposal.contactType) ? (
             <p className="ab-hint">
-              Not filled, because Agent Buddy does not recognise the value:
-              {proposal.impactText && !proposal.impact ? ` Impact "${proposal.impactText}".` : ''}
-              {proposal.urgencyText && !proposal.urgency ? ` Urgency "${proposal.urgencyText}".` : ''}
-              {proposal.contactTypeText && !proposal.contactType ? ` Contact type "${proposal.contactTypeText}".` : ''}
+              {t('Not filled, because Agent Buddy does not recognise the value:')}
+              {proposal.impactText && !proposal.impact ? ` ${t('Impact "{value}".', { value: isolate(proposal.impactText) })}` : ''}
+              {proposal.urgencyText && !proposal.urgency ? ` ${t('Urgency "{value}".', { value: isolate(proposal.urgencyText) })}` : ''}
+              {proposal.contactTypeText && !proposal.contactType ? ` ${t('Contact type "{value}".', { value: isolate(proposal.contactTypeText) })}` : ''}
             </p>
           ) : null}
           {proposal.categoryHint && (
             <p className="ab-sub">
-              Category hint: <strong>{proposal.categoryHint}</strong> (shown only; pick the category on the form yourself)
+              {tx('Category hint: {hint} (shown only; pick the category on the form yourself)', { hint: <strong>{isolate(proposal.categoryHint)}</strong> })}
             </p>
           )}
           <NotesHints key={proposalNo} page={page} text={values.shortDescription} names={names} />
@@ -275,7 +279,7 @@ ${values.description}`.trim(), { people: run.people, scan: run.scan }).hints} />
 
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!plan?.canFill || filling || filled} onClick={() => fillForm(false)}>
-              {filled ? 'Filled' : 'Fill the form'}
+              {filled ? t('Filled') : t('Fill the form')}
             </button>
             <button type="button" className="ab-btn ab-btn-sm" disabled={!values.shortDescription.trim()} onClick={() => fill.copy(values.shortDescription)}>
               {t('Copy short description')}
@@ -310,9 +314,9 @@ function BlankForms({ page, eff, quiet = true }) {
             key={f.table}
             type="button"
             className={quiet ? 'ab-btn ab-btn-sm ab-btn-quiet' : 'ab-btn ab-btn-sm'}
-            onClick={() => setNote(openNewRecord(page, f.table) ? 'The blank form opens in this tab. Your notes and the proposal stay here.' : 'The blank form could not be opened from here. Open it in ServiceNow yourself.')}
+            onClick={() => setNote(openNewRecord(page, f.table) ? t('The blank form opens in this tab. Your notes and the proposal stay here.') : t('The blank form could not be opened from here. Open it in ServiceNow yourself.'))}
           >
-            {f.label}
+            {tr(f.label)}
           </button>
         ))}
       </div>

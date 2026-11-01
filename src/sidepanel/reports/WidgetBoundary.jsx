@@ -1,7 +1,8 @@
 import React, { Component } from 'react';
-import { t } from '../../i18n/index.js';
+import { t, tm } from '../../i18n/index.js';
+import { shown } from '../../reports/shown.js';
 
-export const WIDGET_BROKEN_TEXT = 'This section could not be drawn. The rest of the dashboard is not affected.';
+export const WIDGET_BROKEN_TEXT = tm('This section could not be drawn. The rest of the dashboard is not affected.');
 
 /**
  * One boundary around each dashboard widget: a widget that throws while it draws (an answer of a shape it did not expect) shows one
@@ -28,13 +29,13 @@ export default class WidgetBoundary extends Component {
 
   render() {
     if (!this.state.failed) return this.props.children;
-    const title = this.props.title || 'Section';
+    const title = this.props.title || t('Section');
     return (
       <section className="ab-card ab-widget" aria-label={title}>
         <div className="ab-widget-head">
           <h2 className="ab-h">{title}</h2>
         </div>
-        <p className="ab-note ab-note-warn" role="alert">{WIDGET_BROKEN_TEXT}</p>
+        <p className="ab-note ab-note-warn" role="alert">{shown(WIDGET_BROKEN_TEXT)}</p>
         <div className="ab-row">
           <button type="button" className="ab-btn ab-btn-sm" onClick={() => this.setState({ failed: false })}>{t('Try again')}</button>
         </div>

@@ -5,20 +5,24 @@
 //   SUGGEST[stage]             the actions worth offering first in that stage, best first
 //   rules for `when`           small predicates the feature packs use (notClosed, notNew, isMajorIncident, ...)
 //
-// Pure and small, with no imports: the feature packs use it for their `when` rules and src/features/quick.js (which the service
-// worker loads) uses its stage names, so it must not pull the registry in.
+// Pure and small, with no imports but the translation function (core.js, which carries no catalogue): the feature packs use it for
+// their `when` rules and src/features/quick.js (which the service worker loads) uses its stage names, so it must not pull the
+// registry in.
 //
 // The state comes from the panel's header read: the DISPLAY value of `state` ("In Progress", "Closed Complete"). Display values
 // can be translated or renamed on an instance; a state we do not recognise is `null`, and null never hides an action (only the
 // order of suggestions falls back to a neutral one). docs/live-questions/assist.md lists what to check on a real instance.
 
+import { t } from '../i18n/core.js';
+
 export const STAGES = Object.freeze(['new', 'working', 'resolve', 'closed']);
 
 export const GROUPS = Object.freeze([
-  Object.freeze({ id: 'understand', label: 'Understand' }),
-  Object.freeze({ id: 'reply', label: 'Reply' }),
-  Object.freeze({ id: 'work', label: 'Work it' }),
-  Object.freeze({ id: 'resolve', label: 'Resolve' }),
+  // (the label is read when it is shown, so it follows the language of the panel)
+  Object.freeze({ id: 'understand', get label() { return t('Understand'); } }),
+  Object.freeze({ id: 'reply', get label() { return t('Reply'); } }),
+  Object.freeze({ id: 'work', get label() { return t('Work it'); } }),
+  Object.freeze({ id: 'resolve', get label() { return t('Resolve'); } }),
 ]);
 
 const GROUP_IDS = GROUPS.map((g) => g.id);
@@ -109,11 +113,11 @@ export const SUGGEST = Object.freeze({
 
 /** How the suggestions are introduced, in a few words. */
 export const STAGE_WORDS = Object.freeze({
-  new: 'Suggested for a new ticket',
-  working: 'Suggested while you work on it',
-  resolve: 'Suggested for wrapping up',
-  closed: 'Suggested for a closed ticket',
-  unknown: 'Suggested',
+  get new() { return t('Suggested for a new ticket'); },
+  get working() { return t('Suggested while you work on it'); },
+  get resolve() { return t('Suggested for wrapping up'); },
+  get closed() { return t('Suggested for a closed ticket'); },
+  get unknown() { return t('Suggested'); },
 });
 
 // ---- rules for a feature's `when(record, header)` --------------------------------------------------------------------------
@@ -167,7 +171,7 @@ export function whenAllows(feature, record, header) {
 export function cautionFor(feature, record) {
   const id = feature?.id;
   if (!['reply-draft', 'missing-info', 'request-explain'].includes(id)) return '';
-  if (record?.kind === 'catalog_task') return 'The requester does not see comments on a catalog task. Use the requested item to reach them.';
-  if (record?.kind === 'task') return 'Comments on a task may not reach the customer. Check who can see them.';
+  if (record?.kind === 'catalog_task') return t('The requester does not see comments on a catalog task. Use the requested item to reach them.');
+  if (record?.kind === 'task') return t('Comments on a task may not reach the customer. Check who can see them.');
   return '';
 }

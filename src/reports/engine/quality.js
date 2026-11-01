@@ -6,15 +6,18 @@
 // first) and buckets them here. When there are more rows than the limit the section says so and marks the oldest buckets partial.
 import { LIMITS } from './constants.js';
 import { attempt } from './reader.js';
+import { say, tm } from './say.js';
+import { t } from '../../i18n/core.js';
+import { shown, placeholderName } from '../shown.js';
 import { andQuery, byCountDesc, raw, sectionResult, usableTables, resolvedColumn } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { DAY, HOUR, bucketCounts, bucketLabels, bucketStarts, mean, median, timeOf } from './time.js';
 
 export const TREND_CHOICES = Object.freeze([
-  { id: 'day-14', unit: 'day', span: 14, label: 'Last 14 days' },
-  { id: 'day-30', unit: 'day', span: 30, label: 'Last 30 days' },
-  { id: 'week-8', unit: 'week', span: 8, label: 'Last 8 weeks' },
-  { id: 'week-12', unit: 'week', span: 12, label: 'Last 12 weeks' },
+  { id: 'day-14', unit: 'day', span: 14, label: tm('Last 14 days') },
+  { id: 'day-30', unit: 'day', span: 30, label: tm('Last 30 days') },
+  { id: 'week-8', unit: 'week', span: 8, label: tm('Last 8 weeks') },
+  { id: 'week-12', unit: 'week', span: 12, label: tm('Last 12 weeks') },
 ]);
 
 export function normalizeTrend(input) {
@@ -60,7 +63,7 @@ export function durationsHours(rows, resolvedField) {
 export function repeatCallers(groups, min = LIMITS.repeatCallerMin) {
   return groups
     .filter((g) => g.count >= min && g.keys[0]?.value)
-    .map((g) => ({ id: g.keys[0].value, name: g.keys[0].display || 'Unknown', count: g.count }))
+    .map((g) => ({ id: g.keys[0].value, name: g.keys[0].display || tm('Unknown'), count: g.count }))
     .sort(byCountDesc);
 }
 
@@ -127,8 +130,13 @@ export async function qualitySection(ctx) {
   parts.forEach((p) => {
     const failed = [p.openedRead, p.resolvedRead, p.openedCount, p.openNow].filter((v) => v && !v.ok);
     if (failed.length) ctx.access.push({ source: p.t.table, status: failed[0].status, note: `${p.t.meta.label}: ${failed[0].note}` });
-    [['opened', p.opened], ['resolved', p.resolved]].forEach(([what, b]) => {
-      if (b?.capped) ctx.caps.push({ source: p.t.table, fetched: b.fetched, total: b.total, note: `${p.t.meta.label}: only the first ${b.fetched}${b.total ? ` of ${b.total}` : ''} ${what} dates were read, so the oldest ${trend.unit}s are partial.` });
+    [[tm('opened'), p.opened], [tm('resolved'), p.resolved]].forEach(([what, b]) => {
+      if (!b?.capped) return;
+      const units = trend.unit === 'week' ? tm('weeks') : tm('days');
+      const note = b.total
+        ? say(tm('{table}: only the first {fetched} of {total} {what} dates were read, so the oldest {units} are partial.'), { table: p.t.meta.label, fetched: b.fetched, total: b.total, what, units })
+        : say(tm('{table}: only the first {fetched} {what} dates were read, so the oldest {units} are partial.'), { table: p.t.meta.label, fetched: b.fetched, what, units });
+      ctx.caps.push({ source: p.t.table, fetched: b.fetched, total: b.total, note });
     });
   });
 
@@ -142,7 +150,7 @@ export async function qualitySection(ctx) {
   const backlogOk = resolvable.length === usable.length && usable.length > 0 && parts.every((p) => p.openNow.ok) && !usable.some((p) => p.opened.capped || p.resolved?.capped);
   const backlogPerTable = backlogOk ? usable.map((p) => backlogSeries(p.openNow.value, p.opened.counts, p.resolved.counts)) : null;
   const backlog = backlogPerTable ? starts.map((_, i) => backlogPerTable.reduce((n, series) => n + series[i], 0)) : null;
-  if (!backlogOk && usable.length) ctx.notes.push('The backlog trend is not shown: it needs every table\'s resolved dates and a complete read.');
+  if (!backlogOk && usable.length) ctx.notes.push(tm('The backlog trend is not shown: it needs every table\'s resolved dates and a complete read.'));
 
   const durations = parts.flatMap((p) => p.durations);
   const resolvedRead = parts.filter((p) => p.resolvedRead?.ok);
@@ -164,7 +172,7 @@ export async function qualitySection(ctx) {
   const cat = parts.filter((p) => p.categories?.ok).map((p) => namedCounts(p.categories.value));
   const ci = parts.filter((p) => p.cis?.ok).map((p) => namedCounts(p.cis.value));
 
-  return sectionResult('quality', 'Quality and trend', ctx, {
+  return sectionResult('quality', tm('Quality and trend'), ctx, {
     trend: {
       id: trend.id,
       unit: trend.unit,
@@ -181,9 +189,9 @@ export async function qualitySection(ctx) {
     opened: openedExact.length ? { value: openedExact.reduce((n, p) => n + p.openedCount.value, 0), partial: openedExact.length < parts.length } : null,
     resolved: resolvable.length ? { value: resolvedSeries.reduce((a, b) => a + b, 0), capped: resolvable.some((p) => p.resolved.capped) } : null,
     mttr: durations.length
-      ? { meanHours: mean(durations), medianHours: median(durations), sample: durations.length, capped: mttrCapped, window: `tickets resolved in the last ${windowDays} days` }
+      ? { meanHours: mean(durations), medianHours: median(durations), sample: durations.length, capped: mttrCapped, window: say(tm('tickets resolved in the last {days} days'), { days: windowDays }) }
       : null,
-    reopen: reopenParts.length ? { reopened: reopenedN, of: reopenBase, percent: reopenBase ? (reopenedN / reopenBase) * 100 : 0, window: `tickets opened in the last ${windowDays} days` } : null,
+    reopen: reopenParts.length ? { reopened: reopenedN, of: reopenBase, percent: reopenBase ? (reopenedN / reopenBase) * 100 : 0, window: say(tm('tickets opened in the last {days} days'), { days: windowDays }) } : null,
     reassign: reassignParts.length ? { average: reassignAvg, multi: multiN, of: reassignBase, multiPercent: reassignBase ? (multiN / reassignBase) * 100 : 0, threshold: LIMITS.pingPongMin } : null,
     categories: mergeTop(cat, 8),
     cis: mergeTop(ci, 8),
@@ -202,29 +210,30 @@ export async function qualitySection(ctx) {
 
 export function qualityTables(result) {
   const d = result.data;
-  if (!d) return [];
+  if (!d || d.available === false) return []; // an empty scope or a table list with nothing to read has no tables
   const out = [];
+  const weekly = d.trend.unit === 'week';
   out.push({
-    title: `Opened and resolved per ${d.trend.unit}`,
+    title: weekly ? t('Opened and resolved per week') : t('Opened and resolved per day'),
     columns: [
-      { key: 'label', label: d.trend.unit === 'week' ? 'Week starting' : 'Day' },
-      { key: 'opened', label: 'Opened' },
-      ...(d.trend.resolved ? [{ key: 'resolved', label: 'Resolved' }] : []),
-      ...(d.trend.backlog ? [{ key: 'backlog', label: 'Open at the end (estimate)' }] : []),
-      { key: 'partial', label: 'Complete?' },
+      { key: 'label', label: weekly ? t('Week starting') : t('Day') },
+      { key: 'opened', label: t('Opened') },
+      ...(d.trend.resolved ? [{ key: 'resolved', label: t('Resolved') }] : []),
+      ...(d.trend.backlog ? [{ key: 'backlog', label: t('Open at the end (estimate)') }] : []),
+      { key: 'partial', label: t('Complete?') },
     ],
-    rows: d.trend.labels.map((label, i) => ({ label, opened: d.trend.opened[i], resolved: d.trend.resolved?.[i], backlog: d.trend.backlog?.[i], partial: d.trend.partial[i] ? 'partial' : 'yes' })),
+    rows: d.trend.labels.map((label, i) => ({ label, opened: d.trend.opened[i], resolved: d.trend.resolved?.[i], backlog: d.trend.backlog?.[i], partial: d.trend.partial[i] ? t('partial') : t('yes') })),
   });
   const measures = [];
-  if (d.mttr) measures.push({ measure: 'Mean time to resolve (hours)', value: Math.round(d.mttr.meanHours * 10) / 10, note: d.mttr.window });
-  if (d.mttr) measures.push({ measure: 'Median time to resolve (hours)', value: Math.round(d.mttr.medianHours * 10) / 10, note: `${d.mttr.sample} tickets` });
-  if (d.reopen) measures.push({ measure: 'Reopen rate (%)', value: Math.round(d.reopen.percent * 10) / 10, note: `${d.reopen.reopened} of ${d.reopen.of} ${d.reopen.window}` });
-  if (d.reassign) measures.push({ measure: 'Average reassignments', value: Math.round(d.reassign.average * 100) / 100, note: `${d.reassign.multi} of ${d.reassign.of} reassigned ${d.reassign.threshold}+ times` });
-  if (measures.length) out.push({ title: 'Quality measures', columns: [{ key: 'measure', label: 'Measure' }, { key: 'value', label: 'Value' }, { key: 'note', label: 'Based on' }], rows: measures });
-  if (d.categories.length) out.push({ title: 'Top categories', columns: [{ key: 'name', label: 'Category' }, { key: 'count', label: 'Tickets' }], rows: d.categories });
-  if (d.cis.length) out.push({ title: 'Top configuration items', columns: [{ key: 'name', label: 'Configuration item' }, { key: 'count', label: 'Tickets' }], rows: d.cis });
+  if (d.mttr) measures.push({ measure: t('Mean time to resolve (hours)'), value: Math.round(d.mttr.meanHours * 10) / 10, note: shown(d.mttr.window) });
+  if (d.mttr) measures.push({ measure: t('Median time to resolve (hours)'), value: Math.round(d.mttr.medianHours * 10) / 10, note: t('{count} tickets', { count: d.mttr.sample }) });
+  if (d.reopen) measures.push({ measure: t('Reopen rate (%)'), value: Math.round(d.reopen.percent * 10) / 10, note: t('{reopened} of {total} {window}', { reopened: d.reopen.reopened, total: d.reopen.of, window: shown(d.reopen.window) }) });
+  if (d.reassign) measures.push({ measure: t('Average reassignments'), value: Math.round(d.reassign.average * 100) / 100, note: t('{multi} of {total} reassigned {threshold}+ times', { multi: d.reassign.multi, total: d.reassign.of, threshold: d.reassign.threshold }) });
+  if (measures.length) out.push({ title: t('Quality measures'), columns: [{ key: 'measure', label: t('Measure') }, { key: 'value', label: t('Value') }, { key: 'note', label: t('Based on') }], rows: measures });
+  if (d.categories.length) out.push({ title: t('Top categories'), columns: [{ key: 'name', label: t('Category') }, { key: 'count', label: t('Tickets') }], rows: d.categories.map((c) => ({ ...c, name: placeholderName(c.name) })) });
+  if (d.cis.length) out.push({ title: t('Top configuration items'), columns: [{ key: 'name', label: t('Configuration item') }, { key: 'count', label: t('Tickets') }], rows: d.cis.map((c) => ({ ...c, name: placeholderName(c.name) })) });
   if (d.repeatCallers?.items.length) {
-    out.push({ title: `Callers with ${d.repeatCallers.min}+ tickets in ${d.repeatCallers.days} days`, columns: [{ key: 'name', label: 'Caller', person: true }, { key: 'count', label: 'Tickets' }], rows: d.repeatCallers.items });
+    out.push({ title: t('Callers with {min}+ tickets in {days} days', { min: d.repeatCallers.min, days: d.repeatCallers.days }), columns: [{ key: 'name', label: t('Caller'), person: true }, { key: 'count', label: t('Tickets') }], rows: d.repeatCallers.items.map((c) => ({ ...c, name: placeholderName(c.name) })) });
   }
   return out;
 }

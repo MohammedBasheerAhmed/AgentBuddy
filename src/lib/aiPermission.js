@@ -2,6 +2,7 @@
 // the connection), never for "all sites". Call ensureAiPermission() straight from a click so the browser can show its prompt.
 // Azure OpenAI and company gateways ask for the host of the address that was entered (one resource, one gateway), never a wildcard.
 import { originPattern } from './aiUsage.js';
+import { t, isolate } from '../i18n/index.js';
 
 /** The match pattern for the address calls will go to, or '' if none is needed (or the address is not usable, so nothing is sent). */
 export function aiOriginPattern(config) {
@@ -26,7 +27,7 @@ export async function ensureAiPermission(config, permissions = globalThis.chrome
     granted = await permissions.request({ origins: [pattern] });
   } catch {
     // The browser refuses to even ask for a host the build does not list (an enterprise build with fixed hosts).
-    throw new Error(`This build of Agent Buddy cannot contact ${hostOfPattern(pattern)}. Your organisation decides which AI address it may use. Nothing was sent.`);
+    throw new Error(t('This build of Agent Buddy cannot contact {host}. Your organisation decides which AI address it may use. Nothing was sent.', { host: isolate(hostOfPattern(pattern)) }));
   }
-  if (!granted) throw new Error(`Agent Buddy needs your permission to contact ${hostOfPattern(pattern)}. Nothing was sent.`);
+  if (!granted) throw new Error(t('Agent Buddy needs your permission to contact {host}. Nothing was sent.', { host: isolate(hostOfPattern(pattern)) }));
 }

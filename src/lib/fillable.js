@@ -21,6 +21,9 @@
 
 import { MSG } from './messages.js';
 import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
+// (core.js, not index.js: this file is also in the page script's bundle, which has no Arabic catalogue to carry. The texts below are
+// only ever shown by the side panel.)
+import { t, tm, isolate, t as tr } from '../i18n/core.js';
 
 export const FILLABLE_FIELDS = Object.freeze({
   // Journal fields of the ticket forms (comments are customer-visible, work notes are not).
@@ -72,11 +75,19 @@ export const isJournalField = (field) => JOURNAL.has(field);
 
 // ---- Where the text lands, and what the person does next ------------------------------------------------------------
 
-const FIELD_NAMES = { comments: 'Additional comments', work_notes: 'Work notes', close_notes: 'Resolution notes', text: 'the article body', short_description: 'Short description', subject: 'the email subject', body: 'the email body' };
+const FIELD_NAMES = {
+  comments: tm('Additional comments'),
+  work_notes: tm('Work notes'),
+  close_notes: tm('Resolution notes'),
+  text: tm('the article body'),
+  short_description: tm('Short description'),
+  subject: tm('the email subject'),
+  body: tm('the email body'),
+};
 // The email client's own boxes (an AI email draft carried to the email form, AI9). They are named for what they are, whatever the
 // page calls them, and nothing goes anywhere until the person presses Send there.
 const EMAIL_FIELDS = new Set(['subject', 'body']);
-export const EMAIL_NEXT = 'Nothing is sent until you press Send in the email form.';
+export const EMAIL_NEXT = tm('Nothing is sent until you press Send in the email form.'); // an English text: show it with t()
 
 /**
  * One line that says where an insert lands, one that says what to do after it, and a caution when the box is not what it seems.
@@ -87,30 +98,43 @@ export const EMAIL_NEXT = 'Nothing is sent until you press Send in the email for
  */
 export function describeInsert({ field, fieldLabel = '', mode = 'append', kind = '', surface = 'classic', table = '' } = {}) {
   const email = EMAIL_FIELDS.has(field);
-  const name = (email ? FIELD_NAMES[field] : fieldLabel) || FIELD_NAMES[field] || field;
+  // (the label is an English text marked in the feature, or the page's own label: tr shows the known ones in the panel's language)
+  const label = (email ? FIELD_NAMES[field] : fieldLabel) || FIELD_NAMES[field] || field;
+  const name = tr(label);
   const replacing = fillModeFor(field, mode) === 'replace';
-  const into = table === 'kb_knowledge' ? `the article form (${name})` : name;
-  let where = replacing ? `Replaces what is in ${into}` : `Goes below what is in ${into}`;
-  if (field === 'comments') where += ', which the customer sees';
-  else if (field === 'work_notes') where += ', which only your colleagues see';
-  else if (isCustomerVisible(field) && table !== 'kb_knowledge' && !email) where += ', which the customer can often read';
-  where += '.';
-  if (email) return { where, next: EMAIL_NEXT, caution: '' };
+  const into = table === 'kb_knowledge' ? t('the article form ({name})', { name }) : name;
+  // Whole sentences, so a language can put the clause about who reads it where it likes.
+  const reader = field === 'comments' ? 'customer' : field === 'work_notes' ? 'colleagues' : isCustomerVisible(field) && table !== 'kb_knowledge' && !email ? 'often' : '';
+  let where;
+  if (replacing) {
+    where =
+      reader === 'customer' ? t('Replaces what is in {into}, which the customer sees.', { into })
+      : reader === 'colleagues' ? t('Replaces what is in {into}, which only your colleagues see.', { into })
+      : reader === 'often' ? t('Replaces what is in {into}, which the customer can often read.', { into })
+      : t('Replaces what is in {into}.', { into });
+  } else {
+    where =
+      reader === 'customer' ? t('Goes below what is in {into}, which the customer sees.', { into })
+      : reader === 'colleagues' ? t('Goes below what is in {into}, which only your colleagues see.', { into })
+      : reader === 'often' ? t('Goes below what is in {into}, which the customer can often read.', { into })
+      : t('Goes below what is in {into}.', { into });
+  }
+  if (email) return { where, next: tr(EMAIL_NEXT), caution: '' };
 
-  let next = 'Then press Save.';
+  let next = t('Then press Save.');
   let caution = '';
   if (isJournalField(field) && surface === 'workspace') {
-    next = 'Then press Post.';
-    caution = `In a Workspace one box can hold both comments and work notes: check it is set to ${field === 'comments' ? 'Additional comments' : 'Work notes'} before you post.`;
+    next = t('Then press Post.');
+    caution = t('In a Workspace one box can hold both comments and work notes: check it is set to {box} before you post.', { box: field === 'comments' ? t('Additional comments') : t('Work notes') });
   } else if (isJournalField(field) && surface === 'portal') {
-    next = 'Then press the page\'s own Send.';
+    next = t("Then press the page's own Send.");
   } else if (field === 'comments') {
-    next = 'Then press Save. Saving sends the comment to the customer.';
+    next = t('Then press Save. Saving sends the comment to the customer.');
   } else if (table === 'kb_knowledge') {
-    next = 'Then save the article.';
+    next = t('Then save the article.');
   }
-  if (field === 'comments' && kind === 'catalog_task') caution = 'The requester does not see comments on a catalog task. Use the requested item to reach them.';
-  else if (field === 'comments' && kind === 'task' && !caution) caution = 'Comments on a task may not reach the customer. Check who can see them.';
+  if (field === 'comments' && kind === 'catalog_task') caution = t('The requester does not see comments on a catalog task. Use the requested item to reach them.');
+  else if (field === 'comments' && kind === 'task' && !caution) caution = t('Comments on a task may not reach the customer. Check who can see them.');
   return { where, next, caution };
 }
 
@@ -141,18 +165,18 @@ export function toSafeHtml(text) {
 
 /** What the person reads for each reason FILL_FIELD can answer with. The content script maps any other reason to 'no-form'. */
 export const FILL_REASON_TEXT = Object.freeze({
-  'no-form': 'Agent Buddy could not reach a form field on this page.',
-  'no-such-field': 'That field is not on this form.',
-  'read-only': 'That field is read-only on this form.',
-  'too-long': 'The text is too long to insert.',
-  'set-failed': 'The form did not accept the text.',
-  'bad-field': 'That field cannot be filled.',
-  'wrong-record': 'The open form is not the record this text was written for.',
+  'no-form': tm('Agent Buddy could not reach a form field on this page.'),
+  'no-such-field': tm('That field is not on this form.'),
+  'read-only': tm('That field is read-only on this form.'),
+  'too-long': tm('The text is too long to insert.'),
+  'set-failed': tm('The form did not accept the text.'),
+  'bad-field': tm('That field cannot be filled.'),
+  'wrong-record': tm('The open form is not the record this text was written for.'),
 });
 
 export const FILL_REASONS = Object.freeze(Object.keys(FILL_REASON_TEXT));
 
-export const fillReasonText = (reason) => FILL_REASON_TEXT[reason] || 'Could not insert it.';
+export const fillReasonText = (reason) => (FILL_REASON_TEXT[reason] ? tr(FILL_REASON_TEXT[reason]) : t('Could not insert it.'));
 
 // ---- The record a text was written for -------------------------------------------------------------------------------
 
@@ -251,9 +275,10 @@ export function wrongRecordText(source) {
   const want = parseExpect(source?.expect);
   const kind = want && want !== 'invalid' ? want.kind : '';
   const number = String(source?.number || '').trim();
-  if (kind === 'email') return `This was written for the email form of ${number || 'its own ticket'}. Open that email form, or use Copy.`;
-  if (kind === 'new') return `This was written for a new ${want.table} form. Open that form again, or use Copy.`;
-  return `This was written for ${number || (kind ? `another ${want.table} record` : 'another record')}. Open that ticket again, or use Copy.`;
+  if (kind === 'email') return t('This was written for the email form of {number}. Open that email form, or use Copy.', { number: number ? isolate(number) : t('its own ticket') });
+  if (kind === 'new') return t('This was written for a new {table} form. Open that form again, or use Copy.', { table: want.table });
+  const record = number ? isolate(number) : kind ? t('another {table} record', { table: want.table }) : t('another record');
+  return t('This was written for {record}. Open that ticket again, or use Copy.', { record });
 }
 
 /**
@@ -262,8 +287,8 @@ export function wrongRecordText(source) {
  */
 export function insertedNote(answer, target = null) {
   // With the target ({ field, surface, ... }) the note names the next step for that box (Post in a Workspace, Save on a form).
-  const base = target?.field ? `Inserted. Review it. ${describeInsert(target).next}` : 'Inserted into the form. Review it, then save the record yourself.';
-  if (answer?.method === 'dom' && typeof answer.label === 'string' && answer.label) return `${base} It went into the box labelled "${answer.label}".`;
+  const base = target?.field ? t('Inserted. Review it. {next}', { next: describeInsert(target).next }) : t('Inserted into the form. Review it, then save the record yourself.');
+  if (answer?.method === 'dom' && typeof answer.label === 'string' && answer.label) return t('{base} It went into the box labelled "{label}".', { base, label: isolate(answer.label) });
   return base;
 }
 

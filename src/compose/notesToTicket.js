@@ -6,6 +6,8 @@
 // their choice values, and anything else is kept for display ("Category hint", "Questions still to ask") or dropped.
 // A value the AI made up is never passed on to the form.
 
+import { isolate, t, tm } from '../i18n/index.js';
+
 /** The only form fields Notes to ticket may fill, in the order they are filled. */
 export const FILLABLE_FIELDS = Object.freeze(['short_description', 'description', 'impact', 'urgency', 'contact_type']);
 
@@ -18,19 +20,20 @@ export const FIELD_LABELS = Object.freeze({
   contact_type: 'Contact type',
 });
 
-// Choice values on the base-system incident form: 1 High, 2 Medium, 3 Low.
+// Choice values on the base-system incident form: 1 High, 2 Medium, 3 Low. The English label is also what the panel keeps as the
+// value of its select, so it is only translated where it is shown.
 export const LEVELS = Object.freeze([
-  Object.freeze({ label: 'High', value: '1' }),
-  Object.freeze({ label: 'Medium', value: '2' }),
-  Object.freeze({ label: 'Low', value: '3' }),
+  Object.freeze({ label: tm('High'), value: '1' }),
+  Object.freeze({ label: tm('Medium'), value: '2' }),
+  Object.freeze({ label: tm('Low'), value: '3' }),
 ]);
 
 // Choice values of the base-system incident form's Channel (contact_type).
 export const CONTACT_TYPES = Object.freeze([
-  Object.freeze({ label: 'Phone', value: 'phone' }),
-  Object.freeze({ label: 'Self-service', value: 'self-service' }),
-  Object.freeze({ label: 'Email', value: 'email' }),
-  Object.freeze({ label: 'Walk-in', value: 'walk-in' }),
+  Object.freeze({ label: tm('Phone'), value: 'phone' }),
+  Object.freeze({ label: tm('Self-service'), value: 'self-service' }),
+  Object.freeze({ label: tm('Email'), value: 'email' }),
+  Object.freeze({ label: tm('Walk-in'), value: 'walk-in' }),
 ]);
 
 /** Blank ticket forms the fill is offered on. Impact, urgency and channel exist on incidents; cases name fewer of them. */
@@ -78,11 +81,11 @@ const NOT_STATED = /^(not stated|none|n\/a|unknown|-+|not specified|unspecified)
 
 /** "High", "2 - Medium", "moderate", "1" -> the matching entry of LEVELS, or null. */
 export function normalizeLevel(input) {
-  const t = oneLine(input).toLowerCase();
-  if (!t || NOT_STATED.test(t)) return null;
-  const word = /\b(high|medium|moderate|low)\b/.exec(t);
+  const lowered = oneLine(input).toLowerCase();
+  if (!lowered || NOT_STATED.test(lowered)) return null;
+  const word = /\b(high|medium|moderate|low)\b/.exec(lowered);
   if (word) return LEVELS.find((l) => l.label.toLowerCase() === (word[1] === 'moderate' ? 'medium' : word[1])) || null;
-  const digit = /^([123])\b/.exec(t);
+  const digit = /^([123])\b/.exec(lowered);
   return digit ? LEVELS.find((l) => l.value === digit[1]) : null;
 }
 
@@ -95,9 +98,9 @@ const CONTACT_WORDS = [
 
 /** "Phone", "walk in", "E-mail" -> the matching entry of CONTACT_TYPES, or null (chat, social, anything else). */
 export function normalizeContactType(input) {
-  const t = oneLine(input).toLowerCase();
-  if (!t || NOT_STATED.test(t)) return null;
-  const hit = CONTACT_WORDS.find(([, re]) => re.test(t));
+  const lowered = oneLine(input).toLowerCase();
+  if (!lowered || NOT_STATED.test(lowered)) return null;
+  const hit = CONTACT_WORDS.find(([, re]) => re.test(lowered));
   return hit ? CONTACT_TYPES.find((c) => c.value === hit[0]) : null;
 }
 
@@ -173,10 +176,10 @@ export function parseTicketProposal(input) {
  */
 export function planFill(values, newRecord) {
   if (!newRecord || typeof newRecord !== 'object') {
-    return { canFill: false, reason: 'Fill is only offered on a blank ticket form (a new incident or case on the classic screen). Open one, or copy the text instead.', fields: [] };
+    return { canFill: false, reason: t('Fill is only offered on a blank ticket form (a new incident or case on the classic screen). Open one, or copy the text instead.'), fields: [] };
   }
   if (!TICKET_KINDS.has(newRecord.kind)) {
-    return { canFill: false, reason: `The blank form that is open (${String(newRecord.table || 'unknown').slice(0, 40)}) is not an incident or case form. Copy the text instead.`, fields: [] };
+    return { canFill: false, reason: t('The blank form that is open ({table}) is not an incident or case form. Copy the text instead.', { table: isolate(String(newRecord.table || 'unknown').slice(0, 40)) }), fields: [] };
   }
   const given = values && typeof values === 'object' ? values : {};
   // Own properties only: nothing inherited can become a value.
@@ -199,7 +202,7 @@ export function planFill(values, newRecord) {
   // A choice value only counts when it is on the list above, and only on the form those values belong to.
   const channel = CONTACT_TYPES.find((c) => c.value === v.contactType);
   if (channel && CONTACT_TYPE_TABLES.has(newRecord.table)) add('contact_type', channel.value);
-  if (!fields.length) return { canFill: false, reason: 'There is nothing to fill yet.', fields: [] };
+  if (!fields.length) return { canFill: false, reason: t('There is nothing to fill yet.'), fields: [] };
   // Order is fixed by FILLABLE_FIELDS no matter how the values arrived.
   fields.sort((a, b) => FILLABLE_FIELDS.indexOf(a.field) - FILLABLE_FIELDS.indexOf(b.field));
   return { canFill: true, reason: '', fields };

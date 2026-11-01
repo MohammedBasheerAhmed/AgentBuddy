@@ -21,6 +21,7 @@ import { attempt, createReader } from './reader.js';
 import { andQuery, disp, normalizeTables, probeTables, raw, resolvedColumn, tableAccess } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { timeOf } from './time.js';
+import { say, tm } from './say.js';
 
 export const COACHING_FEATURE = 'coaching-snapshot';
 const PEOPLE_COLUMNS = ['caller_id', 'requested_for', 'contact', 'consumer', 'opened_by', 'requested_by'];
@@ -28,15 +29,17 @@ const PEOPLE_COLUMNS = ['caller_id', 'requested_for', 'contact', 'consumer', 'op
 const fail = (code, reason) => ({ ok: false, code, reason });
 const lower = (v) => String(v ?? '').trim().toLowerCase();
 
-const failureText = (read, what) => (read.status === 'denied' ? `${what} not available to you.` : read.status === 'blocked' ? `${what} not allowed by your organisation.` : read.note);
+const GROUPS_ARE = { denied: tm('Groups are not available to you.'), blocked: tm('Groups are not allowed by your organisation.') };
+const MEMBERSHIP_IS = { denied: tm('Group membership is not available to you.'), blocked: tm('Group membership is not allowed by your organisation.') };
+const failureText = (read, texts) => texts[read.status] || read.note;
 
 /**
  * @param {ReturnType<import('../ai/coaching.js').normalizeCoachingRequest>} request already checked
  * @param {{ deps: {queryTable: Function, aggregate: Function}, userId: string, blocked?: string[], isBlocked?: (table: string) => boolean, now?: number }} env
  */
 export async function readCoachingSample(request, { deps, userId, blocked = [], isBlocked = null, now = Date.now() }) {
-  if (!SYS_ID_RE.test(userId || '')) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
-  if (request.tables.some(isSensitiveTable)) throw new Error('HR case tables are never used for coaching.');
+  if (!SYS_ID_RE.test(userId || '')) throw new Error(tm('Agent Buddy could not tell who is signed in. Reload the page and try again.'));
+  if (request.tables.some(isSensitiveTable)) throw new Error(tm('HR case tables are never used for coaching.'));
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LIMITS.sectionTimeoutMs);
@@ -47,8 +50,8 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
   try {
     // 1. The group, as this person can see it.
     const group = await attempt(() => reader.rows('sys_user_group', buildQuery([{ op: 'eq', field: 'sys_id', value: request.groupId }]), ['sys_id', 'name'], { limit: 1, displayValue: false }), 'sys_user_group');
-    if (!group.ok) return fail('NO_GROUP', failureText(group, 'Groups are'));
-    if (!group.value.length) return fail('NO_GROUP', 'That group is not visible to you.');
+    if (!group.ok) return fail('NO_GROUP', failureText(group, GROUPS_ARE));
+    if (!group.value.length) return fail('NO_GROUP', tm('That group is not visible to you.'));
     const groupName = oneLine(raw(group.value[0].name) || request.groupName || 'the group', 80);
 
     // 2. Its people. Without them nobody can say which comments an agent of the group wrote, so the run stops rather than guess.
@@ -56,7 +59,7 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
       () => reader.rows('sys_user_grmember', buildQuery([{ op: 'eq', field: 'group', value: request.groupId }, { op: 'true', field: 'user.active' }]), ['user', 'user.user_name'], { limit: COACHING_LIMITS.membersMax, displayValue: true }),
       'sys_user_grmember'
     );
-    if (!read.ok) return fail('NO_MEMBERS', `${failureText(read, 'Group membership is')} Agent Buddy cannot tell which comments this group's agents wrote, so it cannot build the snapshot.`);
+    if (!read.ok) return fail('NO_MEMBERS', say(tm('{reason} Agent Buddy cannot tell which comments this group\'s agents wrote, so it cannot build the snapshot.'), { reason: failureText(read, MEMBERSHIP_IS) }));
     const members = [];
     const seen = new Set();
     read.value.forEach((r) => {
@@ -68,7 +71,12 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
       members.push({ name, login });
     });
     if (members.length < COACHING_LIMITS.minMembers) {
-      return fail('GROUP_TOO_SMALL', `This group has ${members.length === 1 ? 'one person' : `${members.length} people`} you can see. A snapshot of fewer than ${COACHING_LIMITS.minMembers} people would describe individuals, not a group, so it is not offered. Pick a larger group.`);
+      return fail(
+        'GROUP_TOO_SMALL',
+        members.length === 1
+          ? say(tm('This group has one person you can see. A snapshot of fewer than {min} people would describe individuals, not a group, so it is not offered. Pick a larger group.'), { min: COACHING_LIMITS.minMembers })
+          : say(tm('This group has {count} people you can see. A snapshot of fewer than {min} people would describe individuals, not a group, so it is not offered. Pick a larger group.'), { count: members.length, min: COACHING_LIMITS.minMembers })
+      );
     }
     const logins = new Set(members.map((m) => m.login).filter(Boolean));
     const names = new Set(members.map((m) => lower(m.name)).filter(Boolean));
@@ -77,7 +85,7 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
     // 3. The tickets this group resolved in the chosen days.
     const probed = await probeTables(reader, normalizeTables(request.tables));
     const usable = probed.filter((t) => t.usable);
-    if (!usable.length) return fail('NO_TABLE', 'None of the ticket tables can be read with your access.');
+    if (!usable.length) return fail('NO_TABLE', tm('None of the ticket tables can be read with your access.'));
     const found = await Promise.all(
       usable.map(async (t) => {
         const col = resolvedColumn(t);
@@ -102,8 +110,8 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
     );
     found.forEach((f) => {
       if (f.failed) access.push({ source: f.t.table, status: f.failed.status, note: `${f.t.meta.label}: ${f.failed.note}` });
-      if (f.skipped) notes.push(`${f.t.meta.label} have no resolved date, so they are not part of the sample.`);
-      if (f.capped) notes.push(`${f.t.meta.label}: the sample was chosen from the ${f.list.length} most recently resolved of ${f.total}.`);
+      if (f.skipped) notes.push(say(tm('{table} have no resolved date, so they are not part of the sample.'), { table: f.t.meta.label }));
+      if (f.capped) notes.push(say(tm('{table}: the sample was chosen from the {shown} most recently resolved of {total}.'), { table: f.t.meta.label, shown: f.list.length, total: f.total }));
     });
     const candidates = found.reduce((n, f) => n + (f.list ? f.total : 0), 0);
     const picked = pickSample(found.flatMap((f) => f.list || []), request.sample);
@@ -134,11 +142,11 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
     const details = await Promise.all(picked.map(readTicket));
     const unreadable = details.filter((d) => d.unreadable);
     const tickets = details.filter((d) => !d.unreadable);
-    if (unreadable.length) notes.push(`${unreadable.length} of the ${picked.length} chosen tickets could not be read with your access and were left out.`);
+    if (unreadable.length) notes.push(say(tm('{count} of the {total} chosen tickets could not be read with your access and were left out.'), { count: unreadable.length, total: picked.length }));
     tickets.forEach((t) => {
       if (t.accessNote) access.push({ source: 'journal', status: 'error', note: `${t.number}: ${t.accessNote}` });
     });
-    if (controller.signal.aborted) notes.push('Some of it took too long to read and is missing.');
+    if (controller.signal.aborted) notes.push(tm('Some of it took too long to read and is missing.'));
 
     return {
       ok: true,
@@ -184,7 +192,7 @@ async function readAgentComments(reader, c, isAgent) {
       entries = parseJournalString(disp(own.value[0].comments), { type: 'comment' }).map((e) => ({ when: e.when, by: e.by, text: clipText(e.text, COACHING_LIMITS.commentChars) }));
       if (entries.length) how = 'record';
     } else if (!own.ok && !table.ok) {
-      access = 'comments could not be read';
+      access = tm('comments could not be read');
     }
   }
 

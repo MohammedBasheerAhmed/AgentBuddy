@@ -11,7 +11,8 @@ import { snippetTargets } from '../../snippets/targets.js';
 import { downloadText } from '../reports/download.js';
 import { ShowMore } from '../ui/primitives.jsx';
 import { FillFeedback, ReviewHints, hintsFor, useFill } from './shared.js';
-import { t } from '../../i18n/index.js';
+import { formatNumber, isolate, t, tn, t as tr } from '../../i18n/index.js';
+import { tx } from '../../i18n/jsx.jsx';
 
 // N21 Snippets: canned replies with {{variables}} filled from the open ticket, inserted into a field of its form (the person presses
 // Save). Three sources, one list: the organisation's (policy `orgSnippets`, read-only, marked), the person's own (this browser,
@@ -21,7 +22,6 @@ import { t } from '../../i18n/index.js';
 const area = () => chrome.storage.local;
 const token = (name) => `{{${name}}}`; // (braces cannot be written inside JSX text)
 const firstLine = (body) => String(body || '').split('\n').find((l) => l.trim()) || '';
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** What a snippet will look like, as plain text (React escapes it), with the variables that could not be filled listed. */
 function PreviewBox({ preview, label }) {
@@ -46,7 +46,8 @@ function PreviewBox({ preview, label }) {
 export function snippetSummary(own, org) {
   const total = own.length + org.length;
   if (!total) return '';
-  return org.length ? `${plural(total, 'snippet')} · ${org.length} from your organisation` : plural(total, 'snippet');
+  const count = tn(total, '{n} snippet', '{n} snippets');
+  return org.length ? t('{count} · {org} from your organisation', { count, org: org.length }) : count;
 }
 
 export default function SnippetsPanel({ page, eff, active, onSummary = () => {} }) {
@@ -97,7 +98,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
   const selected = list.find((s) => s.id === selectedId) || null;
   const needsPack = active && Boolean(selected || editor);
   const targets = snippetTargets(page);
-  const target = targets.find((t) => t.field === targetField) || targets[0];
+  const target = targets.find((item) => item.field === targetField) || targets[0];
 
   useEffect(() => {
     onSummary(snippetSummary(own, org));
@@ -155,12 +156,14 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
   const actual = (body) => previewSnippet(body, { pack: realPack, agent });
   const forNumber = realPack?.number || record?.number || '';
   const sourceNote = !key
-    ? 'No ticket is open, so this shows example values. Open a ticket to see real ones.'
+    ? t('No ticket is open, so this shows example values. Open a ticket to see real ones.')
     : packState.state === 'loading'
-      ? 'Reading the ticket…'
+      ? t('Reading the ticket…')
       : packState.state === 'error'
-        ? 'The ticket could not be read, so this shows example values.'
-        : `Filled from ${forNumber || 'the open ticket'}.`;
+        ? t('The ticket could not be read, so this shows example values.')
+        : forNumber
+          ? t('Filled from {number}.', { number: isolate(forNumber) })
+          : t('Filled from the open ticket.');
 
   // ---- changing the library ----
   async function persist(apply) {
@@ -169,7 +172,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
       setOwn(res.list);
       return res;
     } catch {
-      setMsg({ kind: 'danger', text: 'The snippets could not be saved. Try again.' });
+      setMsg({ kind: 'danger', text: t('The snippets could not be saved. Try again.') });
       return null;
     }
   }
@@ -185,7 +188,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
     setEditor(null);
     setEditError('');
     setSelectedId(res.snippet?.id || '');
-    setMsg({ kind: 'ok', text: 'Saved.' });
+    setMsg({ kind: 'ok', text: t('Saved.') });
   }
 
   async function remove(id) {
@@ -193,7 +196,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
     setConfirmDelete('');
     if (res) {
       setSelectedId('');
-      setMsg({ kind: 'ok', text: 'Deleted.' });
+      setMsg({ kind: 'ok', text: t('Deleted.') });
     }
   }
 
@@ -206,25 +209,25 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
       }
       return { list: next };
     });
-    if (res) setMsg({ kind: 'ok', text: 'Added three examples. Edit or delete them as you like.' });
+    if (res) setMsg({ kind: 'ok', text: t('Added three examples. Edit or delete them as you like.') });
   }
 
   // ---- back up and share: your own snippets only (the organisation's come from its policy) ----
   function saveFile() {
     try {
       downloadText(snippetFileName(), exportSnippets(own), 'application/json;charset=utf-8');
-      setMsg({ kind: 'ok', text: `Saved ${plural(own.length, 'snippet')} to a file in your downloads. Add it on another computer with "Add from a file".` });
+      setMsg({ kind: 'ok', text: tn(own.length, 'Saved {n} snippet to a file in your downloads. Add it on another computer with "Add from a file".', 'Saved {n} snippets to a file in your downloads. Add it on another computer with "Add from a file".') });
     } catch {
-      setMsg({ kind: 'danger', text: 'The browser did not save the file. Try "Copy as text" instead.' });
+      setMsg({ kind: 'danger', text: t('The browser did not save the file. Try "Copy as text" instead.') });
     }
   }
 
   async function copyAll() {
     try {
       await navigator.clipboard.writeText(exportSnippets(own));
-      setMsg({ kind: 'ok', text: `Copied ${plural(own.length, 'snippet')} as text. Paste it into "Paste instead" on another computer.` });
+      setMsg({ kind: 'ok', text: tn(own.length, 'Copied {n} snippet as text. Paste it into "Paste instead" on another computer.', 'Copied {n} snippets as text. Paste it into "Paste instead" on another computer.') });
     } catch {
-      setMsg({ kind: 'danger', text: 'The browser blocked copying. Try "Save to a file" instead.' });
+      setMsg({ kind: 'danger', text: t('The browser blocked copying. Try "Save to a file" instead.') });
     }
   }
 
@@ -234,7 +237,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
       return { list: r.list, added: r.added, skipped: r.skipped, errors: r.errors };
     });
     if (!res) return false;
-    setMsg({ kind: res.added ? 'ok' : 'warn', text: `Added ${res.added}, skipped ${res.skipped}.`, details: res.errors });
+    setMsg({ kind: res.added ? 'ok' : 'warn', text: t('Added {added}, skipped {skipped}.', { added: res.added, skipped: res.skipped }), details: res.errors });
     return res.added > 0;
   }
 
@@ -250,7 +253,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
     try {
       text = await file.text();
     } catch {
-      setMsg({ kind: 'danger', text: 'The file could not be read.' });
+      setMsg({ kind: 'danger', text: t('The file could not be read.') });
       return;
     }
     await importFrom(text);
@@ -319,8 +322,8 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
     const unknown = unknownVariables(editor.body);
     return (
       <div className="ab-compose-stack" ref={box}>
-        <section className="ab-compose-editor" aria-label={editor.id ? 'Edit snippet' : 'New snippet'}>
-          <h3 className="ab-h">{editor.id ? 'Edit snippet' : 'New snippet'}</h3>
+        <section className="ab-compose-editor" aria-label={editor.id ? t('Edit snippet') : t('New snippet')}>
+          <h3 className="ab-h">{editor.id ? t('Edit snippet') : t('New snippet')}</h3>
           <div className="ab-field">
             <label className="ab-label" htmlFor="ab-snip-title">{t('Title')}</label>
             <input id="ab-snip-title" ref={titleRef} className="ab-input" maxLength={LIMITS.title} value={editor.title} onChange={(e) => setEditor({ ...editor, title: e.target.value })} />
@@ -333,28 +336,30 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
           <div className="ab-field">
             <label className="ab-label" htmlFor="ab-snip-body">{t('Text')}</label>
             <textarea id="ab-snip-body" ref={bodyRef} className="ab-textarea ab-compose-text" maxLength={LIMITS.body} value={editor.body} onChange={(e) => setEditor({ ...editor, body: e.target.value })} />
-            <span className="ab-hint">{editor.body.length.toLocaleString()} of {LIMITS.body.toLocaleString()} characters</span>
+            <span className="ab-hint">{t('{count} of {max} characters', { count: formatNumber(editor.body.length), max: formatNumber(LIMITS.body) })}</span>
           </div>
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" aria-expanded={showVars} onClick={() => setShowVars((v) => !v)}>
-              {showVars ? 'Hide variables' : 'Variables'}
+              {showVars ? t('Hide variables') : t('Variables')}
             </button>
           </div>
           {showVars && (
             <div className="ab-note ab-compose-vars">
               <p>
-                Write <span className="ab-mono">{token('name')}</span> where a value should go, for example <span className="ab-mono">{token('caller.first_name')}</span>.
-                Add a fallback after a bar for when there is no value: <span className="ab-mono">{token('caller.first_name | there')}</span>. A variable with no value and no
-                fallback stays visible and is listed, so you can fix it before sending.
+                {tx('Write {name} where a value should go, for example {example}. Add a fallback after a bar for when there is no value: {fallback}. A variable with no value and no fallback stays visible and is listed, so you can fix it before sending.', {
+                  name: <span className="ab-mono">{token('name')}</span>,
+                  example: <span className="ab-mono">{token('caller.first_name')}</span>,
+                  fallback: <span className="ab-mono">{token('caller.first_name | there')}</span>,
+                })}
               </p>
               <ul className="ab-compose-rows">
                 {BUILTIN_VARIABLES.map((v) => (
                   <li key={v.name} className="ab-compose-row">
                     <div className="ab-compose-row-text">
                       <span className="ab-mono">{token(v.name)}</span>
-                      <span className="ab-sub">{t('{description} (for example {example})', { description: v.description, example: v.example })}</span>
+                      <span className="ab-sub">{t('{description} (for example {example})', { description: tr(v.description), example: isolate(tr(v.example)) })}</span>
                     </div>
-                    <button type="button" className="ab-btn ab-btn-sm" onClick={() => addVariable(v.name)} aria-label={`Add ${v.name} to the text`}>{t('Add')}</button>
+                    <button type="button" className="ab-btn ab-btn-sm" onClick={() => addVariable(v.name)} aria-label={t('Add {name} to the text', { name: isolate(v.name) })}>{t('Add')}</button>
                   </li>
                 ))}
               </ul>
@@ -362,7 +367,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
           )}
           {unknown.length > 0 && (
             <p className="ab-note ab-note-warn" role="status">
-              Agent Buddy does not know {unknown.length === 1 ? 'this variable' : 'these variables'}: {unknown.map((n) => token(n)).join(', ')}. Check the spelling, or add a fallback.
+              {tn(unknown.length, 'Agent Buddy does not know this variable: {list}. Check the spelling, or add a fallback.', 'Agent Buddy does not know these variables: {list}. Check the spelling, or add a fallback.', { list: unknown.map((n) => token(n)).join(', ') })}
             </p>
           )}
           <h4 className="ab-compose-sub">{t('Preview')}</h4>
@@ -399,7 +404,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
           </div>
         </div>
       )}
-      {loaded && list.length > 0 && results.length === 0 && <p className="ab-sub">{t('Nothing matches "{query}".', { query })}</p>}
+      {loaded && list.length > 0 && results.length === 0 && <p className="ab-sub">{t('Nothing matches "{query}".', { query: isolate(query) })}</p>}
       {results.length > 0 && (
         <ShowMore
           items={results}
@@ -429,7 +434,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
       )}
 
       {selected && detail && (
-        <section className="ab-compose-actions ab-snip-detail" aria-label={`Snippet: ${selected.title}`}>
+        <section className="ab-compose-actions ab-snip-detail" aria-label={t('Snippet: {title}', { title: isolate(selected.title) })}>
           <div className="ab-row ab-compose-head">
             <h3 className="ab-h">{selected.title}</h3>
             <span className="ab-spacer" />
@@ -446,8 +451,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
 
           {askMissing && askMissing.id === selected.id && (
             <div className="ab-note ab-note-warn" role="alert">
-              <strong>{t('Some values are missing.')}</strong> If you insert now, these stay as written in the text:{' '}
-              {realMissing.map((n) => token(n)).join(', ')}.
+              {tx('{heading} If you insert now, these stay as written in the text: {list}.', { heading: <strong>{t('Some values are missing.')}</strong>, list: realMissing.map((n) => token(n)).join(', ') })}
               <div className="ab-row ab-compose-gap">
                 <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => insertSnippet(selected, true)}>{t('Insert anyway')}</button>
                 <button type="button" className="ab-btn ab-btn-sm" onClick={() => setAskMissing(null)}>{t('Cancel')}</button>
@@ -458,8 +462,8 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
           <div className="ab-row ab-snip-insert">
             <label className="ab-sub" htmlFor="ab-snip-target">{t('Insert into')}</label>
             <select id="ab-snip-target" className="ab-select ab-compose-select" value={target?.field || ''} onChange={(e) => { setTargetField(e.target.value); clearNotes(); }}>
-              {targets.map((t) => (
-                <option key={t.field} value={t.field}>{t.label}</option>
+              {targets.map((item) => (
+                <option key={item.field} value={item.field}>{tr(item.label)}</option>
               ))}
             </select>
           </div>
@@ -470,7 +474,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
               disabled={!target || (Boolean(key) && packState.state === 'loading') || fill.busy || Boolean(fill.inserted[insertKey])}
               onClick={() => insertSnippet(selected)}
             >
-              {fill.inserted[insertKey] ? 'Inserted' : 'Insert'}
+              {fill.inserted[insertKey] ? t('Inserted') : t('Insert')}
             </button>
             <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.copy(actual(selected.body).text)}>{t('Copy')}</button>
             {!fromOrg && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => startEdit(selected)}>{t('Edit')}</button>}
@@ -487,7 +491,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
           </div>
           <FillFeedback fill={fill} />
           <p className="ab-hint">
-            {fromOrg ? 'From your organisation: it cannot be changed here. ' : ''}Insert adds the text below what is in the field. You press Save yourself.
+            {fromOrg ? `${t('From your organisation: it cannot be changed here.')} ` : ''}{t('Insert adds the text below what is in the field. You press Save yourself.')}
           </p>
         </section>
       )}
@@ -523,7 +527,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
           {pasteOpen && (
             <div className="ab-field">
               <label className="ab-label" htmlFor="ab-snip-import">{t('Paste the snippets here')}</label>
-              <textarea id="ab-snip-import" className="ab-textarea ab-compose-text" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={t('{"format":"agent-buddy-snippets", ...}')} />
+              <textarea id="ab-snip-import" className="ab-textarea ab-compose-text" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"format":"agent-buddy-snippets", ...}' />
               <div className="ab-row">
                 <button type="button" className="ab-btn ab-btn-sm" disabled={!importText.trim()} onClick={importPasted}>{t('Add these snippets')}</button>
               </div>

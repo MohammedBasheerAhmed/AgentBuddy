@@ -102,11 +102,11 @@ export function useFill({ page, eff, run, feature = '' }) {
     async (value, why = '') => {
       try {
         await navigator.clipboard.writeText(String(value ?? ''));
-        setNote({ kind: 'ok', text: why ? `${why} Copied to the clipboard instead.` : 'Copied to the clipboard.' });
+        setNote({ kind: 'ok', text: why ? `${why} ${t('Copied to the clipboard instead.')}` : t('Copied to the clipboard.') });
         audit('copied');
         return true;
       } catch {
-        setNote({ kind: 'danger', text: 'The browser blocked copying. Select the text and copy it by hand.' });
+        setNote({ kind: 'danger', text: t('The browser blocked copying. Select the text and copy it by hand.') });
         return false;
       }
     },
@@ -118,7 +118,7 @@ export function useFill({ page, eff, run, feature = '' }) {
       setNote(null);
       const value = String(spec.value ?? '');
       if (!value.trim()) {
-        setNote({ kind: 'danger', text: 'There is nothing to insert.' });
+        setNote({ kind: 'danger', text: t('There is nothing to insert.') });
         return null;
       }
       const key = spec.key || `${spec.field}:${spec.mode || ''}`;
@@ -187,7 +187,7 @@ export function FillFeedback({ fill }) {
     <>
       {findings && (
         <div className="ab-note ab-note-warn" role="alert">
-          <strong>{isCustomerVisible(findings.spec.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
+          <strong>{isCustomerVisible(findings.spec.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
           <ul className="ab-compose-list">
             {findings.items.map((f, i) => (
               <li key={i}>
@@ -207,7 +207,7 @@ export function FillFeedback({ fill }) {
               onClick={() => {
                 const value = findings.spec.value;
                 fill.setFindings(null);
-                fill.copy(value, 'Not inserted.');
+                fill.copy(value, t('Not inserted.'));
               }}
             >
               {t('Edit first (copy instead)')}

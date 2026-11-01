@@ -2,6 +2,8 @@
 // priority accounts in its policy (`priorityAccounts`: account names as ServiceNow shows them). The case's account name, which the
 // `glance` read already brings for the Account card and the Glance, is compared with that list: no read and no column of its own. Pure.
 
+import { t } from '../i18n/index.js';
+
 /** The form two account names are compared in: one Unicode form, spaces trimmed and collapsed, lower case. '' for anything else. */
 export function accountKey(name) {
   if (typeof name !== 'string') return '';
@@ -19,5 +21,12 @@ export function isPriorityAccount(account, priorityAccounts) {
   return priorityAccounts.some((name) => accountKey(name) === key);
 }
 
-/** The words of the mark and its tooltip, the same on the Account card and the Glance. */
-export const PRIORITY_ACCOUNT_MARK = Object.freeze({ text: 'Priority account', title: 'Your organisation lists this account as a priority account.' });
+/** The words of the mark and its tooltip, the same on the Account card and the Glance (read when shown, so they follow the language). */
+export const PRIORITY_ACCOUNT_MARK = Object.freeze({
+  get text() {
+    return t('Priority account');
+  },
+  get title() {
+    return t('Your organisation lists this account as a priority account.');
+  },
+});

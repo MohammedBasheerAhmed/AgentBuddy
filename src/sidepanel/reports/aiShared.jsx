@@ -9,12 +9,13 @@ import { aiNeedsText, isAiReady } from '../aiReady.js';
 import AiKeyNote from '../AiKeyNote.jsx';
 import { AiBadge } from '../ui/primitives.jsx';
 import { destinationOf } from '../shell/shellParts.jsx';
-import { t } from '../../i18n/index.js';
+import { isolate, t } from '../../i18n/index.js';
+import { tx } from '../../i18n/jsx.jsx';
 
 export { isAiReady };
 
 /** The sentence for a section that cannot use the AI yet (no key, or the key is locked). */
-export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this') || 'Add an AI key in Settings to use this.';
+export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this') || t('Add an AI key in Settings to use this.');
 
 /** That sentence as the panel's shared note, with the way there ("Open Settings"). Nothing when the AI can be used. */
 export function AiKeyLine({ eff }) {
@@ -31,7 +32,7 @@ export function AiButton({ eff, primary = false, className = '', children, ...re
     <button
       type="button"
       className={`ab-btn ab-btn-sm ${primary ? 'ab-btn-ai' : 'ab-btn-ai-quiet'}${className ? ` ${className}` : ''}`}
-      title={where ? `Sends masked text to ${where}. You see it first.` : 'Sends masked text to the AI you chose. You see it first.'}
+      title={where ? t('Sends masked text to {where}. You see it first.', { where: isolate(where) }) : t('Sends masked text to the AI you chose. You see it first.')}
       {...rest}
     >
       <AiBadge label="" title="" />
@@ -53,14 +54,16 @@ export function featureState(id, policy) {
  * RunPanel without its own result card: progress, errors and the preview of exactly what will be sent come from RunPanel, but
  * the result is drawn by <AiResult>, because a team note offers Copy and Print (not Insert) and may need a check in front of it.
  */
-export function RunProgress({ run, eff, page, readingText = 'Getting ready…' }) {
+export function RunProgress({ run, eff, page, readingText = t('Getting ready…') }) {
   return <RunPanel run={{ ...run, phase: run.phase === 'done' ? 'idle' : run.phase }} eff={eff} page={page} readingText={readingText} />;
 }
 
-const KIND_TEXT = {
-  ranking: 'ranks people',
-  'person-rating': 'rates a named person',
-  'agent-label': 'rates a person by a label such as "Agent A"',
+// What a finding is, in words (a text, not a constant: the language can change while the page is open).
+const kindText = (kind) => {
+  if (kind === 'ranking') return t('ranks people');
+  if (kind === 'person-rating') return t('rates a named person');
+  if (kind === 'agent-label') return t('rates a person by a label such as "Agent A"');
+  return t('looks like a rating');
 };
 
 /**
@@ -81,10 +84,10 @@ export function AiResult({ run, eff, featureId, heading, notice = [], withhold =
   async function copy() {
     try {
       await navigator.clipboard.writeText(toPlainText(parseSafeText(run.result)));
-      setNote('Copied to the clipboard.');
+      setNote(t('Copied to the clipboard.'));
       logAudit({ feature: featureId, table: run.lastPack?.table, sysId: run.lastPack?.sysId, provider: config.provider, model: config.model, mode: eff.values.piiMode, outcome: 'copied' });
     } catch {
-      setNote('The browser blocked copying. Select the text and copy it by hand.');
+      setNote(t('The browser blocked copying. Select the text and copy it by hand.'));
     }
   }
 
@@ -104,7 +107,7 @@ export function AiResult({ run, eff, featureId, heading, notice = [], withhold =
             <ul className="ab-ai-findings">
               {withhold.findings.map((f) => (
                 <li key={`${f.kind}-${f.excerpt}`}>
-                  {KIND_TEXT[f.kind] || 'looks like a rating'}: <span className="ab-mono">{f.excerpt}</span>
+                  {tx('{kind}: {excerpt}', { kind: kindText(f.kind), excerpt: <span className="ab-mono">{f.excerpt}</span> })}
                 </li>
               ))}
             </ul>

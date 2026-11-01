@@ -4,7 +4,7 @@ import { destinationOf } from '../../../shell/shellParts.jsx';
 import { featureById } from '../../../../features/registry.js';
 import { actionPlan, offeredFeatures } from './plan.js';
 import { useChecklistNeed } from './useChecklistNeed.js';
-import { t } from '../../../../i18n/index.js';
+import { t, t as tr } from '../../../../i18n/index.js';
 
 // The AI actions of the Ticket screen (TRACKER.md 3.5 and 2.4): the three that fit the ticket's state first, the first of them the one
 // primary button of the screen; everything else folded under "More actions", by what the agent is doing (Understand, Reply, Work it,
@@ -22,7 +22,7 @@ const CHECKLIST_KINDS = ['catalog_task', 'requested_item'];
 
 function ActionButton({ item, primary, off, where, onRun }) {
   const { feature, reason, caution } = item;
-  const hover = reason || (where ? `Sends masked text to ${where}. You see it first.` : 'Sends masked text to your AI. You see it first.');
+  const hover = reason || (where ? t('Sends masked text to {where}. You see it first.', { where }) : t('Sends masked text to your AI. You see it first.'));
   return (
     <li className="ab-act-item">
       <button
@@ -34,9 +34,9 @@ function ActionButton({ item, primary, off, where, onRun }) {
         onClick={() => onRun(feature)}
       >
         <span className="ab-act-line">
-          <span className="ab-act-title">{feature.title}</span> <AiBadge title={hover} />
+          <span className="ab-act-title">{tr(feature.title)}</span> <AiBadge title={hover} />
         </span>
-        <span className={`ab-act-desc${reason ? ' ab-act-reason' : ''}`}>{reason || feature.description}</span>
+        <span className={`ab-act-desc${reason ? ' ab-act-reason' : ''}`}>{reason || tr(feature.description)}</span>
       </button>
       {caution && <p className="ab-act-caution">{caution}</p>}
     </li>
@@ -88,7 +88,7 @@ export default function ActionGroups({ page, eff, record, header = null, busy = 
         <div className="ab-act-more">
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-act-moretoggle" aria-expanded={moreOpen} aria-controls={moreId} onClick={() => setMoreOpen(!moreOpen)}>
             <span className={`ab-act-chevron${moreOpen ? ' is-open' : ''}`} aria-hidden="true" />
-            {moreOpen ? 'Fewer actions' : `More actions (${plan.more})`}
+            {moreOpen ? t('Fewer actions') : t('More actions ({count})', { count: plan.more })}
           </button>
           <div id={moreId} className="ab-act-groups" hidden={!moreOpen}>
             {plan.groups.map((g) => (

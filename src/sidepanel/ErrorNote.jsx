@@ -1,5 +1,6 @@
 import React from 'react';
 import { plainError } from './ask.js';
+import { t } from '../i18n/index.js';
 
 /**
  * A read or an action that failed, in plain words, with the next step next to it: "Try again" (when the view can read again).
@@ -7,8 +8,8 @@ import { plainError } from './ask.js';
  *
  * props: error (an Error or a message), onRetry? (shows the button), retryLabel?
  */
-export default function ErrorNote({ error, onRetry, retryLabel = 'Try again' }) {
-  const text = plainError(error, 'Something went wrong.');
+export default function ErrorNote({ error, onRetry, retryLabel = t('Try again') }) {
+  const text = plainError(error, t('Something went wrong.'));
   return (
     <div className="ab-note ab-note-danger ab-errnote" role="alert">
       <p className="ab-errnote-text">{text}</p>

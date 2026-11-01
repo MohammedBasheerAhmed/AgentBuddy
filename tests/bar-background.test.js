@@ -95,24 +95,24 @@ test('BAR_ACTIONS uses the person\'s pins', async () => {
 
 test('BAR_ACTIONS answers with nothing when the person switched the bar off', async () => {
   const d = deps({ loadSettings: async () => ({ pageBar: false }) });
-  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: false });
+  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: false, language: 'en' });
 });
 
 test('BAR_ACTIONS answers with nothing when the organisation switched the bar off, whatever the person chose', async () => {
   const d = deps({ loadSettings: async () => ({ pageBar: true }), loadPolicy: async () => normalizePolicy({ disablePageBar: true }) });
-  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: false });
+  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: false, language: 'en' });
   await assert.rejects(handleBarMessage(launch, fromPage(), d), /not available/);
   assert.deepEqual(d.calls.saved, []);
 });
 
 test('BAR_ACTIONS answers with nothing for a table the organisation blocked', async () => {
   const d = deps({ loadPolicy: async () => normalizePolicy({ blockedTables: ['incident'] }) });
-  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: true });
+  assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: true, language: 'en' });
 });
 
 test('BAR_ACTIONS answers with nothing on HR content unless the organisation allows it', async () => {
   const hr = { ...actions, table: 'sn_hr_core_case' };
-  assert.deepEqual(await handleBarMessage(hr, fromPage(), deps()), { actions: [], bar: true });
+  assert.deepEqual(await handleBarMessage(hr, fromPage(), deps()), { actions: [], bar: true, language: 'en' });
   const allowed = deps({ loadPolicy: async () => normalizePolicy({ allowHrContent: true }) });
   assert.ok((await handleBarMessage(hr, fromPage(), allowed)).actions.length > 0);
 });
@@ -196,10 +196,10 @@ test('a page of a site that is no longer turned on is answered with the code SIT
 });
 
 test('BAR_ACTIONS without a table only says whether the bar is on here (nothing about any record)', async () => {
-  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), deps()), { actions: [], bar: true });
-  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), deps({ loadSettings: async () => ({ pageBar: false }) })), { actions: [], bar: false });
+  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), deps()), { actions: [], bar: true, language: 'en' });
+  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), deps({ loadSettings: async () => ({ pageBar: false }) })), { actions: [], bar: false, language: 'en' });
   const org = deps({ loadPolicy: async () => normalizePolicy({ disablePageBar: true }) });
-  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), org), { actions: [], bar: false });
+  assert.deepEqual(await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), org), { actions: [], bar: false, language: 'en' });
   // and it is still only for a content script of a turned-on site
   await assert.rejects(handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage({ frameId: 1 }), deps()), /only allowed/);
   assert.deepEqual(org.calls.open, []);
@@ -271,4 +271,20 @@ test('no content-script code reads or writes chrome.storage.local, .session or .
   walk(dir);
   walk(path.join(__dirname, '..', 'src', 'page'));
   for (const f of files) assert.ok(!/storage\??\.(local|session|sync)\b/.test(fs.readFileSync(f, 'utf8')), f);
+});
+
+test('the bar speaks the language of the panel: the worker says which one, and the labels of the actions come in it', async () => {
+  const arabic = /[؀-ۿ]/;
+  try {
+    const ar = await handleBarMessage(actions, fromPage(), deps({ loadSettings: async () => ({ language: 'ar' }) }));
+    assert.equal(ar.language, 'ar');
+    assert.ok(ar.actions.length > 0 && ar.actions.every((a) => arabic.test(a.label)), JSON.stringify(ar.actions.map((a) => a.label)));
+    assert.equal((await handleBarMessage({ type: MSG.BAR_ACTIONS }, fromPage(), deps({ loadSettings: async () => ({ language: 'ar' }) }))).language, 'ar', 'the question "is the bar on?" carries it too');
+    const en = await handleBarMessage(actions, fromPage(), deps({ loadSettings: async () => ({ language: 'en' }) }));
+    assert.equal(en.language, 'en');
+    assert.ok(en.actions.every((a) => !arabic.test(a.label)));
+  } finally {
+    const { setLanguage } = await import('../src/i18n/index.js');
+    setLanguage('en');
+  }
 });

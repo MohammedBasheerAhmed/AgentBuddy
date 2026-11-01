@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { PROVIDERS, providerName, resolveProviderConfig } from '../../providers/config.js';
+import { PROVIDERS, endpointHost, providerName, resolveProviderConfig } from '../../providers/config.js';
 import { modelChoices } from '../../lib/modelChoices.js';
 import { saveSettings } from '../../lib/storage.js';
 import { activeProfiles, aiOffByPolicy, missingProfileFor } from '../../profiles/profiles.js';
-import { t } from '../../i18n/index.js';
+import { t, isolate } from '../../i18n/index.js';
 
 // Pieces of the panel frame that more than one screen uses (owner: the lead, docs/round3.md).
 
@@ -20,8 +20,9 @@ export function destinationOf(eff) {
   } catch {
     host = '';
   }
-  if (name.startsWith('The endpoint')) return name.replace(/^The endpoint/, 'the endpoint');
-  return host ? `${name} (${host})` : name;
+  const endpoint = endpointHost(config);
+  if (endpoint) return t('the endpoint {host}', { host: isolate(endpoint) });
+  return host ? `${name} (${isolate(host)})` : name;
 }
 
 /**

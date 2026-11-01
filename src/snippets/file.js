@@ -3,6 +3,7 @@
 // nothing is overwritten, and every skipped entry is named. Pure: the panel hands in the File's name, size and type and, later, its text.
 
 import { LIMITS } from './store.js';
+import { t } from '../i18n/index.js';
 
 /** The largest file read at all (bytes). A UTF-8 file of LIMITS.importChars characters is at most four times that. */
 export const MAX_FILE_BYTES = LIMITS.importChars;
@@ -22,16 +23,16 @@ export function snippetFileName(now = Date.now()) {
  * @param {{ name?: string, size?: number, type?: string } | null | undefined} file
  */
 export function fileProblem(file) {
-  if (!file || typeof file !== 'object') return 'Choose a file first.';
+  if (!file || typeof file !== 'object') return t('Choose a file first.');
   const name = String(file.name || '');
   const type = String(file.type || '').toLowerCase();
-  if (!/\.json$/i.test(name) || !JSON_TYPES.has(type)) return 'Choose a .json file saved by Agent Buddy (Save to a file).';
+  if (!/\.json$/i.test(name) || !JSON_TYPES.has(type)) return t('Choose a .json file saved by Agent Buddy (Save to a file).');
   const size = Number(file.size);
-  if (!Number.isFinite(size) || size <= 0) return 'The file is empty.';
-  if (size > MAX_FILE_BYTES) return 'The file is too large to import.';
+  if (!Number.isFinite(size) || size <= 0) return t('The file is empty.');
+  if (size > MAX_FILE_BYTES) return t('The file is too large to import.');
   return '';
 }
 
 /** The file's text without a byte-order mark (a file saved by a spreadsheet or by the panel's own download starts with one). */
 const BOM = String.fromCharCode(0xfeff); // (written as a code so this file stays plain ASCII)
-export const withoutBom = (text) => { const t = String(text ?? ''); return t.startsWith(BOM) ? t.slice(1) : t; };
+export const withoutBom = (text) => { const s = String(text ?? ''); return s.startsWith(BOM) ? s.slice(1) : s; };

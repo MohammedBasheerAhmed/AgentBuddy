@@ -11,6 +11,5 @@ export const AR_POLICY = {
   'Set by your organisation.': 'حددته مؤسستك.',
   'Allowed by your organisation: {list}.': 'المسموح به من مؤسستك: {list}.',
   'Only instances approved by your organisation can be enabled.': 'لا يمكن تشغيل إلا المواقع التي اعتمدتها مؤسستك.',
-  'Switched off by your organisation.': 'أوقفته مؤسستك.',
   'Supplied by your organisation.': 'وفّرته مؤسستك.',
 };

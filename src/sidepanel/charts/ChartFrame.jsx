@@ -57,11 +57,11 @@ export function Swatch({ uid, index, tone }) {
  *   actions      extra buttons next to the toggle
  *   empty        true shows emptyText instead of the picture
  */
-export default function ChartFrame({ title, summary, table, children, legend, actions, note, interactive = false, defaultTable = false, empty = false, emptyText = 'Nothing to show.' }) {
+export default function ChartFrame({ title, summary, table, children, legend, actions, note, interactive = false, defaultTable = false, empty = false, emptyText = t('Nothing to show.') }) {
   const [showTable, setShowTable] = useState(Boolean(defaultTable));
   const canTable = Boolean(table && Array.isArray(table.rows) && table.rows.length && !empty);
   const tableOn = canTable && showTable;
-  const label = String(summary || title || 'Chart');
+  const label = String(summary || title || t('Chart'));
 
   return (
     <div className="ab-chart">

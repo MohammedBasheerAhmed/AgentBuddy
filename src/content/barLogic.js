@@ -1,4 +1,5 @@
 // The decisions of the bar on the ServiceNow page that need no DOM, so tests can check them (tests/bar-logic.test.js).
+import { t } from '../i18n/index.js';
 
 export const PREFS_KEY = 'agentbuddy-bar';
 export const POLL_MS = 2000; // how often the page is looked at for the record that is open
@@ -133,8 +134,8 @@ export const isGone = (err) => /Extension context invalidated|Receiving end does
 
 /** What to tell the person after a click: '' when the panel opened and has taken over. */
 export function launchNotice(answer) {
-  if (answer?.error) return String(answer.error.message || 'Agent Buddy could not do that.');
-  if (answer?.opened === false) return 'Click the Agent Buddy button in your browser toolbar. The action starts in the panel.';
+  if (answer?.error) return String(answer.error.message || t('Agent Buddy could not do that.'));
+  if (answer?.opened === false) return t('Click the Agent Buddy button in your browser toolbar. The action starts in the panel.');
   return '';
 }
 
@@ -162,11 +163,11 @@ export function clickNotice(verdict) {
     case 'ok':
       return '';
     case 'too-soon':
-      return 'Nothing was started yet. Click the action again to start it.';
+      return t('Nothing was started yet. Click the action again to start it.');
     case 'covered':
-      return 'Nothing was started: something on the page was covering the bar. Make sure you can see the whole bar, then click again.';
+      return t('Nothing was started: something on the page was covering the bar. Make sure you can see the whole bar, then click again.');
     default:
-      return 'Nothing was started: the page had moved or changed the bar. It is back in place; click again if you meant to.';
+      return t('Nothing was started: the page had moved or changed the bar. It is back in place; click again if you meant to.');
   }
 }
 

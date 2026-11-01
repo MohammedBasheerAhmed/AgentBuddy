@@ -9,6 +9,7 @@ import { relatedParts } from '../../itsm/parts.js';
 import { pickCauseNotes, pickFixNotes, pickRequesterQuestions, pickResolutionNotes } from '../picks.js';
 import { hasCustomer, notClosed, notNew } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
+import { t, tm } from '../../i18n/index.js';
 
 // The extras a record carries (SLAs, approvals, tasks, answers on the request form). Which of them a feature actually gets is
 // decided by its context spec (FEATURE_RELATED); a list that could not be read is said so to the model, never left out silently.
@@ -18,15 +19,19 @@ const withRelated = (id, journal) => (pack) => [...packToParts(pack, { journal }
 const CORE = [
   {
     id: 'record-summary',
-    title: 'Summarise this ticket',
-    description: 'Issue, impact, what was tried and the next step, in five lines.',
+    get title() {
+      return t('Summarise this ticket');
+    },
+    get description() {
+      return t('Issue, impact, what was tried and the next step, in five lines.');
+    },
     wave: 1,
     kinds: ALL_TASKS,
     group: 'understand',
     primary: 'copy', // a note for the agent: Copy first, "Add to work notes" second
     journal: 15,
     parts: withRelated('record-summary', 15),
-    insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
+    insert: { field: 'work_notes', get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes') },
     system:
       'You help a service desk agent understand a ServiceNow ticket in seconds.\n' +
       'Write a summary with exactly these five lines, in this order, each one to two short sentences:\n' +
@@ -41,8 +46,12 @@ const CORE = [
   },
   {
     id: 'reply-draft',
-    title: 'Draft a reply to the customer',
-    description: 'A short, polite reply to the latest message, ready to edit and send.',
+    get title() {
+      return t('Draft a reply to the customer');
+    },
+    get description() {
+      return t('A short, polite reply to the latest message, ready to edit and send.');
+    },
     wave: 1,
     kinds: WORKABLE,
     group: 'reply',
@@ -50,7 +59,7 @@ const CORE = [
     // Not on a closed ticket (nobody is waiting for a reply), nor on a task of a problem or a change (there is no customer).
     when: (record, header) => notClosed(record, header) && hasCustomer(record),
     journal: 10,
-    insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
+    insert: { field: 'comments', get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments') },
     system:
       'You help a service desk agent reply to the person who raised a ticket.\n' +
       'Write the next customer-visible reply to the most recent customer message, using the rest of the ticket for context.\n' +
@@ -64,8 +73,12 @@ const CORE = [
   },
   {
     id: 'resolution-notes',
-    title: 'Write resolution notes',
-    description: 'Cause, fix and how it was checked, from the notes and comments.',
+    get title() {
+      return t('Write resolution notes');
+    },
+    get description() {
+      return t('Cause, fix and how it was checked, from the notes and comments.');
+    },
     wave: 1,
     kinds: ['incident', 'problem', 'requested_item', 'catalog_task', 'case', 'task'], // not 'request': its ceiling has no close_notes
     group: 'resolve',
@@ -78,10 +91,10 @@ const CORE = [
     // person can still choose "Add below" before inserting. Each kind gets its own box: incidents and cases call it "Resolution
     // notes", the request and task forms "Close notes", and a problem has "Cause notes" and "Fix notes" instead (no close_notes).
     insert: [
-      { field: 'close_notes', kinds: ['incident', 'case'], label: 'Insert into resolution notes', fieldLabel: 'Resolution notes', mode: 'replace', pick: pickResolutionNotes },
-      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], label: 'Insert into close notes', fieldLabel: 'Close notes', mode: 'replace', pick: pickResolutionNotes },
-      { field: 'fix_notes', kinds: ['problem'], label: 'Insert into fix notes', fieldLabel: 'Fix notes', mode: 'replace', pick: pickFixNotes },
-      { field: 'cause_notes', kinds: ['problem'], label: 'Insert the cause into cause notes', fieldLabel: 'Cause notes', mode: 'replace', pick: pickCauseNotes },
+      { field: 'close_notes', kinds: ['incident', 'case'], get label() { return t('Insert into resolution notes'); }, fieldLabel: tm('Resolution notes'), mode: 'replace', pick: pickResolutionNotes },
+      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], get label() { return t('Insert into close notes'); }, fieldLabel: tm('Close notes'), mode: 'replace', pick: pickResolutionNotes },
+      { field: 'fix_notes', kinds: ['problem'], get label() { return t('Insert into fix notes'); }, fieldLabel: tm('Fix notes'), mode: 'replace', pick: pickFixNotes },
+      { field: 'cause_notes', kinds: ['problem'], get label() { return t('Insert the cause into cause notes'); }, fieldLabel: tm('Cause notes'), mode: 'replace', pick: pickCauseNotes },
     ],
     system:
       'You help a service desk agent write resolution notes for a ServiceNow ticket they are about to resolve.\n' +
@@ -99,8 +112,12 @@ const CORE = [
   },
   {
     id: 'handoff-brief',
-    title: 'Write a hand-off brief',
-    description: 'A structured note so the next person does not re-ask the customer.',
+    get title() {
+      return t('Write a hand-off brief');
+    },
+    get description() {
+      return t('A structured note so the next person does not re-ask the customer.');
+    },
     wave: 1,
     kinds: WORKABLE,
     group: 'work',
@@ -108,7 +125,7 @@ const CORE = [
     when: notClosed,
     journal: 20,
     parts: withRelated('handoff-brief', 20),
-    insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
+    insert: { field: 'work_notes', get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes') },
     system:
       'You help a service desk agent hand a ticket to another team or shift.\n' +
       'Write an internal hand-off note with exactly these headings, each followed by short bullet points:\n' +
@@ -119,8 +136,12 @@ const CORE = [
   },
   {
     id: 'missing-info',
-    title: 'Ask the customer for missing details',
-    description: 'Spots what the ticket does not say and drafts questions to send to the customer.',
+    get title() {
+      return t('Ask the customer for missing details');
+    },
+    get description() {
+      return t('Spots what the ticket does not say and drafts questions to send to the customer.');
+    },
     wave: 1,
     kinds: WORKABLE,
     group: 'reply',
@@ -129,7 +150,7 @@ const CORE = [
     journal: 8,
     parts: withRelated('missing-info', 8),
     // The "Missing:" line is the agent's checklist: only the questions go into the customer comment (src/features/picks.js).
-    insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments', pick: pickRequesterQuestions },
+    insert: { field: 'comments', get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments'), pick: pickRequesterQuestions },
     system:
       'You help a service desk agent get the information needed to resolve a ticket.\n' +
       'First write one line starting "Missing:" that lists, for the agent, the key details not yet in the ticket (for example affected user or device, exact error text, when it started, steps to reproduce, business impact).\n' +

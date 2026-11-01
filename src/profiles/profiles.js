@@ -7,17 +7,62 @@
 //      ("Show customer service tools"), never refused.
 //   3. "Show everything" overrides the profiles for people who want the full list.
 import { PROFILE_IDS } from './ids.js';
+// (core.js: the service worker's bundle carries this file too, and has no Arabic catalogue; the labels are read in the panel)
+import { t } from '../i18n/core.js';
 
 export { PROFILE_IDS };
 
+// (label, short and description are read when they are shown, so they follow the language of the panel)
 export const PROFILES = Object.freeze([
-  { id: 'it', label: 'IT service desk and resolver', short: 'IT', addOn: false, description: 'Incidents and requests: routing, recent changes, known errors and outages.' },
-  { id: 'req', label: 'Request fulfilment', short: 'Requests', addOn: false, description: 'Requested items and catalog tasks: request status, checklists, approvals.' },
-  { id: 'csm', label: 'Customer service', short: 'CSM', addOn: false, description: 'Cases and accounts: account at a glance, escalation to engineering, chat.' },
-  { id: 'hr', label: 'HR service delivery', short: 'HR', addOn: false, description: 'HR cases, always in Strict privacy mode. Your organisation has to approve it.' },
-  { id: 'lead', label: 'Team lead', short: 'Lead', addOn: true, description: 'The Team screen: dashboards, workload, shift hand-over.' },
-  { id: 'km', label: 'Knowledge manager', short: 'Knowledge', addOn: true, description: 'Duplicate articles, knowledge gaps and article reviews.' },
-  { id: 'mpc', label: 'Major incident, problem and change', short: 'Major incident', addOn: true, description: 'Major incident updates, problem write-ups and CAB briefs.' },
+  {
+    id: 'it',
+    get label() { return t('IT service desk and resolver'); },
+    short: 'IT',
+    addOn: false,
+    get description() { return t('Incidents and requests: routing, recent changes, known errors and outages.'); },
+  },
+  {
+    id: 'req',
+    get label() { return t('Request fulfilment'); },
+    get short() { return t('Requests'); },
+    addOn: false,
+    get description() { return t('Requested items and catalog tasks: request status, checklists, approvals.'); },
+  },
+  {
+    id: 'csm',
+    get label() { return t('Customer service'); },
+    short: 'CSM',
+    addOn: false,
+    get description() { return t('Cases and accounts: account at a glance, escalation to engineering, chat.'); },
+  },
+  {
+    id: 'hr',
+    get label() { return t('HR service delivery'); },
+    short: 'HR',
+    addOn: false,
+    get description() { return t('HR cases, always in Strict privacy mode. Your organisation has to approve it.'); },
+  },
+  {
+    id: 'lead',
+    get label() { return t('Team lead'); },
+    get short() { return t('Lead'); },
+    addOn: true,
+    get description() { return t('The Team screen: dashboards, workload, shift hand-over.'); },
+  },
+  {
+    id: 'km',
+    get label() { return t('Knowledge manager'); },
+    get short() { return t('Knowledge'); },
+    addOn: true,
+    get description() { return t('Duplicate articles, knowledge gaps and article reviews.'); },
+  },
+  {
+    id: 'mpc',
+    get label() { return t('Major incident, problem and change'); },
+    get short() { return t('Major incident'); },
+    addOn: true,
+    get description() { return t('Major incident updates, problem write-ups and CAB briefs.'); },
+  },
 ]);
 
 export const profileById = (id) => PROFILES.find((p) => p.id === id) || null;
@@ -119,11 +164,11 @@ export const profilesOfFeature = (feature) => (Array.isArray(feature?.profiles) 
 
 /** The screens of the panel, in order, and who they are for. Team is for team leads; everything else is for everyone. */
 export const SCREENS = Object.freeze([
-  { id: 'ticket', label: 'Ticket', profiles: ALL },
-  { id: 'mywork', label: 'My work', profiles: ALL },
-  { id: 'team', label: 'Team', profiles: ['lead'] },
-  { id: 'write', label: 'Write', profiles: ALL },
-  { id: 'knowledge', label: 'Knowledge', profiles: ALL },
+  { id: 'ticket', get label() { return t('Ticket'); }, profiles: ALL },
+  { id: 'mywork', get label() { return t('My work'); }, profiles: ALL },
+  { id: 'team', get label() { return t('Team'); }, profiles: ['lead'] },
+  { id: 'write', get label() { return t('Write'); }, profiles: ALL },
+  { id: 'knowledge', get label() { return t('Knowledge'); }, profiles: ALL },
 ]);
 
 /** The screens this person sees: their profiles, minus what the organisation hides. The Ticket screen is always there. */
@@ -136,7 +181,15 @@ export function screensFor(eff) {
 
 // The profile a kind of record belongs to, for the hint "This is a customer service case. Show customer service tools?".
 const KIND_PROFILE = { case: 'csm', hr_case: 'hr', requested_item: 'req', catalog_task: 'req', request: 'req', knowledge: 'km' };
-const KIND_WORDS = { case: 'a customer service case', hr_case: 'an HR case', requested_item: 'a requested item', catalog_task: 'a catalog task', request: 'a request', knowledge: 'a knowledge article' };
+// The whole sentence for each kind, so a language can say "this is ..." the way it needs to (the tools are named by the profile).
+const KIND_HINT = {
+  case: (tools) => t('This is a customer service case. Show {tools} tools?', { tools }),
+  hr_case: (tools) => t('This is an HR case. Show {tools} tools?', { tools }),
+  requested_item: (tools) => t('This is a requested item. Show {tools} tools?', { tools }),
+  catalog_task: (tools) => t('This is a catalog task. Show {tools} tools?', { tools }),
+  request: (tools) => t('This is a request. Show {tools} tools?', { tools }),
+  knowledge: (tools) => t('This is a knowledge article. Show {tools} tools?', { tools }),
+};
 
 /**
  * The profile this record calls for when the person does not have it, so the panel can offer to add it; null when nothing is missing.
@@ -150,7 +203,7 @@ export function missingProfileFor(kind, eff) {
   if (Array.isArray(eff?.policy?.allowedProfiles) && !eff.policy.allowedProfiles.includes(id)) return null;
   if (eff?.locked?.profiles) return null;
   const profile = profileById(id);
-  return profile ? { profile, text: `This is ${KIND_WORDS[kind]}. Show ${profile.label.toLowerCase()} tools?` } : null;
+  return profile ? { profile, text: KIND_HINT[kind](profile.label.toLowerCase()) } : null;
 }
 
 // ---- AI on or off ---------------------------------------------------------------------------------------------------------------

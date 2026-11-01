@@ -2,6 +2,7 @@
 // (tests/options-notes.test.js).
 import { FEATURES } from '../features/registry.js';
 import { effectiveDailyTokenCap, isAzureDeployment } from '../lib/aiUsage.js';
+import { t } from '../i18n/index.js';
 
 // Ids that `disabledFeatures` switches off but that are not features in the registry: 'reports' hides the whole Team section
 // (src/sidepanel/reports/ReportsDashboard.jsx). Add an id here when code checks isFeatureEnabled() with a name of its own.
@@ -35,14 +36,16 @@ export function dailyTokenLimit({ policyBudget = 0, ownCap = 0, usedToday = 0 } 
   const own = Number(ownCap) > 0 ? Math.floor(Number(ownCap)) : 0;
   const limit = effectiveDailyTokenCap(org, own);
   const used = Math.max(0, Number(usedToday) || 0);
-  if (!limit) return { limit: 0, source: 'none', left: null, text: 'No daily token limit applies.' };
+  if (!limit) return { limit: 0, source: 'none', left: null, text: t('No daily token limit applies.') };
   // When both are the same, the organisation's is the one that cannot be changed here, so it is named.
   const source = org && org <= (own || Infinity) ? 'policy' : 'own';
   const left = Math.max(0, limit - used);
+  // Three sentences, each whole, joined by a space.
+  const head = source === 'policy' ? t("Your organisation's limit applies: {limit} tokens a day.", { limit: n(limit) }) : t('Your own limit applies: {limit} tokens a day.', { limit: n(limit) });
   const other =
-    source === 'policy' && own ? ` Your own limit (${n(own)}) is higher, so your organisation's applies.` : source === 'own' && org ? ` Your organisation allows up to ${n(org)}.` : '';
-  const who = source === 'policy' ? "Your organisation's limit" : 'Your own limit';
-  return { limit, source, left, text: `${who} applies: ${n(limit)} tokens a day.${other} Used today: ${n(used)}, ${n(left)} left.` };
+    source === 'policy' && own ? t("Your own limit ({own}) is higher, so your organisation's applies.", { own: n(own) }) : source === 'own' && org ? t('Your organisation allows up to {org}.', { org: n(org) }) : '';
+  const tail = t('Used today: {used}, {left} left.', { used: n(used), left: n(left) });
+  return { limit, source, left, text: [head, other, tail].filter(Boolean).join(' ') };
 }
 
 /**
@@ -52,7 +55,7 @@ export function dailyTokenLimit({ policyBudget = 0, ownCap = 0, usedToday = 0 } 
 export function parseLimit(text) {
   const raw = String(text ?? '').trim().replace(/[\s,_]/g, '');
   if (!raw) return { ok: true, value: 0 };
-  if (!/^\d{1,12}$/.test(raw)) return { ok: false, value: 0, error: 'Enter a whole number, or leave it empty for no limit.' };
+  if (!/^\d{1,12}$/.test(raw)) return { ok: false, value: 0, error: t('Enter a whole number, or leave it empty for no limit.') };
   return { ok: true, value: Number(raw) };
 }
 

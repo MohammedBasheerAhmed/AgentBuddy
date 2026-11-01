@@ -10,6 +10,7 @@ import { describeHeader } from '../sidepanel/recordHeader.js';
 import { outageSignal } from './outage.js';
 import { TIME, agoText, noteInstant, shortSpan, storedTime } from './time.js';
 import { parseSnTime } from '../context/util.js';
+import { isolate, t, tn } from '../i18n/index.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 const SOON = TIME.HOUR; // an SLA with less than this left is a warning
@@ -29,7 +30,7 @@ export function pickSla(slas, now) {
   if (!live.length) return { kind: 'none', text: '', tone: '', leftMs: null, name: '' };
   const open = live.filter((s) => !isFinished(s));
   const breachedOpen = open.find((s) => s.breached === true);
-  if (breachedOpen) return { kind: 'breached', text: 'SLA breached', tone: 'danger', leftMs: null, name: text(breachedOpen.name) };
+  if (breachedOpen) return { kind: 'breached', text: t('SLA breached'), tone: 'danger', leftMs: null, name: text(breachedOpen.name) };
   const running = open
     .filter((s) => !isPaused(s))
     .map((s) => ({ s, end: parseSnTime(s.plannedEndUtc) }))
@@ -37,14 +38,14 @@ export function pickSla(slas, now) {
     .sort((a, b) => a.end - b.end)[0];
   if (running) {
     const left = running.end - now;
-    if (left <= 0) return { kind: 'breached', text: 'SLA past due', tone: 'danger', leftMs: left, name: text(running.s.name) };
-    return { kind: 'running', text: `SLA ${shortSpan(left)}`, tone: left < SOON ? 'warn' : '', leftMs: left, name: text(running.s.name) };
+    if (left <= 0) return { kind: 'breached', text: t('SLA past due'), tone: 'danger', leftMs: left, name: text(running.s.name) };
+    return { kind: 'running', text: t('SLA {span}', { span: shortSpan(left) }), tone: left < SOON ? 'warn' : '', leftMs: left, name: text(running.s.name) };
   }
   const paused = open.find(isPaused);
-  if (paused) return { kind: 'paused', text: 'SLA paused', tone: '', leftMs: null, name: text(paused.name) };
-  if (open.length) return { kind: 'running', text: 'SLA running', tone: '', leftMs: null, name: text(open[0].name) };
+  if (paused) return { kind: 'paused', text: t('SLA paused'), tone: '', leftMs: null, name: text(paused.name) };
+  if (open.length) return { kind: 'running', text: t('SLA running'), tone: '', leftMs: null, name: text(open[0].name) };
   const missed = live.find((s) => s.breached === true);
-  if (missed) return { kind: 'missed', text: 'SLA was breached', tone: '', leftMs: null, name: text(missed.name) };
+  if (missed) return { kind: 'missed', text: t('SLA was breached'), tone: '', leftMs: null, name: text(missed.name) };
   return { kind: 'met', text: '', tone: '', leftMs: null, name: '' };
 }
 
@@ -77,9 +78,9 @@ export function customerWaiting(pack, now) {
 /** "Customer waiting 4 d" ("about" when the time may be off by the time zone). '' when nobody is waiting. */
 export function waitingText(wait) {
   if (!wait?.waiting) return '';
-  if (wait.sinceMs === null) return 'Customer waiting for a reply';
-  if (wait.approx) return wait.sinceMs >= TIME.DAY ? `Customer waiting about ${Math.round(wait.sinceMs / TIME.DAY)} d` : 'Customer waiting today';
-  return `Customer waiting ${shortSpan(wait.sinceMs)}`;
+  if (wait.sinceMs === null) return t('Customer waiting for a reply');
+  if (wait.approx) return wait.sinceMs >= TIME.DAY ? tn(Math.round(wait.sinceMs / TIME.DAY), 'Customer waiting about {n} d', 'Customer waiting about {n} d') : t('Customer waiting today');
+  return t('Customer waiting {span}', { span: shortSpan(wait.sinceMs) });
 }
 
 /** The owner as the glance says it: the assignee, else the group, else "Unassigned" (only when the record was readable). */
@@ -87,8 +88,8 @@ export function ownerText(fields) {
   const who = text(fields?.assigned_to);
   const group = text(fields?.assignment_group);
   if (who) return who;
-  if (group) return `${group} (no one assigned)`;
-  return 'Unassigned';
+  if (group) return t('{group} (no one assigned)', { group: isolate(group) });
+  return t('Unassigned');
 }
 
 /**
@@ -116,7 +117,7 @@ export function buildGlance({ record, header, headPhase, answer, now }) {
   const waiting = waitingText(wait);
   if (waiting) line3.push(waiting);
   const updated = pack ? storedTime(pack, 'sys_updated_on') : NaN;
-  if (Number.isFinite(updated)) line3.push(`Updated ${agoText(Math.max(0, now - updated))}`);
+  if (Number.isFinite(updated)) line3.push(t('Updated {ago}', { ago: agoText(Math.max(0, now - updated)) }));
 
   const outage = pack && answer?.outage ? outageSignal(answer.outage, pack) : null;
   return {

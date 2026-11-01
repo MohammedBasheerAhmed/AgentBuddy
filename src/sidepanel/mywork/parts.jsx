@@ -1,19 +1,19 @@
 import React, { useId, useState } from 'react';
 import RecordLink from '../RecordLink.jsx';
-import { slaText, idleText, agoText } from '../../mywork/time.js';
+import { slaText, idleText, waitingText } from '../../mywork/time.js';
 import { priorityRank } from '../../mywork/rank.js';
-import { t } from '../../i18n/index.js';
+import { isolate, t, t as tr } from '../../i18n/index.js';
 
 // The small pieces the My work cards share: a ticket line, a fold, the filter chips, copying a template. Styles: src/ui/areas/mywork.css.
 
 /** The one status chip of a ticket: who it waits on, or its state. { text, tone: 'reply' | 'quiet' | 'plain' }. Pure. */
 export function statusChip(item) {
-  if (item.work !== 'resolved' && item.marker?.replied === 'customer') return { text: 'Customer replied', tone: 'reply' };
-  if (item.work !== 'resolved' && item.marker?.replied === 'other') return { text: 'New comment', tone: 'reply' };
-  if (item.work === 'waiting-customer') return { text: 'Waiting on customer', tone: 'quiet' };
-  if (item.work === 'on-hold') return { text: item.holdReason ? `On hold: ${item.holdReason}` : item.state || 'On hold', tone: 'quiet' };
-  if (item.work === 'resolved') return { text: item.state || 'Resolved', tone: 'quiet' };
-  if (item.work === 'new') return { text: 'New', tone: 'plain' };
+  if (item.work !== 'resolved' && item.marker?.replied === 'customer') return { text: t('Customer replied'), tone: 'reply' };
+  if (item.work !== 'resolved' && item.marker?.replied === 'other') return { text: t('New comment'), tone: 'reply' };
+  if (item.work === 'waiting-customer') return { text: t('Waiting on customer'), tone: 'quiet' };
+  if (item.work === 'on-hold') return { text: item.holdReason ? t('On hold: {reason}', { reason: isolate(item.holdReason) }) : item.state || t('On hold'), tone: 'quiet' };
+  if (item.work === 'resolved') return { text: item.state || t('Resolved'), tone: 'quiet' };
+  if (item.work === 'new') return { text: t('New'), tone: 'plain' };
   return item.state ? { text: item.state, tone: 'plain' } : null;
 }
 
@@ -32,14 +32,14 @@ export function TicketRow({ page, item, now, onOpen, where = 'queue' }) {
   const chip = where === 'group' ? null : statusChip(item);
   const sla = slaText(item.sla, now);
   const risk = item.sla?.risk || 'none';
-  const quiet = where === 'group' ? (item.openedAt ? `waiting ${agoText(item.openedAt, now).replace(/ ago$/, '')}` : '') : sla ? '' : idleText(item.updatedAt, now);
+  const quiet = where === 'group' ? (item.openedAt ? waitingText(item.openedAt, now) : '') : sla ? '' : idleText(item.updatedAt, now);
   const meta = [priorityShort(item.priority), where === 'group' ? item.group?.name : '', quiet].filter(Boolean).join(' · ');
   return (
     <div className="ab-mw-row">
       <RecordLink page={page} item={item} onOpen={() => onOpen(item)} className="ab-mw-link">
         <span className="ab-mw-line">
           <span className="ab-record-number">{item.number}</span>
-          <span className="ab-mw-title">{item.title || 'No title'}</span>
+          <span className="ab-mw-title">{item.title || t('No title')}</span>
         </span>
         <span className="ab-mw-line ab-mw-sub">
           {chip && <span className={`ab-mw-chip ab-mw-chip-${chip.tone}`}>{chip.text}</span>}
@@ -81,12 +81,12 @@ export function FilterChips({ chips, value, onChange, limit = 3 }) {
     <div className="ab-mw-chips" role="group" aria-label={t('Filter the queue')}>
       {shown.map((c) => (
         <button key={c.id} type="button" className="ab-mw-filter" aria-pressed={value === c.id} onClick={() => onChange(value === c.id ? '' : c.id)}>
-          {c.label} <span className="ab-mw-count">{c.count}</span>
+          {tr(c.label)} <span className="ab-mw-count">{c.count}</span>
         </button>
       ))}
       {chips.length > limit && (
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-expanded={more} onClick={() => setMore(!more)}>
-          {more ? 'Fewer filters' : `More filters (${chips.length - shown.length})`}
+          {more ? t('Fewer filters') : t('More filters ({count})', { count: chips.length - shown.length })}
         </button>
       )}
     </div>

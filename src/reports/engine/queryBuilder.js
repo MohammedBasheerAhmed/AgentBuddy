@@ -7,6 +7,7 @@
 // Pure and tested (tests/reports-query.test.js). The same function builds the drill-down address the panel opens.
 import { SYS_ID_RE } from '../../context/util.js';
 import { snLiteral, DAY } from './time.js';
+import { tm } from './say.js';
 
 export class QueryError extends Error {
   constructor(message) {
@@ -111,14 +112,14 @@ export const andQuery = (...pieces) => pieces.filter(Boolean).join('^');
 // A preset is a name from this list. It turns into conditions here, so the panel never writes query text.
 
 export const FILTER_PRESETS = Object.freeze([
-  { id: 'open', label: 'Open' },
-  { id: 'assigned_to_me', label: 'Assigned to me' },
-  { id: 'my_groups', label: 'In my groups' },
-  { id: 'unassigned', label: 'Unassigned' },
-  { id: 'breached', label: 'SLA breached' },
-  { id: 'last_7', label: 'Opened in the last 7 days', exclusive: 'window' },
-  { id: 'last_30', label: 'Opened in the last 30 days', exclusive: 'window' },
-  { id: 'last_90', label: 'Opened in the last 90 days', exclusive: 'window' },
+  { id: 'open', label: tm('Open') },
+  { id: 'assigned_to_me', label: tm('Assigned to me') },
+  { id: 'my_groups', label: tm('In my groups') },
+  { id: 'unassigned', label: tm('Unassigned') },
+  { id: 'breached', label: tm('SLA breached') },
+  { id: 'last_7', label: tm('Opened in the last 7 days'), exclusive: 'window' },
+  { id: 'last_30', label: tm('Opened in the last 30 days'), exclusive: 'window' },
+  { id: 'last_90', label: tm('Opened in the last 90 days'), exclusive: 'window' },
 ]);
 
 export const PRESET_IDS = Object.freeze(FILTER_PRESETS.map((p) => p.id));
@@ -149,10 +150,10 @@ export function presetConditions(presets, { userId = '', groupIds = [], now = Da
   for (const id of normalizePresets(presets)) {
     if (id === 'open') out.push({ op: 'true', field: 'active' });
     else if (id === 'assigned_to_me') {
-      if (!SYS_ID_RE.test(userId)) throw new QueryError('Agent Buddy could not tell who is signed in.');
+      if (!SYS_ID_RE.test(userId)) throw new QueryError(tm('Agent Buddy could not tell who is signed in.'));
       out.push({ op: 'eq', field: 'assigned_to', value: userId });
     } else if (id === 'my_groups') {
-      if (!groupIds.length) throw new QueryError('You are not in any group that Agent Buddy can see.');
+      if (!groupIds.length) throw new QueryError(tm('You are not in any group that Agent Buddy can see.'));
       out.push({ op: 'in', field: 'assignment_group', values: groupIds });
     } else if (id === 'unassigned') out.push({ op: 'empty', field: 'assigned_to' });
     else if (WINDOW_DAYS[id]) out.push({ op: 'since', field: 'opened_at', ms: now - WINDOW_DAYS[id] * DAY });

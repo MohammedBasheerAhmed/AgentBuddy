@@ -2,6 +2,7 @@
 // and the existing reads), GET only, with the person's own session; the answers stay in panel memory (useInsight.js).
 import { read } from '../../ask.js';
 import { insightStore, recordKey, useInsight } from './useInsight.js';
+import { t } from '../../../i18n/index.js';
 
 export const allowSensitiveOf = (eff) => Boolean(eff?.policy?.allowHrContent);
 
@@ -19,7 +20,7 @@ export function useTicketFacts({ page, record, eff, active, maxAgeMs = TICKET_AG
 // The ticket's facts first (from memory when they are there), then the read that needs them.
 const ticketPack = async (page, record, eff) => {
   const answer = await insightStore.get(ticketKey(page, record), loadTicket(page, record, eff), { maxAgeMs: LIST_AGE });
-  if (!answer?.pack) throw new Error('This ticket could not be read.');
+  if (!answer?.pack) throw new Error(t('This ticket could not be read.'));
   return answer.pack;
 };
 

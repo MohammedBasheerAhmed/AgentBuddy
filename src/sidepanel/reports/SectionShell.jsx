@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import ErrorNote from '../ErrorNote.jsx';
 import { t } from '../../i18n/index.js';
+import { shown } from '../../reports/shown.js';
 
 // The frame every report widget sits in: title, one line of help, a calm loading line, the picture, and the few facts that belong
 // to this section only (denominators). Kept quiet on purpose (TRACKER.md 2.4):
@@ -44,11 +45,11 @@ export default function SectionShell({ title, help, state, env, widgetId, facts 
       {phase === 'loading' && !result && <p className="ab-note" role="status">{t('Reading the numbers…')}</p>}
       {phase === 'error' && !sessionLost && (
         <div className="ab-widget-error">
-          <ErrorNote error={`${error}${result ? ' The numbers below are from the last read that worked.' : ''}`} onRetry={state.reload} />
+          <ErrorNote error={`${shown(error)}${result ? ` ${t('The numbers below are from the last read that worked.')}` : ''}`} onRetry={state.reload} />
         </div>
       )}
 
-      {unavailable && <p className="ab-note ab-widget-note">{data.reason || 'Nothing to show here.'}</p>}
+      {unavailable && <p className="ab-note ab-widget-note">{shown(data.reason) || t('Nothing to show here.')}</p>}
       {result && !unavailable && <div className={busy ? 'ab-widget-body ab-is-busy' : 'ab-widget-body'}>{children}</div>}
 
       {result && facts.filter(Boolean).length > 0 && <p className="ab-widget-foot">{facts.filter(Boolean).join(' · ')}</p>}
@@ -65,7 +66,7 @@ export function dashboardNotes(entries, order = null) {
   for (const { result: r } of list) {
     const notes = [
       r.scope?.note,
-      ...(r.tables || []).filter((t) => t.status !== 'ok' && t.note).map((t) => t.note),
+      ...(r.tables || []).filter((x) => x.status !== 'ok' && x.note).map((x) => x.note),
       ...(r.access || []).map((a) => a.note),
       ...(r.caps || []).map((c) => c.note),
       ...(r.notes || []),

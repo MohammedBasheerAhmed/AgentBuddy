@@ -15,7 +15,7 @@ async function prepare(ctx, { previewMode = 'always', piiMode = 'standard' } = {
   await ctx.ensureEnabled();
   await ctx.configure(
     // Round 3: a set-up IT agent (profiles answered, nothing skipped), so one scenario's profile choices never leak into the next.
-    { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode, previewMode, previewSeen: [], instances: [inst.origin], profiles: ['it'], profilesConfirmed: true, showEverything: false, aiSkipped: false, halves: {} },
+    { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode, previewMode, previewSeen: [], instances: [inst.origin], profiles: ['it'], profilesConfirmed: true, showEverything: false, aiSkipped: false, halves: {}, language: 'en', answerLanguage: 'ticket' },
     { key: { provider: 'custom', value: ai.key } }
   );
 }

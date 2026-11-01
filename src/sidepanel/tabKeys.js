@@ -1,16 +1,20 @@
 // Keyboard behaviour of a row of tabs (the standard tab pattern), as a pure function.
+import { isRtl } from '../i18n/index.js';
 
 /**
  * Which tab a key moves to: the index to select, or -1 when the key means nothing to a tab list.
- * Left/Right wrap around; Home and End go to the first and last.
+ * Left/Right wrap around; Home and End go to the first and last. In a right-to-left language the row runs the other way: Left is
+ * the next tab and Right the previous one.
  */
 export function nextTabIndex(key, at, count) {
   if (!(count > 0)) return -1;
   const here = at >= 0 && at < count ? at : 0;
+  const forward = isRtl() ? 'ArrowLeft' : 'ArrowRight';
+  const backward = isRtl() ? 'ArrowRight' : 'ArrowLeft';
   switch (key) {
-    case 'ArrowRight':
+    case forward:
       return (here + 1) % count;
-    case 'ArrowLeft':
+    case backward:
       return (here - 1 + count) % count;
     case 'Home':
       return 0;

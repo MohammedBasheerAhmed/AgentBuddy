@@ -13,18 +13,18 @@ import { aiNeedsText, isAiReady } from './aiReady.js';
 import { describeHeader, headerPhase } from './recordHeader.js';
 import { launchIsForPage } from '../lib/launch.js';
 import { panelShowsBar } from '../features/quick.js';
-import { t } from '../i18n/index.js';
+import { t, t as tr } from '../i18n/index.js';
 
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
 const needsStricter = (feature, mode) => Boolean(feature.requires?.minMode) && (MODE_RANK[mode] ?? 0) < (MODE_RANK[feature.requires.minMode] ?? 0);
 
 // "Related and Check", "Related, Request, Check and Checklist": the tabs of this record that need no AI key.
-const listWords = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+const listWords = (names) => (names.length < 2 ? names.join('') : t('{list} and {last}', { list: names.slice(0, -1).join(t(', ')), last: names[names.length - 1] }));
 
 /** The tab to show on a record of this kind: the one the person was in when this kind has it (checking ticket after ticket), else Actions. */
 export function keepTab(current, kind) {
   if (current === 'actions' || current === 'related') return current;
-  return RECORD_TABS.some((t) => t.id === current && t.kinds.includes(kind)) ? current : 'actions';
+  return RECORD_TABS.some((x) => x.id === current && x.kinds.includes(kind)) ? current : 'actions';
 }
 
 // launch / onLaunchDone: an action the bar on the ServiceNow page asked for (src/lib/launch.js); it is used once.
@@ -105,9 +105,9 @@ export default function RecordView({ page, eff, launch = null, onLaunchDone = ()
     if (!launchIsForPage(launch, page)) return;
     onLaunchDone();
     const feature = features.find((f) => f.id === launch.featureId);
-    if (!feature) setLaunchNote('That action is not available for this record.');
+    if (!feature) setLaunchNote(t('That action is not available for this record.'));
     else if (!aiReady) setLaunchNote(aiNeedsText(eff, 'this action'));
-    else if (!idle) setLaunchNote('Close the answer on screen first, then choose the action again.');
+    else if (!idle) setLaunchNote(t('Close the answer on screen first, then choose the action again.'));
     else {
       setLaunchNote('');
       start(feature, 'list');
@@ -116,16 +116,16 @@ export default function RecordView({ page, eff, launch = null, onLaunchDone = ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launch, page.tabId, key]);
 
-  const extraTabs = RECORD_TABS.filter((t) => t.kinds.includes(kind));
-  const tabs = [{ id: 'actions', label: 'Actions' }, { id: 'related', label: 'Related' }, ...extraTabs.map((t) => ({ id: t.id, label: t.label }))];
-  const shown = tabs.some((t) => t.id === tab) ? tab : 'actions';
+  const extraTabs = RECORD_TABS.filter((x) => x.kinds.includes(kind));
+  const tabs = [{ id: 'actions', label: t('Actions') }, { id: 'related', label: t('Related') }, ...extraTabs.map((x) => ({ id: x.id, label: tr(x.label) }))];
+  const shown = tabs.some((x) => x.id === tab) ? tab : 'actions';
   const mounted = new Set([...(opened.key === key ? opened.ids : []), shown]);
   const chooseTab = (id) => {
     setTab(id);
     setOpened((o) => ({ key, ids: [...new Set([...(o.key === key ? o.ids : []), shown, id])] }));
   };
   const card = describeHeader(head, record);
-  const noAiTabs = listWords(['Related', ...extraTabs.map((t) => t.label)]);
+  const noAiTabs = listWords([t('Related'), ...extraTabs.map((x) => tr(x.label))]);
 
   return (
     <div className="ab-pane" ref={root}>
@@ -133,8 +133,8 @@ export default function RecordView({ page, eff, launch = null, onLaunchDone = ()
         <span className="ab-record-number">{card.number}</span>
         <span className={`ab-record-title${card.titleKind === 'text' ? '' : ' ab-muted'}`}>{card.title}</span>
         <div className="ab-tags">
-          {card.tags.map((t) => (
-            <span key={t} className="ab-tag">{t}</span>
+          {card.tags.map((tag) => (
+            <span key={tag} className="ab-tag">{tag}</span>
           ))}
         </div>
       </section>
@@ -144,7 +144,7 @@ export default function RecordView({ page, eff, launch = null, onLaunchDone = ()
       {run.phase === 'done' && <p className="ab-hint">{t('One answer at a time: close the answer below to choose another action.')}</p>}
       {launchNote && <p className="ab-note ab-note-warn" role="status">{launchNote}</p>}
 
-      <AiKeyNote eff={eff} what="these actions" also={`${noAiTabs} work without a key.`} />
+      <AiKeyNote eff={eff} what="these actions" also={t('{tabs} work without a key.', { tabs: noAiTabs })} />
 
       <Tabs idBase="ab-rec" label={t('Record tools')} tabs={tabs} value={shown} onChange={chooseTab} />
 
@@ -153,8 +153,8 @@ export default function RecordView({ page, eff, launch = null, onLaunchDone = ()
           <section className="ab-features" aria-label={t('Actions')}>
             {features.map((f) => (
               <button key={f.id} type="button" className="ab-feature" data-feature={f.id} disabled={!aiReady} onClick={() => start(f, 'list')}>
-                <span className="ab-feature-title">{f.title}</span>
-                <span className="ab-feature-desc">{f.description}</span>
+                <span className="ab-feature-title">{tr(f.title)}</span>
+                <span className="ab-feature-desc">{tr(f.description)}</span>
                 {needsStricter(f, eff.values.piiMode) && <span className="ab-feature-desc">{t('Needs Strict privacy mode. Change it in Settings.')}</span>}
               </button>
             ))}

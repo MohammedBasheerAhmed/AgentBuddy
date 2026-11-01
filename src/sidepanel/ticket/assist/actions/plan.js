@@ -17,12 +17,13 @@ import { GROUPS, STAGE_WORDS, SUGGEST, cautionFor, groupOf, stageOf, whenAllows 
 import { isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../../../../policy/policy.js';
 import { resolveProviderConfig } from '../../../../providers/config.js';
 import { requiredMode } from '../../../../lib/pipeline.js';
+import { isolate, t } from '../../../../i18n/index.js';
 
 /** How many actions show as the main choices before "More actions". */
 export const MAX_SUGGESTED = 3;
 
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
-const MODE_LABEL = { strict: 'Strict', 'local-only': 'Local-only' };
+const modeLabel = (mode) => ({ strict: t('Strict'), 'local-only': t('Local-only') })[mode] || mode;
 
 // What the pipeline would know about this record before reading it: its table, and whether it is already known to be sensitive.
 const packLike = (record) => ({ table: String(record?.table || '').trim(), ...(record?.sensitive === true ? { sensitive: true } : {}) });
@@ -38,20 +39,20 @@ export function recordBlock({ record, eff }) {
   const table = String(record?.table || '').trim();
   const policy = eff?.policy || {};
   if (!table) return '';
-  if (!isTableAllowed(table, policy)) return `Your organisation does not allow Agent Buddy to use ${table} records with AI. Insights still works.`;
+  if (!isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {table} records with AI. Insights still works.', { table: isolate(table) });
   if (record?.sensitive === true || isSensitiveByPolicy(table, policy)) {
-    if (!policy.allowHrContent) return 'HR case content is not sent to an AI unless your organisation allows it. Insights still works.';
+    if (!policy.allowHrContent) return t('HR case content is not sent to an AI unless your organisation allows it. Insights still works.');
     let local = false;
     try {
       local = Boolean(resolveProviderConfig(eff?.values || {}, eff?.apiKey || '').local);
     } catch {
       local = false;
     }
-    if (!(policy.aiProvider || policy.aiBaseUrl || local)) return 'HR case content can only go to an AI your organisation has approved. Ask your administrator.';
+    if (!(policy.aiProvider || policy.aiBaseUrl || local)) return t('HR case content can only go to an AI your organisation has approved. Ask your administrator.');
   }
   // Every function on an HR record needs Strict (or Local-only): the pipeline's own rule (requiredMode), said once for the record.
   const recordNeeds = requiredMode({}, packLike(record), policy);
-  if (below(eff, recordNeeds)) return `HR records need ${MODE_LABEL[recordNeeds] || recordNeeds} privacy mode (or stricter). Change it in Settings.`;
+  if (below(eff, recordNeeds)) return t('HR records need {mode} privacy mode (or stricter). Change it in Settings.', { mode: modeLabel(recordNeeds) });
   return '';
 }
 
@@ -62,10 +63,10 @@ export function recordBlock({ record, eff }) {
  */
 export function featureBlock(feature, eff, record = null) {
   const policy = eff?.policy || {};
-  if (!isFeatureEnabled(feature?.id, policy) || !isFeatureAvailable(feature, policy)) return 'Switched off by your organisation.';
+  if (!isFeatureEnabled(feature?.id, policy) || !isFeatureAvailable(feature, policy)) return t('Switched off by your organisation.');
   const pack = packLike(record);
   const needed = requiredMode(feature, pack, policy);
-  if (below(eff, needed) && needed !== requiredMode({}, pack, policy)) return `Needs ${MODE_LABEL[needed] || needed} privacy mode. Change it in Settings.`;
+  if (below(eff, needed) && needed !== requiredMode({}, pack, policy)) return t('Needs {mode} privacy mode. Change it in Settings.', { mode: modeLabel(needed) });
   return '';
 }
 

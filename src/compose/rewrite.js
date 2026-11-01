@@ -8,26 +8,31 @@ import { FORM_FIELD_NAMES, MAX_FORM_TEXT } from './formFields.js';
 import { isTableAllowed } from '../policy/policy.js';
 import { isSensitiveTable } from '../context/kinds.js';
 import { TABLE_RE } from '../context/util.js';
+import { isolate, t, tm } from '../i18n/index.js';
 
 export { MAX_FORM_TEXT };
 
+// label (the button) and title (the heading of the result) are shown to the person: marked with tm(), shown with t().
 export const REWRITE_PRESETS = Object.freeze([
-  Object.freeze({ id: 'short', featureId: 'rewrite-short', label: 'Shorter', title: 'Shorter version' }),
-  Object.freeze({ id: 'friendly', featureId: 'rewrite-friendly', label: 'Friendlier', title: 'Friendlier version' }),
-  Object.freeze({ id: 'plain', featureId: 'rewrite-plain', label: 'Plain language', title: 'Plain-language version' }),
-  Object.freeze({ id: 'formal', featureId: 'rewrite-formal', label: 'More formal', title: 'More formal version' }),
-  Object.freeze({ id: 'fix', featureId: 'rewrite-fix', label: 'Fix spelling and grammar', title: 'Corrected version' }),
-  Object.freeze({ id: 'translate', featureId: 'rewrite-translate', label: 'Translate to', title: 'Translation', needsLanguage: true }),
-  Object.freeze({ id: 'bilingual', featureId: 'rewrite-bilingual', label: 'Bilingual (original and translation)', title: 'Original and translation', needsLanguage: true }),
+  Object.freeze({ id: 'short', featureId: 'rewrite-short', label: tm('Shorter'), title: tm('Shorter version') }),
+  Object.freeze({ id: 'friendly', featureId: 'rewrite-friendly', label: tm('Friendlier'), title: tm('Friendlier version') }),
+  Object.freeze({ id: 'plain', featureId: 'rewrite-plain', label: tm('Plain language'), title: tm('Plain-language version') }),
+  Object.freeze({ id: 'formal', featureId: 'rewrite-formal', label: tm('More formal'), title: tm('More formal version') }),
+  Object.freeze({ id: 'fix', featureId: 'rewrite-fix', label: tm('Fix spelling and grammar'), title: tm('Corrected version') }),
+  Object.freeze({ id: 'translate', featureId: 'rewrite-translate', label: tm('Translate to'), title: tm('Translation'), needsLanguage: true }),
+  Object.freeze({ id: 'bilingual', featureId: 'rewrite-bilingual', label: tm('Bilingual (original and translation)'), title: tm('Original and translation'), needsLanguage: true }),
 ]);
 
 export const rewritePresetById = (id) => REWRITE_PRESETS.find((p) => p.id === id) || null;
 
-/** The picker. The name (not the code) is what the instruction says, and only names from this list ever reach a prompt. */
+/**
+ * The picker. The name (not the code) is what the instruction says, and only names from this list ever reach a prompt: the English
+ * name stays in `name` for the instruction (languageName), and the picker shows it translated.
+ */
 export const LANGUAGES = Object.freeze(
   [
-    ['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['pt', 'Portuguese'], ['it', 'Italian'],
-    ['nl', 'Dutch'], ['pl', 'Polish'], ['hi', 'Hindi'], ['ar', 'Arabic'], ['zh', 'Chinese (Simplified)'], ['ja', 'Japanese'],
+    ['en', tm('English')], ['es', tm('Spanish')], ['fr', tm('French')], ['de', tm('German')], ['pt', tm('Portuguese')], ['it', tm('Italian')],
+    ['nl', tm('Dutch')], ['pl', tm('Polish')], ['hi', tm('Hindi')], ['ar', tm('Arabic')], ['zh', tm('Chinese (Simplified)')], ['ja', tm('Japanese')],
   ].map(([code, name]) => Object.freeze({ code, name }))
 );
 
@@ -132,9 +137,9 @@ export function buildComposePack({ text, people = [], label = 'Text to rewrite',
  * HR table and HR content is not allowed, or the field itself is blocked. The same rules the run would hit later, said up front.
  */
 export function formReadRefusal(table, field, policy) {
-  if (table && !isTableAllowed(table, policy)) return `Your organisation does not allow Agent Buddy to use ${table} records.`;
-  if (table && isSensitiveTable(table) && !policy?.allowHrContent) return 'HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.';
-  if (field && (policy?.blockedFields || []).includes(String(field).toLowerCase())) return `Your organisation does not allow the ${field} field to be sent to an AI model.`;
+  if (table && !isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {table} records.', { table: isolate(table) });
+  if (table && isSensitiveTable(table) && !policy?.allowHrContent) return t('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.');
+  if (field && (policy?.blockedFields || []).includes(String(field).toLowerCase())) return t('Your organisation does not allow the {field} field to be sent to an AI model.', { field: isolate(field) });
   return '';
 }
 

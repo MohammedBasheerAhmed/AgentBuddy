@@ -24,6 +24,7 @@
 
 import { DEFAULT_INTERNAL_PHRASES, checkOutgoing, maskExcerpt } from './index.js';
 import { isCustomerVisible } from '../lib/fillable.js';
+import { tm, t as tr } from '../i18n/index.js';
 
 export { isCustomerVisible };
 
@@ -47,14 +48,14 @@ export function phrasesWith(extra) {
 
 // Kinds the firewall masks on the way out and that must never come back into a message the customer reads.
 const NEVER_BACK = new Set(['SECRET', 'URL_CREDENTIALS', 'CARD', 'IBAN', 'NATIONAL_ID']);
-const NEVER_BACK_ADVICE = 'This is a password, key, card number or ID that was hidden from the AI, and it is back in the draft. Remove it before it reaches the customer.';
+const NEVER_BACK_ADVICE = tm('This is a password, key, card number or ID that was hidden from the AI, and it is back in the draft. Remove it before it reaches the customer.');
 
-const MARKUP_ADVICE = 'This has markup in it (a tag, [code] or a script link). A form field can show it as live HTML. Remove it, or say it in words.';
-const PLACEHOLDER_ADVICE = 'A hidden-name marker such as [PERSON_1] is still in the text, where a real value belongs. Replace it before you use the text.';
+const MARKUP_ADVICE = tm('This has markup in it (a tag, [code] or a script link). A form field can show it as live HTML. Remove it, or say it in words.');
+const PLACEHOLDER_ADVICE = tm('A hidden-name marker such as [PERSON_1] is still in the text, where a real value belongs. Replace it before you use the text.');
 // A password, card or ID number is never put back into an answer (src/pii/firewall.js NEVER_REHYDRATE), so its marker stays.
 const KEPT_PLACEHOLDER = /^\[(?:SECRET|CARD|IBAN|ID)_\d+\]$/;
-const KEPT_PLACEHOLDER_ADVICE = 'A password, card or ID number stays hidden as a marker such as [CARD_1]. Remove the marker, or type the value yourself only if it really belongs here.';
-const OVERLAP_ADVICE = 'These words are also in an internal work note on this ticket. Check you may share them with the customer.';
+const KEPT_PLACEHOLDER_ADVICE = tm('A password, card or ID number stays hidden as a marker such as [CARD_1]. Remove the marker, or type the value yourself only if it really belongs here.');
+const OVERLAP_ADVICE = tm('These words are also in an internal work note on this ticket. Check you may share them with the customer.');
 
 // ---- Markup ---------------------------------------------------------------------------------------------------------
 
@@ -73,7 +74,7 @@ export function markupFindings(text) {
     let m;
     while ((m = pattern.exec(plain)) !== null && out.length < 3) {
       const end = Math.min(plain.length, m.index + 40);
-      out.push({ kind: 'MARKUP', severity: 'high', start: m.index, end: m.index + m[0].length, excerpt: plain.slice(m.index, end).replace(/\s+/g, ' ').slice(0, 24), advice: MARKUP_ADVICE });
+      out.push({ kind: 'MARKUP', severity: 'high', start: m.index, end: m.index + m[0].length, excerpt: plain.slice(m.index, end).replace(/\s+/g, ' ').slice(0, 24), advice: tr(MARKUP_ADVICE) });
     }
   }
   return out.sort((a, b) => a.start - b.start);
@@ -84,7 +85,7 @@ export function markupFindings(text) {
 // A link in a customer reply may have come from the ticket itself (a requester can write anything there and ask the model to repeat
 // it). It is not blocked, links are normal, but it is named so the person sees where it points before the customer clicks it.
 const LINK = /\b(?:https?:\/\/|www\.)[^\s<>"'`)\]]+/gi;
-const LINK_ADVICE = 'This draft has a link in it. Check it goes where you mean before the customer reads it. It points to';
+const LINK_ADVICE = tm('This draft has a link in it. Check it goes where you mean before the customer reads it. It points to');
 
 /** Links (http, https, www.) as low hints, one per site, at most three. The excerpt is the site's name only, never the path. */
 export function linkFindings(text) {
@@ -104,7 +105,7 @@ export function linkFindings(text) {
     host = host.slice(0, 80) || 'an address that could not be read';
     if (hosts.has(host)) continue; // eslint-disable-line no-continue
     hosts.add(host);
-    out.push({ kind: 'LINK', severity: 'low', start: m.index, end: m.index + m[0].length, excerpt: host, advice: LINK_ADVICE });
+    out.push({ kind: 'LINK', severity: 'low', start: m.index, end: m.index + m[0].length, excerpt: host, advice: tr(LINK_ADVICE) });
   }
   return out;
 }
@@ -120,7 +121,8 @@ export function placeholderFindings(text, severity = 'medium') {
   PLACEHOLDER.lastIndex = 0;
   let m;
   while ((m = PLACEHOLDER.exec(plain)) !== null && out.length < 3) {
-    out.push({ kind: 'PLACEHOLDER', severity, start: m.index, end: m.index + m[0].length, excerpt: m[0], advice: KEPT_PLACEHOLDER.test(m[0]) ? KEPT_PLACEHOLDER_ADVICE : PLACEHOLDER_ADVICE });
+    const advice = KEPT_PLACEHOLDER.test(m[0]) ? KEPT_PLACEHOLDER_ADVICE : PLACEHOLDER_ADVICE;
+    out.push({ kind: 'PLACEHOLDER', severity, start: m.index, end: m.index + m[0].length, excerpt: m[0], advice: tr(advice) });
   }
   return out;
 }
@@ -167,7 +169,7 @@ export function overlapFindings(text, internalTexts, { minWords = 6, minChars = 
     while (last + 1 < words.length && seen.has(words.slice(last + 2 - minWords, last + 2).map((x) => x.w).join(' '))) last += 1;
     const start = words[i].start;
     const end = words[last].end;
-    out.push({ kind: 'INTERNAL_NOTE', severity: 'medium', start, end, excerpt: maskExcerpt(plain.slice(start, end)), advice: OVERLAP_ADVICE });
+    out.push({ kind: 'INTERNAL_NOTE', severity: 'medium', start, end, excerpt: maskExcerpt(plain.slice(start, end)), advice: tr(OVERLAP_ADVICE) });
     i = last + 1;
   }
   return out;
@@ -185,7 +187,7 @@ function rememberedFindings(plain, scan, alreadyFound) {
   }
   return remembered
     .filter((f) => !alreadyFound.some((g) => g.start < f.end && f.start < g.end))
-    .map((f) => ({ kind: f.kind, severity: 'high', start: f.start, end: f.end, excerpt: maskExcerpt(f.value), advice: NEVER_BACK_ADVICE }));
+    .map((f) => ({ kind: f.kind, severity: 'high', start: f.start, end: f.end, excerpt: maskExcerpt(f.value), advice: tr(NEVER_BACK_ADVICE) }));
 }
 
 const byPosition = (a, b) => a.start - b.start || b.end - a.end;

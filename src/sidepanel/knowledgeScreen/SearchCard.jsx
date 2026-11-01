@@ -6,7 +6,7 @@ import Notes from '../knowledge/Notes.jsx';
 import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import { copyText } from '../reports/download.js';
 import { articleShareUrl, freshnessOf } from './articleInfo.js';
-import { t } from '../../i18n/index.js';
+import { isolate, t } from '../../i18n/index.js';
 
 // N23 Knowledge search, for everyone: a search box over the published articles the person can read, ranked like the ticket's
 // "Knowledge that may help" (src/context/knowledge.js searchKnowledgeText). GET only, with their own session; nothing is sent to an
@@ -29,7 +29,7 @@ function Hit({ page, hit, copied, onCopy }) {
       {hit.excerpt && <p className="ab-kbx-excerpt">{hit.excerpt}</p>}
       <div className="ab-row">
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={!articleShareUrl(page, hit)} onClick={() => onCopy(hit)}>
-          {copied ? 'Link copied' : 'Copy link'}
+          {copied ? t('Link copied') : t('Copy link')}
         </button>
       </div>
     </article>
@@ -64,9 +64,9 @@ export default function SearchCard({ page, active, onSummary = () => {} }) {
       if (mine !== token.current) return;
       const hits = Array.isArray(data?.hits) ? data.hits : [];
       setState({ phase: 'ready', data: { ...data, hits, access: Array.isArray(data?.access) ? data.access : [] }, error: '', asked });
-      onSummary(hits.length ? `${hits.length}${data?.more ? '+' : ''} for "${asked.slice(0, 30)}"` : '');
+      onSummary(hits.length ? t('{count} for "{query}"', { count: `${hits.length}${data?.more ? '+' : ''}`, query: isolate(asked.slice(0, 30)) }) : '');
     } catch (err) {
-      if (mine === token.current) setState({ phase: 'error', data: null, error: plainError(err, 'The knowledge base could not be searched.'), asked });
+      if (mine === token.current) setState({ phase: 'error', data: null, error: plainError(err, t('The knowledge base could not be searched.')), asked });
     } finally {
       clearTimeout(timer.current);
     }
@@ -87,12 +87,12 @@ export default function SearchCard({ page, active, onSummary = () => {} }) {
       </div>
 
       {!state && <p className="ab-hint">{t('Every published article you can read, best match first: the same ranking as on a ticket.')}</p>}
-      {state?.phase === 'reading' && <p className="ab-sub" role="status">{state.slow ? 'Still searching the knowledge base. Large bases take a moment…' : 'Searching…'}</p>}
+      {state?.phase === 'reading' && <p className="ab-sub" role="status">{state.slow ? t('Still searching the knowledge base. Large bases take a moment…') : t('Searching…')}</p>}
       {state?.phase === 'error' && <ErrorNote error={state.error} onRetry={search} />}
       {data && (
         <>
           {data.hits.length === 0 ? (
-            <EmptyNote>{t('No published article you can read matches "{asked}". Try other words, or fewer.', { asked: state.asked })}</EmptyNote>
+            <EmptyNote>{t('No published article you can read matches "{asked}". Try other words, or fewer.', { asked: isolate(state.asked) })}</EmptyNote>
           ) : (
             <ShowMore items={data.hits} className="ab-list ab-kbx-hits" render={(hit) => <Hit key={hit.sysId} page={page} hit={hit} copied={copied === hit.sysId} onCopy={copy} />} />
           )}

@@ -12,8 +12,10 @@
 import { SYS_ID_RE, oneLine } from '../../context/util.js';
 import { REPORT_TABLE_IDS, STANDARD_TABLE_IDS } from '../engine/constants.js';
 import { REPORT_TABLE, addPeople, blockedSet, checkAnswer, line } from './common.js';
+import { say, tm } from '../engine/say.js';
+import { t } from '../../i18n/core.js';
 
-export const COACHING_REMINDER = 'This is a coaching aid for the team lead only, not a performance rating.';
+export const COACHING_REMINDER = tm('This is a coaching aid for the team lead only, not a performance rating.');
 
 /** The fixed rubric, in the order the answer gives it. Each is judged per ticket as Strong, Adequate, Needs work or Not enough to judge. */
 export const COACHING_RUBRIC = Object.freeze([
@@ -49,7 +51,9 @@ export const COACHING_REQUIRED_FIELDS = Object.freeze(['close_notes', 'comments'
 export function coachingBlockedBy(blockedFields) {
   const blocked = blockedSet(blockedFields);
   const hit = COACHING_REQUIRED_FIELDS.filter((f) => blocked.has(f));
-  return hit.length ? `Your organisation blocks the ${hit.map((f) => f.replace('_', ' ')).join(' and ')} field${hit.length > 1 ? 's' : ''} that coaching needs, so it cannot run.` : '';
+  if (!hit.length) return '';
+  if (hit.length > 1) return t('Your organisation blocks the close notes and comments fields that coaching needs, so it cannot run.');
+  return hit[0] === 'close_notes' ? t('Your organisation blocks the close notes field that coaching needs, so it cannot run.') : t('Your organisation blocks the comments field that coaching needs, so it cannot run.');
 }
 
 // ---- The request ---------------------------------------------------------------------------------------------------------
@@ -89,18 +93,18 @@ const isHrTable = (table) => /^sn_hr_/i.test(String(table || ''));
  */
 export function normalizeCoachingRequest(input, { now = Date.now() } = {}) {
   const groupId = typeof input?.groupId === 'string' ? input.groupId.trim().toLowerCase() : '';
-  if (!SYS_ID_RE.test(groupId)) throw new Error('Pick one group first.');
+  if (!SYS_ID_RE.test(groupId)) throw new Error(tm('Pick one group first.'));
   const fromMs = Math.floor(Number(input?.fromMs));
   let toMs = Math.floor(Number(input?.toMs));
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) throw new Error('Choose the first and the last day.');
-  if (toMs > now + DAY) throw new Error('The last day cannot be in the future.');
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) throw new Error(tm('Choose the first and the last day.'));
+  if (toMs > now + DAY) throw new Error(tm('The last day cannot be in the future.'));
   toMs = Math.min(toMs, now);
-  if (toMs <= fromMs) throw new Error('The last day must come after the first day.');
-  if (toMs - fromMs > COACHING_LIMITS.rangeDaysMax * DAY) throw new Error(`Choose at most ${COACHING_LIMITS.rangeDaysMax} days.`);
-  if (fromMs < now - COACHING_LIMITS.lookBackDaysMax * DAY) throw new Error('Choose days from the last twelve months.');
+  if (toMs <= fromMs) throw new Error(tm('The last day must come after the first day.'));
+  if (toMs - fromMs > COACHING_LIMITS.rangeDaysMax * DAY) throw new Error(say(tm('Choose at most {days} days.'), { days: COACHING_LIMITS.rangeDaysMax }));
+  if (fromMs < now - COACHING_LIMITS.lookBackDaysMax * DAY) throw new Error(tm('Choose days from the last twelve months.'));
   const asked = Array.isArray(input?.tables) ? input.tables.map((t) => String(t || '').toLowerCase()) : [];
   // HR cases are never coached on: not read, not sampled, not an option.
-  if (asked.some(isHrTable)) throw new Error('HR case tables are never used for coaching.');
+  if (asked.some(isHrTable)) throw new Error(tm('HR case tables are never used for coaching.'));
   const tables = asked.filter((t, i) => REPORT_TABLE_IDS.includes(t) && asked.indexOf(t) === i);
   const n = Math.floor(Number(input?.sample));
   const sample = Number.isFinite(n) ? Math.min(COACHING_LIMITS.sampleMax, Math.max(1, n)) : COACHING_LIMITS.sampleDefault;

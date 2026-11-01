@@ -1,9 +1,12 @@
 // The card at the top of a record: number, title and a few tags. Its read can succeed, be refused, or succeed with nothing in it
 // (an ACL that returns a row with empty columns); each one is said in words instead of an endless "Loading…".
 
-export const HEADER_LOADING = 'Loading…';
-export const HEADER_DENIED = 'Details are not available to you.';
-export const HEADER_NO_TITLE = '(no short description)';
+import { tm, t as tr } from '../i18n/index.js';
+
+// English constants (the tests compare them); describeHeader shows them in the language of the panel.
+export const HEADER_LOADING = tm('Loading…');
+export const HEADER_DENIED = tm('Details are not available to you.');
+export const HEADER_NO_TITLE = tm('(no short description)');
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -22,12 +25,12 @@ export function headerPhase(answer) {
 export function describeHeader(state, record) {
   const header = state.header || {};
   const number = record.number || text(header.number) || record.table;
-  if (state.phase === 'loading') return { number, title: HEADER_LOADING, titleKind: 'loading', tags: [record.table] };
-  if (state.phase === 'failed') return { number, title: HEADER_DENIED, titleKind: 'denied', tags: [record.table] };
+  if (state.phase === 'loading') return { number, title: tr(HEADER_LOADING), titleKind: 'loading', tags: [record.table] };
+  if (state.phase === 'failed') return { number, title: tr(HEADER_DENIED), titleKind: 'denied', tags: [record.table] };
   const title = text(header.short_description);
   return {
     number,
-    title: title || HEADER_NO_TITLE,
+    title: title || tr(HEADER_NO_TITLE),
     titleKind: title ? 'text' : 'missing',
     tags: [record.table, text(header.state), text(header.priority)].filter(Boolean),
   };

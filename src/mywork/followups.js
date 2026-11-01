@@ -12,6 +12,7 @@
 import { hasCustomer } from './tables.js';
 import { DAY, daysSince } from './time.js';
 import { groupOf } from './rank.js';
+import { t, tn } from '../i18n/index.js';
 
 export const FOLLOW_UP_DAY_CHOICES = Object.freeze([2, 3, 5, 7]);
 export const DEFAULT_FOLLOW_UP_DAYS = 3;
@@ -78,15 +79,15 @@ export function followUps(items, { now, days = DEFAULT_FOLLOW_UP_DAYS }) {
 
 /** The reason line: "Customer replied 2 h ago", "Waiting on the customer 4 d", "Customer not updated for 5 d". */
 export function followUpReason(entry) {
-  const d = `${entry.days} d`;
-  if (entry.kind === 'replied') return entry.days >= 1 ? `Customer replied ${d} ago` : 'Customer replied today';
-  if (entry.kind === 'reminder') return `Waiting on the customer ${d}`;
-  return entry.never ? `No update to the customer in ${d}` : `Customer not updated for ${d}`;
+  // (the English forms are the same: "5 d" is one unit; Arabic names the days with their own plural forms)
+  if (entry.kind === 'replied') return entry.days >= 1 ? tn(entry.days, 'Customer replied {n} d ago', 'Customer replied {n} d ago') : t('Customer replied today');
+  if (entry.kind === 'reminder') return tn(entry.days, 'Waiting on the customer {n} d', 'Waiting on the customer {n} d');
+  return entry.never ? tn(entry.days, 'No update to the customer in {n} d', 'No update to the customer in {n} d') : tn(entry.days, 'Customer not updated for {n} d', 'Customer not updated for {n} d');
 }
 
 const clean = (v, max) => {
-  const t = String(v ?? '').replace(/\s+/g, ' ').trim();
-  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+  const s = String(v ?? '').replace(/\s+/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 };
 
 /**
@@ -97,28 +98,29 @@ export function followUpText(entry) {
   const number = clean(entry.item.number, 40);
   const title = clean(entry.item.title, 120);
   const about = title ? `${number} (${title})` : number;
+  // The text is written in the panel's language: it is a message to the customer, like a snippet, and the person reads it before pasting.
   if (entry.kind === 'reminder') {
     return [
-      'Hello,',
+      t('Hello,'),
       '',
-      `We are still waiting for your reply on ${about}. Could you send us the information we asked for, or let us know if you no longer need help?`,
+      t('We are still waiting for your reply on {about}. Could you send us the information we asked for, or let us know if you no longer need help?', { about }),
       '',
-      'If we do not hear back from you, this ticket may be closed. You can reopen it by replying.',
+      t('If we do not hear back from you, this ticket may be closed. You can reopen it by replying.'),
       '',
-      'Thank you.',
+      t('Thank you.'),
     ].join('\n');
   }
   if (entry.kind === 'update') {
     return [
-      'Hello,',
+      t('Hello,'),
       '',
-      `A quick update on ${about}: we are still working on it, and we will let you know as soon as there is news.`,
+      t('A quick update on {about}: we are still working on it, and we will let you know as soon as there is news.', { about }),
       '',
-      'Thank you for your patience.',
+      t('Thank you for your patience.'),
     ].join('\n');
   }
   return '';
 }
 
 /** The copy button's name: "Copy reminder" or "Copy status update"; '' for a ticket the customer just answered. */
-export const followUpAction = (entry) => (entry.kind === 'reminder' ? 'Copy reminder' : entry.kind === 'update' ? 'Copy status update' : '');
+export const followUpAction = (entry) => (entry.kind === 'reminder' ? t('Copy reminder') : entry.kind === 'update' ? t('Copy status update') : '');

@@ -4,6 +4,7 @@ import DrillLink from '../charts/DrillLink.jsx';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
 import { t } from '../../i18n/index.js';
+import { shown } from '../../reports/shown.js';
 
 // Tiles that mean "look at this" when they are not zero.
 const TONE = { breached: 'bad', dueSoon: 'warn', stale: 'warn', unassigned: 'warn' };
@@ -24,31 +25,31 @@ export function OverviewBody({ d, env }) {
   return (
     <>
       <div className="ab-tiles">
-        {tiles.map((t) => (
+        {tiles.map((x) => (
           <Tile
-            key={t.key}
-            label={t.label}
-            value={t.value}
-            hint={t.unavailable && t.note ? t.note : t.hint}
-            unavailable={t.unavailable}
-            tone={t.value > 0 && TONE[t.key] ? TONE[t.key] : 'neutral'}
-            onOpen={t.drills?.length ? () => open(t) : undefined}
-            href={t.drills?.length === 1 ? hrefOf(t.drills[0]) : ''}
-            expanded={t.drills?.length > 1 ? picked?.key === t.key : undefined}
+            key={x.key}
+            label={shown(x.label)}
+            value={x.value}
+            hint={shown(x.unavailable && x.note ? x.note : x.hint)}
+            unavailable={x.unavailable}
+            tone={x.value > 0 && TONE[x.key] ? TONE[x.key] : 'neutral'}
+            onOpen={x.drills?.length ? () => open(x) : undefined}
+            href={x.drills?.length === 1 ? hrefOf(x.drills[0]) : ''}
+            expanded={x.drills?.length > 1 ? picked?.key === x.key : undefined}
           />
         ))}
       </div>
       {picked && (
-        <div className="ab-pick" role="group" aria-label={`Open ${picked.label} in ServiceNow`}>
+        <div className="ab-pick" role="group" aria-label={t('Open {name} in ServiceNow', { name: shown(picked.label) })}>
           <span className="ab-hint">{t('Open in ServiceNow:')}</span>
           {picked.drills.map((dr) =>
             hrefOf(dr) ? (
-              <DrillLink key={dr.table} className="ab-btn ab-btn-sm ab-pick-link" href={hrefOf(dr)} onOpen={() => env.openList(dr.table, dr.query)} label={`${dr.label}: ${dr.count}. Open the list.`}>
-                {dr.label} ({dr.count})
+              <DrillLink key={dr.table} className="ab-btn ab-btn-sm ab-pick-link" href={hrefOf(dr)} onOpen={() => env.openList(dr.table, dr.query)} label={t('{name}. Open the list.', { name: `${shown(dr.label)}: ${dr.count}` })}>
+                {shown(dr.label)} ({dr.count})
               </DrillLink>
             ) : (
               <button key={dr.table} type="button" className="ab-btn ab-btn-sm" onClick={() => env.openList(dr.table, dr.query)}>
-                {dr.label} ({dr.count})
+                {shown(dr.label)} ({dr.count})
               </button>
             )
           )}
@@ -60,16 +61,16 @@ export function OverviewBody({ d, env }) {
           <DataTable
             caption={t('Overview by table')}
             columns={[
-              { key: 'label', label: 'Table' },
-              { key: 'open', label: 'Open', align: 'right' },
-              ...(env.scopeKind === 'mine' ? [] : [{ key: 'unassigned', label: 'Unassigned', align: 'right' }]),
-              { key: 'stale', label: 'Stale', align: 'right' },
-              { key: 'waiting', label: 'Waiting', align: 'right' },
-              ...(d.resolvedActive > 0 ? [{ key: 'resolvedActive', label: 'Resolved, not closed', align: 'right' }] : []),
-              { key: 'openedToday', label: 'Opened today', align: 'right' },
-              { key: 'resolvedToday', label: 'Resolved today', align: 'right' },
+              { key: 'label', label: t('Table') },
+              { key: 'open', label: shown('Open'), align: 'right' },
+              ...(env.scopeKind === 'mine' ? [] : [{ key: 'unassigned', label: t('Unassigned'), align: 'right' }]),
+              { key: 'stale', label: t('Stale'), align: 'right' },
+              { key: 'waiting', label: t('Waiting'), align: 'right' },
+              ...(d.resolvedActive > 0 ? [{ key: 'resolvedActive', label: t('Resolved, not closed'), align: 'right' }] : []),
+              { key: 'openedToday', label: t('Opened today'), align: 'right' },
+              { key: 'resolvedToday', label: t('Resolved today'), align: 'right' },
             ]}
-            rows={d.perTable}
+            rows={d.perTable.map((r) => ({ ...r, label: shown(r.label) }))}
           />
         </details>
       )}
@@ -88,7 +89,7 @@ export default function OverviewView({ widget, env }) {
       state={state}
       env={env}
       widgetId={widget?.id}
-      facts={d?.sla && !d.sla.unavailable ? [`SLA counts cover ${d.sla.activeSlas} active SLAs`] : []}
+      facts={d?.sla && !d.sla.unavailable ? [t('SLA counts cover {n} active SLAs', { n: d.sla.activeSlas })] : []}
     >
       {d && <OverviewBody d={d} env={env} />}
     </SectionShell>

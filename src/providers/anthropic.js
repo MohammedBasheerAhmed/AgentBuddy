@@ -15,6 +15,7 @@ import { ANTHROPIC_API_URL, ANTHROPIC_VERSION } from './config.js';
 import { toAnthropicRequest, toAnthropicTools, fromAnthropicResponse, applyCacheControl } from './messages.js';
 import { anthropicMessagesUrl } from '../lib/aiUsage.js';
 import { AiError, requestJson } from './http.js';
+import { t, isolate } from '../i18n/index.js';
 
 export const MAX_OUTPUT_TOKENS = 16000;
 
@@ -22,16 +23,16 @@ const hostOf = (url) => {
   try {
     return new URL(url).host;
   } catch {
-    return 'the AI address';
+    return t('the AI address');
   }
 };
 
 // `baseUrl` is an optional Anthropic-compatible proxy (validated); blank = the real API. `promptCache` marks the stable
 // prefix for caching (see applyCacheControl). `name` is how messages name the provider; `signal` cancels.
 export async function sendAnthropic({ apiKey, model, messages, tools = [], maxTokens = MAX_OUTPUT_TOKENS, effort = 'medium', baseUrl = '', promptCache = true, name = '', signal, timeoutMs, fetchFn, sleep }) {
-  if (!apiKey) throw new AiError('Missing Anthropic API key. Add it in the Agent Buddy settings.', 'NO_KEY');
+  if (!apiKey) throw new AiError(t('Missing Anthropic API key. Add it in the Agent Buddy settings.'), 'NO_KEY');
   const url = baseUrl ? anthropicMessagesUrl(baseUrl) : ANTHROPIC_API_URL;
-  const who = name || (baseUrl ? `The endpoint ${hostOf(baseUrl)}` : 'Anthropic');
+  const who = name || (baseUrl ? t('The endpoint {host}', { host: isolate(hostOf(baseUrl)) }) : 'Anthropic');
 
   const { system, messages: wire } = toAnthropicRequest(messages);
   let body = {

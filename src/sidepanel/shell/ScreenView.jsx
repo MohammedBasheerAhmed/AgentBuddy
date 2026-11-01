@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
+import { t } from '../../i18n/index.js';
 import { HalfPanel, HalfRule, HalfSwitch } from '../ui/primitives.jsx';
 import { aiOffByPolicy } from '../../profiles/profiles.js';
 import { AiSkippedNote, destinationOf, useHalf } from './shellParts.jsx';
@@ -26,7 +27,7 @@ export default function ScreenView({ screen, Insights, Assist = null, page, eff,
 
   return (
     <div className="ab-pane">
-      {hasAssist && <HalfSwitch idBase={idBase} value={shown} onChange={choose} assistNote={skipped ? 'off' : ''} />}
+      {hasAssist && <HalfSwitch idBase={idBase} value={shown} onChange={choose} assistNote={skipped ? t('off') : ''} />}
       {hasAssist && <HalfRule half={shown} destination={destinationOf(eff)} />}
       <HalfPanel idBase={idBase} half="insights" hidden={shown !== 'insights'} switched={hasAssist}>
         {mounted('insights') && (

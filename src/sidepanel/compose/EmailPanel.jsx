@@ -11,20 +11,20 @@ import { recommendEmails, parseEmailDraft, emailFormUrl, EMAIL_TYPES } from '../
 import { internalTextsOf } from '../../safeSend/review.js';
 import { currentFromPage, emailClientTarget, matchesExpect } from '../../lib/fillable.js';
 import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, useFill } from './shared.js';
-import { t } from '../../i18n/index.js';
+import { t, t as tr, tm } from '../../i18n/index.js';
 
-const isEmailFeature = (feature) => Boolean(feature?.id) && EMAIL_TYPES.some((t) => t.featureId === feature.id);
+const isEmailFeature = (feature) => Boolean(feature?.id) && EMAIL_TYPES.some((type) => type.featureId === feature.id);
 
 /** One suggested (or other) kind of email, with its Draft button. */
 function TypeRow({ type, why, primary, disabled, offReason, onDraft }) {
   return (
     <li className="ab-compose-row">
       <div className="ab-compose-row-text">
-        <span className="ab-compose-row-title">{type.label}</span>
-        <span className="ab-sub">{why || type.blurb}</span>
+        <span className="ab-compose-row-title">{tr(type.label)}</span>
+        <span className="ab-sub">{why || tr(type.blurb)}</span>
         {offReason && <span className="ab-locked">{offReason}</span>}
       </div>
-      <button type="button" className={`ab-btn ab-btn-sm${primary ? ' ab-btn-primary' : ''}`} disabled={disabled} onClick={onDraft} aria-label={`Draft: ${type.label}`}>
+      <button type="button" className={`ab-btn ab-btn-sm${primary ? ' ab-btn-primary' : ''}`} disabled={disabled} onClick={onDraft} aria-label={t('Draft: {label}', { label: tr(type.label) })}>
         {t('Draft')}
       </button>
     </li>
@@ -67,15 +67,15 @@ export function DraftActions({ page, run, fill, target, internalTexts }) {
           disabled={!draft.body || fill.busy || fill.inserted.body || onOtherEmail}
           onClick={() => fill.insert({ field: 'body', value: draft.body, label: 'Body', mode: 'append', key: 'body', expect }, { internalTexts })}
         >
-          {fill.inserted.body ? 'Inserted' : 'Insert into the email body'}
+          {fill.inserted.body ? t('Inserted') : t('Insert into the email body')}
         </button>
       </div>
       <ReviewHints hints={hintsFor('body', draft.body, { people: run.people, scan: run.scan, internalTexts })} />
       {onOtherEmail && <p className="ab-note ab-note-warn" role="status">{t('This email form is for another ticket. Open the email form for this draft again, or use Copy.')}</p>}
       <FillFeedback fill={fill} />
       <p className="ab-hint">
-        {opened ? 'The email form is opening in this tab. When it is ready, press Insert, or paste what you copied. ' : ''}
-        Insert only works when the email form is open on this page; Copy always works. Nothing is sent until you press Send in the form.
+        {opened ? `${t('The email form is opening in this tab. When it is ready, press Insert, or paste what you copied.')} ` : ''}
+        {t('Insert only works when the email form is open on this page; Copy always works. Nothing is sent until you press Send in the form.')}
       </p>
     </section>
   );
@@ -119,7 +119,7 @@ export default function EmailPanel({ page, eff, active }) {
       const pack = await read(page.tabId, 'pack', { table: record.table, sysId: record.sysId, feature: 'email-compose', allowSensitive: Boolean(eff.policy?.allowHrContent) });
       if (mine === token.current) setRecs({ state: 'ready', value: recommendEmails(pack, { now: Date.now() }), error: '' });
     } catch (err) {
-      if (mine === token.current) setRecs({ state: 'error', value: null, error: err?.message || 'The ticket could not be read.' });
+      if (mine === token.current) setRecs({ state: 'error', value: null, error: err?.message || t('The ticket could not be read.') });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.tabId, record?.table, record?.sysId, eff.policy]);
@@ -158,7 +158,7 @@ export default function EmailPanel({ page, eff, active }) {
         why={props.why}
         primary={props.primary}
         disabled={!aiReady || !available}
-        offReason={available ? '' : 'Switched off by your organisation.'}
+        offReason={available ? '' : t('Switched off by your organisation.')}
         onDraft={() => draft(type)}
       />
     );
@@ -170,7 +170,7 @@ export default function EmailPanel({ page, eff, active }) {
         <p className="ab-note">{t('Open a ticket (an incident, request, case or similar) to get email suggestions that fit it. Agent Buddy reads it with your own session.')}</p>
       )}
 
-      {record && <AiKeyNote eff={eff} what="this" />}
+      {record && <AiKeyNote eff={eff} what={tm('this')} />}
 
       {record && idle && (
         <section className="ab-card" aria-label={t('Suggested emails')}>
@@ -201,7 +201,7 @@ export default function EmailPanel({ page, eff, active }) {
               {ready.others.length > 0 && (
                 <>
                   <h4 className="ab-compose-sub">{t('Other emails')}</h4>
-                  <ul className="ab-compose-rows">{ready.others.map((t) => row(t))}</ul>
+                  <ul className="ab-compose-rows">{ready.others.map((type) => row(type))}</ul>
                 </>
               )}
             </>

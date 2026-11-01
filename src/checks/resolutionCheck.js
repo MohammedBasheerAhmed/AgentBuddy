@@ -16,6 +16,7 @@ import { checkOutgoing } from '../safeSend/index.js';
 import { LIMITS } from '../context/allowlists.js';
 import { clipText } from '../context/util.js';
 import { daysSince, isFinishedState, isOpenItem } from './states.js';
+import { isolate, t, tm, tn } from '../i18n/index.js';
 
 const text = (v) => String(v ?? '').trim();
 
@@ -38,29 +39,51 @@ const CHILD_LIST = {
   requested_item: ['catalogTasks', 'catalog task'],
   request: ['items', 'requested item'],
 };
+// The words for what a ticket's children are called (the noun above is a key, not a text).
+const nounPlural = (noun) => ({ task: t('tasks'), 'catalog task': t('catalog tasks'), 'requested item': t('requested items') })[noun];
+const nounCount = (noun, n) =>
+  noun === 'task' ? tn(n, '{n} task', '{n} tasks') : noun === 'catalog task' ? tn(n, '{n} catalog task', '{n} catalog tasks') : tn(n, '{n} requested item', '{n} requested items');
 // Roles of people who are the customer (not the agents who answer them).
 const CUSTOMER_ROLES = new Set(['caller', 'requested_for', 'contact', 'consumer', 'opened_for', 'subject_person']);
 
-const KIND_LABEL = {
-  EMAIL: 'email address',
-  PHONE: 'phone number',
-  CARD: 'card number',
-  IBAN: 'bank account number',
-  NATIONAL_ID: 'ID number',
-  IP: 'IP address',
-  MAC: 'device address',
-  DOB: 'date of birth',
-  ADDRESS: 'postal address',
-  EMPLOYEE_ID: 'employee id',
-  SECRET: 'password or key',
-  URL_CREDENTIALS: 'link with a password in it',
-  OTHER_PERSON: "other person's name",
-  INTERNAL_PHRASE: 'wording meant to stay internal',
-};
+// "1 email address", "2 phone numbers": what was found, by kind and count.
+function kindCount(kind, n) {
+  switch (kind) {
+    case 'EMAIL':
+      return tn(n, '{n} email address', '{n} email addresses');
+    case 'PHONE':
+      return tn(n, '{n} phone number', '{n} phone numbers');
+    case 'CARD':
+      return tn(n, '{n} card number', '{n} card numbers');
+    case 'IBAN':
+      return tn(n, '{n} bank account number', '{n} bank account numbers');
+    case 'NATIONAL_ID':
+      return tn(n, '{n} ID number', '{n} ID numbers');
+    case 'IP':
+      return tn(n, '{n} IP address', '{n} IP addresses');
+    case 'MAC':
+      return tn(n, '{n} device address', '{n} device addresses');
+    case 'DOB':
+      return tn(n, '{n} date of birth', '{n} dates of birth');
+    case 'ADDRESS':
+      return tn(n, '{n} postal address', '{n} postal addresses');
+    case 'EMPLOYEE_ID':
+      return tn(n, '{n} employee id', '{n} employee ids');
+    case 'SECRET':
+      return tn(n, '{n} password or key', '{n} passwords or keys');
+    case 'URL_CREDENTIALS':
+      return tn(n, '{n} link with a password in it', '{n} links with a password in them');
+    case 'OTHER_PERSON':
+      return tn(n, "{n} other person's name", "{n} other persons' names");
+    case 'INTERNAL_PHRASE':
+      return tn(n, '{n} wording meant to stay internal', '{n} wordings meant to stay internal');
+    default:
+      return tn(n, '{n} item', '{n} items');
+  }
+}
 // What counts in earlier comments that are already on the ticket: only the serious ones.
 const SERIOUS = new Set(['SECRET', 'URL_CREDENTIALS', 'CARD', 'IBAN', 'NATIONAL_ID']);
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const check = (id, status, title, hint = '') => ({ id, status, title, hint });
 const fold = (s) => text(s).toLowerCase().replace(/\s+/g, ' ');
 
@@ -70,11 +93,11 @@ const fold = (s) => text(s).toLowerCase().replace(/\s+/g, ' ');
 
 // ('blocked': the organisation's policy does not let Agent Buddy read that table; 'skipped': not read on purpose.)
 const NOT_READ = new Set(['denied', 'empty-or-hidden', 'error', 'skipped', 'blocked']);
-export const NOTES_UNREADABLE = 'Could not read the notes and comments';
-const NO_FORM = 'This page has no form Agent Buddy can read, so anything you have typed and not saved is not counted.';
+export const NOTES_UNREADABLE = tm('Could not read the notes and comments');
+const noForm = () => t('This page has no form Agent Buddy can read, so anything you have typed and not saved is not counted.');
 // A Workspace page: the notes boxes are read, nothing else.
-const NO_NOTES_BOX = 'The resolution notes box was not found on this page, so notes typed there and not saved are not counted.';
-const CODE_NOT_READ = 'On this page only the notes are read, so a code picked and not saved yet is not counted.';
+const noNotesBox = () => t('The resolution notes box was not found on this page, so notes typed there and not saved are not counted.');
+const codeNotRead = () => t('On this page only the notes are read, so a code picked and not saved yet is not counted.');
 
 /** The access entry for the notes when they could not be read (or may be hidden from this user); null when they were read. */
 function unreadableNotes(pack) {
@@ -91,10 +114,10 @@ function effective(pack, form, name) {
 }
 
 // What to add to a hint about `name` when its value is only the saved one: nothing when the form had it (or a form with g_form does
-// not have the field at all, so nothing can be typed there); NO_FORM when nothing could be read; on a Workspace, `notRead`.
+// not have the field at all, so nothing can be typed there); the "no form" text when nothing could be read; on a Workspace, `notRead`.
 function notCounted(form, source, fromForm, notRead) {
   if (fromForm) return '';
-  if (!form) return ` ${NO_FORM}`;
+  if (!form) return ` ${noForm()}`;
   return source === 'boxes' ? ` ${notRead}` : '';
 }
 
@@ -118,18 +141,18 @@ function notesCheck(pack, form, source) {
   const body = text(value);
   if (!body) {
     // A work note typed on the form is not a substitute: it stays internal and is not what the next person searches.
-    const workNote = form && text(form.work_notes) ? ' The work note you have typed is separate from these notes.' : '';
+    const workNote = form && text(form.work_notes) ? ` ${t('The work note you have typed is separate from these notes.')}` : '';
     // With no readable form (or, on a Workspace, no notes box found) the notes being empty is only what is SAVED: say that the
     // typed ones could not be seen.
-    const noForm = notCounted(form, source, fromForm, NO_NOTES_BOX);
-    return check('notes', 'warn', 'No resolution notes yet', `Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.${workNote}${noForm}`);
+    const unseen = notCounted(form, source, fromForm, noNotesBox());
+    return check('notes', 'warn', t('No resolution notes yet'), `${t('Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.')}${workNote}${unseen}`);
   }
-  if (isFillerNote(body)) return check('notes', 'warn', 'The notes only say "resolved"', 'Add what was wrong and what you did, in a sentence or two. "Resolved" does not help anyone later.');
+  if (isFillerNote(body)) return check('notes', 'warn', t('The notes only say "resolved"'), t('Add what was wrong and what you did, in a sentence or two. "Resolved" does not help anyone later.'));
   const words = body.split(/\s+/).filter(Boolean).length;
   if (body.length < MIN_NOTE_CHARS || words < MIN_NOTE_WORDS) {
-    return check('notes', 'warn', 'The resolution notes are very short', 'A sentence on the cause and one on the fix makes them far more useful to the next person.');
+    return check('notes', 'warn', t('The resolution notes are very short'), t('A sentence on the cause and one on the fix makes them far more useful to the next person.'));
   }
-  return check('notes', 'ok', 'Resolution notes are filled in');
+  return check('notes', 'ok', t('Resolution notes are filled in'));
 }
 
 // ---- close code ----------------------------------------------------------------------------------------------------
@@ -139,8 +162,8 @@ function codeCheck(pack, form, source) {
   if (!field) return null;
   // (On a Workspace the code is never read from the page: the form object has no such field, so this is the saved code.)
   const { value, fromForm } = effective(pack, form, field);
-  if (!text(value)) return check('code', 'warn', 'No close code chosen', `Pick the code that best describes the fix. Reports and trends use it.${notCounted(form, source, fromForm, CODE_NOT_READ)}`);
-  return check('code', 'ok', 'A close code is chosen');
+  if (!text(value)) return check('code', 'warn', t('No close code chosen'), `${t('Pick the code that best describes the fix. Reports and trends use it.')}${notCounted(form, source, fromForm, codeNotRead())}`);
+  return check('code', 'ok', t('A close code is chosen'));
 }
 
 // ---- did the customer answer? -------------------------------------------------------------------------------------
@@ -175,33 +198,38 @@ const looksLikeLogin = (by) => Boolean(text(by)) && !/\s/.test(text(by)) && !tex
 function customerCheck(pack, now, waitDays) {
   const unreadable = unreadableNotes(pack);
   if (unreadable) {
-    const why = sentence(unreadable.note) || 'Your user may not be able to read them.';
-    return check('customer', 'info', NOTES_UNREADABLE, `${why} Check by eye whether the customer confirmed the fix or has had a chance to answer.`);
+    const why = sentence(unreadable.note) || t('Your user may not be able to read them.');
+    return check('customer', 'info', t('Could not read the notes and comments'), `${why} ${t('Check by eye whether the customer confirmed the fix or has had a chance to answer.')}`);
   }
   const visible = (Array.isArray(pack?.journal) ? pack.journal : []).filter((e) => e?.type === 'comment' && text(e.text));
   if (!visible.length) {
-    return check('customer', 'info', 'No messages to or from the customer on this ticket', 'If you confirmed the fix by phone or in person, say so in the resolution notes.');
+    return check('customer', 'info', t('No messages to or from the customer on this ticket'), t('If you confirmed the fix by phone or in person, say so in the resolution notes.'));
   }
   const customers = customerKeys(pack);
   if (!customers.size) {
-    return check('customer', 'info', 'Could not tell which messages are the customer\'s', 'Check by eye that the customer confirmed the fix or had a chance to answer.');
+    return check('customer', 'info', t("Could not tell which messages are the customer's"), t('Check by eye that the customer confirmed the fix or had a chance to answer.'));
   }
   const last = visible[visible.length - 1];
   if (customers.has(personKey(last.by))) {
-    return check('customer', 'ok', 'The customer wrote the last message', 'Read it once more and make sure it confirms the fix.');
+    return check('customer', 'ok', t('The customer wrote the last message'), t('Read it once more and make sure it confirms the fix.'));
   }
   if (!text(last.by) || looksLikeLogin(last.by)) {
-    return check('customer', 'info', 'Could not tell who wrote the last message', 'Its author is shown only as a user name. Read it and check whether the customer confirmed the fix.');
+    return check('customer', 'info', t('Could not tell who wrote the last message'), t('Its author is shown only as a user name. Read it and check whether the customer confirmed the fix.'));
   }
   const days = daysSince(last.when, now);
   if (Number.isFinite(days) && days >= waitDays) {
-    return check('customer', 'ok', `No reply for ${Math.floor(days)} days since your last message`, 'That is a fair wait. Mention in the notes that you asked and heard nothing.');
+    return check('customer', 'ok', tn(Math.floor(days), 'No reply for {n} day since your last message', 'No reply for {n} days since your last message'), t('That is a fair wait. Mention in the notes that you asked and heard nothing.'));
   }
   if (Number.isFinite(days)) {
-    const age = days < 1 ? 'today' : `${Math.floor(days)} day${Math.floor(days) === 1 ? '' : 's'} ago`;
-    return check('customer', 'warn', `The customer has not replied to your last message (${age})`, `Wait for an answer (about ${waitDays} days is usual) or confirm the fix another way before you resolve.`);
+    const age = days < 1 ? t('today') : tn(Math.floor(days), '{n} day ago', '{n} days ago');
+    return check(
+      'customer',
+      'warn',
+      t('The customer has not replied to your last message ({age})', { age }),
+      tn(waitDays, 'Wait for an answer (about {n} day is usual) or confirm the fix another way before you resolve.', 'Wait for an answer (about {n} days is usual) or confirm the fix another way before you resolve.')
+    );
   }
-  return check('customer', 'warn', 'The last message on the ticket is from an agent and there is no reply yet', 'Wait for an answer or confirm the fix another way before you resolve.');
+  return check('customer', 'warn', t('The last message on the ticket is from an agent and there is no reply yet'), t('Wait for an answer or confirm the fix another way before you resolve.'));
 }
 
 // ---- open work under this ticket -----------------------------------------------------------------------------------
@@ -215,19 +243,19 @@ function childCheck(pack) {
     const entry = (pack?.access || []).find((e) => e?.source === { childTasks: 'task', catalogTasks: 'sc_task', items: 'sc_req_item' }[key]);
     const why =
       entry?.status === 'blocked'
-        ? `Your organisation does not allow Agent Buddy to read ${noun}s.`
+        ? t('Your organisation does not allow Agent Buddy to read {things}.', { things: nounPlural(noun) })
         : entry?.status === 'denied'
-          ? `You cannot read ${noun}s on this instance.`
+          ? t('You cannot read {things} on this instance.', { things: nounPlural(noun) })
           : entry?.status
-            ? `The ${noun}s could not be read.`
+            ? t('The {things} could not be read.', { things: nounPlural(noun) })
             : '';
-    return check('children', 'info', `Could not check for open ${noun}s`, why || 'Look at the related list on the form.');
+    return check('children', 'info', t('Could not check for open {things}', { things: nounPlural(noun) }), why || t('Look at the related list on the form.'));
   }
   const open = list.filter(isOpenItem);
-  if (!open.length) return check('children', 'ok', list.length ? `All ${plural(list.length, noun)} closed` : `No ${noun}s under this ticket`);
-  const named = open.slice(0, 4).map((t) => [text(t.number), text(t.state) && `(${text(t.state)})`].filter(Boolean).join(' ')).filter(Boolean);
-  const more = open.length > named.length ? ` and ${open.length - named.length} more` : '';
-  return check('children', 'warn', `${plural(open.length, noun)} still open`, `Close or hand over ${named.join(', ')}${more} first, or leave a note saying why they stay open.`);
+  if (!open.length) return check('children', 'ok', list.length ? t('All {count} closed', { count: nounCount(noun, list.length) }) : t('No {things} under this ticket', { things: nounPlural(noun) }));
+  const named = open.slice(0, 4).map((row) => [isolate(text(row.number)), text(row.state) && `(${isolate(text(row.state))})`].filter(Boolean).join(' ')).filter(Boolean);
+  const names = open.length > named.length ? t('{names} and {extra} more', { names: named.join(t(', ')), extra: open.length - named.length }) : named.join(t(', '));
+  return check('children', 'warn', t('{count} still open', { count: nounCount(noun, open.length) }), t('Close or hand over {names} first, or leave a note saying why they stay open.', { names }));
 }
 
 // ---- linked problem or knowledge ----------------------------------------------------------------------------------
@@ -240,16 +268,21 @@ function linkCheck(pack, links, notes) {
   const mentioned = KB_MENTION.test(notes);
   const knowledge = mentioned ? 'yes' : links?.knowledge?.status || '';
   const found = [];
-  if (problem === 'yes') found.push('a problem');
-  if (knowledge === 'yes') found.push(mentioned && links?.knowledge?.status !== 'yes' ? 'an article (named in the notes)' : 'an article');
-  if (found.length) return check('links', 'ok', `Linked to ${found.join(' and ')}`);
-  if (!links) return check('links', 'info', 'Could not check for a linked problem or article', 'Look at the related lists on the form.');
+  if (problem === 'yes') found.push(t('a problem'));
+  if (knowledge === 'yes') found.push(mentioned && links?.knowledge?.status !== 'yes' ? t('an article (named in the notes)') : t('an article'));
+  if (found.length) return check('links', 'ok', t('Linked to {things}', { things: found.length > 1 ? t('{names} and {last}', { names: found[0], last: found[1] }) : found[0] }));
+  if (!links) return check('links', 'info', t('Could not check for a linked problem or article'), t('Look at the related lists on the form.'));
   const unsure = [problem, knowledge].includes('unknown') || !knowledge;
-  const what = pack?.kind === 'incident' ? 'problem or article' : 'article';
+  const incident = pack?.kind === 'incident';
   if (unsure) {
-    return check('links', 'info', `Could not fully check for a linked ${what}`, `${[links?.problem?.note, links?.knowledge?.note].filter(Boolean).join(' ')} Look at the related lists on the form.`.trim());
+    return check(
+      'links',
+      'info',
+      incident ? t('Could not fully check for a linked problem or article') : t('Could not fully check for a linked article'),
+      `${[links?.problem?.note, links?.knowledge?.note].filter(Boolean).join(' ')} ${t('Look at the related lists on the form.')}`.trim()
+    );
   }
-  return check('links', 'info', `No ${what} is linked`, 'If this is likely to happen again, link a problem or attach an article (or write one) so the fix is easy to find.');
+  return check('links', 'info', incident ? t('No problem or article is linked') : t('No article is linked'), t('If this is likely to happen again, link a problem or attach an article (or write one) so the fix is easy to find.'));
 }
 
 // ---- personal data and secrets -----------------------------------------------------------------------------------
@@ -259,7 +292,7 @@ function tally(counts, findings, keep) {
 }
 
 function describeCounts(counts) {
-  return [...counts.entries()].map(([kind, n]) => plural(n, KIND_LABEL[kind] || 'item')).join(', ');
+  return [...counts.entries()].map(([kind, n]) => kindCount(kind, n)).join(t(', '));
 }
 
 function piiCheck(pack, form, source) {
@@ -284,8 +317,8 @@ function piiCheck(pack, form, source) {
 
   // The notes and the agent's unsent customer comment: everything that is not just "low" counts.
   const notable = (f) => f.severity !== 'low';
-  scan('the resolution notes', effective(pack, form, 'close_notes').value, notable);
-  if (form) scan('the comment you have not sent yet', form.comments, notable);
+  scan(t('the resolution notes'), effective(pack, form, 'close_notes').value, notable);
+  if (form) scan(t('the comment you have not sent yet'), form.comments, notable);
   // Comments already on the ticket (the customer's own too): a password or card number is worth knowing about.
   const earlier = (Array.isArray(pack?.journal) ? pack.journal : []).filter((e) => e?.type === 'comment');
   const earlierCounts = new Map();
@@ -299,23 +332,23 @@ function piiCheck(pack, form, source) {
     if (text(e.text)) scanned = true;
     tally(earlierCounts, findings, (f) => SERIOUS.has(f.kind));
   }
-  if (earlierCounts.size) where.push({ label: 'comments already on the ticket', counts: earlierCounts });
+  if (earlierCounts.size) where.push({ label: t('comments already on the ticket'), counts: earlierCounts });
 
   if (where.length) {
-    const detail = where.map((w) => `${describeCounts(w.counts)} in ${w.label}`).join('; ');
-    return check('pii', 'warn', 'Possible personal data or secrets in the text', `Found: ${detail}. Remove or rephrase before you save; resolution notes are reused and may be seen by the customer.`);
+    const detail = where.map((w) => t('{counts} in {where}', { counts: describeCounts(w.counts), where: w.label })).join(t('; '));
+    return check('pii', 'warn', t('Possible personal data or secrets in the text'), t('Found: {detail}. Remove or rephrase before you save; resolution notes are reused and may be seen by the customer.', { detail }));
   }
   // "Nothing found" is only a fact about text that could be read.
   if (unreadable) {
     const checked = scanned
-      ? 'No personal data or secrets were spotted in the text you can see, but the comments already on the ticket were not checked.'
-      : 'The comments already on the ticket were not checked for personal data.';
-    return check('pii', 'info', NOTES_UNREADABLE, `${sentence(unreadable.note) || 'Your user may not be able to read them.'} ${checked}`);
+      ? t('No personal data or secrets were spotted in the text you can see, but the comments already on the ticket were not checked.')
+      : t('The comments already on the ticket were not checked for personal data.');
+    return check('pii', 'info', t('Could not read the notes and comments'), `${sentence(unreadable.note) || t('Your user may not be able to read them.')} ${checked}`);
   }
   // On a Workspace the boxes that were found were checked; a box that was not found may hold text that was not.
   const missedBox = source === 'boxes' && ['close_notes', 'comments'].some((name) => typeof form[name] !== 'string');
-  const unsaved = !form ? 'Text you have typed and not saved on this page was not checked.' : missedBox ? 'Some boxes on this page could not be found, so text typed there and not saved was not checked.' : '';
-  return check('pii', 'ok', scanned ? 'No personal data or secrets spotted in the text' : 'Nothing written yet to scan for personal data', unsaved);
+  const unsaved = !form ? t('Text you have typed and not saved on this page was not checked.') : missedBox ? t('Some boxes on this page could not be found, so text typed there and not saved was not checked.') : '';
+  return check('pii', 'ok', scanned ? t('No personal data or secrets spotted in the text') : t('Nothing written yet to scan for personal data'), unsaved);
 }
 
 // ---- hold reason ---------------------------------------------------------------------------------------------------
@@ -323,7 +356,7 @@ function piiCheck(pack, form, source) {
 function holdCheck(pack, form) {
   const reason = effective(pack, form, 'hold_reason').value;
   if (!text(reason)) return null;
-  return check('hold', 'warn', 'A hold reason is still filled in', 'Clear the hold reason (and move the ticket off "On hold") before you resolve it.');
+  return check('hold', 'warn', t('A hold reason is still filled in'), t('Clear the hold reason (and move the ticket off "On hold") before you resolve it.'));
 }
 
 // ---- already finished -----------------------------------------------------------------------------------------------
@@ -331,7 +364,7 @@ function holdCheck(pack, form) {
 function finishedCheck(pack) {
   const state = text(pack?.fields?.state);
   if (!isFinishedState(state)) return null;
-  return check('state', 'info', `This ticket is already ${state.toLowerCase()}`, 'The checks below look at what is saved on it.');
+  return check('state', 'info', t('This ticket is already {state}', { state: isolate(state.toLowerCase()) }), t('The checks below look at what is saved on it.'));
 }
 
 // The only fields a Workspace page gives (src/content/ops/checks.js BOX_FIELDS): the text boxes, never a choice.
@@ -386,9 +419,9 @@ export function summarizeChecks(checks) {
   const warn = count('warn');
   const info = count('info');
   const ok = count('ok');
-  if (warn) return { warn, info, ok, tone: 'warn', headline: `${plural(warn, 'thing')} to look at before you resolve this` };
-  if (info) return { warn, info, ok, tone: 'info', headline: 'Nothing is wrong, but there are a few notes' };
-  return { warn, info, ok, tone: 'ok', headline: 'Nothing stands out. This looks ready to resolve' };
+  if (warn) return { warn, info, ok, tone: 'warn', headline: tn(warn, '{n} thing to look at before you resolve this', '{n} things to look at before you resolve this') };
+  if (info) return { warn, info, ok, tone: 'info', headline: t('Nothing is wrong, but there are a few notes') };
+  return { warn, info, ok, tone: 'ok', headline: t('Nothing stands out. This looks ready to resolve') };
 }
 
 

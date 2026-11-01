@@ -16,6 +16,7 @@
 //   - the folded tab shows an icon and a short label; it can be dragged up or down (the place is remembered in the page), and on a
 //     Workspace it starts lower, out of the way of the Workspace's own strip of icons on the right edge
 import { MSG } from '../lib/messages.js';
+import { direction, setLanguage, t } from '../i18n/index.js';
 import themeCss from '../ui/theme.css';
 import barCss from './bar.css';
 import { BAR_Z, POLL_MS, PREFS_KEY, clampTop, clickNotice, clickVerdict, dragTop, isGone, launchNotice, nextSeen, pageHasModal, parsePrefs, serializePrefs, topFor } from './barLogic.js';
@@ -99,7 +100,8 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     },
   };
   let prefs = parsePrefs(prefsBox.read());
-  const state = { record: null, actions: [], busy: false, notice: '', modal: false };
+  const state = { record: null, actions: [], busy: false, notice: '', modal: false, language: 'en' };
+  let appliedLanguage = '';
   let stopped = false;
   let refreshing = false;
   let shownActions = '';
@@ -114,11 +116,11 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
   shadow.adoptedStyleSheets = [sheet];
 
   const bar = h(doc, 'div', { class: 'bar', hidden: true });
-  const handle = h(doc, 'button', { type: 'button', class: 'handle', 'aria-expanded': 'false', 'aria-label': 'Open the Agent Buddy quick actions', title: 'Agent Buddy quick actions. Drag to move it up or down.' });
+  const handle = h(doc, 'button', { type: 'button', class: 'handle', 'aria-expanded': 'false', 'aria-label': t('Open the Agent Buddy quick actions'), title: t('Agent Buddy quick actions. Drag to move it up or down.') });
   handle.append(icon(doc), h(doc, 'span', { class: 'label' }, 'Buddy'));
-  const card = h(doc, 'div', { class: 'card', role: 'group', 'aria-label': 'Agent Buddy quick actions', hidden: true });
+  const card = h(doc, 'div', { class: 'card', role: 'group', 'aria-label': t('Agent Buddy quick actions'), hidden: true });
   const head = h(doc, 'div', { class: 'head' });
-  const fold = h(doc, 'button', { type: 'button', class: 'icon', 'aria-label': 'Fold the bar', title: 'Fold the bar' });
+  const fold = h(doc, 'button', { type: 'button', class: 'icon', 'aria-label': t('Fold the bar'), title: t('Fold the bar') });
   const list = h(doc, 'div', { class: 'actions' });
   const notice = h(doc, 'p', { class: 'notice', role: 'status', hidden: true });
   const foot = h(doc, 'div', { class: 'foot' });
@@ -177,7 +179,22 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
   }
 
   // ---- drawing ---------------------------------------------------------------------------------------------------
+  // The texts that are written once, when the bar is built, are written again when the language changes (the worker says which it is).
+  function applyLanguage() {
+    if (appliedLanguage === state.language) return;
+    appliedLanguage = state.language;
+    setLanguage(state.language);
+    bar.setAttribute('dir', direction());
+    handle.setAttribute('aria-label', t('Open the Agent Buddy quick actions'));
+    handle.setAttribute('title', t('Agent Buddy quick actions. Drag to move it up or down.'));
+    card.setAttribute('aria-label', t('Agent Buddy quick actions'));
+    fold.setAttribute('aria-label', t('Fold the bar'));
+    fold.setAttribute('title', t('Fold the bar'));
+    shownActions = ''; // the buttons carry titles: draw them again
+  }
+
   function render() {
+    applyLanguage();
     const visible = Boolean(state.record) && state.actions.length > 0 && !state.modal;
     bar.hidden = !visible;
     bar.setAttribute('data-side', prefs.side);
@@ -187,7 +204,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     card.hidden = !prefs.open;
     handle.setAttribute('aria-expanded', String(prefs.open));
     fold.textContent = prefs.side === 'left' ? '‹' : '›';
-    move.textContent = prefs.side === 'left' ? 'Move to the right' : 'Move to the left';
+    move.textContent = prefs.side === 'left' ? t('Move to the right') : t('Move to the left');
 
     // Rebuilt only when the actions change, so the focus stays where it is while the page is looked at again.
     const signature = state.actions.map((a) => `${a.id}:${a.label}`).join('|');
@@ -200,7 +217,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
         ...state.actions.map((action, i) => {
           // An AI action carries the AI mark (drawn by the stylesheet, so the button's text stays its label; its title says where text
           // goes); an Insights card says it stays in ServiceNow.
-          const button = h(doc, 'button', { type: 'button', class: i === 0 ? 'act act-first' : 'act', 'data-ai': action.ai ? 'true' : false, title: action.ai ? 'Uses AI: opens the side panel, which shows what will be sent first' : 'Stays in ServiceNow: opens this in the side panel' }, action.label);
+          const button = h(doc, 'button', { type: 'button', class: i === 0 ? 'act act-first' : 'act', 'data-ai': action.ai ? 'true' : false, title: action.ai ? t('Uses AI: opens the side panel, which shows what will be sent first') : t('Stays in ServiceNow: opens this in the side panel') }, action.label);
           button.addEventListener('click', (e) => e.isTrusted && press(action, button));
           watcher?.observe(button);
           return button;
@@ -349,6 +366,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     if (!result.record || (state.record && state.record.sysId !== result.record.sysId)) state.notice = '';
     state.record = result.record;
     state.actions = result.actions;
+    if (result.language) state.language = result.language;
     state.modal = Boolean(result.record) && modalShown(doc, win);
     if (!stopped) render();
   }

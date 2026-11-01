@@ -1,11 +1,13 @@
 // N8, chat facts: the content script's `chatOverview` answer in the shape the card draws. It comes from the page's side of the
 // extension, so it is checked: an answer that is not an overview is "the chat could not be read", never a crash. Pure.
 
+import { t } from '../i18n/index.js';
+
 const num = (v) => (Number.isFinite(v) ? v : null);
 
 export function chatOverviewOf(answer) {
   const o = answer && typeof answer === 'object' ? answer.overview : null;
-  if (!o || typeof o !== 'object') throw new Error('The chat could not be read. Try again.');
+  if (!o || typeof o !== 'object') throw new Error(t('The chat could not be read. Try again.'));
   return {
     overview: {
       ...o,

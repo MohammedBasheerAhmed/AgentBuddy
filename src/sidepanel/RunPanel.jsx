@@ -7,6 +7,7 @@ import { auditRefFromPage, expectFromPage, sourceFromPack } from '../lib/fillabl
 import { madeWithoutLine, otherRecordsSummary, previewStyle, startedOnAfter } from './runLogic.js';
 import { madeWithoutText } from '../features/parts.js';
 import { RunError, RunProgress } from './ticket/assist/answers/RunStatus.jsx';
+import { t } from '../i18n/index.js';
 
 const NO_TEXTS = [];
 
@@ -25,7 +26,7 @@ const NO_TEXTS = [];
  *
  * props: run (from useRun), eff, page, readingText? (what to say while the data is being read)
  */
-export default function RunPanel({ run, eff, page, readingText = 'Reading the ticket with your session…' }) {
+export default function RunPanel({ run, eff, page, readingText = t('Reading the ticket with your session…') }) {
   const { phase, prepared, active, result, error, people, scan, lastPack } = run;
   const config = resolveProviderConfig(eff.values, eff.apiKey);
   // The record that was open when the run started (its number is for the message when another one is open later). Taken once, as

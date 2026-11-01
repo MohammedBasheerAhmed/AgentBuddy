@@ -6,6 +6,7 @@
 // management API, which needs an Azure sign-in, does), so Settings asks for the names instead.
 import { apiOf, PROVIDERS } from './config.js';
 import { fetchModelsBody } from './openai.js';
+import { t, isolate } from '../i18n/index.js';
 
 export const MAX_MODELS = 500;
 const ID_RE = /^[\w.:/@+-]{1,120}$/; // what a model id may look like (letters, digits, . : / @ + - _), whatever a server sends
@@ -32,13 +33,13 @@ export const canListModels = (provider) => apiOf(provider) === 'openai' && !PROV
  * Throws a plain message the person can act on; the typed model name always still works. `fetchFn` is for tests; `signal` cancels.
  */
 export async function listModels(config, fetchFn, { signal, sleep } = {}) {
-  if (PROVIDERS[config.provider]?.azure) throw new Error('Azure OpenAI does not give a key a list of your deployments. Type the deployment name instead.');
-  if (apiOf(config.provider) !== 'openai') throw new Error('This provider has no list to load here. Pick one of the listed models or type its name.');
-  if (config.invalidBaseUrl) throw new Error(`The AI address is not valid: ${config.invalidBaseUrl}`);
-  if (config.provider === 'custom' && !config.baseUrl) throw new Error('Enter the address of your AI server in Settings first.');
-  if (!config.apiKey && !config.keyOptional) throw new Error('Enter your key first, then load the models.');
+  if (PROVIDERS[config.provider]?.azure) throw new Error(t('Azure OpenAI does not give a key a list of your deployments. Type the deployment name instead.'));
+  if (apiOf(config.provider) !== 'openai') throw new Error(t('This provider has no list to load here. Pick one of the listed models or type its name.'));
+  if (config.invalidBaseUrl) throw new Error(t('The AI address is not valid: {reason}', { reason: config.invalidBaseUrl }));
+  if (config.provider === 'custom' && !config.baseUrl) throw new Error(t('Enter the address of your AI server in Settings first.'));
+  if (!config.apiKey && !config.keyOptional) throw new Error(t('Enter your key first, then load the models.'));
   const { host, body } = await fetchModelsBody({ apiKey: config.apiKey, baseUrl: config.baseUrl, fetchFn, signal, sleep });
   const ids = parseModelIds(body);
-  if (!ids.length) throw new Error(`${host} answered, but with no models. Type the model name instead.`);
+  if (!ids.length) throw new Error(t('{host} answered, but with no models. Type the model name instead.', { host: isolate(host) }));
   return ids;
 }

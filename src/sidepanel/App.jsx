@@ -18,7 +18,7 @@ import MyWorkView from './mywork/index.js';
 import { TeamInsights, TeamAssist } from './team/index.js';
 import { WriteInsights, WriteAssist } from './write/index.js';
 import { KnowledgeInsights, KnowledgeAssist } from './knowledgeScreen/index.js';
-import { t } from '../i18n/index.js';
+import { t, isolate } from '../i18n/index.js';
 import { useLanguage } from '../i18n/useLanguage.js';
 
 // The panel's screens (TRACKER.md 2.1): Ticket is the record that is open (or the setup / open-a-ticket help); the others work from any
@@ -52,7 +52,7 @@ function Header({ base }) {
     <header className="ab-header">
       <span className="ab-brand">{t('Agent Buddy')}</span>
       {instance && (
-        <span className="ab-instance" title={`Reading ${instance.host} with your own session`}>
+        <span className="ab-instance" title={t('Reading {host} with your own session', { host: isolate(instance.host) })}>
           {instance.short}
         </span>
       )}

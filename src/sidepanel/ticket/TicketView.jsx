@@ -14,6 +14,7 @@ import { offeredFeatures } from './assist/actions/plan.js';
 import { useAnswers } from './assist/answers/index.js';
 import TicketInsights from './TicketInsights.jsx';
 import TicketAssist from './TicketAssist.jsx';
+import { t } from '../../i18n/index.js';
 
 export const SAVE_SETTLE_MS = 1500;
 
@@ -114,10 +115,10 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // The same list the AI Assist half offers for this record (kind, policy, state, profiles); a refusal by the pipeline (HR,
     // privacy mode) still happens in the run itself, with its audit entry.
     const feature = offeredFeatures({ record, header: head.header, eff }).find((f) => f.id === launch.featureId);
-    if (!feature) setLaunchNote('That action is not available for this record.');
-    else if (!aiOn) setLaunchNote('Your organisation has switched AI Assist off.');
-    else if (!ready) setLaunchNote(aiNeedsText(eff, 'this action') || 'Set up AI Assist in Settings to use this action.');
-    else if (busyRef.current) setLaunchNote('An answer is on its way. Choose the action again when it has arrived.');
+    if (!feature) setLaunchNote(t('That action is not available for this record.'));
+    else if (!aiOn) setLaunchNote(t('Your organisation has switched AI Assist off.'));
+    else if (!ready) setLaunchNote(aiNeedsText(eff, 'this action') || t('Set up AI Assist in Settings to use this action.'));
+    else if (busyRef.current) setLaunchNote(t('An answer is on its way. Choose the action again when it has arrived.'));
     else {
       setLaunchNote('');
       runAi(feature);

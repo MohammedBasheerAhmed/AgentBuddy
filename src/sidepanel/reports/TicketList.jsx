@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { isPlainClick, NEW_TAB_HINT } from '../linkClick.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * A short list of tickets, easy to scan at 400 px: the number (a real link to the record) and the title on the first line, a few
@@ -12,7 +13,7 @@ import { isPlainClick, NEW_TAB_HINT } from '../linkClick.js';
  *   env       the dashboard env: openTicket(ref) and ticketHref(ref)
  *   empty     the line shown when there is nothing (useful, not blank)
  */
-export default function TicketList({ caption, items, meta, env, limit = 3, empty = 'Nothing to show.' }) {
+export default function TicketList({ caption, items, meta, env, limit = 3, empty = t('Nothing to show.') }) {
   const [all, setAll] = useState(false);
   const list = (Array.isArray(items) ? items : []).filter((i) => i && i.number);
   if (!list.length) return <p className="ab-note ab-note-ok">{empty}</p>;
@@ -35,7 +36,7 @@ export default function TicketList({ caption, items, meta, env, limit = 3, empty
                     target="_blank"
                     rel="noopener noreferrer"
                     data-ab-link="record"
-                    title={NEW_TAB_HINT}
+                    title={t(NEW_TAB_HINT)}
                     onClick={(event) => {
                       if (!isPlainClick(event)) return;
                       event.preventDefault();
@@ -60,7 +61,7 @@ export default function TicketList({ caption, items, meta, env, limit = 3, empty
       </ul>
       {list.length > limit && (
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-showmore" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? 'Show fewer' : `Show all (${list.length})`}
+          {all ? t('Show fewer') : t('Show all ({n})', { n: list.length })}
         </button>
       )}
     </div>

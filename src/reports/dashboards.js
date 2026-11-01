@@ -13,6 +13,7 @@ import { normalizeScope } from './engine/scope.js';
 import { normalizeBuilderConfig } from './engine/builder.js';
 import { TREND_CHOICES } from './engine/quality.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from './layoutFile.js';
+import { isolate, t, tm } from '../i18n/core.js';
 
 export { LAYOUT_KIND, LAYOUT_VERSION };
 
@@ -54,14 +55,14 @@ export const PRESETS = Object.freeze([
   {
     id: 'preset-my-day',
     // Not 'My day': the My work screen is that. This is the same dashboard as the others, for one's own tickets only.
-    name: 'My numbers',
+    name: tm('My numbers'),
     scope: { kind: 'mine' },
     tables: null,
     widgets: [{ type: 'section', section: 'overview' }, { type: 'section', section: 'sla' }, { type: 'section', section: 'fulfilment' }],
   },
   {
     id: 'preset-team',
-    name: 'Team overview',
+    name: tm('Team overview'),
     scope: { kind: 'groups' },
     tables: null,
     // Insights only. "Explain this dashboard" is under the Team screen's AI Assist half and explains these sections' numbers.
@@ -75,7 +76,7 @@ export const PRESETS = Object.freeze([
   },
   {
     id: 'preset-handover',
-    name: 'Shift handover',
+    name: tm('Shift handover'),
     scope: { kind: 'groups' },
     tables: null,
     // The hand-over tables (N16). The note written from them is under AI Assist (AI28).
@@ -257,8 +258,9 @@ export function layoutFileName(name) {
   return `agent-buddy-dashboard-${slug}.json`;
 }
 
-const NOT_A_LAYOUT = 'The file is not a dashboard layout saved by Agent Buddy.';
-const FULL = `You have ${CAPS.dashboards} dashboards, the most there can be. Remove one first.`;
+// (texts, not constants: the language can change while the page is open)
+const notALayout = () => t('The file is not a dashboard layout saved by Agent Buddy.');
+const full = () => t('You have {n} dashboards, the most there can be. Remove one first.', { n: CAPS.dashboards });
 
 // The dashboard of a layout whose envelope is checked, cleaned exactly like storage, with new ids. Shared by a file a person loads and
 // the organisation's dashboard, so the two are read the same way. { ok: true, dashboard } or { ok: false, code }.
@@ -276,19 +278,19 @@ function cleanLayoutDashboard(input, makeId) {
  */
 export function importLayout(text, state, makeId = randomId) {
   const body = String(text ?? '').replace(/^﻿/, '');
-  if (!body.trim()) return { ok: false, reason: 'The file is empty.' };
-  if (body.length > CAPS.file) return { ok: false, reason: 'The file is too big to be a dashboard layout.' };
+  if (!body.trim()) return { ok: false, reason: t('The file is empty.') };
+  if (body.length > CAPS.file) return { ok: false, reason: t('The file is too big to be a dashboard layout.') };
   let parsed;
   try {
     parsed = JSON.parse(body);
   } catch {
-    return { ok: false, reason: NOT_A_LAYOUT };
+    return { ok: false, reason: notALayout() };
   }
   const envelope = layoutEnvelopeProblem(parsed);
-  if (envelope) return { ok: false, reason: envelope === 'newer' ? 'The file was saved by a newer version of Agent Buddy.' : NOT_A_LAYOUT };
-  if (state.dashboards.length >= CAPS.dashboards) return { ok: false, reason: FULL };
+  if (envelope) return { ok: false, reason: envelope === 'newer' ? t('The file was saved by a newer version of Agent Buddy.') : notALayout() };
+  if (state.dashboards.length >= CAPS.dashboards) return { ok: false, reason: full() };
   const read = cleanLayoutDashboard(parsed.dashboard, makeId);
-  if (!read.ok) return { ok: false, reason: read.code === 'no-section' ? 'The file holds no section this version of Agent Buddy knows.' : NOT_A_LAYOUT };
+  if (!read.ok) return { ok: false, reason: read.code === 'no-section' ? t('The file holds no section this version of Agent Buddy knows.') : notALayout() };
   const clean = read.dashboard;
   const taken = new Set(state.dashboards.map((d) => d.name));
   if (taken.has(clean.name)) clean.name = cleanName(`${clean.name.slice(0, CAPS.name - 11)} (imported)`, clean.name);
@@ -347,9 +349,9 @@ export function offerOrgDashboard(state, layout) {
  */
 export function addOrgDashboard(state, layout, makeId = randomId) {
   const own = orgDashboard(layout, makeId);
-  if (!own) return { ok: false, reason: 'Your organisation has not set a dashboard this version of Agent Buddy can show.' };
-  if (state.dashboards.some((d) => nameKey(d.name) === nameKey(own.name))) return { ok: false, reason: `You already have "${own.name}".` };
-  if (state.dashboards.length >= CAPS.dashboards) return { ok: false, reason: FULL };
+  if (!own) return { ok: false, reason: t('Your organisation has not set a dashboard this version of Agent Buddy can show.') };
+  if (state.dashboards.some((d) => nameKey(d.name) === nameKey(own.name))) return { ok: false, reason: t('You already have "{name}".', { name: isolate(own.name) }) };
+  if (state.dashboards.length >= CAPS.dashboards) return { ok: false, reason: full() };
   return { ok: true, state: { ...state, activeId: own.id, dashboards: [...state.dashboards, own] }, name: own.name };
 }
 

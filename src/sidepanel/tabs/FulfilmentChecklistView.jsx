@@ -8,7 +8,7 @@ import { Facts, Hints, LoadNotes, Section } from '../checks/Bits.jsx';
 import { ProgressBar, StepList } from '../checks/ChecklistSteps.jsx';
 import { panelChecklistStore } from '../checks/panelStore.js';
 import { useLoader } from '../checks/useLoader.js';
-import { t } from '../../i18n/index.js';
+import { t, tn, t as tr } from '../../i18n/index.js';
 
 // G6, fulfilment checklist for a catalog task or a requested item. The steps are worked out on this computer from the written
 // instructions (no AI needed); the agent ticks them off. The ONLY thing saved is which steps are ticked, as short hashes next
@@ -32,7 +32,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
     if (record.kind === 'catalog_task') {
       const target = await read(page.tabId, 'requestTarget', { table: record.table, sysId: record.sysId }).catch(() => null);
       if (target?.table === 'sc_req_item') parent = await readPack(target).catch(() => null);
-      note = target?.note || (target && !parent ? 'You cannot see the requested item, so its answers are not included.' : '');
+      note = target?.note || (target && !parent ? t('You cannot see the requested item, so its answers are not included.') : '');
     }
     const done = await store.load(record.sysId).catch(() => []);
     return { own, parent, note, done };
@@ -60,7 +60,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
       setDone(await store.set(record.sysId, step.id, on));
     } catch {
       setDone(before);
-      setMessage('Could not save that tick on this computer.');
+      setMessage(t('Could not save that tick on this computer.'));
     }
   }
 
@@ -70,7 +70,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
       await store.clear(record.sysId);
       setDone([]);
     } catch {
-      setMessage('Could not clear the ticks.');
+      setMessage(t('Could not clear the ticks.'));
     }
   }
 
@@ -91,7 +91,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={reload} disabled={state.phase === 'loading'}>{t('Refresh')}</button>
         </div>
         <p className="ab-sub">
-          {aiSteps ? 'The steps your AI proposed.' : 'Steps found in the written instructions.'} Your ticks are kept on this computer (not the step text).
+          {aiSteps ? t('The steps your AI proposed. Your ticks are kept on this computer (not the step text).') : t('Steps found in the written instructions. Your ticks are kept on this computer (not the step text).')}
         </p>
         {data?.note && <p className="ab-note ab-note-warn" role="note">{data.note}</p>}
       </section>
@@ -112,7 +112,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
             </>
           ) : (
             <p className="ab-hint">
-              No steps were found in the written instructions{canPropose ? '. You can ask the AI to propose a list from the instructions and the answers' : ''}.
+              {canPropose ? t('No steps were found in the written instructions. You can ask the AI to propose a list from the instructions and the answers.') : t('No steps were found in the written instructions.')}
             </p>
           )}
           {message && <p className="ab-note ab-note-danger" role="alert">{message}</p>}
@@ -121,7 +121,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
 
       {proposed.length > 0 && !sameAsShown && (
         <p className="ab-note" role="status">
-          The AI proposed {proposed.length} step{proposed.length === 1 ? '' : 's'}.{' '}
+          {tn(proposed.length, 'The AI proposed {n} step.', 'The AI proposed {n} steps.')}{' '}
           <button type="button" className="ab-btn ab-btn-sm" onClick={() => setAiSteps(proposed)}>{t('Use this list')}</button>
         </p>
       )}
@@ -131,7 +131,7 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
           <p className="ab-sub">{t('Not happy with the list? The AI can write a cleaner one from the instructions and the answers. You choose whether to use it.')}</p>
           <div className="ab-row">
             <button type="button" className="ab-btn" disabled={!aiReady || run.busy} onClick={() => run.run(feature, { getPack: async () => mergeParentPack(data.own, data.parent) })}>
-              {feature.title}
+              {tr(feature.title)}
             </button>
           </div>
           {!aiReady && <p className="ab-hint">{t('Add an AI key in Settings to use this button. The checklist above works without one.')}</p>}

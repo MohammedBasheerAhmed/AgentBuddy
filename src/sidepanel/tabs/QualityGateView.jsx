@@ -5,7 +5,7 @@ import { read } from '../ask.js';
 import { LoadNotes } from '../checks/Bits.jsx';
 import { CheckList, CheckSummary } from '../checks/CheckList.jsx';
 import { useLoader } from '../checks/useLoader.js';
-import { t } from '../../i18n/index.js';
+import { t, t as tr } from '../../i18n/index.js';
 
 // C2, "Check before you resolve". Reads the saved ticket and, where the page has a classic form, what has been typed on it but
 // not saved yet (on a Workspace page: the notes boxes only), and lists what is worth a second look. It only advises: nothing is blocked, changed or sent. The optional AI
@@ -47,10 +47,10 @@ export default function QualityGateView({ page, eff, record, run, aiReady, activ
         {view && (
           <p className="ab-hint" role="note">
             {view.formSource === 'boxes'
-              ? 'Checked the notes typed on this page, plus the saved ticket.'
+              ? t('Checked the notes typed on this page, plus the saved ticket.')
               : view.usedForm
-                ? 'Checked against what is on the form right now, plus the saved ticket.'
-                : 'Checked the saved ticket only. This page has no form Agent Buddy can read, so anything you have typed and not saved is not included.'}
+                ? t('Checked against what is on the form right now, plus the saved ticket.')
+                : t('Checked the saved ticket only. This page has no form Agent Buddy can read, so anything you have typed and not saved is not included.')}
           </p>
         )}
       </section>
@@ -69,7 +69,7 @@ export default function QualityGateView({ page, eff, record, run, aiReady, activ
           <p className="ab-sub">{t('Rewrites the notes you have started into cause, fix and verification, using only what the ticket says.')}</p>
           <div className="ab-row">
             <button type="button" className="ab-btn" disabled={!aiReady || run.busy} onClick={() => run.run(improve, { getPack: getImprovePack })}>
-              {improve.title}
+              {tr(improve.title)}
             </button>
           </div>
           {!aiReady && <p className="ab-hint">{t('Add an AI key in Settings to use this button. The checks above work without one.')}</p>}

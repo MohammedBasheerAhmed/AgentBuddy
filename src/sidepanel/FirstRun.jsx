@@ -7,7 +7,7 @@ import { read } from './ask.js';
 import { KeyUnlock, openSettings } from './AiKeyNote.jsx';
 import ProfilePicker from '../options/ProfilePicker.jsx';
 import { saveSettings } from '../lib/storage.js';
-import { t } from '../i18n/index.js';
+import { t, t as tr } from '../i18n/index.js';
 
 // "What do you work on?" with the suggestion from the person's roles and work. The two counts behind it (do they manage a group, is
 // catalog work assigned to them) are read once from the page when it is turned on; until then the roles alone suggest.
@@ -36,7 +36,7 @@ function AiStep({ eff }) {
     try {
       await saveSettings({ aiSkipped: true });
     } catch {
-      setError('The browser did not save that. Try again.');
+      setError(t('The browser did not save that. Try again.'));
     }
   }
   return (
@@ -87,7 +87,7 @@ export default function FirstRun({ page, lastSeen = null, aiReady, eff = null, o
       <h2 className="ab-h" id="ab-firstrun-title">{t('Getting started')}</h2>
       {at >= 0 && (
         <p className="ab-sub">
-          Step {at + 1} of {steps.length}
+          {t('Step {n} of {total}', { n: at + 1, total: steps.length })}
         </p>
       )}
       <ol className="ab-firstrun-steps">
@@ -96,7 +96,7 @@ export default function FirstRun({ page, lastSeen = null, aiReady, eff = null, o
             <span className="ab-firstrun-num" aria-hidden="true">{i + 1}</span>
             <span className="ab-firstrun-body">
               <span className="ab-firstrun-label">
-                {s.label} <span className={`ab-tag ab-firstrun-tag-${s.state}`}>{STEP_WORD[s.state]}</span>
+                {s.label} <span className={`ab-tag ab-firstrun-tag-${s.state}`}>{tr(STEP_WORD[s.state])}</span>
               </span>
               {s.state === 'next' && s.hint && <span className="ab-hint">{s.hint}</span>}
               {s.id === next && action(s.id)}

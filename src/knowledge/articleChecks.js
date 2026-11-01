@@ -4,6 +4,7 @@
 // with a short plain-language reason. Nothing here is a verdict: a finding is a prompt to look, not proof of a fault.
 
 import { parseSnTime } from '../context/util.js';
+import { isolate, t, tn } from '../i18n/index.js';
 
 const DAY = 86400000;
 
@@ -95,63 +96,71 @@ export function checkArticle(article, { now = Date.now(), scanSecrets } = {}) {
   // ---- Title ----
   const titleWords = title ? title.split(/\s+/).length : 0;
   if (!title) {
-    add('title-missing', 'problem', 'No title', 'The article has no title, so nobody can find it by what it is about.');
+    add('title-missing', 'problem', t('No title'), t('The article has no title, so nobody can find it by what it is about.'));
   } else {
-    if (GENERIC_TITLE.test(title)) add('title-vague', 'warn', 'The title says nothing about the topic', `"${title}" does not tell a reader what the article is for. Say what it helps with, for example "Reset your VPN password".`);
-    else if (title.length < LIMITS.titleMinChars || titleWords < LIMITS.titleMinWords) add('title-short', 'warn', 'The title is very short', `${title.length} characters, ${titleWords} word${titleWords === 1 ? '' : 's'}. People search by what they want to do; a title of three or more words that says it is found more often.`);
-    if (title.length > LIMITS.titleMaxChars) add('title-long', 'warn', 'The title is very long', `${title.length} characters. Search results cut long titles off; keep it under ${LIMITS.titleMaxChars}.`);
-    if (TICKET_NUMBER.test(title)) add('title-ticket', 'warn', 'The title contains a ticket number', 'A ticket number means nothing to a reader. Name the problem or the task instead.');
+    if (GENERIC_TITLE.test(title)) add('title-vague', 'warn', t('The title says nothing about the topic'), t('"{title}" does not tell a reader what the article is for. Say what it helps with, for example "Reset your VPN password".', { title: isolate(title) }));
+    else if (title.length < LIMITS.titleMinChars || titleWords < LIMITS.titleMinWords) {
+      add(
+        'title-short',
+        'warn',
+        t('The title is very short'),
+        tn(titleWords, '{chars} characters, {n} word. People search by what they want to do; a title of three or more words that says it is found more often.', '{chars} characters, {n} words. People search by what they want to do; a title of three or more words that says it is found more often.', { chars: title.length }),
+      );
+    }
+    if (title.length > LIMITS.titleMaxChars) add('title-long', 'warn', t('The title is very long'), t('{chars} characters. Search results cut long titles off; keep it under {max}.', { chars: title.length, max: LIMITS.titleMaxChars }));
+    if (TICKET_NUMBER.test(title)) add('title-ticket', 'warn', t('The title contains a ticket number'), t('A ticket number means nothing to a reader. Name the problem or the task instead.'));
     const letters = title.replace(/[^A-Za-z]/g, '');
-    if (letters.length >= 8 && letters === letters.toUpperCase()) add('title-caps', 'info', 'The title is in capital letters', 'Capitals are harder to read and look like shouting. Use normal sentence case.');
+    if (letters.length >= 8 && letters === letters.toUpperCase()) add('title-caps', 'info', t('The title is in capital letters'), t('Capitals are harder to read and look like shouting. Use normal sentence case.'));
   }
 
   // ---- Text: size ----
   if (!chars) {
-    if (a.articleType === 'wiki') add('text-wiki', 'info', 'The text could not be read', 'This looks like a wiki-format article; its body is not read by Agent Buddy, so size and structure were not checked.');
-    else add('text-empty', 'problem', 'No text', 'The article has no body text.');
+    if (a.articleType === 'wiki') add('text-wiki', 'info', t('The text could not be read'), t('This looks like a wiki-format article; its body is not read by Agent Buddy, so size and structure were not checked.'));
+    else add('text-empty', 'problem', t('No text'), t('The article has no body text.'));
   } else {
-    if (chars < LIMITS.textMinChars) add('text-short', 'warn', 'The text is very short', `${chars} characters. Check that it gives the reader enough to solve the problem without asking.`);
-    if (chars > LIMITS.textMaxChars) add('text-long', 'warn', 'The text is very long', `About ${words} words (${chars} characters). Long articles are rarely read to the end; consider splitting it into smaller articles.`);
-    if (PLACEHOLDER.test(text)) add('text-placeholder', 'warn', 'Unfinished text', 'The text contains a marker such as TODO, TBD or lorem ipsum.');
+    if (chars < LIMITS.textMinChars) add('text-short', 'warn', t('The text is very short'), t('{chars} characters. Check that it gives the reader enough to solve the problem without asking.', { chars }));
+    if (chars > LIMITS.textMaxChars) add('text-long', 'warn', t('The text is very long'), t('About {words} words ({chars} characters). Long articles are rarely read to the end; consider splitting it into smaller articles.', { words, chars }));
+    if (PLACEHOLDER.test(text)) add('text-placeholder', 'warn', t('Unfinished text'), t('The text contains a marker such as TODO, TBD or lorem ipsum.'));
   }
 
   // ---- Structure ----
   if (chars) {
     const instructional = (text.match(INSTRUCTION_VERB) || []).length >= 3;
     const numbered = (stats?.orderedLists ?? 0) > 0 || NUMBERED_LINE.test(text);
-    if (stats && stats.headings === 0 && chars > LIMITS.noHeadingsAfterChars) add('structure-headings', 'warn', 'No headings', 'A long text without headings is hard to scan. Headings such as "Symptoms", "Resolution" or "Steps" help readers jump to the part they need.');
-    if (instructional && !numbered) add('structure-steps', 'warn', 'No numbered steps', 'The text reads like instructions, but has no numbered steps. Numbered steps are easier to follow and to check off.');
-    if (instructional && !PREREQUISITE.test(text)) add('structure-prerequisites', 'info', 'No prerequisites', 'If the reader needs access, a tool or a permission first, say so before the steps ("Before you begin").');
-    if (stats && stats.images >= 3 && chars < 500) add('structure-images', 'info', 'Mostly pictures', 'Search cannot read screenshots. Describe the steps in words as well.');
+    if (stats && stats.headings === 0 && chars > LIMITS.noHeadingsAfterChars) add('structure-headings', 'warn', t('No headings'), t('A long text without headings is hard to scan. Headings such as "Symptoms", "Resolution" or "Steps" help readers jump to the part they need.'));
+    if (instructional && !numbered) add('structure-steps', 'warn', t('No numbered steps'), t('The text reads like instructions, but has no numbered steps. Numbered steps are easier to follow and to check off.'));
+    if (instructional && !PREREQUISITE.test(text)) add('structure-prerequisites', 'info', t('No prerequisites'), t('If the reader needs access, a tool or a permission first, say so before the steps ("Before you begin").'));
+    if (stats && stats.images >= 3 && chars < 500) add('structure-images', 'info', t('Mostly pictures'), t('Search cannot read screenshots. Describe the steps in words as well.'));
   }
 
   // ---- Keywords ----
   const keywords = String(a.meta || '').split(/[,;\n]+/).map((k) => k.trim()).filter(Boolean);
-  if (!keywords.length) add('keywords-none', 'warn', 'No search keywords', 'Add the words people would type when they look for this: product names, error messages and the way users describe the problem.');
-  else if (keywords.length < LIMITS.minKeywords) add('keywords-thin', 'info', 'Few search keywords', `Only ${keywords.length}. Add synonyms and the words users use, not just the official names.`);
+  if (!keywords.length) add('keywords-none', 'warn', t('No search keywords'), t('Add the words people would type when they look for this: product names, error messages and the way users describe the problem.'));
+  else if (keywords.length < LIMITS.minKeywords) add('keywords-thin', 'info', t('Few search keywords'), t('Only {count}. Add synonyms and the words users use, not just the official names.', { count: keywords.length }));
 
   // ---- Freshness ----
   const updatedDays = Number.isFinite(a.updatedMs) ? Math.floor((now - a.updatedMs) / DAY) : null;
   if (updatedDays !== null) {
-    if (updatedDays > LIMITS.veryStaleDays) add('stale-very', 'problem', 'Not changed for over two years', `Last changed ${day(a.updatedMs)}. Steps, screens and product names may no longer match.`);
-    else if (updatedDays > LIMITS.staleDays) add('stale', 'warn', 'Not changed for over a year', `Last changed ${day(a.updatedMs)}. Check that the steps still match what users see.`);
+    if (updatedDays > LIMITS.veryStaleDays) add('stale-very', 'problem', t('Not changed for over two years'), t('Last changed {date}. Steps, screens and product names may no longer match.', { date: isolate(day(a.updatedMs)) }));
+    else if (updatedDays > LIMITS.staleDays) add('stale', 'warn', t('Not changed for over a year'), t('Last changed {date}. Check that the steps still match what users see.', { date: isolate(day(a.updatedMs)) }));
   }
   const untilExpiry = Number.isFinite(a.validToMs) ? Math.ceil((a.validToMs - now) / DAY) : null;
   if (untilExpiry !== null) {
-    if (untilExpiry < 0) add('expired', 'problem', 'The article has expired', `Valid until ${day(a.validToMs)}. It may no longer be shown to readers.`);
-    else if (untilExpiry <= LIMITS.expiresSoonDays) add('expires-soon', 'warn', 'The article expires soon', `Valid until ${day(a.validToMs)} (${untilExpiry} day${untilExpiry === 1 ? '' : 's'}). Review it or extend the date.`);
-    else if (untilExpiry <= LIMITS.expiresLaterDays) add('expires-later', 'info', 'The article expires in about two months', `Valid until ${day(a.validToMs)}.`);
+    if (untilExpiry < 0) add('expired', 'problem', t('The article has expired'), t('Valid until {date}. It may no longer be shown to readers.', { date: isolate(day(a.validToMs)) }));
+    else if (untilExpiry <= LIMITS.expiresSoonDays) {
+      add('expires-soon', 'warn', t('The article expires soon'), tn(untilExpiry, 'Valid until {date} ({n} day). Review it or extend the date.', 'Valid until {date} ({n} days). Review it or extend the date.', { date: isolate(day(a.validToMs)) }));
+    } else if (untilExpiry <= LIMITS.expiresLaterDays) add('expires-later', 'info', t('The article expires in about two months'), t('Valid until {date}.', { date: isolate(day(a.validToMs)) }));
   }
   const liveDays = Number.isFinite(a.publishedMs) ? Math.floor((now - a.publishedMs) / DAY) : updatedDays;
   if (a.views !== null && a.views !== undefined && a.views < LIMITS.lowViews && liveDays !== null && liveDays > LIMITS.lowViewsAfterDays) {
-    add('views-low', 'info', 'Hardly anyone reads it', `${a.views} view${a.views === 1 ? '' : 's'} in ${Math.floor(liveDays / 30)} months. The title or keywords may not match what people search for.`);
+    add('views-low', 'info', t('Hardly anyone reads it'), tn(a.views, '{n} view in {months} months. The title or keywords may not match what people search for.', '{n} views in {months} months. The title or keywords may not match what people search for.', { months: Math.floor(liveDays / 30) }));
   }
 
   // ---- State and content that should not be there ----
-  if (a.state && a.state !== 'published') add('not-published', 'info', `This article is not published (${a.state})`, 'Readers cannot see it yet.');
+  if (a.state && a.state !== 'published') add('not-published', 'info', t('This article is not published ({state})', { state: isolate(a.state) }), t('Readers cannot see it yet.'));
   if (typeof scanSecrets === 'function' && chars) {
     const secrets = scanSecrets(text);
-    if (secrets > 0) add('secrets', 'problem', 'May contain a password, key or card number', `${secrets} value${secrets === 1 ? '' : 's'} in the text look like credentials or payment data. Remove them before anyone else reads the article.`);
+    if (secrets > 0) add('secrets', 'problem', t('May contain a password, key or card number'), tn(secrets, '{n} value in the text look like credentials or payment data. Remove them before anyone else reads the article.', '{n} values in the text look like credentials or payment data. Remove them before anyone else reads the article.'));
   }
 
   findings.sort((x, y) => LEVEL_ORDER[x.level] - LEVEL_ORDER[y.level]);

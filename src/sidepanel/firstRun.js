@@ -3,6 +3,7 @@
 // out (tests/panel-first-run.test.js). FirstRun.jsx draws the card with the action of the step that is next; SetupView.jsx leaves
 // out what the card already offers, so nothing is said twice.
 import { PROFILES, suggestProfiles } from '../profiles/profiles.js';
+import { t, tm } from '../i18n/index.js';
 
 /**
  * @param {{ page: object, lastSeen?: object|null, aiReady: boolean, eff?: object, activeInstances?: string[]|null }} input
@@ -26,15 +27,15 @@ export function firstRunSteps({ page, lastSeen = null, aiReady, eff = null, acti
   const raw = [
     {
       id: 'site',
-      label: 'Turn on Agent Buddy for your ServiceNow site',
+      label: t('Turn on Agent Buddy for your ServiceNow site'),
       done: siteOn,
       // No hint: the step's own text (with the Turn on button) already says what turning it on reads, and without an address the
       // "Not turned on for this page" card below the steps says what to do. Said once (TRACKER.md 2.4).
       hint: '',
     },
-    { id: 'profiles', label: 'Choose what you work on', done: profilesDone, hint: 'Agent Buddy then shows the tools for that work first. You can change it in Settings.' },
-    ...(aiOff ? [] : [{ id: 'ai', label: 'Set up AI, or skip it for now', done: aiDone, hint: 'Add a key for your AI provider in Settings. Without AI, everything under Insights still works.' }]),
-    { id: 'ticket', label: 'Open a ticket', done: onTicket, hint: 'An incident, request, catalog task or case. Agent Buddy offers help for it here.' },
+    { id: 'profiles', label: t('Choose what you work on'), done: profilesDone, hint: t('Agent Buddy then shows the tools for that work first. You can change it in Settings.') },
+    ...(aiOff ? [] : [{ id: 'ai', label: t('Set up AI, or skip it for now'), done: aiDone, hint: t('Add a key for your AI provider in Settings. Without AI, everything under Insights still works.') }]),
+    { id: 'ticket', label: t('Open a ticket'), done: onTicket, hint: t('An incident, request, catalog task or case. Agent Buddy offers help for it here.') },
   ];
   let next = '';
   const steps = raw.map(({ done, ...step }) => {
@@ -47,7 +48,8 @@ export function firstRunSteps({ page, lastSeen = null, aiReady, eff = null, acti
   return { show, next: show ? next : '', steps };
 }
 
-export const STEP_WORD = Object.freeze({ done: 'Done', next: 'Next', later: 'Later' });
+// (English texts marked for the catalogue; FirstRun.jsx shows them with t())
+export const STEP_WORD = Object.freeze({ done: tm('Done'), next: tm('Next'), later: tm('Later') });
 
 // ---- Is this tab a ServiceNow page? -------------------------------------------------------------------------------------------
 //

@@ -4,6 +4,7 @@ import AiKeyNote from '../AiKeyNote.jsx';
 import { AiSkippedNote } from '../shell/shellParts.jsx';
 import { ActionGroups } from './assist/actions/index.js';
 import { AnswerArea, AskBox } from './assist/answers/index.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * The Ticket screen's AI Assist half: the answers first (where the person looks), then a question box, then the actions grouped by
@@ -16,7 +17,7 @@ export default function TicketAssist({ page, eff, record, header, assist, ready,
   if (eff.values?.aiSkipped) return <AiSkippedNote />;
   return (
     <>
-      <AiKeyNote eff={eff} what="AI Assist" also="Insights works without a key." />
+      <AiKeyNote eff={eff} what="AI Assist" also={t('Insights works without a key.')} />
       <ErrorBoundary resetKey={key}>
         <AnswerArea assist={assist} page={page} eff={eff} record={record} active={active} />
       </ErrorBoundary>

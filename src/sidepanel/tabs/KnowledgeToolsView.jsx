@@ -12,12 +12,11 @@ import { t } from '../../i18n/index.js';
 // tests/panel-tabs.test.js still looks at its tab list. Remove both together.
 // props: { page, eff }
 
-const TOOLS = [
-  { id: 'duplicates', label: 'Duplicates' },
-  { id: 'gaps', label: 'Gaps' },
-];
-
 export default function KnowledgeToolsView({ page, eff }) {
+  const TOOLS = [
+    { id: 'duplicates', label: t('Duplicates') },
+    { id: 'gaps', label: t('Gaps') },
+  ];
   const [tool, setTool] = useState('duplicates');
   const [, setMerge] = useShared(page, 'merge');
   const [, setGaps] = useShared(page, 'gaps');

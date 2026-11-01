@@ -16,6 +16,7 @@ import { resolutionImproveParts } from '../../checks/resolutionParts.js';
 import { withCurrentNotes } from '../../checks/resolutionCheck.js';
 import { notClosed, notNew } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
+import { t, tm, t as tr } from '../../i18n/index.js';
 
 const isTask = (pack) => String(pack?.table || '').toLowerCase() === 'sc_task';
 const access = (pack, entry) => ({ ...pack, access: [...(Array.isArray(pack.access) ? pack.access : []), entry] });
@@ -36,18 +37,18 @@ async function parentItem(pack, read) {
 async function explainTarget(pack, { read, allowSensitive }) {
   if (!isTask(pack)) return pack;
   const target = await parentItem(pack, read);
-  if (!target) return access(pack, { source: 'sc_req_item', status: 'denied', note: 'The requested item this task belongs to could not be read, so the message is about the task only.' });
+  if (!target) return access(pack, { source: 'sc_req_item', status: 'denied', note: t('The requested item this task belongs to could not be read, so the message is about the task only.') });
   try {
     const item = await read('pack', { table: target.table, sysId: target.sysId, feature: 'request-explain', allowSensitive });
     return item && typeof item === 'object' && item.table ? item : pack;
   } catch {
-    return access(pack, { source: 'sc_req_item', status: 'denied', note: 'The requested item this task belongs to could not be read, so the message is about the task only.' });
+    return access(pack, { source: 'sc_req_item', status: 'denied', note: t('The requested item this task belongs to could not be read, so the message is about the task only.') });
   }
 }
 
 // resolution-improve: what is in the box NOW (classic forms, and the notes box of a Workspace page; read again at every run). Without any notes, typed or saved, there is
 // nothing to improve: the person is told to write a few words first (or to use "Write resolution notes"), and nothing is sent.
-export const NO_NOTES_TO_IMPROVE = 'There are no resolution notes on the form yet. Type a few words first, or use "Write resolution notes".';
+export const NO_NOTES_TO_IMPROVE = tm('There are no resolution notes on the form yet. Type a few words first, or use "Write resolution notes".'); // an English text: show it with t()
 
 async function typedNotes(pack, { read }) {
   let form = null;
@@ -58,7 +59,7 @@ async function typedNotes(pack, { read }) {
     form = null;
   }
   const out = withCurrentNotes(pack, form);
-  if (!String(out?.fields?.close_notes || '').trim()) throw new Error(NO_NOTES_TO_IMPROVE);
+  if (!String(out?.fields?.close_notes || '').trim()) throw new Error(tr(NO_NOTES_TO_IMPROVE));
   return out;
 }
 
@@ -71,15 +72,19 @@ async function withRequestAnswers(pack, { read, allowSensitive }) {
     const item = await read('pack', { table: target.table, sysId: target.sysId, feature: 'fulfilment-checklist', allowSensitive });
     return mergeParentPack(pack, item && typeof item === 'object' ? item : null);
   } catch {
-    return access(pack, { source: 'sc_req_item', status: 'denied', note: 'You cannot see the requested item, so its answers are not included.' });
+    return access(pack, { source: 'sc_req_item', status: 'denied', note: t('You cannot see the requested item, so its answers are not included.') });
   }
 }
 
 export default [
   {
     id: 'request-explain',
-    title: 'Tell the requester where it stands',
-    description: 'A short, friendly message that says where the request stands and what it is waiting for.',
+    get title() {
+      return t('Tell the requester where it stands');
+    },
+    get description() {
+      return t('A short, friendly message that says where the request stands and what it is waiting for.');
+    },
     wave: 1,
     kinds: ['request', 'requested_item', 'catalog_task'],
     group: 'reply',
@@ -88,7 +93,7 @@ export default [
     journal: 6,
     enrich: explainTarget,
     parts: requestExplainParts,
-    insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
+    insert: { field: 'comments', get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments') },
     system:
       'You help a service desk agent tell a requester where their service request stands.\n' +
       'Write a short, friendly status message the agent can send to the requester as a comment.\n' +
@@ -103,8 +108,12 @@ export default [
   },
   {
     id: 'resolution-improve',
-    title: 'Improve my resolution notes',
-    description: 'Rewrites the notes you have started so they say the cause, the fix and how it was checked.',
+    get title() {
+      return t('Improve my resolution notes');
+    },
+    get description() {
+      return t('Rewrites the notes you have started so they say the cause, the fix and how it was checked.');
+    },
     wave: 2,
     // The kinds whose form has close_notes (a problem keeps its fix in fix_notes, which this does not read).
     kinds: ['incident', 'requested_item', 'catalog_task', 'case', 'task'],
@@ -117,8 +126,8 @@ export default [
     parts: resolutionImproveParts,
     // The answer keeps every fact of the notes it rewrites, so it REPLACES them (Add below would leave the old and the new).
     insert: [
-      { field: 'close_notes', kinds: ['incident', 'case'], label: 'Insert into resolution notes', fieldLabel: 'Resolution notes', mode: 'replace' },
-      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], label: 'Insert into close notes', fieldLabel: 'Close notes', mode: 'replace' },
+      { field: 'close_notes', kinds: ['incident', 'case'], get label() { return t('Insert into resolution notes'); }, fieldLabel: tm('Resolution notes'), mode: 'replace' },
+      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], get label() { return t('Insert into close notes'); }, fieldLabel: tm('Close notes'), mode: 'replace' },
     ],
     system:
       'You help a service desk agent improve the resolution notes they are writing for a ServiceNow ticket.\n' +
@@ -135,8 +144,12 @@ export default [
   },
   {
     id: 'fulfilment-checklist',
-    title: 'Draft a checklist from the instructions',
-    description: 'Turns the written instructions and the request answers into short, ordered steps.',
+    get title() {
+      return t('Draft a checklist from the instructions');
+    },
+    get description() {
+      return t('Turns the written instructions and the request answers into short, ordered steps.');
+    },
     wave: 3,
     // Offered only when the written instructions give no steps by themselves (the AI Assist list checks that first: the no-AI
     // checklist in Insights is the better answer when there is one).
@@ -147,7 +160,7 @@ export default [
     journal: 0,
     enrich: withRequestAnswers,
     parts: checklistParts,
-    insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
+    insert: { field: 'work_notes', get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes') },
     system:
       'You help a fulfiller carry out a catalog task or a requested item.\n' +
       'Turn the written instructions and the answers to the request questions in the ticket data into a short, ordered checklist.\n' +

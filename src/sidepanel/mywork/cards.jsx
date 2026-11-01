@@ -4,14 +4,13 @@ import { CardFrame, ShowMore, EmptyNote } from '../ui/primitives.jsx';
 import { groupQueue, filterChips, passes } from '../../mywork/rank.js';
 import { followUps, followUpReason, followUpText, followUpAction, FOLLOW_UP_DAY_CHOICES } from '../../mywork/followups.js';
 import { fullListUrl } from '../../mywork/links.js';
-import { agoText, spanText, dueToday } from '../../mywork/time.js';
+import { askedText, dueAgoText, dueInText, spanText, dueToday } from '../../mywork/time.js';
 import { TicketRow, Fold, FilterChips, copyText } from './parts.jsx';
-import { t } from '../../i18n/index.js';
+import { shown as shownText } from '../../reports/shown.js';
+import { isolate, t, tn } from '../../i18n/index.js';
 
 // The four cards of the My work screen (N13 My queue, approvals waiting on me, N27 Follow-ups due, N14 Unassigned in my groups).
 // Every one is Insights: facts read with the person's own session, nothing sent anywhere, no AI.
-
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The queue card's one-line summary: "12 open · 2 SLA breached · 3 replied". Pure. */
 export function queueSummary(queue, items) {
@@ -19,21 +18,23 @@ export function queueSummary(queue, items) {
   if (!total) return '';
   const breached = items.filter((i) => i.sla?.risk === 'breached' && i.work !== 'resolved').length;
   const replied = items.filter((i) => i.marker?.replied && i.work !== 'resolved').length;
-  return [`${total} open`, breached ? `${breached} SLA breached` : '', replied ? `${replied} replied` : ''].filter(Boolean).join(' · ');
+  return [t('{count} open', { count: total }), breached ? t('{count} SLA breached', { count: breached }) : '', replied ? t('{count} replied', { count: replied }) : ''].filter(Boolean).join(' · ');
 }
 
 /** What an empty "waiting on you" list says, with what the group queue adds ("3 tickets in your groups are due today"). Pure. */
 export function emptyQueueText({ empty, waiting = 0, groupItems = [], groupTotal = 0, now }) {
-  if (empty === 'unread') return 'None of your ticket queues could be read.';
-  if (empty === 'unseen') return 'Agent Buddy can see no tickets at all with your access, so it cannot tell whether anything is assigned to you.';
-  const head = waiting ? `Nothing needs you right now. ${plural(waiting, 'ticket')} ${waiting === 1 ? 'waits' : 'wait'} on the customer or others.` : 'Nothing is waiting on you.';
+  if (empty === 'unread') return t('None of your ticket queues could be read.');
+  if (empty === 'unseen') return t('Agent Buddy can see no tickets at all with your access, so it cannot tell whether anything is assigned to you.');
+  const head = waiting
+    ? tn(waiting, 'Nothing needs you right now. {n} ticket waits on the customer or others.', 'Nothing needs you right now. {n} tickets wait on the customer or others.')
+    : t('Nothing is waiting on you.');
   const due = groupItems.filter((i) => i.sla && !i.sla.paused && (i.sla.breached || dueToday(i.sla.dueAt, now))).length;
-  if (due) return `${head} ${plural(due, 'ticket')} in your groups ${due === 1 ? 'is' : 'are'} due today.`;
-  if (groupTotal) return `${head} Your groups have ${plural(groupTotal, 'unassigned ticket')}.`;
+  if (due) return `${head} ${tn(due, '{n} ticket in your groups is due today.', '{n} tickets in your groups are due today.')}`;
+  if (groupTotal) return `${head} ${tn(groupTotal, 'Your groups have {n} unassigned ticket.', 'Your groups have {n} unassigned tickets.')}`;
   return head;
 }
 
-function FullList({ page, table, query, children = 'Open the full list' }) {
+function FullList({ page, table, query, children = t('Open the full list') }) {
   const url = fullListUrl(page, table, query);
   if (!url) return null;
   return (
@@ -55,7 +56,7 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
     // A filter set from the outage note (one CI) shows as a chip of its own while it is on.
     if (filter.startsWith('ci:') && !list.some((c) => c.id === filter)) {
       const ci = items.find((i) => i.ci && `ci:${i.ci.id}` === filter)?.ci;
-      if (ci) list.unshift({ id: filter, label: `On ${ci.name}`, count: items.filter((i) => passes(i, filter)).length });
+      if (ci) list.unshift({ id: filter, label: t('On {name}', { name: isolate(ci.name) }), count: items.filter((i) => passes(i, filter)).length });
     }
     return list;
   }, [items, filter, queue.names]);
@@ -76,14 +77,14 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
             </button>
           }
         >
-          {shown.length ? 'Nothing that matches needs you right now.' : 'No ticket matches this filter.'}
+          {shown.length ? t('Nothing that matches needs you right now.') : t('No ticket matches this filter.')}
         </EmptyNote>
       ) : (
         <EmptyNote>{emptyQueueText({ empty: items.length ? null : queue.empty, waiting: g.waiting.length, groupItems: groups.items, groupTotal: groups.total, now })}</EmptyNote>
       )}
       {queue.more && (
         <p className="ab-hint ab-mw-cap">
-          Showing {items.length} of {queue.total > items.length ? queue.total : `${items.length} or more`}.{' '}
+          {queue.total > items.length ? t('Showing {shown} of {total}.', { shown: items.length, total: queue.total }) : t('Showing {shown} of {total} or more.', { shown: items.length, total: items.length })}{' '}
           <FullList page={page} table="task" query={queue.listQuery} />
         </p>
       )}
@@ -111,11 +112,11 @@ export function ApprovalsCard({ page, approvals, now }) {
     <div className="ab-mw-row" key={a.sysId}>
       <RecordLink page={page} item={{ table: 'sysapproval_approver', sysId: a.sysId }} className="ab-mw-link">
         <span className="ab-mw-line">
-          <span className="ab-record-number">{a.number || 'Approval'}</span>
+          <span className="ab-record-number">{a.number || t('Approval')}</span>
           {a.title && <span className="ab-mw-title">{a.title}</span>}
         </span>
         <span className="ab-mw-line ab-mw-sub">
-          <span className="ab-mw-meta">{[a.requestedAt ? `asked ${agoText(a.requestedAt, now)}` : '', a.dueAt ? (a.dueAt < now ? `due ${agoText(a.dueAt, now)}` : `due in ${spanText(a.dueAt - now)}`) : ''].filter(Boolean).join(' · ')}</span>
+          <span className="ab-mw-meta">{[a.requestedAt ? askedText(a.requestedAt, now) : '', a.dueAt ? (a.dueAt < now ? dueAgoText(a.dueAt, now) : dueInText(a.dueAt - now)) : ''].filter(Boolean).join(' · ')}</span>
         </span>
       </RecordLink>
     </div>
@@ -125,7 +126,7 @@ export function ApprovalsCard({ page, approvals, now }) {
       <ShowMore items={items} limit={3} render={row} className="ab-list ab-mw-list" />
       {approvals.total > items.length && (
         <p className="ab-hint ab-mw-cap">
-          Showing {items.length} of {approvals.total}. <FullList page={page} table="sysapproval_approver" query={approvals.listQuery} />
+          {t('Showing {shown} of {total}.', { shown: items.length, total: approvals.total })} <FullList page={page} table="sysapproval_approver" query={approvals.listQuery} />
         </p>
       )}
     </CardFrame>
@@ -139,14 +140,14 @@ function FollowUpRow({ page, entry, now, onOpen }) {
   const action = followUpAction(entry);
   const copy = async () => {
     const ok = await copyText(followUpText(entry));
-    setNote(ok ? 'Copied. Paste it into the customer comment of the ticket.' : 'Could not copy. Your browser did not allow it.');
+    setNote(ok ? t('Copied. Paste it into the customer comment of the ticket.') : t('Could not copy. Your browser did not allow it.'));
   };
   return (
     <div className="ab-mw-row ab-mw-follow">
       <RecordLink page={page} item={entry.item} onOpen={() => onOpen(entry.item)} className="ab-mw-link">
         <span className="ab-mw-line">
           <span className="ab-record-number">{entry.item.number}</span>
-          <span className="ab-mw-title">{entry.item.title || 'No title'}</span>
+          <span className="ab-mw-title">{entry.item.title || t('No title')}</span>
         </span>
         <span className="ab-mw-line ab-mw-sub">
           <span className={`ab-mw-chip ab-mw-chip-${entry.kind === 'replied' ? 'reply' : 'quiet'}`}>{followUpReason(entry)}</span>
@@ -172,7 +173,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
   const known = (data.queue.items || []).some((i) => i.marker?.known);
   const replied = list.filter((f) => f.kind === 'replied').length;
   const due = list.length - replied;
-  const summary = [due ? `${due} due` : '', replied ? `${replied} replied` : ''].filter(Boolean).join(' · ');
+  const summary = [due ? t('{count} due', { count: due }) : '', replied ? t('{count} replied', { count: replied }) : ''].filter(Boolean).join(' · ');
   return (
     <CardFrame
       id="mywork-followups"
@@ -186,7 +187,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
           <select id={selectId} className="ab-select ab-select-sm" value={days} onChange={(e) => setDays(Number(e.target.value))} title={t('How long a customer may wait for a word')}>
             {FOLLOW_UP_DAY_CHOICES.map((d) => (
               <option key={d} value={d}>
-                {t('after {d} days', { d })}
+                {tn(d, 'after {n} day', 'after {n} days')}
               </option>
             ))}
           </select>
@@ -196,7 +197,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
       {list.length > 0 ? (
         <ShowMore items={list} limit={3} render={(entry) => <FollowUpRow key={`${entry.kind}:${entry.item.sysId}`} page={page} entry={entry} now={now} onOpen={onOpen} />} className="ab-list ab-mw-list" />
       ) : (
-        <EmptyNote>{known || !data.queue.items.length ? `No customer has waited ${days} days for a word from you.` : 'Follow-ups need the comments on your tickets, which are not visible to you.'}</EmptyNote>
+        <EmptyNote>{known || !data.queue.items.length ? tn(days, 'No customer has waited {n} day for a word from you.', 'No customer has waited {n} days for a word from you.') : t('Follow-ups need the comments on your tickets, which are not visible to you.')}</EmptyNote>
       )}
     </CardFrame>
   );
@@ -207,20 +208,20 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
 export function GroupsCard({ page, groups, now, onOpen }) {
   const items = groups.items || [];
   const oldest = items[0]?.openedAt;
-  const summary = items.length ? [`${groups.total > items.length ? groups.total : items.length} waiting`, oldest ? `oldest ${spanText(now - oldest)}` : ''].filter(Boolean).join(' · ') : '';
+  const summary = items.length ? [t('{count} waiting', { count: groups.total > items.length ? groups.total : items.length }), oldest ? t('oldest {span}', { span: spanText(now - oldest) }) : ''].filter(Boolean).join(' · ') : '';
   return (
     <CardFrame id="mywork-groups" title={t('Unassigned in my groups')} summary={summary}>
       {items.length > 0 ? (
         <ShowMore items={items} limit={3} render={(item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} where="group" />} className="ab-list ab-mw-list" />
       ) : (
-        <EmptyNote>{groups.groups.length ? 'Nothing is waiting unassigned in your groups.' : 'Agent Buddy can see no group you belong to.'}</EmptyNote>
+        <EmptyNote>{groups.groups.length ? t('Nothing is waiting unassigned in your groups.') : t('Agent Buddy can see no group you belong to.')}</EmptyNote>
       )}
       {(groups.more || groups.total > items.length) && items.length > 0 && (
         <p className="ab-hint ab-mw-cap">
-          Showing {items.length} of {groups.total > items.length ? groups.total : `${items.length} or more`}. <FullList page={page} table="task" query={groups.listQuery} />
+          {groups.total > items.length ? t('Showing {shown} of {total}.', { shown: items.length, total: groups.total }) : t('Showing {shown} of {total} or more.', { shown: items.length, total: items.length })} <FullList page={page} table="task" query={groups.listQuery} />
         </p>
       )}
-      {groups.note && <p className="ab-hint">{groups.note}</p>}
+      {groups.note && <p className="ab-hint">{shownText(groups.note)}</p>}
     </CardFrame>
   );
 }

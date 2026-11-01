@@ -4,6 +4,8 @@
 // Everything here works on DISPLAY values (what the person sees), because the stored numbers differ between releases and
 // between tables. A word that is not recognised never counts as closed or as an approval: unknown stays unknown.
 
+import { isolate, t } from '../i18n/index.js';
+
 const text = (v) => String(v ?? '').trim();
 
 // Closed / finished states of requests, items, tasks, incidents, problems and cases.
@@ -57,7 +59,7 @@ export function isOpenItem(item) {
 export function ownerOf(item) {
   const person = text(item?.assignedTo);
   const group = text(item?.assignmentGroup);
-  if (person && group) return `${person} in ${group}`;
+  if (person && group) return t('{person} in {group}', { person: isolate(person), group: isolate(group) });
   return person || group;
 }
 

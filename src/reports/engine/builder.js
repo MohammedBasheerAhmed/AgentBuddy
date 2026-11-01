@@ -7,32 +7,35 @@ import { andQuery, capNote, probeTables, raw, disp, resolvedColumn, tableAccess 
 import { FILTER_PRESETS, buildQuery, normalizePresets, presetConditions, windowDaysOf, QueryError } from './queryBuilder.js';
 import { readMyGroups } from './scope.js';
 import { DAY, bucketCounts, bucketLabels, bucketStarts, mean, timeOf } from './time.js';
+import { say, tm } from './say.js';
+import { t } from '../../i18n/core.js';
+import { shown } from '../shown.js';
 
 export const GROUP_BY = Object.freeze([
-  { id: 'none', label: 'No grouping (one number)' },
-  { id: 'state', label: 'State', field: 'state' },
-  { id: 'priority', label: 'Priority', field: 'priority' },
-  { id: 'assignment_group', label: 'Assignment group', field: 'assignment_group' },
-  { id: 'assigned_to', label: 'Assigned to', field: 'assigned_to', person: true },
-  { id: 'category', label: 'Category', field: 'category' },
-  { id: 'cmdb_ci', label: 'Configuration item', field: 'cmdb_ci' },
-  { id: 'opened_day', label: 'Day opened', time: { field: 'opened_at', unit: 'day' } },
-  { id: 'opened_week', label: 'Week opened', time: { field: 'opened_at', unit: 'week' } },
-  { id: 'resolved_day', label: 'Day resolved', time: { field: 'resolved', unit: 'day' } },
-  { id: 'resolved_week', label: 'Week resolved', time: { field: 'resolved', unit: 'week' } },
+  { id: 'none', label: tm('No grouping (one number)') },
+  { id: 'state', label: tm('State'), field: 'state' },
+  { id: 'priority', label: tm('Priority'), field: 'priority' },
+  { id: 'assignment_group', label: tm('Assignment group'), field: 'assignment_group' },
+  { id: 'assigned_to', label: tm('Assigned to'), field: 'assigned_to', person: true },
+  { id: 'category', label: tm('Category'), field: 'category' },
+  { id: 'cmdb_ci', label: tm('Configuration item'), field: 'cmdb_ci' },
+  { id: 'opened_day', label: tm('Day opened'), time: { field: 'opened_at', unit: 'day' } },
+  { id: 'opened_week', label: tm('Week opened'), time: { field: 'opened_at', unit: 'week' } },
+  { id: 'resolved_day', label: tm('Day resolved'), time: { field: 'resolved', unit: 'day' } },
+  { id: 'resolved_week', label: tm('Week resolved'), time: { field: 'resolved', unit: 'week' } },
 ]);
 
 export const METRICS = Object.freeze([
-  { id: 'count', label: 'Number of tickets' },
-  { id: 'avg_resolve_days', label: 'Average days to resolve' },
-  { id: 'avg_age_days', label: 'Average age of open tickets (days)' },
+  { id: 'count', label: tm('Number of tickets') },
+  { id: 'avg_resolve_days', label: tm('Average days to resolve') },
+  { id: 'avg_age_days', label: tm('Average age of open tickets (days)') },
 ]);
 
 export const CHARTS = Object.freeze([
-  { id: 'bar', label: 'Bars' },
-  { id: 'donut', label: 'Donut' },
-  { id: 'line', label: 'Line over time' },
-  { id: 'table', label: 'Table only' },
+  { id: 'bar', label: tm('Bars') },
+  { id: 'donut', label: tm('Donut') },
+  { id: 'line', label: tm('Line over time') },
+  { id: 'table', label: tm('Table only') },
 ]);
 
 const byId = (list, id) => list.find((x) => x.id === id);
@@ -54,7 +57,7 @@ export function normalizeBuilderConfig(input) {
 /** "Open, in my groups, opened in the last 30 days" for the heading. */
 export function describeFilter(presets) {
   const names = normalizePresets(presets).map((id) => byId(FILTER_PRESETS, id).label);
-  return names.length ? names.join(', ') : 'All tickets';
+  return names.length ? names.join(', ') : tm('All tickets');
 }
 
 /** Group of drill-down: the query for one bar. */
@@ -81,13 +84,17 @@ export async function runBuilder(ctx, rawConfig) {
   const meta = REPORT_TABLES[config.table];
   // An HR-family table is read only for someone with the HR profile whose organisation allows HR content (see constants.js).
   if (isSensitiveReportTable(config.table, ctx.sensitivePrefixes) && !ctx.allowSensitive) {
-    return { id: 'builder', title: meta.label, generatedAt: ctx.generatedAt, readAt: ctx.generatedAt, scope: { kind: 'builder', label: describeFilter(config.presets), groups: [], inferred: false, note: '' }, tables: [], access: [], notes: [], caps: [], data: { available: false, reason: `${meta.label} are shown only with the HR profile, when your organisation allows HR content.`, status: 'blocked', config } };
+    return { id: 'builder', title: meta.label, generatedAt: ctx.generatedAt, readAt: ctx.generatedAt, scope: { kind: 'builder', label: describeFilter(config.presets), groups: [], inferred: false, note: '' }, tables: [], access: [], notes: [], caps: [], data: { available: false, reason: say(tm('{table} are shown only with the HR profile, when your organisation allows HR content.'), { table: meta.label }), status: 'blocked', config } };
   }
   const [t] = await probeTables(reader, [config.table]);
   ctx.tables = [t];
   const base = {
     id: 'builder',
-    title: config.title || `${meta.label}: ${byId(METRICS, config.metric).label.toLowerCase()}${config.groupBy === 'none' ? '' : ` by ${byId(GROUP_BY, config.groupBy).label.toLowerCase()}`}`,
+    title:
+      config.title ||
+      (config.groupBy === 'none'
+        ? say(tm('{table}: {measure}'), { table: meta.label, measure: byId(METRICS, config.metric).label.toLowerCase() })
+        : say(tm('{table}: {measure} by {groupBy}'), { table: meta.label, measure: byId(METRICS, config.metric).label.toLowerCase(), groupBy: byId(GROUP_BY, config.groupBy).label.toLowerCase() })),
     generatedAt: ctx.generatedAt,
     scope: { kind: 'builder', label: describeFilter(config.presets), groups: [], inferred: false, note: '' },
     tables: tableAccess([t]),
@@ -96,13 +103,13 @@ export async function runBuilder(ctx, rawConfig) {
     caps: ctx.caps,
   };
   const fail = (reason, status = 'error') => ({ ...base, readAt: reader.readAt || ctx.generatedAt, data: { available: false, reason, status, config } });
-  if (!t.usable) return fail(tableAccess([t])[0].note || 'This table is not available to you.', t.vis.status);
+  if (!t.usable) return fail(tableAccess([t])[0].note || tm('This table is not available to you.'), t.vis.status);
 
   // Filter -> conditions. Presets that need the person's id or groups read them here.
   let groupIds = [];
   if (config.presets.includes('my_groups')) {
     const groups = await attempt(() => readMyGroups(reader, ctx.userId), 'sys_user_grmember');
-    if (!groups.ok || !groups.value.length) return fail(groups.ok ? 'You are not in any group that Agent Buddy can see.' : 'Your groups are not available to you.');
+    if (!groups.ok || !groups.value.length) return fail(groups.ok ? tm('You are not in any group that Agent Buddy can see.') : tm('Your groups are not available to you.'));
     groupIds = groups.value.map((g) => g.id);
   }
   let conditions;
@@ -114,15 +121,15 @@ export async function runBuilder(ctx, rawConfig) {
   }
   if (config.presets.includes('breached')) {
     const ids = await attempt(() => breachedIds(reader, config.table), 'task_sla');
-    if (!ids.ok) return fail('SLA information is not available to you.', ids.status);
+    if (!ids.ok) return fail(tm('SLA information is not available to you.'), ids.status);
     if (!ids.value.ids.length) {
       // "Nothing breached" is only true when this person can see SLA records at all; otherwise the report would show a made-up 0.
       const vis = await reader.visibility('task_sla');
-      if (vis.status !== 'ok') return fail(vis.status === 'hidden' ? 'You can see no SLA records at all, so "SLA breached" cannot be worked out.' : 'SLA information is not available to you.', vis.status);
+      if (vis.status !== 'ok') return fail(vis.status === 'hidden' ? tm('You can see no SLA records at all, so "SLA breached" cannot be worked out.') : tm('SLA information is not available to you.'), vis.status);
     }
     if (!ids.value.ids.length) conditions.push({ op: 'in', field: 'sys_id', values: ['0'.repeat(32)] }); // nothing breached: match nothing
     else conditions.push({ op: 'in', field: 'sys_id', values: ids.value.ids });
-    if (ids.value.capped) ctx.notes.push('Only the first 100 breached tickets are included.');
+    if (ids.value.capped) ctx.notes.push(tm('Only the first 100 breached tickets are included.'));
   }
   let query;
   try {
@@ -135,7 +142,7 @@ export async function runBuilder(ctx, rawConfig) {
   const group = byId(GROUP_BY, config.groupBy);
   const metric = config.metric;
   const out = { config, table: config.table, tableLabel: meta.label, filter: describeFilter(config.presets), query, groupBy: group.id, groupLabel: group.label, metric, available: true };
-  const unit = metric === 'count' ? 'tickets' : 'days';
+  const unit = metric === 'count' ? tm('tickets') : tm('days');
 
   // ---- count, no time grouping: the Aggregate API gives exact numbers ----
   if (metric === 'count' && !group.time) {
@@ -145,9 +152,9 @@ export async function runBuilder(ctx, rawConfig) {
       return { ...base, readAt: reader.readAt || ctx.generatedAt, data: { ...out, unit, items: [{ key: 'all', label: meta.label, value: n.value, n: n.value, query }], total: n.value } };
     }
     const g = await attempt(() => reader.groups(config.table, query, [group.field]), config.table);
-    if (!g.ok) return fail(g.status === 'error' ? `${group.label} is not available on ${meta.label.toLowerCase()}. ${g.note}` : g.note, g.status);
+    if (!g.ok) return fail(g.status === 'error' ? say(tm('{groupBy} is not available on {table}. {note}'), { groupBy: group.label, table: meta.label.toLowerCase(), note: g.note }) : g.note, g.status);
     const items = g.value
-      .map((x) => ({ key: x.keys[0]?.value || '', label: x.keys[0]?.display || '(empty)', value: x.count, n: x.count }))
+      .map((x) => ({ key: x.keys[0]?.value || '', label: x.keys[0]?.display || tm('(empty)'), value: x.count, n: x.count }))
       .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
       .map((x) => ({ ...x, query: itemQuery(query, group.field, x.key) }));
     return { ...base, readAt: reader.readAt || ctx.generatedAt, data: { ...out, unit, items: items.slice(0, 40), total: items.reduce((n, x) => n + x.value, 0), hidden: Math.max(0, items.length - 40), person: Boolean(group.person) } };
@@ -156,7 +163,7 @@ export async function runBuilder(ctx, rawConfig) {
   // ---- everything else reads a bounded number of rows and works them out here ----
   const rf = resolvedColumn(t);
   if (group.time?.field === 'resolved' || metric === 'avg_resolve_days') {
-    if (!rf) return fail('This table has no resolved date to work from.');
+    if (!rf) return fail(tm('This table has no resolved date to work from.'));
   }
   const openOnly = metric === 'avg_age_days' ? andQuery(query, 'active=true') : query;
 
@@ -194,7 +201,7 @@ export async function runBuilder(ctx, rawConfig) {
     const end = metric === 'avg_resolve_days' ? timeOf(raw(r[rf])) : now;
     if (!Number.isFinite(opened) || !Number.isFinite(end) || end < opened) return;
     const key = group.id === 'none' ? 'all' : raw(r[group.field]);
-    const entry = buckets.get(key) || { key, label: group.id === 'none' ? meta.label : disp(r[group.field]) || '(empty)', days: [] };
+    const entry = buckets.get(key) || { key, label: group.id === 'none' ? meta.label : disp(r[group.field]) || tm('(empty)'), days: [] };
     entry.days.push((end - opened) / DAY);
     buckets.set(key, entry);
   });
@@ -205,18 +212,18 @@ export async function runBuilder(ctx, rawConfig) {
   return {
     ...base,
     readAt: reader.readAt || ctx.generatedAt,
-    data: { ...out, unit, items: items.slice(0, 40), total: allDays.length, overall: allDays.length ? Math.round(mean(allDays) * 10) / 10 : null, person: Boolean(group.person), basedOn: `${allDays.length} tickets${read.value.capped ? ' (the first ones read; there are more)' : ''}` },
+    data: { ...out, unit, items: items.slice(0, 40), total: allDays.length, overall: allDays.length ? Math.round(mean(allDays) * 10) / 10 : null, person: Boolean(group.person), basedOn: read.value.capped ? say(tm('{count} tickets (the first ones read; there are more)'), { count: allDays.length }) : say(tm('{count} tickets'), { count: allDays.length }) },
   };
 }
 
 export function builderTables(result) {
   const d = result.data;
   if (!d?.available) return [];
-  const valueLabel = d.metric === 'count' ? 'Tickets' : d.metric === 'avg_resolve_days' ? 'Average days to resolve' : 'Average age (days)';
+  const valueLabel = d.metric === 'count' ? t('Tickets') : d.metric === 'avg_resolve_days' ? t('Average days to resolve') : t('Average age (days)');
   return [
     {
-      title: result.title,
-      columns: [{ key: 'label', label: d.groupLabel === 'No grouping (one number)' ? 'Measure' : d.groupLabel, person: Boolean(d.person) }, { key: 'value', label: valueLabel }, ...(d.metric === 'count' ? [] : [{ key: 'n', label: 'Tickets counted' }])],
+      title: shown(result.title),
+      columns: [{ key: 'label', label: d.groupLabel === 'No grouping (one number)' ? t('Measure') : shown(d.groupLabel), person: Boolean(d.person) }, { key: 'value', label: valueLabel }, ...(d.metric === 'count' ? [] : [{ key: 'n', label: t('Tickets counted') }])],
       rows: d.items,
     },
   ];

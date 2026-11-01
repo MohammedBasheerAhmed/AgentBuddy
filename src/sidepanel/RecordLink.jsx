@@ -1,5 +1,6 @@
 import { recordUrl, openUrl, openInNewTab } from './openRecord.js';
 import { isPlainClick, NEW_TAB_HINT, OWN_TAB_HINT } from './linkClick.js';
+import { t } from '../i18n/index.js';
 
 /**
  * A record (or any address on the instance) as a real link. A plain click opens it in the tab the panel is attached to, as a
@@ -21,7 +22,7 @@ export default function RecordLink({ page, item, url: given, onOpen, newTab = fa
       rel="noopener noreferrer"
       data-ab-link="record"
       className={className}
-      title={title ?? (newTab ? OWN_TAB_HINT : NEW_TAB_HINT)}
+      title={title ?? t(newTab ? OWN_TAB_HINT : NEW_TAB_HINT)}
       onClick={(event) => {
         if (!isPlainClick(event)) return; // the browser opens a new tab
         event.preventDefault();

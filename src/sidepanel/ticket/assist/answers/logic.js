@@ -5,14 +5,15 @@ import { primaryOf } from '../../../insertFlow.js';
 import { LANGUAGES, buildComposePack, languageName, mergePeople, withLanguage } from '../../../../compose/rewrite.js';
 import { withWantedResult } from '../../../../features/packs/assist.js';
 import { parseSafeText, toPlainText } from '../../../../render/safeText.js';
+import { isolate, t, tm, tn, t as tr } from '../../../../i18n/index.js';
 
 /** "just now", "1 min ago", "12 min ago", "2 h ago". */
 export function ago(at, now = Date.now()) {
   const s = Math.max(0, Math.floor((now - Number(at || 0)) / 1000));
-  if (s < 60) return 'just now';
+  if (s < 60) return t('just now');
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min ago`;
-  return `${Math.floor(m / 60)} h ago`;
+  if (m < 60) return t('{minutes} min ago', { minutes: m });
+  return t('{hours} h ago', { hours: Math.floor(m / 60) });
 }
 
 /** The answer's text as plain text (what Copy copies and a refinement rewrites): the safe renderer's own reading of it. */
@@ -26,9 +27,9 @@ export const baseFeatureOf = (answer) => answer?.meta?.base || answer?.feature |
 
 /** "Draft a reply to the customer" or, for a refinement, "Draft a reply to the customer · Shorter". */
 export function titleOf(answer) {
-  if (answer?.meta?.question && !answer.meta.label) return 'Answer to your question';
+  if (answer?.meta?.question && !answer.meta.label) return t('Answer to your question');
   const base = baseFeatureOf(answer);
-  const title = answer?.meta?.question ? 'Answer to your question' : base?.title || 'Answer';
+  const title = answer?.meta?.question ? t('Answer to your question') : base?.title ? tr(base.title) : t('Answer');
   return answer?.meta?.label ? `${title} · ${answer.meta.label}` : title;
 }
 
@@ -41,11 +42,11 @@ export const answerPrimary = (answer, kind) => primaryOf(baseFeatureOf(answer), 
 
 // The refinements offered on an answer (src/features/packs/compose.js rewrite-*, run on the answer's text) and the own-instruction one.
 export const REFINE_PRESETS = Object.freeze([
-  Object.freeze({ id: 'short', label: 'Shorter', featureId: 'rewrite-short' }),
-  Object.freeze({ id: 'formal', label: 'More formal', featureId: 'rewrite-formal' }),
-  Object.freeze({ id: 'friendly', label: 'Friendlier', featureId: 'rewrite-friendly' }),
-  Object.freeze({ id: 'translate', label: 'Translate', featureId: 'rewrite-translate', needsLanguage: true }),
-  Object.freeze({ id: 'own', label: 'Your own instruction', featureId: 'rewrite-own', needsText: true }),
+  Object.freeze({ id: 'short', label: tm('Shorter'), featureId: 'rewrite-short' }),
+  Object.freeze({ id: 'formal', label: tm('More formal'), featureId: 'rewrite-formal' }),
+  Object.freeze({ id: 'friendly', label: tm('Friendlier'), featureId: 'rewrite-friendly' }),
+  Object.freeze({ id: 'translate', label: tm('Translate'), featureId: 'rewrite-translate', needsLanguage: true }),
+  Object.freeze({ id: 'own', label: tm('Your own instruction'), featureId: 'rewrite-own', needsText: true }),
 ]);
 
 /**
@@ -72,9 +73,12 @@ export function refineFeature(preset, { language = '', instruction = '' } = {}, 
 /** The label the refined answer carries: "Shorter", "Translated to French", "Your instruction". */
 export function refineLabel(preset, { language = '' } = {}) {
   if (!preset) return '';
-  if (preset.needsLanguage) return `Translated to ${languageName(language) || 'another language'}`;
-  if (preset.needsText) return 'Your instruction';
-  return preset.label;
+  if (preset.needsLanguage) {
+    const named = languageName(language); // (English, marked with tm() in src/compose/rewrite.js)
+    return t('Translated to {language}', { language: named ? tr(named) : t('another language') });
+  }
+  if (preset.needsText) return t('Your instruction');
+  return tr(preset.label);
 }
 
 export { LANGUAGES };
@@ -129,9 +133,9 @@ export function elsewhereLines({ runs = [], answersOf = () => [], current = '' }
   const seen = new Set();
   for (const r of runs) {
     if (!r || r.key === current || seen.has(r.key)) continue;
-    const number = r.number || 'another ticket';
-    if (r.phase === 'preview') lines.push({ key: r.key, text: `${number}: waiting for you to check what is sent.` });
-    else if (r.phase === 'reading' || r.phase === 'sending') lines.push({ key: r.key, text: `${number}: answer on its way.` });
+    const number = r.number ? isolate(r.number) : t('another ticket');
+    if (r.phase === 'preview') lines.push({ key: r.key, text: t('{number}: waiting for you to check what is sent.', { number }) });
+    else if (r.phase === 'reading' || r.phase === 'sending') lines.push({ key: r.key, text: t('{number}: answer on its way.', { number }) });
     else continue;
     seen.add(r.key);
   }
@@ -139,7 +143,7 @@ export function elsewhereLines({ runs = [], answersOf = () => [], current = '' }
     if (!r || r.key === current || seen.has(r.key)) continue;
     const fresh = answersOf(r.key).filter((a) => a.unseen);
     if (!fresh.length) continue;
-    lines.push({ key: r.key, text: `${r.number || 'another ticket'}: ${fresh.length === 1 ? 'an answer is ready' : `${fresh.length} answers are ready`}.` });
+    lines.push({ key: r.key, text: tn(fresh.length, '{number}: an answer is ready.', '{number}: {n} answers are ready.', { number: r.number ? isolate(r.number) : t('another ticket') }) });
     seen.add(r.key);
   }
   return lines.slice(0, 3);

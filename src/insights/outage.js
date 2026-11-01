@@ -2,6 +2,8 @@
 // When enough of them arrive close together it is probably one outage, not one person's problem. Pure: works on the answer of the
 // open-duplicates check (src/context/similar.js findOpenDuplicates), which reads by the record's own CI and service ids.
 
+import { isolate, t, tn } from '../i18n/index.js';
+
 export const OUTAGE_RULE = Object.freeze({ hours: 2, threshold: 3 });
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -14,7 +16,7 @@ function targetOf(hits, fields) {
   const byService = hits.filter((h) => Array.isArray(h.same) && h.same.includes('business_service')).length;
   if (ci && (byCi >= byService || !service)) return ci;
   if (service) return service;
-  return ci || 'the same service';
+  return ci || t('the same service');
 }
 
 /**
@@ -35,10 +37,10 @@ export function outageSignal(answer, pack, { hours = OUTAGE_RULE.hours, threshol
   const count = recent.length;
   const over = readable && count >= threshold;
   const windowHours = Number.isFinite(answer?.windowHours) ? answer.windowHours : 24;
-  const plural = (n) => `${n} other open ticket${n === 1 ? '' : 's'}`;
+  const inHours = (n) => tn(n, '{n} h', '{n} h');
   let line = '';
-  if (over) line = `${plural(count)} on ${target} in the last ${hours} h`;
-  else if (readable && hits.length) line = `${plural(hits.length)} on ${target} in the last ${windowHours} h`;
-  else if (readable) line = `No other open tickets on ${target} in the last ${windowHours} h`;
+  if (over) line = tn(count, '{n} other open ticket on {target} in the last {hours}', '{n} other open tickets on {target} in the last {hours}', { target: isolate(target), hours: inHours(hours) });
+  else if (readable && hits.length) line = tn(hits.length, '{n} other open ticket on {target} in the last {hours}', '{n} other open tickets on {target} in the last {hours}', { target: isolate(target), hours: inHours(windowHours) });
+  else if (readable) line = t('No other open tickets on {target} in the last {hours}', { target: isolate(target), hours: inHours(windowHours) });
   return { readable, count, total: hits.length, hours, windowHours, over, target, recent, hits, note: skipped ? text(skipped.note) : '', line };
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatNumber } from './geometry.js';
 import { isPlainClick, NEW_TAB_HINT } from '../linkClick.js';
+import { t } from '../../i18n/index.js';
 
 const cellText = (value) => {
   if (value === null || value === undefined || value === '') return '-';
@@ -15,7 +16,7 @@ const cellText = (value) => {
  * With onRowOpen the first cell of each row is a button that opens that row. With rowHref(row) as well (the address of the row, or '')
  * it is a real link instead: a click calls onRowOpen, Ctrl+click and the right-click menu open the address in a new tab.
  */
-export default function DataTable({ caption, columns, rows, onRowOpen, rowHref, maxRows = 100, emptyText = 'Nothing to show.' }) {
+export default function DataTable({ caption, columns, rows, onRowOpen, rowHref, maxRows = 100, emptyText = t('Nothing to show.') }) {
   const cols = (Array.isArray(columns) ? columns : []).filter((c) => c && c.key !== undefined);
   const list = Array.isArray(rows) ? rows.filter((r) => r && typeof r === 'object') : [];
   if (!cols.length || !list.length) return <p className="ab-chart-empty">{emptyText}</p>;
@@ -54,7 +55,7 @@ export default function DataTable({ caption, columns, rows, onRowOpen, rowHref, 
                         target="_blank"
                         rel="noopener noreferrer"
                         data-ab-link="record"
-                        title={NEW_TAB_HINT}
+                        title={t(NEW_TAB_HINT)}
                         onClick={(event) => {
                           if (!isPlainClick(event)) return;
                           event.preventDefault();
@@ -83,7 +84,7 @@ export default function DataTable({ caption, columns, rows, onRowOpen, rowHref, 
       </table>
       {list.length > shown.length ? (
         <p className="ab-chart-note">
-          Showing the first {formatNumber(shown.length)} of {formatNumber(list.length)} rows.
+          {t('Showing the first {shown} of {total} rows.', { shown: formatNumber(shown.length), total: formatNumber(list.length) })}
         </p>
       ) : null}
     </div>

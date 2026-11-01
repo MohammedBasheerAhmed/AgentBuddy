@@ -2,11 +2,10 @@ import { useEffect, useId, useState } from 'react';
 import { MAX_QUICK, QUICK_CARDS, QUICK_LABELS, isQuickCard, isQuickId, quickItems } from '../features/quick.js';
 import { saveSettings } from '../lib/storage.js';
 import { AiBadge } from './ui/primitives.jsx';
-import { t } from '../i18n/index.js';
+import { t, t as tr } from '../i18n/index.js';
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const cardId = (card) => `card:${card}`;
-const AI_HOVER = 'Uses AI. Masked text goes to the AI you chose, after a preview.';
 
 /**
  * The few actions worth one click, in the ticket at a glance. It holds items from both halves of the Ticket screen, each marked:
@@ -25,6 +24,7 @@ const AI_HOVER = 'Uses AI. Masked text goes to the AI you chose, after a preview
  */
 export default function QuickBar({ kind, stage = null, features = [], cards = [], eff, disabled = false, aiReady = true, onRun, onShowCard }) {
   const bodyId = useId();
+  const AI_HOVER = t('Uses AI. Masked text goes to the AI you chose, after a preview.');
   const [choosing, setChoosing] = useState(false);
   const [mine, setMine] = useState(null); // { open?, pins? } changed here and not saved back yet
   const [problem, setProblem] = useState('');
@@ -59,7 +59,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
     setMine((m) => ({ ...(m || {}), ...local }));
     saveSettings(patch).catch(() => {
       setMine(null);
-      setProblem('Agent Buddy could not save that choice. Try again.');
+      setProblem(t('Agent Buddy could not save that choice. Try again.'));
     });
   };
   const setOpen = (next) => save({ quickBarOpen: next }, { open: next });
@@ -76,11 +76,11 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
       <div className="ab-quick-head">
         <button type="button" className="ab-quick-toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
           <span className={`ab-quick-chevron${open ? ' ab-quick-chevron-open' : ''}`} aria-hidden="true" />
-          Quick actions
+          {t('Quick actions')}
         </button>
         {open && pinnable.length > 1 && (
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-pressed={choosing} aria-label={choosing ? 'Done choosing quick actions' : 'Choose quick actions'} onClick={() => setChoosing((on) => !on)}>
-            {choosing ? 'Done' : 'Choose'}
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-pressed={choosing} aria-label={choosing ? t('Done choosing quick actions') : t('Choose quick actions')} onClick={() => setChoosing((on) => !on)}>
+            {choosing ? t('Done') : t('Choose')}
           </button>
         )}
       </div>
@@ -91,13 +91,13 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
             <div className="ab-quick-actions" role="group" aria-label={t('Quick actions')}>
               {items.map((a) =>
                 a.ai ? (
-                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-btn-ai-quiet ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={`${a.label} (AI)`} onClick={() => onRun(byId.get(a.id))}>
-                    {a.label}
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-btn-ai-quiet ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={t('{label} (AI)', { label: tr(a.label) })} onClick={() => onRun(byId.get(a.id))}>
+                    {tr(a.label)}
                     <AiBadge label="" title={AI_HOVER} />
                   </button>
                 ) : (
                   <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-quick-insight" title={t('Opens the card in Insights. Stays in ServiceNow.')} onClick={() => onShowCard(a.card)}>
-                    {a.label}
+                    {tr(a.label)}
                   </button>
                 )
               )}
@@ -112,7 +112,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
                 return (
                   <label key={p.id} className="ab-check">
                     <input type="checkbox" checked={on} disabled={on ? shownIds.length === 1 : shownIds.length >= MAX_QUICK} onChange={() => toggle(p.id)} />
-                    <span className="ab-quick-choice">{p.label}</span>
+                    <span className="ab-quick-choice">{tr(p.label)}</span>
                     {p.ai && <AiBadge />}
                   </label>
                 );

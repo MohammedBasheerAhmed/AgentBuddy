@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import ErrorNote from '../ErrorNote.jsx';
 import { openRecord } from '../openRecord.js';
 import { sharedCis } from '../../mywork/rank.js';
-import { readText } from '../../mywork/time.js';
+import { readText, readWhen } from '../../mywork/time.js';
+import { noteText } from './accessNotes.js';
 import { cleanDays, DEFAULT_FOLLOW_UP_DAYS } from '../../mywork/followups.js';
 import { useMyWork } from './useMyWork.js';
 import { QueueCard, ApprovalsCard, FollowUpsCard, GroupsCard } from './cards.jsx';
-import { t } from '../../i18n/index.js';
+import { isolate, t, t as tr } from '../../i18n/index.js';
 
 // The My work screen (TRACKER.md 3.6: N13 My queue, N14 Unassigned in my groups, N27 Follow-ups due). Insights only: it reads with
 // the person's own session (src/content/ops/mywork.js), nothing is sent anywhere and there is no AI half.
@@ -32,7 +33,8 @@ function rememberedDays(eff) {
 
 /** The access notes as one short line, each said once. Pure. */
 export function accessLine(access) {
-  return [...new Set((access || []).map((a) => String(a?.note || '').trim()).filter(Boolean))].join(' ');
+  // (the notes are written in English by the page script; noteText() puts each in the language of the panel)
+  return [...new Set((access || []).map((a) => String(a?.note || '').trim()).filter(Boolean))].map(noteText).join(' ');
 }
 
 export default function MyWorkView({ page, eff, active, onOpenTicket }) {
@@ -65,10 +67,10 @@ export default function MyWorkView({ page, eff, active, onOpenTicket }) {
     <div className="ab-mywork" aria-busy={busy}>
       <div className="ab-mw-bar">
         <span className="ab-mw-read" role="status">
-          {busy ? 'Reading your work…' : data ? readText(work.readAt, now) : ''}
+          {busy ? t('Reading your work…') : data ? readText(work.readAt, now) : ''}
         </span>
         <label className="ab-mw-auto" title={t('Read again every 5 minutes while this screen is open')}>
-          <input type="checkbox" checked={work.auto} onChange={(e) => work.setAuto(e.target.checked)} /> Every 5 min
+          <input type="checkbox" checked={work.auto} onChange={(e) => work.setAuto(e.target.checked)} /> {t('Every 5 min')}
         </label>
         {busy ? (
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={work.stop}>
@@ -89,7 +91,7 @@ export default function MyWorkView({ page, eff, active, onOpenTicket }) {
       {work.phase === 'error' && <ErrorNote error={work.error} onRetry={work.load} />}
       {work.stopped && (
         <div className="ab-note ab-mw-stopped">
-          <span>{data ? `Stopped. What you see was ${readText(work.readAt, now).replace(/^Read /, 'read ')}.` : 'Stopped before anything was read.'}</span>
+          <span>{data ? t('Stopped. What you see was read {when}.', { when: readWhen(work.readAt, now) }) : t('Stopped before anything was read.')}</span>
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={work.load}>
             {t('Try again')}
           </button>
@@ -101,7 +103,7 @@ export default function MyWorkView({ page, eff, active, onOpenTicket }) {
           {outage && (
             <div className="ab-note ab-note-warn ab-mw-outage">
               <span>
-                {t('{count} of your tickets are on {name}. One cause?', { count: outage.count, name: outage.name })}
+                {t('{count} of your tickets are on {name}. One cause?', { count: outage.count, name: isolate(tr(outage.name)) })}
               </span>
               <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setFilter(`ci:${outage.id}`)}>
                 {t('Show them')}

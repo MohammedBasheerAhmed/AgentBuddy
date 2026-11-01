@@ -5,6 +5,7 @@ import { ageText } from './format.js';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
 import { t } from '../../i18n/index.js';
+import { placeholderName, shown } from '../../reports/shown.js';
 
 const CLASS_TONE = { new: 'c1', working: 'c2', waiting: 'c3', resolved: 'c4', other: 'neutral' };
 
@@ -13,28 +14,28 @@ export function FulfilmentBody({ d, env }) {
   return (
     <>
       <div className="ab-tiles">
-        <Tile label={t('Open items and tasks')} value={d.open} unavailable={d.open === null} hint={d.openPartial ? 'Some tables could not be counted' : ''} />
-        <Tile label={t('Waiting for your approval')} value={d.approvals.mine} unavailable={d.approvals.mine === null} hint={d.approvals.mineNote || ''} tone={d.approvals.mine > 0 ? 'warn' : 'neutral'} />
-        {d.approvals.team !== undefined && <Tile label={t('Approvals holding up the team')} value={d.approvals.team} unavailable={d.approvals.team === null} hint={d.approvals.teamNote || 'On requested items in this scope'} tone={d.approvals.team > 0 ? 'warn' : 'neutral'} />}
+        <Tile label={t('Open items and tasks')} value={d.open} unavailable={d.open === null} hint={d.openPartial ? t('Some tables could not be counted') : ''} />
+        <Tile label={t('Waiting for your approval')} value={d.approvals.mine} unavailable={d.approvals.mine === null} hint={shown(d.approvals.mineNote || '')} tone={d.approvals.mine > 0 ? 'warn' : 'neutral'} />
+        {d.approvals.team !== undefined && <Tile label={t('Approvals holding up the team')} value={d.approvals.team} unavailable={d.approvals.team === null} hint={d.approvals.teamNote ? shown(d.approvals.teamNote) : t('On requested items in this scope')} tone={d.approvals.team > 0 ? 'warn' : 'neutral'} />}
       </div>
 
-      {d.byTable.map((t) =>
-        t.states ? (
+      {d.byTable.map((tbl) =>
+        tbl.states ? (
           <HorizontalBar
-            key={t.table}
-            title={`${t.label} by state`}
-            items={t.states.map((s) => ({ key: s.key || s.name, label: s.name, value: s.count, tone: CLASS_TONE[s.cls] }))}
-            unit={t.label.toLowerCase()}
-            labelHeader="State"
-            onDrill={(item) => t.stateQuery?.[item.key] && env.openList(t.table, t.stateQuery[item.key])}
-            hrefFor={env.listHref ? (item) => (t.stateQuery?.[item.key] ? env.listHref(t.table, t.stateQuery[item.key]) : '') : undefined}
+            key={tbl.table}
+            title={t('{table} by state', { table: shown(tbl.label) })}
+            items={tbl.states.map((s) => ({ key: s.key || s.name, label: placeholderName(s.name), value: s.count, tone: CLASS_TONE[s.cls] }))}
+            unit={shown(tbl.label.toLowerCase())}
+            labelHeader={t('State')}
+            onDrill={(item) => tbl.stateQuery?.[item.key] && env.openList(tbl.table, tbl.stateQuery[item.key])}
+            hrefFor={env.listHref ? (item) => (tbl.stateQuery?.[item.key] ? env.listHref(tbl.table, tbl.stateQuery[item.key]) : '') : undefined}
           />
         ) : (
-          <p key={t.table} className="ab-hint">{t.label}: the states could not be read.</p>
+          <p key={tbl.table} className="ab-hint">{t('{table}: the states could not be read.', { table: shown(tbl.label) })}</p>
         )
       )}
 
-      {d.oldest.length > 0 && <TicketList caption={t('Oldest open items')} items={d.oldest} env={env} meta={(t) => [t.state, ageText(t.ageDays), t.owner || 'Unassigned']} />}
+      {d.oldest.length > 0 && <TicketList caption={t('Oldest open items')} items={d.oldest} env={env} meta={(item) => [item.state, ageText(item.ageDays), item.owner || t('Unassigned')]} />}
     </>
   );
 }

@@ -6,8 +6,8 @@ import { COACHING_LIMITS, COACHING_REMINDER, buildCoachingPack, checkCoachingAns
 import { PER_PERSON_NOTE, flagPerPersonScoring } from '../../reports/ai/scoring.js';
 import { AiBlocked, AiButton, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { isSensitiveReportTable } from '../../reports/engine/constants.js';
-import { plural } from './format.js';
-import { t } from '../../i18n/index.js';
+import { isolate, t, tn } from '../../i18n/index.js';
+import { shown as shownText } from '../../reports/shown.js';
 
 const FEATURE_ID = 'coaching-snapshot';
 const DAY = 86400000;
@@ -28,7 +28,7 @@ export function coachingGate(eff) {
 
 export function coachingNeeds(eff) {
   const mode = eff.values?.piiMode;
-  if (mode !== 'strict' && mode !== 'local-only') return 'Coaching needs Strict privacy mode. Change it in Settings.';
+  if (mode !== 'strict' && mode !== 'local-only') return t('Coaching needs Strict privacy mode. Change it in Settings.');
   return coachingBlockedBy(eff.policy?.blockedFields) || '';
 }
 
@@ -79,11 +79,11 @@ function OneGroupPicker({ tabId, blocked, myGroups, groupsNote, value, onPick })
           {myGroups.map(choice)}
         </div>
       ) : (
-        groupsNote && <p className="ab-hint">{groupsNote}</p>
+        groupsNote && <p className="ab-hint">{shownText(groupsNote)}</p>
       )}
       <label className="ab-label" htmlFor="ab-coach-group-search">{t('Or find a group by name')}</label>
       <input id="ab-coach-group-search" className="ab-input" value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Type at least two letters')} autoComplete="off" />
-      {found.note && <p className="ab-hint" role="status">{found.note}</p>}
+      {found.note && <p className="ab-hint" role="status">{shownText(found.note)}</p>}
       {found.groups.length > 0 && <div className="ab-chips" role="group" aria-label={t('Groups found')}>{found.groups.map(choice)}</div>}
     </div>
   );
@@ -92,26 +92,31 @@ function OneGroupPicker({ tabId, blocked, myGroups, groupsNote, value, onPick })
 /** What the read found and what was picked, in words (numbers and ticket numbers only; no text of any ticket). */
 export function CoachingSample({ result, dayLabel }) {
   if (!result) return null;
-  if (result.ok === false) return <p className="ab-note ab-note-warn" role="alert">{result.reason}</p>;
+  if (result.ok === false) return <p className="ab-note ab-note-warn" role="alert">{shownText(result.reason)}</p>;
   const n = result.tickets.length;
-  const missingComments = result.tickets.filter((t) => !t.comments.length).length;
+  const missingComments = result.tickets.filter((x) => !x.comments.length).length;
+  // "3 were picked, spread evenly ...: {numbers}." — the numbers are a code span, so the sentence is cut at the slot, not in the middle of a word.
+  const picked = tn(n, '{n} was picked, spread evenly over those days, whoever worked on them: {numbers}.', '{n} were picked, spread evenly over those days, whoever worked on them: {numbers}.').split('{numbers}');
   return (
     <div className="ab-coach-sample">
       {n === 0 ? (
-        <p className="ab-note ab-note-warn">{t('No ticket resolved by {name} in these days could be read, so there is nothing to review.', { name: result.group.name })}</p>
+        <p className="ab-note ab-note-warn">{t('No ticket resolved by {name} in these days could be read, so there is nothing to review.', { name: isolate(result.group.name) })}</p>
       ) : (
         <>
           <p className="ab-note ab-note-ok">
-            {result.group.name} resolved {result.candidates} {result.candidates === 1 ? 'ticket' : 'tickets'} {dayLabel}. {n} {n === 1 ? 'was' : 'were'} picked, spread evenly over those days, whoever worked on them: <span className="ab-mono">{result.tickets.map((t) => t.number).join(', ')}</span>.
+            {tn(result.candidates, '{group} resolved {n} ticket {days}.', '{group} resolved {n} tickets {days}.', { group: isolate(result.group.name), days: dayLabel })}{' '}
+            {picked[0]}
+            <span className="ab-mono">{result.tickets.map((x) => x.number).join(', ')}</span>
+            {picked[1]}
           </p>
           <p className="ab-hint">
-            For each, Agent Buddy read the close notes, the close code and the customer-visible comments written by agents of this group. Work notes and descriptions were not read.
-            {missingComments ? ` ${plural(missingComments, 'ticket')} had no such comment.` : ''}
+            {t('For each, Agent Buddy read the close notes, the close code and the customer-visible comments written by agents of this group. Work notes and descriptions were not read.')}
+            {missingComments ? ` ${tn(missingComments, '{n} ticket had no such comment.', '{n} tickets had no such comment.')}` : ''}
           </p>
         </>
       )}
       {[...(result.notes || []), ...(result.access || []).map((a) => a.note)].filter(Boolean).map((note) => (
-        <p key={note} className="ab-hint">{note}</p>
+        <p key={note} className="ab-hint">{shownText(note)}</p>
       ))}
     </div>
   );
@@ -124,7 +129,7 @@ export default function CoachingView({ env, eff }) {
   if (gate) {
     return (
       <AiShell title={t('Coaching snapshot')} help={t('A rubric review of the written work of a group, for its team lead.')}>
-        <AiBlocked>{gate === 'off' ? 'Your organisation has turned the coaching snapshot off.' : 'Your organisation has not switched coaching on.'}</AiBlocked>
+        <AiBlocked>{gate === 'off' ? t('Your organisation has turned the coaching snapshot off.') : t('Your organisation has not switched coaching on.')}</AiBlocked>
       </AiShell>
     );
   }
@@ -148,11 +153,11 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
 
   const range = rangeFromDays(fromDay, toDay, offset);
   const rangeProblem = !range
-    ? 'Choose the first and the last day.'
+    ? t('Choose the first and the last day.')
     : range.toMs - range.fromMs > COACHING_LIMITS.rangeDaysMax * DAY
-      ? `Choose at most ${COACHING_LIMITS.rangeDaysMax} days.`
+      ? t('Choose at most {days} days.', { days: COACHING_LIMITS.rangeDaysMax })
       : '';
-  const dayLabel = `between ${fromDay} and ${toDay}`;
+  const dayLabel = t('between {from} and {to}', { from: fromDay, to: toDay });
 
   // Anything that changes the question makes the sample (and any answer) out of date.
   const invalidate = () => {
@@ -166,11 +171,11 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
     setSample({ phase: 'reading', result: null, error: '' });
     try {
       // HR cases are never coached on: they are not even asked for (the page refuses them too).
-      const tables = (env.tables || []).filter((t) => !isSensitiveReportTable(t, eff.policy?.sensitiveTablePrefixes));
+      const tables = (env.tables || []).filter((table) => !isSensitiveReportTable(table, eff.policy?.sensitiveTablePrefixes));
       const result = await read(env.page.tabId, 'coachingSample', { groupId: group.id, groupName: group.name, fromMs: range.fromMs, toMs: range.toMs, sample: size, tables, blocked: env.blocked });
       setSample({ phase: 'ready', result, error: '' });
     } catch (err) {
-      setSample({ phase: 'error', result: null, error: err.code === 'SESSION_EXPIRED' ? 'Your ServiceNow session has expired. Log in again, then try again.' : err.message || 'The sample could not be read.' });
+      setSample({ phase: 'error', result: null, error: err.code === 'SESSION_EXPIRED' ? t('Your ServiceNow session has expired. Log in again, then try again.') : shownText(err.message) || t('The sample could not be read.') });
     }
   }
 
@@ -183,7 +188,7 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
       // The sample is already on screen: the run builds its pack from it and reads nothing more.
       getPack: async () => {
         const pack = buildCoachingPack(picked, { blockedFields: eff.policy?.blockedFields || [], periodLabel: `${fromDay} to ${toDay}` });
-        if (!pack) throw new Error('There is nothing to review yet.');
+        if (!pack) throw new Error(t('There is nothing to review yet.'));
         return pack;
       },
     });
@@ -192,11 +197,11 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
   const shown = run.phase === 'done' && run.active?.id === FEATURE_ID;
   const verdict = shown ? flagPerPersonScoring(run.result, { people: run.people }) : null;
   const checks = shown ? checkCoachingAnswer(run.result) : null;
-  const notice = checks?.missing.length ? [`The answer is missing: ${checks.missing.join(' ')}`] : [];
+  const notice = checks?.missing.length ? [t('The answer is missing: {missing}', { missing: checks.missing.join(' ') })] : [];
 
   return (
     <Frame bare={bare}>
-      <p className="ab-note ab-note-warn ab-coach-reminder">{COACHING_REMINDER}</p>
+      <p className="ab-note ab-note-warn ab-coach-reminder">{shownText(COACHING_REMINDER)}</p>
       <details className="ab-details">
         <summary>{t('What it reads and sends')}</summary>
         <p className="ab-hint">
@@ -218,7 +223,7 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
             invalidate();
           }}
         />
-        <p className="ab-hint">{group ? `Chosen: ${group.name}` : 'Choose one group.'}</p>
+        <p className="ab-hint">{group ? t('Chosen: {name}', { name: isolate(group.name) }) : t('Choose one group.')}</p>
       </fieldset>
 
       <div className="ab-row ab-coach-controls">
@@ -254,16 +259,16 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
       {sample.phase === 'error' && <ErrorNote error={sample.error} onRetry={pick} />}
       <CoachingSample result={sample.result} dayLabel={dayLabel} />
 
-      <RunProgress run={run} eff={eff} page={env.page} readingText="Getting ready…" />
+      <RunProgress run={run} eff={eff} page={env.page} readingText={t('Getting ready…')} />
       <AiResult
         run={run}
         eff={eff}
         featureId={FEATURE_ID}
         heading={t('Coaching snapshot')}
         notice={notice}
-        withhold={verdict?.tripped ? { note: PER_PERSON_NOTE, findings: verdict.findings } : null}
+        withhold={verdict?.tripped ? { note: shownText(PER_PERSON_NOTE), findings: verdict.findings } : null}
       />
-      {shown && <p className="ab-note ab-coach-reminder">{COACHING_REMINDER}</p>}
+      {shown && <p className="ab-note ab-coach-reminder">{shownText(COACHING_REMINDER)}</p>}
     </Frame>
   );
 }

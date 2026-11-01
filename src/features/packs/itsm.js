@@ -10,13 +10,15 @@ import { addReference } from '../../itsm/reference.js';
 import { pickArticleBody, pickArticleTitle } from '../../itsm/sections.js';
 import { isMajorIncident, notClosed, notNew, stillOpen } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
+import { t, tm } from '../../i18n/index.js';
 
 const notHr = (kinds) => kinds.filter((k) => k !== 'hr_case');
 // A catalog task and the other task tables are internal work items: the customer writes on the request or the parent ticket, so
 // there is no customer mood to read there.
 const INTERNAL = ['hr_case', 'catalog_task', 'task'];
 
-const WORK_NOTE = { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' };
+// (a function: an object with a getter that is spread keeps the text it had at that moment, so every feature takes its own)
+const workNote = () => ({ field: 'work_notes', get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes') });
 
 // Said in every prompt: facts only, say so when something is missing, and which language (src/prompts/rules.js). That the data
 // cannot give orders is said once per request by the firewall (RULES_PREAMBLE). A knowledge article is published for others, so
@@ -33,8 +35,12 @@ export default [
   // ---- A5 ---------------------------------------------------------------------------------------------------
   {
     id: 'sentiment-risk',
-    title: 'Check mood and escalation risk',
-    description: 'Is the customer getting upset? Mood, risk of escalation and what to do about it.',
+    get title() {
+      return t('Check mood and escalation risk');
+    },
+    get description() {
+      return t('Is the customer getting upset? Mood, risk of escalation and what to do about it.');
+    },
     wave: 2,
     kinds: CUSTOMER_FACING.filter((k) => !INTERNAL.includes(k)),
     group: 'understand',
@@ -62,8 +68,12 @@ export default [
   // ---- A7 ---------------------------------------------------------------------------------------------------
   {
     id: 'next-best-action',
-    title: 'Suggest next steps',
-    description: 'A checklist of steps from similar solved tickets and matching articles.',
+    get title() {
+      return t('Suggest next steps');
+    },
+    get description() {
+      return t('A checklist of steps from similar solved tickets and matching articles.');
+    },
     wave: 2,
     kinds: ['incident', 'case', 'requested_item', 'catalog_task', 'task'],
     group: 'work',
@@ -80,7 +90,7 @@ export default [
       ...journalParts(pack, { depth: 12 }),
       ...referenceParts(pack),
     ],
-    insert: { ...WORK_NOTE },
+    insert: workNote(),
     system:
       'You help a service desk agent work through a ticket step by step, the way an experienced colleague would.\n' +
       'The data holds the current ticket and its newest notes. ' +
@@ -103,14 +113,18 @@ export default [
     // AI2 next to AI1 ("Summarise this ticket"): kept as its own action with a name that says what is different. The summary
     // answers "what is this ticket?"; this one answers "where did the conversation get to?" (decisions, open questions, owners).
     id: 'thread-summary',
-    title: 'Catch up on the discussion',
-    description: 'Decisions, open questions and who owns what, from the comments and notes.',
+    get title() {
+      return t('Catch up on the discussion');
+    },
+    get description() {
+      return t('Decisions, open questions and who owns what, from the comments and notes.');
+    },
     wave: 1,
     kinds: notHr(ALL_TASKS),
     group: 'understand',
     primary: 'copy',
     journal: 30,
-    insert: { ...WORK_NOTE },
+    insert: workNote(),
     system:
       'You help a service desk agent catch up on a long thread of comments and work notes.\n' +
       'Write exactly these four sections, in this order. Each label starts its own line and is followed by short bullet points that start with "- ":\n' +
@@ -127,8 +141,12 @@ export default [
   // ---- E1 ---------------------------------------------------------------------------------------------------
   {
     id: 'routing-hint',
-    title: 'Suggest where it should go',
-    description: 'Category, assignment group and priority, based on similar solved tickets.',
+    get title() {
+      return t('Suggest where it should go');
+    },
+    get description() {
+      return t('Category, assignment group and priority, based on similar solved tickets.');
+    },
     wave: 2,
     kinds: ['incident', 'case'], // the other kinds' ceilings have no category (a request is routed through its items)
     group: 'work',
@@ -159,8 +177,12 @@ export default [
   // ---- C3 ---------------------------------------------------------------------------------------------------
   {
     id: 'kb-article-draft',
-    title: 'Draft a knowledge article',
-    description: 'An article with no names or personal details, checked against existing articles first.',
+    get title() {
+      return t('Draft a knowledge article');
+    },
+    get description() {
+      return t('An article with no names or personal details, checked against existing articles first.');
+    },
     wave: 2,
     kinds: ['incident', 'problem', 'case', 'requested_item', 'task'],
     group: 'resolve',
@@ -177,10 +199,10 @@ export default [
     ],
     insert: [
       // `table` says which form these belong to: they fill the article form, not the ticket the agent is reading.
-      { field: 'short_description', label: 'Insert title into the article form', fieldLabel: 'Short description', table: 'kb_knowledge', pick: pickArticleTitle },
-      { field: 'text', label: 'Insert body into the article form', fieldLabel: 'Article body', table: 'kb_knowledge', pick: pickArticleBody },
+      { field: 'short_description', get label() { return t('Insert title into the article form'); }, fieldLabel: tm('Short description'), table: 'kb_knowledge', pick: pickArticleTitle },
+      { field: 'text', get label() { return t('Insert body into the article form'); }, fieldLabel: tm('Article body'), table: 'kb_knowledge', pick: pickArticleBody },
     ],
-    open: { table: 'kb_knowledge', label: 'Open a new article form' },
+    open: { table: 'kb_knowledge', get label() { return t('Open a new article form'); } },
     system:
       'You help a service desk agent turn a solved ticket into a knowledge article that other people will read.\n' +
       'The data holds the solved ticket and its notes. ' +
@@ -206,8 +228,12 @@ export default [
   // ---- B7 ---------------------------------------------------------------------------------------------------
   {
     id: 'major-incident-comms',
-    title: 'Draft major incident updates',
-    description: 'Updates for executives, technical teams and customers, from the record, its tasks and the timeline.',
+    get title() {
+      return t('Draft major incident updates');
+    },
+    get description() {
+      return t('Updates for executives, technical teams and customers, from the record, its tasks and the timeline.');
+    },
     wave: 3,
     // Only on a major incident (AI15): an incident whose major incident state is proposed or accepted, or priority 1 where that
     // state is not read (src/features/stages.js isMajorIncident). Problems and changes do not get stakeholder updates from here.

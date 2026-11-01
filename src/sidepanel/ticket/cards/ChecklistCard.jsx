@@ -27,7 +27,7 @@ export default function ChecklistCard({ page, eff, record, active, setSummary })
       if (record.kind === 'catalog_task') {
         const target = await read(page.tabId, 'requestTarget', { table: record.table, sysId: record.sysId }).catch(() => null);
         if (target?.table === 'sc_req_item') parent = await readPack(target).catch(() => null);
-        note = target?.note || (target && !parent ? 'You cannot see the requested item, so its answers are not included.' : '');
+        note = target?.note || (target && !parent ? t('You cannot see the requested item, so its answers are not included.') : '');
       }
       return { own, parent, note };
     },
@@ -43,7 +43,7 @@ export default function ChecklistCard({ page, eff, record, active, setSummary })
   const steps = useMemo(() => (data ? stepsFromPack(data.own) : []), [data]);
   const progress = checklistProgress(steps, done);
   const answers = useMemo(() => (data ? answersModel(data.parent || data.own) : null), [data]);
-  useReport(setSummary, data ? (steps.length ? progress.text : 'No written steps found') : '');
+  useReport(setSummary, data ? (steps.length ? progress.text : t('No written steps found')) : '');
 
   async function toggle(step, on) {
     const before = done;
@@ -53,7 +53,7 @@ export default function ChecklistCard({ page, eff, record, active, setSummary })
       setMine(await store.set(record.sysId, step.id, on));
     } catch {
       setMine(before);
-      setMessage('Could not keep that tick on this computer.');
+      setMessage(t('Could not keep that tick on this computer.'));
     }
   }
 
@@ -63,11 +63,11 @@ export default function ChecklistCard({ page, eff, record, active, setSummary })
       await store.clear(record.sysId);
       setMine([]);
     } catch {
-      setMessage('Could not clear the ticks.');
+      setMessage(t('Could not clear the ticks.'));
     }
   }
 
-  if (!data) return <ReadState state={state} what="the instructions" onRetry={state.reload} />;
+  if (!data) return <ReadState state={state} what={t('the instructions')} onRetry={state.reload} />;
   return (
     <>
       {data.note && <p className="ab-note ab-note-warn">{data.note}</p>}

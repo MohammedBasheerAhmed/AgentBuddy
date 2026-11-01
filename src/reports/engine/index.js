@@ -15,14 +15,15 @@ import { fulfilmentSection, fulfilmentTables } from './fulfilment.js';
 import { handoverSection, handoverTables } from './handover.js';
 import { runBuilder, builderTables } from './builder.js';
 import { localOffset, quantize } from './time.js';
+import { tm } from './say.js';
 
 export const SECTIONS = Object.freeze({
-  overview: { title: 'Overview', run: overviewSection, tables: overviewTables },
-  workload: { title: 'Workload and ageing', run: workloadSection, tables: workloadTables },
-  sla: { title: 'SLA risk radar', run: slaSection, tables: slaTables },
-  quality: { title: 'Quality and trend', run: qualitySection, tables: qualityTables },
-  fulfilment: { title: 'Request fulfilment', run: fulfilmentSection, tables: fulfilmentTables },
-  handover: { title: 'Shift handover', run: handoverSection, tables: handoverTables },
+  overview: { title: tm('Overview'), run: overviewSection, tables: overviewTables },
+  workload: { title: tm('Workload and ageing'), run: workloadSection, tables: workloadTables },
+  sla: { title: tm('SLA risk radar'), run: slaSection, tables: slaTables },
+  quality: { title: tm('Quality and trend'), run: qualitySection, tables: qualityTables },
+  fulfilment: { title: tm('Request fulfilment'), run: fulfilmentSection, tables: fulfilmentTables },
+  handover: { title: tm('Shift handover'), run: handoverSection, tables: handoverTables },
 });
 
 /** The rows of a result as plain tables: [{ title, columns: [{key,label,person?}], rows }]. For CSV, print and copy. */
@@ -69,7 +70,7 @@ export async function runReport(request, env) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let hardTimer;
   const hardStop = new Promise((_, reject) => {
-    hardTimer = setTimeout(() => reject(new ReportError('TIMEOUT', 'This report took too long to read. Try again, or narrow the scope.')), timeoutMs + 4000);
+    hardTimer = setTimeout(() => reject(new ReportError('TIMEOUT', tm('This report took too long to read. Try again, or narrow the scope.'))), timeoutMs + 4000);
   });
   hardStop.catch(() => {});
 
@@ -94,7 +95,7 @@ export async function runReport(request, env) {
   async function work() {
     if (request.kind === 'builder') return runBuilder(ctx, request.config);
     const id = request.section;
-    if (!Object.prototype.hasOwnProperty.call(SECTIONS, id) || !SECTION_IDS.includes(id)) throw new Error('That report does not exist.');
+    if (!Object.prototype.hasOwnProperty.call(SECTIONS, id) || !SECTION_IDS.includes(id)) throw new Error(tm('That report does not exist.'));
     ctx.tables = await probeTables(reader, normalizeTables(request.tables, { allowSensitive: ctx.allowSensitive, sensitivePrefixes: ctx.sensitivePrefixes }));
     ctx.scope = await resolveScope(request.scope, { reader, userId: ctx.userId, tables: ctx.tables.filter((t) => t.usable).map((t) => t.table) });
     // An empty scope would match every ticket in the table: never run with it.
@@ -108,7 +109,7 @@ export async function runReport(request, env) {
     const result = await Promise.race([working, hardStop]);
     if (controller.signal.aborted) {
       // The result already holds its own copy of the notes (sectionResult removes repeats), so the note goes there.
-      const note = 'Some numbers took too long to read and are missing.';
+      const note = tm('Some numbers took too long to read and are missing.');
       if (Array.isArray(result?.notes) && !result.notes.includes(note)) result.notes.push(note);
     }
     return result;

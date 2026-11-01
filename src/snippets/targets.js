@@ -5,16 +5,18 @@
 // one-line fields (a title, a choice) and the article body (HTML, and an article is not answered with canned replies) are left out.
 
 import { FILLABLE_FIELDS, emailClientTarget, isCustomerVisible, isSingleLineField } from '../lib/fillable.js';
+import { tm } from '../i18n/index.js';
 
-// label: what the panel calls it; fieldLabel: how a Workspace or portal page names the box (the page bridge's fallback).
+// label: what the panel calls it (marked with tm(), shown with t()); fieldLabel: how a Workspace or portal page names the box (the page
+// bridge's fallback), which is not translated.
 const TARGETS = Object.freeze({
-  comments: { label: 'Customer comment', fieldLabel: 'Additional comments' },
-  work_notes: { label: 'Work note', fieldLabel: 'Work notes' },
-  close_notes: { label: 'Resolution notes', fieldLabel: 'Resolution notes' },
-  description: { label: 'Description', fieldLabel: 'Description' },
-  cause_notes: { label: 'Cause notes', fieldLabel: 'Cause notes' },
-  workaround: { label: 'Workaround', fieldLabel: 'Workaround' },
-  body: { label: 'Email body', fieldLabel: 'Body' },
+  comments: { label: tm('Customer comment'), fieldLabel: 'Additional comments' },
+  work_notes: { label: tm('Work note'), fieldLabel: 'Work notes' },
+  close_notes: { label: tm('Resolution notes'), fieldLabel: 'Resolution notes' },
+  description: { label: tm('Description'), fieldLabel: 'Description' },
+  cause_notes: { label: tm('Cause notes'), fieldLabel: 'Cause notes' },
+  workaround: { label: tm('Workaround'), fieldLabel: 'Workaround' },
+  body: { label: tm('Email body'), fieldLabel: 'Body' },
 });
 
 // Which fields each kind of record has. A kind not listed gets the journal fields only.
@@ -51,4 +53,4 @@ export function snippetTargets(page) {
 }
 
 /** One target by field name, among those offered for the page; null when that field is not offered here. */
-export const snippetTargetFor = (page, field) => snippetTargets(page).find((t) => t.field === field) || null;
+export const snippetTargetFor = (page, field) => snippetTargets(page).find((target) => target.field === field) || null;

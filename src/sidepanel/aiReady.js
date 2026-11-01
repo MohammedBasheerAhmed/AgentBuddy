@@ -1,4 +1,5 @@
 import { resolveProviderConfig } from '../providers/config.js';
+import { t, tm, t as tr } from '../i18n/index.js';
 
 // "Can the AI buttons work?" in one place. It asks the same questions the pipeline asks (assertRunnable): is there a key, or does
 // this provider need none (Ollama, or an OpenAI-compatible server on this computer such as LM Studio)? A key the organisation
@@ -10,8 +11,8 @@ export function setupProblem(eff) {
   if (!eff?.values) return '';
   const config = resolveProviderConfig(eff.values, eff.apiKey || eff.values.providedApiKey || '');
   if (config.invalidBaseUrl) return config.invalidBaseUrl;
-  if (config.provider === 'custom' && !config.baseUrl) return 'Enter the address of your AI server.';
-  if (config.azure && !config.model) return 'Enter the name of your Azure deployment.';
+  if (config.provider === 'custom' && !config.baseUrl) return t('Enter the address of your AI server.');
+  if (config.azure && !config.model) return t('Enter the name of your Azure deployment.');
   return '';
 }
 
@@ -37,11 +38,15 @@ export function aiNeeds(eff) {
   return 'setup';
 }
 
+// What the panels put after "to use": a fragment, translated here so every panel gets the same Arabic. Each panel names its own
+// (the ones in use are marked here so the catalogue has them; `tr` looks the fragment up like t, for a word that is not known here).
+export const USE_WHAT = Object.freeze([tm('these actions'), tm('this action'), tm('this'), tm('these buttons'), tm('this button')]);
+
 /** The sentence for a panel that cannot use the AI yet; '' when it can. `what` finishes "...to use ...". */
 export function aiNeedsText(eff, what = 'these actions') {
   const needs = aiNeeds(eff);
-  if (needs === 'unlock') return 'Your AI key is locked. Unlock it in Settings.';
-  if (needs === 'add-key') return `Add an AI key in Settings to use ${what}.`;
-  if (needs === 'setup') return `Finish the AI set-up in Settings to use ${what}: ${setupProblem(eff)}`;
+  if (needs === 'unlock') return t('Your AI key is locked. Unlock it in Settings.');
+  if (needs === 'add-key') return t('Add an AI key in Settings to use {what}.', { what: tr(what) });
+  if (needs === 'setup') return t('Finish the AI set-up in Settings to use {what}: {problem}', { what: tr(what), problem: setupProblem(eff) });
   return '';
 }

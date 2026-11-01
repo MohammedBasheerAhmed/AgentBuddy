@@ -4,6 +4,7 @@ import { buildInsightsPack, checkInsightsNote, describeInputs, INSIGHT_MAX_WORDS
 import { AiBlocked, AiButton, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { andList, readLabel } from './format.js';
 import { t } from '../../i18n/index.js';
+import { shown as shownText } from '../../reports/shown.js';
 
 const FEATURE_ID = 'dashboard-insights';
 const NONE = [];
@@ -14,8 +15,8 @@ const getNone = () => NONE;
 export function insightChecks(text) {
   const c = checkInsightsNote(text);
   const out = [];
-  if (c.tooLong) out.push(`The answer is ${c.words} words; the aim was ${INSIGHT_MAX_WORDS}.`);
-  if (c.missing.length) out.push(`The AI left out: ${c.missing.join(' ')}`);
+  if (c.tooLong) out.push(t('The answer is {words} words; the aim was {max}.', { words: c.words, max: INSIGHT_MAX_WORDS }));
+  if (c.missing.length) out.push(t('The AI left out: {missing}', { missing: c.missing.join(' ') }));
   return out;
 }
 
@@ -28,10 +29,11 @@ export function InsightsInputs({ entries }) {
   return (
     <>
       <p className="ab-note ab-note-ok">
-        Based on what is on this dashboard now: {andList(inputs.used)}
-        {inputs.readAt ? `, read at ${readLabel(inputs.readAt)}` : ''}.
+        {inputs.readAt
+          ? t('Based on what is on this dashboard now: {list}, read at {time}.', { list: andList(inputs.used.map(shownText)), time: readLabel(inputs.readAt) })
+          : t('Based on what is on this dashboard now: {list}.', { list: andList(inputs.used.map(shownText)) })}
       </p>
-      {inputs.missing.length > 0 && <p className="ab-hint">Not on this dashboard, so they are not part of the explanation: {andList(inputs.missing)}.</p>}
+      {inputs.missing.length > 0 && <p className="ab-hint">{t('Not on this dashboard, so they are not part of the explanation: {list}.', { list: andList(inputs.missing.map(shownText)) })}</p>}
     </>
   );
 }
@@ -55,7 +57,7 @@ export function ExplainBody({ entries, page, eff, primary = false }) {
     run.run(feature, {
       getPack: async () => {
         const pack = buildInsightsPack(entries, { blockedFields, sensitivePrefixes });
-        if (!pack) throw new Error('There are no numbers on this dashboard to explain yet.');
+        if (!pack) throw new Error(t('There are no numbers on this dashboard to explain yet.'));
         return pack;
       },
     });
@@ -77,7 +79,7 @@ export function ExplainBody({ entries, page, eff, primary = false }) {
           </div>
         </>
       )}
-      <RunProgress run={run} eff={eff} page={page} readingText="Getting the numbers ready…" />
+      <RunProgress run={run} eff={eff} page={page} readingText={t('Getting the numbers ready…')} />
       <AiResult run={run} eff={eff} featureId={FEATURE_ID} heading={t('What the numbers say')} notice={shown ? insightChecks(run.result) : []} />
     </>
   );

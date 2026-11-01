@@ -8,6 +8,7 @@
 //  - Free text that may have come in by email (a description, a note) loses what the mail program added: the quoted thread,
 //    signatures, legal notices (cleanEmailText in src/context/journal.js). The pack keeps the whole text.
 import { cleanEmailText } from '../context/journal.js';
+import { t, tm, t as tr } from '../i18n/index.js';
 
 const LABELS = {
   number: 'Number',
@@ -115,22 +116,23 @@ export function peopleFor(pack) {
 // carries one short part listing what was not available (src/lib/pipeline.js adds it), and the panel gets the same list to show
 // "Made without: ..." next to the answer. All wording here is fixed: nothing from the instance's error text.
 
-// What each source is, for the person and for the model.
+// What each source is, for the person and for the model. The words stay English here (the model reads them too); the panel shows
+// them in its language (madeWithout below). tm() marks them for the catalogue.
 const SOURCE_LABEL = {
-  task_sla: 'SLAs',
-  sysapproval_approver: 'Approvals',
-  task: 'Child tasks',
-  change_task: 'Change tasks',
-  sc_task: 'Catalog tasks',
-  sc_req_item: 'Requested items',
-  sc_item_option_mtom: 'Answers to the request form',
-  item_option_new: 'Answers to the request form',
-  incident: 'Linked incidents',
-  change_request: 'Other changes',
-  journal: 'Notes and comments',
-  sys_journal_field: 'Notes and comments',
-  sn_customerservice_case: "The account's other cases",
-  'caller-history': "The caller's other tickets",
+  task_sla: tm('SLAs'),
+  sysapproval_approver: tm('Approvals'),
+  task: tm('Child tasks'),
+  change_task: tm('Change tasks'),
+  sc_task: tm('Catalog tasks'),
+  sc_req_item: tm('Requested items'),
+  sc_item_option_mtom: tm('Answers to the request form'),
+  item_option_new: tm('Answers to the request form'),
+  incident: tm('Linked incidents'),
+  change_request: tm('Other changes'),
+  journal: tm('Notes and comments'),
+  sys_journal_field: tm('Notes and comments'),
+  sn_customerservice_case: tm("The account's other cases"),
+  'caller-history': tm("The caller's other tickets"),
 };
 // People lookups only affect email addresses; the model has no use for hearing about them.
 const QUIET_SOURCES = new Set(['sys_user', 'csm_consumer', 'customer_contact', 'sys_user_group']);
@@ -144,11 +146,11 @@ const PHRASE = {
 };
 // For the person ("Made without: ...").
 const PERSON_PHRASE = {
-  blocked: 'not allowed by your organisation',
-  denied: 'your user cannot read them',
-  'empty-or-hidden': 'may be hidden from your user',
-  error: 'could not be read',
-  skipped: 'not read',
+  blocked: tm('not allowed by your organisation'),
+  denied: tm('your user cannot read them'),
+  'empty-or-hidden': tm('may be hidden from your user'),
+  error: tm('could not be read'),
+  skipped: tm('not read'),
 };
 
 const present = (value) => String(value ?? '').trim();
@@ -167,7 +169,7 @@ export function unavailable(pack) {
     const status = String(a.status || '');
     if (!PHRASE[status] && !(status === 'skipped' && present(a.note))) continue;
     const source = String(a.source || '');
-    const what = SOURCE_LABEL[source] || (source && source === pack?.table ? 'Some fields of this record' : source.slice(0, 60) || 'Something');
+    const what = SOURCE_LABEL[source] || (source && source === pack?.table ? tm('Some fields of this record') : source.slice(0, 60) || tm('Something'));
     const key = `${what}|${status}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -225,18 +227,19 @@ export function notAvailablePart(list, cut = null) {
 
 /** The one line the panel can show under an answer: "Made without: Notes and comments (your user cannot read them); SLAs (...)." */
 export const madeWithoutText = (list) =>
-  Array.isArray(list) && list.length ? `Made without: ${list.map((m) => `${m.what} (${m.why})`).join('; ')}.` : '';
+  Array.isArray(list) && list.length ? t('Made without: {list}.', { list: list.map((m) => t('{what} ({why})', { what: m.what, why: m.why })).join(t('; ')) }) : '';
 
 /** "Made without: ..." for the panel: `{ what, why, status }` in plain words, nothing from the instance. */
 export function madeWithout(list, cut = null) {
-  const out = list.map((u) => ({ what: u.what, why: u.why, status: u.status }));
+  // (for the person only, so it is said in the language of the panel; what the model reads is unavailableText above)
+  const out = list.map((u) => ({ what: tr(u.what), why: tr(u.why), status: u.status }));
   if (cut) {
     const why = cut.trimmed
-      ? `left out to fit the AI model (the newest ${cut.sent} of ${cut.total} were sent)`
+      ? t('left out to fit the AI model (the newest {sent} of {total} were sent)', { sent: cut.sent, total: cut.total })
       : cut.more
-        ? `not read (only the newest ${cut.total} could be read)`
-        : `left out (the newest ${cut.sent} of ${cut.total} were sent)`;
-    out.push({ what: 'Older notes and comments', why, status: 'cut' });
+        ? t('not read (only the newest {total} could be read)', { total: cut.total })
+        : t('left out (the newest {sent} of {total} were sent)', { sent: cut.sent, total: cut.total });
+    out.push({ what: t('Older notes and comments'), why, status: 'cut' });
   }
   return out;
 }

@@ -30,8 +30,8 @@ export default function Glance({ page, eff, record, header, headPhase, quickBar 
 
   // The clock for "SLA 2h 10m" and "updated 3 h ago": once a minute is enough.
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
   }, []);
   useEffect(() => setNow(Date.now()), [facts.at]);
 

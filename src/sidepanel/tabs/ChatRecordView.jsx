@@ -6,7 +6,7 @@ import ErrorNote from '../ErrorNote.jsx';
 import { aiNeedsText } from '../aiReady.js';
 import { useLoader } from '../checks/useLoader.js';
 import { chatOverviewOf } from '../../insights/chat.js';
-import { t } from '../../i18n/index.js';
+import { t, tn, isolate, t as tr } from '../../i18n/index.js';
 
 // D1, D2: the facts about this chat (who, how many messages, how long the customer has waited, what they said last) with no
 // AI, and one-click buttons for the two AI features. The messages are read with the person's own session; when the chat tables
@@ -15,7 +15,7 @@ import { t } from '../../i18n/index.js';
 // new messages may have arrived).
 
 const WAITING_WARN_MINUTES = 5;
-const ROLE = { customer: 'customer', agent: 'agent', opened_for: 'customer', assigned_to: 'agent', journal_author: 'in the chat' };
+const roleWord = (role) => ({ customer: t('customer'), agent: t('agent'), opened_for: t('customer'), assigned_to: t('agent'), journal_author: t('in the chat') })[role];
 // The answer check lives in src/insights/chat.js (the Ticket screen's chat card uses it too); kept exported here for older imports.
 export { chatOverviewOf };
 
@@ -39,7 +39,7 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
       disabled={!aiReady || run.busy || !isFeatureAvailable(feature, eff.policy) || noMessages}
       onClick={() => run.run(feature)}
     >
-      {feature.title}
+      {tr(feature.title)}
     </button>
   );
 
@@ -57,22 +57,22 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
 
         {noMessages && (
           <p className="ab-note ab-note-warn" role="status">
-            {chatEntry?.note || 'No chat messages are available to you.'}
+            {chatEntry?.note || t('No chat messages are available to you.')}
           </p>
         )}
 
         {phase === 'ready' && !noMessages && (
           <>
             <div className="ab-tags">
-              <span className="ab-tag">{o.count} message{o.count === 1 ? '' : 's'}</span>
+              <span className="ab-tag">{tn(o.count, '{n} message', '{n} messages')}</span>
               {o.canTellSides && <span className="ab-tag">{t('{byCustomer} from the customer', { byCustomer: o.byCustomer })}</span>}
               {o.canTellSides && <span className="ab-tag">{t('{byAgent} from agents', { byAgent: o.byAgent })}</span>}
               {o.byBot > 0 && <span className="ab-tag">{t('{byBot} from a bot', { byBot: o.byBot })}</span>}
-              <span className="ab-tag">{o.ended ? 'chat ended' : 'chat open'}</span>
+              <span className="ab-tag">{o.ended ? t('chat ended') : t('chat open')}</span>
             </div>
             {o.waitingMinutes !== null && (
               <p className={`ab-note ${o.waitingMinutes >= WAITING_WARN_MINUTES ? 'ab-note-warn' : ''}`} role="status">
-                The customer has been waiting {describeMinutes(o.waitingMinutes)} for an answer.
+                {t('The customer has been waiting {time} for an answer.', { time: describeMinutes(o.waitingMinutes) })}
               </p>
             )}
             {!o.canTellSides && <p className="ab-hint">{t('This instance does not say who sent each message, so waiting time cannot be worked out.')}</p>}
@@ -92,13 +92,13 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
               {o.participants.length > 0 && (
                 <>
                   <dt>{t('Taking part')}</dt>
-                  <dd>{o.participants.map((p) => `${p.name}${ROLE[p.role] ? ` (${ROLE[p.role]})` : ''}`).join(', ')}</dd>
+                  <dd>{o.participants.map((p) => (roleWord(p.role) ? t('{name} ({role})', { name: isolate(p.name), role: roleWord(p.role) }) : isolate(p.name))).join(t(', '))}</dd>
                 </>
               )}
             </dl>
             {(o.lastCustomer || o.lastMessage) && (
               <blockquote className="ab-kb-quote">
-                <span className="ab-kb-quote-head">{o.lastCustomer ? "The customer's last message" : 'Last message'}</span>
+                <span className="ab-kb-quote-head">{o.lastCustomer ? t("The customer's last message") : t('Last message')}</span>
                 {(o.lastCustomer || o.lastMessage).text}
               </blockquote>
             )}
@@ -112,7 +112,7 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
         <h2 className="ab-h">{t('With AI')}</h2>
         <p className="ab-sub">{t('The chat goes through the privacy filter first. Replies are never sent for you: copy the one you want into the chat.')}</p>
         {/* A disabled button says why, next to it (greyed text alone does not). */}
-        {!aiReady && <p className="ab-hint">{aiNeedsText(eff, 'these buttons') || 'Add an AI key in Settings to use these buttons.'}</p>}
+        {!aiReady && <p className="ab-hint">{aiNeedsText(eff, 'these buttons') || t('Add an AI key in Settings to use these buttons.')}</p>}
         {aiReady && noMessages && <p className="ab-hint">{t('There are no messages to work with.')}</p>}
         <div className="ab-row">
           {button(summary, true)}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FOCUSABLE, dialogKeyAction, focusToRestore, inertOutside, outsideKeyAction, selectedTextIn } from './dialogKeys.js';
 import { maskMessage, splitPreview } from './runLogic.js';
-import { t } from '../i18n/index.js';
+import { t, tn, isolate } from '../i18n/index.js';
 
 const PLACEHOLDER = /(\[[A-Z_]{2,20}_\d+\])/;
 
@@ -17,30 +17,27 @@ function Highlighted({ text }) {
   );
 }
 
-// [one, several]: "1 email address", "3 email addresses".
-const KIND_LABEL = {
-  PERSON: ['name', 'names'],
-  EMAIL: ['email address', 'email addresses'],
-  PHONE: ['phone number', 'phone numbers'],
-  CARD: ['card number', 'card numbers'],
-  ID: ['ID number', 'ID numbers'],
-  NATIONAL_ID: ['ID number', 'ID numbers'],
-  SECRET: ['secret', 'secrets'],
-  ADDRESS: ['address', 'addresses'],
-  IP: ['IP address', 'IP addresses'],
-  IBAN: ['bank account', 'bank accounts'],
-  DOB: ['birth date', 'birth dates'],
-  EMPLOYEE_ID: ['employee ID', 'employee IDs'],
-  MANUAL: ['added by you', 'added by you'],
+// How many of each kind: "1 email address", "3 email addresses" (a language with more plural forms says its own).
+const KIND_SAY = {
+  PERSON: (n) => tn(n, '{n} name', '{n} names'),
+  EMAIL: (n) => tn(n, '{n} email address', '{n} email addresses'),
+  PHONE: (n) => tn(n, '{n} phone number', '{n} phone numbers'),
+  CARD: (n) => tn(n, '{n} card number', '{n} card numbers'),
+  ID: (n) => tn(n, '{n} ID number', '{n} ID numbers'),
+  NATIONAL_ID: (n) => tn(n, '{n} ID number', '{n} ID numbers'),
+  SECRET: (n) => tn(n, '{n} secret', '{n} secrets'),
+  ADDRESS: (n) => tn(n, '{n} address', '{n} addresses'),
+  IP: (n) => tn(n, '{n} IP address', '{n} IP addresses'),
+  IBAN: (n) => tn(n, '{n} bank account', '{n} bank accounts'),
+  DOB: (n) => tn(n, '{n} birth date', '{n} birth dates'),
+  EMPLOYEE_ID: (n) => tn(n, '{n} employee ID', '{n} employee IDs'),
+  MANUAL: (n) => tn(n, '{n} added by you', '{n} added by you'),
 };
 
 /** What was masked, as the dialog says it: "12 names, 1 email address, 1 added by you". */
 export function maskSummary(stats) {
-  const parts = Object.entries(stats?.counts || {}).map(([kind, n]) => {
-    const [one, several] = KIND_LABEL[kind] || [kind.toLowerCase(), kind.toLowerCase()];
-    return `${n} ${n === 1 ? one : several}`;
-  });
-  return parts.length ? parts.join(', ') : 'nothing needed masking';
+  const parts = Object.entries(stats?.counts || {}).map(([kind, n]) => (KIND_SAY[kind] ? KIND_SAY[kind](n) : `${n} ${kind.toLowerCase()}`));
+  return parts.length ? parts.join(t(', ')) : t('nothing needed masking');
 }
 
 /**
@@ -160,6 +157,8 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
   const split = splitPreview(prepared);
   const shownView = view === 'data' && !split.ok ? 'exact' : view;
   const destination = `${config.provider}${config.baseUrl ? ` (${new URL(config.baseUrl).host})` : ''}`;
+  // "Summarise this ticket · to anthropic · masked: 3 names" (the title is the feature's, the destination an address)
+  const subLine = t('{title} · to {destination} · masked: {summary}', { title: feature.title, destination: isolate(destination), summary: maskSummary(prepared.stats) });
 
   if (shownView === 'short') {
     return (
@@ -168,7 +167,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
           <div className="ab-dialog-head">
             <h2 className="ab-h" id="ab-prev-title">{t('Send to the AI?')}</h2>
             <p className="ab-sub">
-              {feature.title} · to {destination} · masked: {maskSummary(prepared.stats)}
+              {subLine}
             </p>
           </div>
           <div className="ab-dialog-body">
@@ -178,7 +177,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
             <button
               type="button"
               className="ab-btn ab-btn-quiet"
-              style={{ marginRight: 'auto' }}
+              style={{ marginInlineEnd: 'auto' }}
               onClick={() => {
                 opened.current = true;
                 setView('data');
@@ -200,13 +199,14 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
         <div className="ab-dialog-head">
           <h2 className="ab-h" id="ab-prev-title">{t('Check what will be sent')}</h2>
           <p className="ab-sub">
-            {feature.title} · to {destination} · masked: {maskSummary(prepared.stats)}
+            {subLine}
           </p>
         </div>
         <div className="ab-dialog-body">
           <p className="ab-note">
-            Highlighted placeholders replace personal details. The AI never sees the real values; your screen puts them back. A name or detail
-            can still be missed, so read the text below before you send{onMask ? ', and mask anything you still see' : ''}.
+            {onMask
+              ? t('Highlighted placeholders replace personal details. The AI never sees the real values; your screen puts them back. A name or detail can still be missed, so read the text below before you send, and mask anything you still see.')
+              : t('Highlighted placeholders replace personal details. The AI never sees the real values; your screen puts them back. A name or detail can still be missed, so read the text below before you send.')}
           </p>
           <div ref={previewRef} onMouseUp={pickSelection} onKeyUp={pickSelection}>
             {shownView === 'data' ? (
@@ -230,7 +230,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
           </div>
           {split.ok && (
             <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-preview-switch" aria-pressed={shownView === 'exact'} onClick={() => setView(shownView === 'exact' ? 'data' : 'exact')}>
-              {shownView === 'exact' ? 'Show the ticket data first' : 'Show the exact text'}
+              {shownView === 'exact' ? t('Show the ticket data first') : t('Show the exact text')}
             </button>
           )}
           {typeof onMask === 'function' && (
@@ -261,8 +261,8 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
           )}
         </div>
         <div className="ab-dialog-foot" style={{ flexWrap: 'wrap' }}>
-          {canSkipNext && !always && <span className="ab-hint" style={{ marginRight: 'auto' }}>{t('You will not be asked again for this action.')}</span>}
-          {always && <span className="ab-hint" style={{ marginRight: 'auto' }}>{t('This one includes other tickets, so you are always asked.')}</span>}
+          {canSkipNext && !always && <span className="ab-hint" style={{ marginInlineEnd: 'auto' }}>{t('You will not be asked again for this action.')}</span>}
+          {always && <span className="ab-hint" style={{ marginInlineEnd: 'auto' }}>{t('This one includes other tickets, so you are always asked.')}</span>}
           <button type="button" className="ab-btn" onClick={onCancel}>{t('Cancel')}</button>
           <button type="button" className="ab-btn ab-btn-primary" ref={sendRef} onClick={() => onSend({ shown: true })}>{t('Send to AI')}</button>
         </div>

@@ -1,6 +1,9 @@
 // Request fulfilment: requested items and catalog tasks by state, approvals waiting, and the oldest open items.
 import { LIMITS, TICKET_FIELDS } from './constants.js';
 import { attempt } from './reader.js';
+import { tm } from './say.js';
+import { t } from '../../i18n/core.js';
+import { shown, placeholderName } from '../shown.js';
 import { andQuery, byCountDesc, raw, disp, sectionResult, stateClass, sumResults, usableTables, verifiedCount } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { daysBetween, timeOf } from './time.js';
@@ -10,7 +13,7 @@ export const FULFILMENT_TABLES = ['sc_req_item', 'sc_task'];
 /** State breakdown rows with the class each label belongs to, biggest first. Pure. */
 export function stateRows(groups) {
   return groups
-    .map((g) => ({ key: g.keys[0]?.value || '', name: g.keys[0]?.display || '(none)', count: g.count, cls: stateClass(g.keys[0]?.display) }))
+    .map((g) => ({ key: g.keys[0]?.value || '', name: g.keys[0]?.display || tm('(none)'), count: g.count, cls: stateClass(g.keys[0]?.display) }))
     .sort(byCountDesc);
 }
 
@@ -46,7 +49,7 @@ export async function fulfilmentSection(ctx) {
   const tables = usableTables(ctx).filter((t) => FULFILMENT_TABLES.includes(t.table));
   const asked = ctx.tables.filter((t) => FULFILMENT_TABLES.includes(t.table));
   if (!asked.length) {
-    return sectionResult('fulfilment', 'Request fulfilment', ctx, { available: false, reason: 'Turn on Requested items or Catalog tasks in the table list to see request fulfilment.' });
+    return sectionResult('fulfilment', tm('Request fulfilment'), ctx, { available: false, reason: tm('Turn on Requested items or Catalog tasks in the table list to see request fulfilment.') });
   }
   const q = (...extra) => andQuery(scope.query, ...extra);
   const open = q('active=true');
@@ -73,7 +76,7 @@ export async function fulfilmentSection(ctx) {
   });
 
   const openSum = sumResults(parts.map((p) => p.openN));
-  return sectionResult('fulfilment', 'Request fulfilment', ctx, {
+  return sectionResult('fulfilment', tm('Request fulfilment'), ctx, {
     available: true,
     byTable: parts.map((p) => ({
       table: p.t.table,
@@ -98,8 +101,8 @@ export async function fulfilmentSection(ctx) {
   });
 }
 
-export const APPROVALS_UNSEEN = 'You can see no approval records at all, so a count of 0 would prove nothing.';
-const approvalNote = (r) => (r.status === 'denied' ? 'Approvals are not available to you.' : r.note);
+export const APPROVALS_UNSEEN = tm('You can see no approval records at all, so a count of 0 would prove nothing.');
+const approvalNote = (r) => (r.status === 'denied' ? tm('Approvals are not available to you.') : r.note);
 
 /**
  * Approvals waiting: for the person, and (for a team scope) on the requested items in scope. Shared with the hand-over page.
@@ -119,27 +122,27 @@ export function fulfilmentTables(result) {
   const d = result.data;
   if (!d?.available) return [];
   const out = [];
-  d.byTable.forEach((t) => {
-    if (t.states) out.push({ title: `${t.label} by state`, columns: [{ key: 'name', label: 'State' }, { key: 'count', label: 'Open' }], rows: t.states });
+  d.byTable.forEach((x) => {
+    if (x.states) out.push({ title: t('{table} by state', { table: shown(x.label) }), columns: [{ key: 'name', label: t('State') }, { key: 'count', label: shown('Open') }], rows: x.states.map((s) => ({ ...s, name: placeholderName(s.name) })) });
   });
   out.push({
-    title: 'Approvals waiting',
-    columns: [{ key: 'what', label: 'Approvals' }, { key: 'count', label: 'Waiting' }],
+    title: t('Approvals waiting'),
+    columns: [{ key: 'what', label: t('Approvals') }, { key: 'count', label: t('Waiting') }],
     rows: [
-      { what: 'Waiting for your approval', count: d.approvals.mine ?? 'n/a' },
-      ...(d.approvals.team !== undefined ? [{ what: 'On requested items in this scope', count: d.approvals.team ?? 'n/a' }] : []),
+      { what: t('Waiting for your approval'), count: d.approvals.mine ?? t('n/a') },
+      ...(d.approvals.team !== undefined ? [{ what: t('On requested items in this scope'), count: d.approvals.team ?? t('n/a') }] : []),
     ],
   });
   if (d.oldest.length) {
     out.push({
-      title: 'Oldest open items',
+      title: t('Oldest open items'),
       columns: [
-        { key: 'number', label: 'Item' },
-        { key: 'title', label: 'Short description' },
-        { key: 'state', label: 'State' },
-        { key: 'ageDays', label: 'Age (days)' },
-        { key: 'owner', label: 'Assigned to', person: true },
-        { key: 'group', label: 'Group' },
+        { key: 'number', label: t('Item') },
+        { key: 'title', label: t('Short description') },
+        { key: 'state', label: t('State') },
+        { key: 'ageDays', label: t('Age (days)') },
+        { key: 'owner', label: t('Assigned to'), person: true },
+        { key: 'group', label: t('Group') },
       ],
       rows: d.oldest,
     });

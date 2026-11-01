@@ -8,8 +8,9 @@ import { AiBadge, CardFrame, EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { gapPack, mergePack } from '../../knowledge/parts.js';
 import { shownFor } from '../../profiles/profiles.js';
+import { shown as shownText } from '../../reports/shown.js';
 import { useShared } from './shared.js';
-import { t } from '../../i18n/index.js';
+import { isolate, t, tm, tn } from '../../i18n/index.js';
 
 // The Knowledge screen, AI Assist half (knowledge managers): draft ONE article out of the duplicate group compared in Insights (AI26)
 // and an outline for a knowledge-gap topic found there (AI27). Each has its own run, so the answer of one survives a look at the
@@ -18,12 +19,11 @@ import { t } from '../../i18n/index.js';
 
 export const KM_PROFILES = Object.freeze(['km']);
 const pct = (ratio) => `${Math.round(ratio * 100)}%`;
-const aiTitle = 'Sends masked text to the AI you chose, after a preview.';
 
 /** The AI button of a card: filled (the one main step) or outlined, always with the AI mark. */
 function AiButton({ primary, disabled, onClick, children }) {
   return (
-    <button type="button" className={primary ? 'ab-btn ab-wk-aibtn' : 'ab-btn ab-wk-aibtn-quiet'} disabled={disabled} title={aiTitle} onClick={onClick}>
+    <button type="button" className={primary ? 'ab-btn ab-wk-aibtn' : 'ab-btn ab-wk-aibtn-quiet'} disabled={disabled} title={t('Sends masked text to the AI you chose, after a preview.')} onClick={onClick}>
       <AiBadge label="" title="" /> {children}
     </button>
   );
@@ -58,16 +58,16 @@ export function MergeDraft({ page, eff, primary = true }) {
           </li>
         ))}
       </ul>
-      {best && <p className="ab-hint">{best.a} and {best.b} share {pct(best.containment)} of the shorter text.</p>}
+      {best && <p className="ab-hint">{t('{a} and {b} share {percent} of the shorter text.', { a: isolate(best.a), b: isolate(best.b), percent: pct(best.containment) })}</p>}
       {!available && <p className="ab-note ab-note-warn">{t('Your organisation has switched the merge draft off.')}</p>}
       <p className="ab-hint">{t('Hidden details show as placeholders such as [EMAIL_1]: put the real ones back before you publish.')}</p>
       <div className="ab-row">
         <AiButton primary={primary} disabled={!aiReady || !available || run.busy || articles.length < 2} onClick={() => run.run(feature, { getPack: async () => mergePack(articles, texts.access || [], texts.people || []) })}>
-          {feature?.title || 'Draft a merged article'}
+          {t('Draft a merged article')}
         </AiButton>
       </div>
       <ErrorBoundary resetKey={run.active?.id || ''}>
-        <RunPanel run={run} eff={eff} page={page} readingText="Getting ready…" />
+        <RunPanel run={run} eff={eff} page={page} readingText={t('Getting ready…')} />
       </ErrorBoundary>
     </>
   );
@@ -104,7 +104,7 @@ export function GapOutline({ page, eff, primary = true }) {
             <label key={c.id} className="ab-check">
               <input type="radio" name="ab-gap-topic" value={c.id} checked={topic?.id === c.id} onChange={() => setChosen(c.id)} />
               <span>
-                {c.label} <span className="ab-hint">({c.count} ticket{c.count === 1 ? '' : 's'})</span>
+                {shownText(c.label)} <span className="ab-hint">({tn(c.count, '{n} ticket', '{n} tickets')})</span>
               </span>
             </label>
           )}
@@ -114,11 +114,11 @@ export function GapOutline({ page, eff, primary = true }) {
       <p className="ab-hint">{t('Only the topic words, the counts, the category and the item are sent: no ticket text.')}</p>
       <div className="ab-row">
         <AiButton primary={primary} disabled={!aiReady || !available || run.busy || !topic} onClick={() => run.run(feature, { getPack: async () => gapPack(topic, { days: gaps.days }) })}>
-          {feature?.title || 'Draft an article outline'}
+          {t('Draft an article outline')}
         </AiButton>
       </div>
       <ErrorBoundary resetKey={run.active?.id || ''}>
-        <RunPanel run={run} eff={eff} page={page} readingText="Getting ready…" />
+        <RunPanel run={run} eff={eff} page={page} readingText={t('Getting ready…')} />
       </ErrorBoundary>
     </>
   );
@@ -132,8 +132,8 @@ export default function KnowledgeAssist({ page, eff }) {
   const mergeReady = Boolean(merge?.texts);
   return (
     <div className="ab-kbx" data-half="assist">
-      <AiKeyNote eff={eff} what="the merged drafts and outlines" />
-      <CardFrame id="kb-merge" title={t('Merge duplicate articles')} summary={mergeReady ? 'A compared group is ready' : ''} actions={<AiBadge />}>
+      <AiKeyNote eff={eff} what={tm('the merged drafts and outlines')} />
+      <CardFrame id="kb-merge" title={t('Merge duplicate articles')} summary={mergeReady ? t('A compared group is ready') : ''} actions={<AiBadge />}>
         <ErrorBoundary resetKey="merge">
           <MergeDraft page={page} eff={eff} primary />
         </ErrorBoundary>

@@ -9,6 +9,7 @@
 // so the agent can see what still needs filling in. An empty or whitespace-only value counts as no value.
 
 import { stripUnsafeChars } from '../render/safeText.js';
+import { tm } from '../i18n/index.js';
 
 const MAX_INNER = 1000; // longest text between the braces; longer is left as plain text
 const MAX_NAME = 100;
@@ -17,20 +18,23 @@ const MAX_OUTPUT = 100000; // longest rendered text
 const NAME = /^[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*$/;
 const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
-/** The variables the app fills in from the open record and the signed-in agent. */
+/**
+ * The variables the app fills in from the open record and the signed-in agent. `description` is shown to the person, and so are the
+ * three examples that are words (the others are names, a number and dates): marked with tm(), shown with t().
+ */
 export const BUILTIN_VARIABLES = Object.freeze([
-  { name: 'caller.first_name', description: "The caller's first name (requester, contact or subject of the record)", example: 'Abel' },
-  { name: 'caller.last_name', description: "The caller's last name", example: 'Tuter' },
-  { name: 'caller.name', description: "The caller's full name", example: 'Abel Tuter' },
-  { name: 'number', description: 'Record number', example: 'INC0010001' },
-  { name: 'short_description', description: 'Short description of the record', example: 'Cannot connect to VPN' },
-  { name: 'state', description: 'State of the record (display value)', example: 'In Progress' },
-  { name: 'priority', description: 'Priority of the record (display value)', example: '2 - High' },
-  { name: 'assigned_to.name', description: 'Who the record is assigned to', example: 'Beth Anglin' },
-  { name: 'agent.first_name', description: 'Your first name', example: 'Beth' },
-  { name: 'agent.name', description: 'Your full name', example: 'Beth Anglin' },
-  { name: 'sla.due', description: 'When the next SLA is due', example: '2026-10-27 09:00:00' },
-  { name: 'today', description: "Today's date (YYYY-MM-DD)", example: '2026-10-26' },
+  { name: 'caller.first_name', description: tm("The caller's first name (requester, contact or subject of the record)"), example: 'Abel' },
+  { name: 'caller.last_name', description: tm("The caller's last name"), example: 'Tuter' },
+  { name: 'caller.name', description: tm("The caller's full name"), example: 'Abel Tuter' },
+  { name: 'number', description: tm('Record number'), example: 'INC0010001' },
+  { name: 'short_description', description: tm('Short description of the record'), example: tm('Cannot connect to VPN') },
+  { name: 'state', description: tm('State of the record (display value)'), example: tm('In Progress') },
+  { name: 'priority', description: tm('Priority of the record (display value)'), example: tm('2 - High') },
+  { name: 'assigned_to.name', description: tm('Who the record is assigned to'), example: 'Beth Anglin' },
+  { name: 'agent.first_name', description: tm('Your first name'), example: 'Beth' },
+  { name: 'agent.name', description: tm('Your full name'), example: 'Beth Anglin' },
+  { name: 'sla.due', description: tm('When the next SLA is due'), example: '2026-10-27 09:00:00' },
+  { name: 'today', description: tm("Today's date (YYYY-MM-DD)"), example: '2026-10-26' },
 ]);
 
 // ---- Template reading ----------------------------------------------------------------------------------------------

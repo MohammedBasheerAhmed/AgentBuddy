@@ -1,8 +1,9 @@
 import React from 'react';
 import ChartFrame from './ChartFrame.jsx';
 import { clipLabel, formatNumber, gaugeArc, gaugeTone, niceMax, num, summarizeGauge, toneClass, withUnit } from './geometry.js';
+import { t } from '../../i18n/index.js';
 
-const STATUS = { good: 'Good', warn: 'Warning', bad: 'Bad' };
+const statusOf = (tone) => ({ good: t('Good'), warn: t('Warning'), bad: t('Bad') })[tone];
 
 const text = (n) => formatNumber(n, { decimals: Number.isInteger(n) ? 0 : 1 });
 
@@ -14,7 +15,7 @@ const text = (n) => formatNumber(n, { decimals: Number.isInteger(n) ? 0 : 1 });
  *   thresholds            { warn, bad }
  *   higherIsWorse         true (default): a backlog or an age is bad when high. false: a compliance rate is bad when low.
  */
-export default function Gauge({ title, label = '', value, max, unit = '', thresholds, higherIsWorse = true, emptyText = 'Nothing to show.', defaultTable = false }) {
+export default function Gauge({ title, label = '', value, max, unit = '', thresholds, higherIsWorse = true, emptyText = t('Nothing to show.'), defaultTable = false }) {
   const v = num(value);
   const top = num(max) || (unit === '%' ? 100 : niceMax(v, { integer: false }));
   const tone = gaugeTone(v, thresholds, higherIsWorse);
@@ -24,12 +25,12 @@ export default function Gauge({ title, label = '', value, max, unit = '', thresh
   const valueText = withUnit(text(v), unit);
 
   const bits = [];
-  if (STATUS[tone]) {
-    const when = (n) => `at ${text(n)} or ${higherIsWorse ? 'above' : 'below'}`;
+  if (statusOf(tone)) {
+    const when = (n) => (higherIsWorse ? t('at {value} or above', { value: text(n) }) : t('at {value} or below', { value: text(n) }));
     const line = [];
-    if (Number.isFinite(thresholds?.warn)) line.push(`warning ${when(thresholds.warn)}`);
-    if (Number.isFinite(thresholds?.bad)) line.push(`bad ${when(thresholds.bad)}`);
-    bits.push(`Status: ${STATUS[tone]}${line.length ? ` (${line.join(', ')})` : ''}.`);
+    if (Number.isFinite(thresholds?.warn)) line.push(t('warning {when}', { when: when(thresholds.warn) }));
+    if (Number.isFinite(thresholds?.bad)) line.push(t('bad {when}', { when: when(thresholds.bad) }));
+    bits.push(line.length ? t('Status: {status} ({details}).', { status: statusOf(tone), details: line.join(t(', ')) }) : t('Status: {status}.', { status: statusOf(tone) }));
   }
 
   return (
@@ -42,12 +43,12 @@ export default function Gauge({ title, label = '', value, max, unit = '', thresh
       table={{
         caption: title || name,
         columns: [
-          { key: 'label', label: 'Measure' },
-          { key: 'value', label: 'Value', align: 'right' },
-          { key: 'max', label: 'Scale', align: 'right' },
-          { key: 'status', label: 'Status' },
+          { key: 'label', label: t('Measure') },
+          { key: 'value', label: t('Value'), align: 'right' },
+          { key: 'max', label: t('Scale'), align: 'right' },
+          { key: 'status', label: t('Status') },
         ],
-        rows: [{ key: 'gauge', label: name || 'Value', value: valueText, max: withUnit(text(top), unit), status: STATUS[tone] || '-' }],
+        rows: [{ key: 'gauge', label: name || t('Value'), value: valueText, max: withUnit(text(top), unit), status: statusOf(tone) || '-' }],
       }}
     >
       <div className="ab-gauge">
@@ -58,11 +59,11 @@ export default function Gauge({ title, label = '', value, max, unit = '', thresh
               <path className="ab-gauge-fill" d={g.fill} />
             </g>
           ) : null}
-          {g.ticks.map((t) => (
-            <g key={t.name}>
-              <line className="ab-gauge-tick" x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />
-              <text className="ab-gauge-end" x={t.lx} y={t.ly} textAnchor="middle" dy="0.35em">
-                {text(t.value)}
+          {g.ticks.map((tick) => (
+            <g key={tick.name}>
+              <line className="ab-gauge-tick" x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2} />
+              <text className="ab-gauge-end" x={tick.lx} y={tick.ly} textAnchor="middle" dy="0.35em">
+                {text(tick.value)}
               </text>
             </g>
           ))}

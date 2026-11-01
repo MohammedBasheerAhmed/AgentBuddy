@@ -10,6 +10,8 @@
 //    hidden), and never repeats what was sent (a reason that quotes the request is dropped).
 //
 // Every error is an AiError with a machine `code` (the audit log records the code, never the message: src/lib/pipeline.js errorReason).
+// The messages are shown to the person, so they are written through t() at the moment the error is made (the language can change).
+import { t, tn, isolate } from '../i18n/index.js';
 
 export const RETRY_STATUSES = Object.freeze([429, 503, 529]);
 export const DEFAULT_TIMEOUT_MS = 120000; // a hosted model writing a long draft
@@ -106,11 +108,12 @@ function waitText(headers) {
   const ms = Number(get('retry-after-ms') || NaN);
   let wait = Number.isFinite(ms) && ms > 0 ? ms : Number(get('retry-after') || NaN) * 1000;
   if (!Number.isFinite(wait) || wait <= 0) return '';
-  if (wait < 90000) return `about ${Math.max(1, Math.round(wait / 1000))} seconds`;
-  return `about ${Math.round(wait / 60000)} minutes`;
+  const seconds = Math.max(1, Math.round(wait / 1000));
+  if (wait < 90000) return tn(seconds, 'about {n} second', 'about {n} seconds');
+  return tn(Math.round(wait / 60000), 'about {n} minute', 'about {n} minutes');
 }
 
-const minutes = (ms) => (ms >= 90000 ? `${Math.round(ms / 60000)} minutes` : `${Math.round(ms / 1000)} seconds`);
+const minutes = (ms) => (ms >= 90000 ? tn(Math.round(ms / 60000), '{n} minute', '{n} minutes') : tn(Math.round(ms / 1000), '{n} second', '{n} seconds'));
 
 /** A pause that a cancel cuts short. */
 export function abortableSleep(ms, signal) {
@@ -132,42 +135,65 @@ export function abortableSleep(ms, signal) {
   });
 }
 
-const cancelled = () => new AiError('Cancelled. No answer will be shown for this request.', 'CANCELLED');
+const cancelled = () => new AiError(t('Cancelled. No answer will be shown for this request.'), 'CANCELLED');
 
 /** The sentence for an answer that is not OK. `who` names the provider ("DeepSeek", "The endpoint ai.corp.example"). */
 export function statusError(status, who, { reason = '', code = '', type = '', headers = null, deploymentWord = 'model', params = [], noCredit = false } = {}) {
-  const why = reason ? ` (${reason})` : '';
+  const why = reason ? ` (${isolate(reason)})` : '';
+  const dep = deploymentWord === 'deployment'; // Azure calls the model a deployment
   // `params`: optional request fields the provider named in its complaint (from a fixed list), so the adapter can drop them and retry.
   const extra = { status, params };
   if (status === 400 && /content_filter|content_policy/i.test(`${code} ${type}`)) {
-    return new AiError(`${who} turned this request down with its content filter. Change the text, or ask your administrator about the filter.`, 'CONTENT_FILTER', extra);
+    return new AiError(t('{who} turned this request down with its content filter. Change the text, or ask your administrator about the filter.', { who }), 'CONTENT_FILTER', extra);
   }
   if (noCredit || /insufficient_quota|billing/i.test(`${code} ${type}`) || status === 402) {
-    return new AiError(`${who} says the account has no balance left${why}. Add credit on the provider's site, then try again.`, 'NO_CREDIT', extra);
+    return new AiError(t("{who} says the account has no balance left{why}. Add credit on the provider's site, then try again.", { who, why }), 'NO_CREDIT', extra);
   }
   switch (status) {
     case 400:
-      return new AiError(`${who} could not use this request (answer 400)${why}. Check the ${deploymentWord} name in Settings, or try with less text.`, 'BAD_REQUEST', extra);
+      return new AiError(
+        dep
+          ? t('{who} could not use this request (answer 400){why}. Check the deployment name in Settings, or try with less text.', { who, why })
+          : t('{who} could not use this request (answer 400){why}. Check the model name in Settings, or try with less text.', { who, why }),
+        'BAD_REQUEST',
+        extra
+      );
     case 401:
-      return new AiError(`${who} rejected the API key. Check it in Agent Buddy settings.`, 'BAD_KEY', extra);
+      return new AiError(t('{who} rejected the API key. Check it in Agent Buddy settings.', { who }), 'BAD_KEY', extra);
     case 403:
-      return new AiError(`${who} refused the request (answer 403)${why}. The key may not be allowed to use this ${deploymentWord}, or a network filter blocks the address.`, 'NO_ACCESS', extra);
+      return new AiError(
+        dep
+          ? t('{who} refused the request (answer 403){why}. The key may not be allowed to use this deployment, or a network filter blocks the address.', { who, why })
+          : t('{who} refused the request (answer 403){why}. The key may not be allowed to use this model, or a network filter blocks the address.', { who, why }),
+        'NO_ACCESS',
+        extra
+      );
     case 404:
-      return new AiError(`${who} answered "not found" (404)${why}. Check the address and the ${deploymentWord} name in Settings.`, 'NOT_FOUND', extra);
+      return new AiError(
+        dep
+          ? t('{who} answered "not found" (404){why}. Check the address and the deployment name in Settings.', { who, why })
+          : t('{who} answered "not found" (404){why}. Check the address and the model name in Settings.', { who, why }),
+        'NOT_FOUND',
+        extra
+      );
     case 408:
-      return new AiError(`${who} gave up waiting for the request (answer 408). Try again in a minute.`, 'TIMEOUT', extra);
+      return new AiError(t('{who} gave up waiting for the request (answer 408). Try again in a minute.', { who }), 'TIMEOUT', extra);
     case 413:
-      return new AiError(`The request is too large for ${who}. Try with less text, or a ${deploymentWord} that takes more.`, 'TOO_LARGE', extra);
+      return new AiError(
+        dep ? t('The request is too large for {who}. Try with less text, or a deployment that takes more.', { who }) : t('The request is too large for {who}. Try with less text, or a model that takes more.', { who }),
+        'TOO_LARGE',
+        extra
+      );
     case 429: {
       const wait = waitText(headers);
-      return new AiError(`${who} is limiting requests${why}. ${wait ? `Try again in ${wait}.` : 'Wait a minute and try again.'}`, 'RATE_LIMIT', extra);
+      return new AiError(wait ? t('{who} is limiting requests{why}. Try again in {wait}.', { who, why, wait }) : t('{who} is limiting requests{why}. Wait a minute and try again.', { who, why }), 'RATE_LIMIT', extra);
     }
     case 503:
     case 529:
-      return new AiError(`${who} is busy. Try again in a minute.`, 'BUSY', extra);
+      return new AiError(t('{who} is busy. Try again in a minute.', { who }), 'BUSY', extra);
     default:
-      if (status >= 500) return new AiError(`${who} had a problem on its side (answer ${status}). Try again in a minute.`, 'SERVER_ERROR', extra);
-      return new AiError(`${who} could not handle the request (answer ${status})${why}.`, 'REQUEST_FAILED', extra);
+      if (status >= 500) return new AiError(t('{who} had a problem on its side (answer {status}). Try again in a minute.', { who, status }), 'SERVER_ERROR', extra);
+      return new AiError(t('{who} could not handle the request (answer {status}){why}.', { who, status, why }), 'REQUEST_FAILED', extra);
   }
 }
 
@@ -201,7 +227,15 @@ export async function requestJson({ url, init, who, host, secrets = [], sent = '
     signal?.addEventListener?.('abort', onAbort, { once: true });
     const stopped = () => {
       if (signal?.aborted) return cancelled();
-      if (timedOut) return new AiError(`${who} did not answer within ${minutes(timeoutMs)}. Try again, or choose a faster ${deploymentWord} in Settings.`, 'TIMEOUT');
+      if (timedOut) {
+        const time = minutes(timeoutMs);
+        return new AiError(
+          deploymentWord === 'deployment'
+            ? t('{who} did not answer within {time}. Try again, or choose a faster deployment in Settings.', { who, time })
+            : t('{who} did not answer within {time}. Try again, or choose a faster model in Settings.', { who, time }),
+          'TIMEOUT'
+        );
+      }
       return null;
     };
     try {
@@ -217,13 +251,13 @@ export async function requestJson({ url, init, who, host, secrets = [], sent = '
       } catch {
         // fetch only throws when nothing came back at all: offline, blocked by a firewall, VPN or proxy, no browser permission, or
         // an answer that redirects elsewhere (never followed).
-        throw stopped() || new AiError(`Could not reach ${host}. Check your internet connection, VPN or proxy, that the browser allowed access to this address, and that the address does not redirect elsewhere.`, 'UNREACHABLE');
+        throw stopped() || new AiError(t('Could not reach {host}. Check your internet connection, VPN or proxy, that the browser allowed access to this address, and that the address does not redirect elsewhere.', { host: isolate(host) }), 'UNREACHABLE');
       }
       if (response.ok) {
         try {
           return await response.json();
         } catch {
-          throw stopped() || new AiError(`${who} sent an answer Agent Buddy could not read. Check the address in Settings.`, 'BAD_ANSWER');
+          throw stopped() || new AiError(t('{who} sent an answer Agent Buddy could not read. Check the address in Settings.', { who }), 'BAD_ANSWER');
         }
       }
       let text = '';

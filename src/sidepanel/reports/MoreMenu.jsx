@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { t } from '../../i18n/index.js';
 
 /**
  * The one "⋯" menu of the Team dashboard's quiet top row: everything that is not a number (refresh, auto-refresh, customize, export,
@@ -10,7 +11,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
  * Keyboard: Enter/Space/ArrowDown open it and focus the first item; ArrowUp/ArrowDown/Home/End move; Escape closes and gives the focus
  * back to the button; Tab closes. A click outside closes it.
  */
-export default function MoreMenu({ label = 'More', items }) {
+export default function MoreMenu({ label = t('More'), items }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const button = useRef(null);
