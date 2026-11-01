@@ -20,6 +20,8 @@ import ProfilePicker from './ProfilePicker.jsx';
 import Tabs from '../sidepanel/Tabs.jsx';
 import { panelId, tabId } from '../sidepanel/tabKeys.js';
 import { t } from '../i18n/index.js';
+import { useLanguage } from '../i18n/useLanguage.js';
+import { LANGUAGES } from '../i18n/index.js';
 
 const KEY_MODE_TEXT = {
   local: "Kept in Agent Buddy's own storage in this browser. ServiceNow pages cannot read it, but anyone who can read your browser profile on disk can. Use a key with a spend limit.",
@@ -1136,6 +1138,46 @@ export function ProfilesSection({ eff, reload }) {
   );
 }
 
+/** Language: the language of the panel and this page, and the language the AI writes in. Saved at once, shown at once. */
+export function LanguageSection({ eff, reload }) {
+  const [status, setStatus] = useState(null);
+  const aiOn = eff.policy?.aiEnabled !== false;
+  async function change(patch) {
+    try {
+      await saveSettings(patch);
+      setStatus(null);
+      reload();
+    } catch {
+      setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
+    }
+  }
+  return (
+    <section className="ab-section" aria-labelledby="h-language">
+      <h2 className="ab-h" id="h-language">{t('Language')}</h2>
+      <div className="ab-field">
+        <label className="ab-label" htmlFor="language-choice">{t('Language of the panel and this page')}</label>
+        <select id="language-choice" className="ab-select" value={eff.values.language} aria-describedby="language-hint" onChange={(e) => change({ language: e.target.value })}>
+          {LANGUAGES.map((l) => (
+            <option key={l.id} value={l.id}>{l.id === 'auto' ? t('Same as the browser') : l.name}</option>
+          ))}
+        </select>
+        <span className="ab-hint" id="language-hint">{t('The panel, this page and the team page. What is in a ticket is never translated.')}</span>
+      </div>
+      {aiOn && (
+        <div className="ab-field">
+          <label className="ab-label" htmlFor="answer-language">{t('Language of AI answers')}</label>
+          <select id="answer-language" className="ab-select" value={eff.values.answerLanguage} aria-describedby="answer-language-hint" onChange={(e) => change({ answerLanguage: e.target.value })}>
+            <option value="ticket">{t('The language of the ticket')}</option>
+            <option value="panel">{t('The language of the panel')}</option>
+          </select>
+          <span className="ab-hint" id="answer-language-hint">{t("A reply to an Arabic ticket is written in Arabic, and one to an English ticket in English. Choose the panel's language to always get answers in it.")}</span>
+        </div>
+      )}
+      <Status status={status} />
+    </section>
+  );
+}
+
 export const FOLLOW_UP_CHOICES = Object.freeze([2, 3, 5, 7]);
 
 /** My work: after how many days a customer who is waiting (or has not answered) counts as a follow-up due. */
@@ -1260,6 +1302,7 @@ export function AiAssistPage({ eff, reload, epoch }) {
 
 export default function Options() {
   const [eff, setEff] = useState(null);
+  const lang = useLanguage(eff?.values?.language); // before anything below draws a text
   const [failed, setFailed] = useState('');
   const [epoch, setEpoch] = useState(0); // bumped after "clear everything" so every section shows what is left
   const reload = useCallback(async () => {
@@ -1290,7 +1333,7 @@ export default function Options() {
   if (failed) return <div className="ab-page"><p className="ab-note ab-note-danger" role="alert">{t('{failed} Close this tab and open Settings again.', { failed })}</p></div>;
   if (!eff) return <div className="ab-page"><p className="ab-sub">{t('Loading…')}</p></div>;
   return (
-    <main className="ab-page">
+    <main className="ab-page" key={lang}>
       <h1 className="ab-h ab-page-title">{t('Agent Buddy settings')}</h1>
       <SettingsPages eff={eff} reload={reload} epoch={epoch} onCleared={() => { setEpoch((n) => n + 1); reload(); }} />
     </main>
@@ -1328,6 +1371,7 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
       {managedNote && <p className="ab-note ab-note-warn">{t('Some settings are managed by your organisation and cannot be changed.')}</p>}
       <div id={panelId('ab-settings', 'basics')} role="tabpanel" aria-labelledby={tabId('ab-settings', 'basics')} hidden={page !== 'basics'}>
         <p className="ab-sub ab-page-intro">{t('Where Agent Buddy works, what you work on, how personal data is protected, and what it keeps on this computer.')}</p>
+        <LanguageSection eff={eff} reload={reload} />
         <InstancesSection eff={eff} reload={reload} />
         <ProfilesSection eff={eff} reload={reload} />
         <FollowUpSection eff={eff} reload={reload} />

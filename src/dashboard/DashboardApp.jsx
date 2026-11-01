@@ -3,6 +3,7 @@ import { useEffective } from '../sidepanel/useEffective.js';
 import ReportsDashboard from '../sidepanel/reports/ReportsDashboard.jsx';
 import { checkSourceTab, nextSource, parseTabId } from './sourceTab.js';
 import { t } from '../i18n/index.js';
+import { useLanguage } from '../i18n/useLanguage.js';
 
 const MESSAGES = {
   'no-tab': 'This page needs a ServiceNow tab to read from. Open ServiceNow, open the Agent Buddy side panel, choose Team and press "Open full page".',
@@ -14,6 +15,7 @@ const MESSAGES = {
 // through the ServiceNow tab it was opened for (the address says which); it has no connection of its own to the instance.
 export default function DashboardApp() {
   const eff = useEffective();
+  const lang = useLanguage(eff.values?.language);
   const tabId = useMemo(() => parseTabId(window.location.search), []);
   const [source, setSource] = useState({ status: 'checking' });
 
@@ -49,7 +51,7 @@ export default function DashboardApp() {
   }
 
   return (
-    <main className="ab-dashboard-page">
+    <main className="ab-dashboard-page" key={lang}>
       <div className="ab-dashboard-head">
         <h1>{t('Agent Buddy: team dashboard')}</h1>
         {origin && <span className="ab-sub">{t('Reading from {origin} with your own session', { origin })}</span>}

@@ -19,6 +19,7 @@ import { TeamInsights, TeamAssist } from './team/index.js';
 import { WriteInsights, WriteAssist } from './write/index.js';
 import { KnowledgeInsights, KnowledgeAssist } from './knowledgeScreen/index.js';
 import { t } from '../i18n/index.js';
+import { useLanguage } from '../i18n/useLanguage.js';
 
 // The panel's screens (TRACKER.md 2.1): Ticket is the record that is open (or the setup / open-a-ticket help); the others work from any
 // page of an enabled ServiceNow site. Which screens a person sees comes from their work profiles and the organisation's policy
@@ -203,6 +204,7 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
 
 function Panel() {
   const eff = useEffective();
+  const lang = useLanguage(eff.values?.language); // before anything below draws a text
   const { page, lastGood, lastSeen, refresh } = usePage();
   const { launch, clear: clearLaunch } = useLaunch();
   const [nav, setNav] = useState(() => {
@@ -234,7 +236,7 @@ function Panel() {
     );
   }
 
-  return <AppView eff={eff} page={page} lastGood={lastGood} lastSeen={lastSeen} section={nav.section} visited={nav.visited} onChoose={choose} onChanged={refresh} launch={launch} onLaunchDone={clearLaunch} />;
+  return <AppView key={lang} eff={eff} page={page} lastGood={lastGood} lastSeen={lastSeen} section={nav.section} visited={nav.visited} onChoose={choose} onChanged={refresh} launch={launch} onLaunchDone={clearLaunch} />;
 }
 
 export default function App() {

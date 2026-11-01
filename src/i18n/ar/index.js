@@ -4,5 +4,6 @@ import { AR_REPORTS } from './reports.js';
 import { AR_TICKET } from './ticket.js';
 import { AR_WRITE } from './write.js';
 import { AR_SHELL } from './shell.js';
+import { AR_LANGUAGE } from './language.js';
 
-export const AR = Object.freeze({ ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS });
+export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS });
