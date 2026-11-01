@@ -10,47 +10,42 @@ what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` 
 
 ## Where to pick up (updated 2026-11-01)
 
-Everything planned is built and on GitHub (`62b4d42` to the latest commit on `main`). Status: 78 ready for review, 1 partly built
-(R6), 3 need you (V1 to V3), 2 agreed for later (R3, R5). Nothing has been seen on the real instance yet.
+Everything planned is built and on GitHub (latest commit on `main`). Status: 82 ready for review, 3 need you (V1 to V3). Nothing has
+been seen on the real instance yet. Unit tests 2,784, end-to-end 1,057 checks (real Chrome, fake ServiceNow, fake AI).
 
-Why those labels: **R6 is partly built** because its accessibility and dark-mode check is done but its shortcuts and languages wait for
-your decision. **R3 and R5 are "agreed for later"** because Claude left them out of round 3 to wait for your decisions; you did not
-ask for that.
+**Done since the last wrap-up (2026-11-01, one long session):**
 
-**Done since (2026-11-01, session after the wrap-up):**
-
-- **R1 is finished.** The e2e job passes on GitHub's `ubuntu-latest` (run 41265048867: 1,010 pass, 0 fail). The cause: headless Chrome on
-  Linux makes the popup that holds the panel the "last focused window" about 350 ms after it loads, and the panel reads the active tab
-  of that window, so it read itself and never found the ServiceNow tab (scenario b, then every scenario after it). The harness now
-  takes the main window's focus away and gives it back (the only way that worked there). Also: a failed scenario now prints the pages,
-  windows, focus changes and errors; the workflow can be run by hand with a list of scenarios; the actions are on Node 24 (v7).
-  Since then two more tests that were racing the slower runner were fixed (scenarios o and c). Of the last four full runs on GitHub
-  three pass 1,010 of 1,010; one had three timing failures in scenarios q (ticks after a panel reload) and x (the quick-actions bar),
-  which pass locally and on the other runs. Left: find that timing flake, then take `continue-on-error: true` off the e2e job.
-- **R6, accessibility and dark mode: done and proven.** New e2e scenario `zz` (`e2e/a11y.js`) audits every screen and half, the
-  cards opened, the first-run card, the preview dialog, an answer, the Team full page and Settings in light and dark: contrast, names,
-  labels, tab structure, visible focus, 24 px targets, duplicate ids; then reduced motion and 320 px. Contrast was already fine. It
-  found two real faults, both fixed: the selected Insights / AI Assist tab lost its keyboard focus ring, and a screen with one half
-  was a tab panel named by a tab that does not exist.
+- **R1, e2e on GitHub:** passes on `ubuntu-latest`. The cause was headless Chrome on Linux making the popup that holds the panel the
+  "last focused window"; the harness takes the main window's focus away and gives it back. A failed scenario prints pages, windows, a
+  focus log and errors; the workflow can be run by hand with a list of scenarios. The job is still allowed to fail until it has passed
+  a few more times in a row (scenario q had a timing flake, now waited out).
+- **R6 accessibility and dark mode:** scenario `zz` audits every screen in light and dark (contrast, names, labels, focus, 24 px targets,
+  reduced motion, 320 px); it found and we fixed two faults.
+- **Masking for Arabic tickets (a gap found on the way):** a phone or card number in Arabic digits, a password after "كلمة المرور", an
+  Emirates or Saudi ID, an employee number and a birth date named in Arabic, and Arabic spellings of a name, all reached the AI unmasked.
+  Fixed (`src/pii/arabic.js`), 17 tests.
+- **R8 Arabic:** see the table. How it is built is in `docs/i18n-arabic.md`; `node scripts/i18n-check.js` lists any text without an Arabic
+  entry. Nothing sent to the AI, no prompt and no data label is translated.
+- **R6 shortcuts, R3 self-hosted install, R5 minified build:** see the table. Decisions made by Claude on your instruction "take the best
+  approach": shortcut keys are digits (they work with an Arabic keyboard layout); the release is minified with a readable copy.
 
 **When you say "continue", Claude starts here:**
 
-1. **Ask you the three decisions** that hold back R3, R5 and the rest of R6 (still open):
-   - R3: Chrome Web Store, or self-hosted (your own update address, the extension pushed by Chrome policy)?
-   - R5: OK to ship minified bundles (the content script is 380 KB on every ServiceNow page), with a readable copy kept for the
-     security review?
-   - R6: keyboard shortcuts yes or no (they need a manifest `commands` change, which the build rules forbid without your
-     approval), and which languages, if any?
-2. **Then R3, R5 and the rest of R6**, as you decided.
-3. **V1, the real-instance walk-through, whenever you are at Chrome** (it can go first if you are). Reload Agent Buddy in the
-   already-open Chrome from `D:\AgentBuddy\dist` (no separate automation window), sign in to dev364920 yourself, and walk a real
-   ticket screen by screen. Answer the open questions in `docs/live-questions/`, these four first: the email form takes Insert or
-   forces Copy (`compose.md` 3), Chrome accepts the `defaultDashboard` policy as one object (`policy.md` 15), priority-account names
-   match the case (`policy.md` 16), the labels of a Workspace's notes boxes (`checks.md` 20).
-4. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (you enter the key in Settings, never in chat).
+1. **V1, the real-instance walk-through, whenever you are at Chrome.** Reload Agent Buddy in the already-open Chrome from
+   `D:\AgentBuddy\dist` (no separate automation window), sign in to dev364920 yourself, and walk a real ticket screen by screen, in
+   English and in Arabic. Answer the open questions in `docs/live-questions/`, `i18n.md` first (does the Arabic read well, is the layout
+   right in the real side panel, the shortcuts in Chrome and Edge on Windows and Mac, a ServiceNow whose own language is Arabic), then
+   these four: the email form takes Insert or forces Copy (`compose.md` 3), Chrome accepts the `defaultDashboard` policy as one object
+   (`policy.md` 15), priority-account names match the case (`policy.md` 16), the labels of a Workspace's notes boxes (`checks.md` 20).
+2. **The self-hosted install on two pilot computers** (`docs/deployment.md`, "Self-hosted install"): you need managed computers, an
+   https address for the files, and someone to keep the signing key (`node scripts/selfhost.js init`).
+3. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (you enter the key in Settings, never in chat), Arabic
+   tickets included.
+4. Small leftovers: take `continue-on-error: true` off the e2e job; ServiceNow-in-Arabic comparisons of displayed values
+   (`docs/live-questions/i18n.md` 4).
 
-How to check a change: `node tests/run.js` (unit, 2,729), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
-(1,010 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
+How to check a change: `node tests/run.js` (unit, 2,784), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
+(1,057 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
 `--check` to rewrite the map). Rules for every change: `docs/build-rules.md`.
 
 ---
@@ -337,11 +332,12 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | V3 | Prove it | - | - | New | - | Shadow a few agents; baseline numbers before rollout (reassignment, reopen, time to first response, customer-update gap); compare after; five-second test of each screen | - | Needs you |
 | R1 | CI | - | - | New | None | Unit tests, compile check and e2e on every push. Done: `.github/workflows/ci.yml`; on GitHub the checks job (unit, compile, build, traceability, audit) passes. The e2e job now passes on `ubuntu-latest` too (1,010 pass, run 41265048867); still allowed to fail until it has passed a few times | - | Ready for review |
 | R2 | Version and release package | - | - | New | Version 0.1.0, no packaging step | One release with both halves; zip; changelog | - | Ready for review |
-| R3 | Deployment | - | - | Partly | `docs/deployment.md`, policy samples | Chrome/Edge policy install, update address, store or self-hosted | - | Agreed |
+| R3 | Deployment | - | - | Partly | `docs/deployment.md`, policy samples | Self-hosted install (decided 2026-11-01: your own web server, installed and updated by policy). Done: `scripts/selfhost.js` (signing key, signed CRX3 package checked against one Chrome made itself, `update.xml`, policy files with the id and address filled in), `docs/deployment.md` "Self-hosted install". Not tried on a managed computer | Not yet | Ready for review |
 | R4 | e2e stability | - | - | New | Scenario b timed out once under load | Find out whether it is flaky and fix it | - | Ready for review |
-| R5 | Performance | - | - | New | Unminified: 380 KB content script on every ServiceNow page, 1.35 MB panel | Smaller bundles, measured load time | - | Agreed |
-| R6 | Accessibility, dark mode, shortcuts, languages | - | - | Partly | Dark-mode tokens and focus fixes exist; no keyboard shortcuts | Accessibility pass and dark-mode check, shortcuts, other languages. Done: accessibility and dark-mode audit in the real browser (e2e scenario `zz`, light and dark, every screen; two faults found and fixed). Left: shortcuts (manifest change) and other languages, they wait for your decision | - | Partly built |
+| R5 | Performance | - | - | New | Unminified: 380 KB content script on every ServiceNow page, 1.35 MB panel | Minified release: `build.js --minify` is 43% smaller (content script 494 KB to 284 KB); `npm run package -- --minify` also writes a readable copy for the security review; `npm run repro -- --minify` rebuilds it byte for byte. Each bundle carries only the Arabic entries it can ask for (the script on every ServiceNow page grew by 90 KB, not 700 KB) | - | Ready for review |
+| R6 | Accessibility, dark mode, shortcuts, languages | - | - | Partly | Dark-mode tokens and focus fixes exist; no keyboard shortcuts | Done: accessibility and dark-mode audit (scenario `zz`), keyboard shortcuts (`Alt+Shift+1/2/3`, Mac `Control+Shift+1/2/3`: open the panel, summarise, draft a reply; Settings lists them), Arabic with right-to-left layout (below, R8) | Not yet | Ready for review |
 | R7 | e2e harness: attach to a new tab before its first request | - | - | New | Record links from the Ticket screen open in a new tab; the harness can miss its first reads, so the coverage check tolerates up to 5 plain GET reads (listed) | Attach through the DevTools protocol before the tab starts (auto-attach, wait for debugger), then drop the tolerance. Done: new pages are logged from their start, and every http(s) request is logged in the browser (held and continued at once), so the reads a page makes as it closes or navigates are seen too; coverage has zero tolerance (0 missing in 4 of 4 full runs) | - | Ready for review |
+| R8 | Arabic (and a language setting) | - | - | New | English only | Settings > Language (English, العربية, same as the browser). 2,760 texts in Arabic across the panel, Settings, the Team page and the bar on the ServiceNow page; right to left; masking that understands Arabic digits, Arabic labels and Arabic spellings of a name (`tests/pii-arabic.test.js`); AI answers in the ticket's language (default) or the panel's (`Language of AI answers`). Checked by `tests/i18n.test.js` and scenario `zy` (every screen: no English left, nothing sideways at 320 px, the accessibility audit) | Not yet (`docs/live-questions/i18n.md`) | Ready for review |
 
 ---
 
@@ -385,3 +381,4 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-10-31 | **Partly built rows finished.** Four agents plus the lead: the header follows a Save (N1), notes typed on a Workspace count in Ready to resolve (N4), organisation dashboard and priority accounts through two new policy keys (N17, N28), the key unlocked in the panel (AI0.1), AI email drafts inserted into the email form (AI9), and an e2e harness that logs every request from the start to the end of each page with zero tolerance (R7). Status: 78 ready for review, 3 need you (V1 to V3), 3 agreed for later (R3, R5, R6), none partly built. Unit tests 2,725 of 2,725; the full end-to-end run 965 of 965, twice in a row. Nothing committed yet. |
 | 2026-11-01 | **Pushed to `main`:** `62b4d42` (round 3, 386 files); `6e93694` (CI file fix: GitHub refused the whole workflow because a job-level `env` used `runner.temp`); `61fb3c7` (the review map `docs/review-pack/traceability.md` regenerated; CI's check had found it stale). First CI run on GitHub: the checks job passes, the e2e job (allowed to fail) 265 pass, 21 fail on Linux (R1 left as partly built). Next: V1 on dev364920. |
 | 2026-11-01 | **R1 and the accessibility half of R6 built** (`f7c30a4` to `f55fa1d`). The e2e job fails on Linux because headless Chrome makes the popup that holds the panel the last focused window, so the panel read itself; found with a focus log (two guesses were wrong first: keeping the main window focused, and bringToFront), fixed by taking the main window's focus away and giving it back. The e2e run now passes on GitHub: 1,010 of 1,010. New scenario `zz` audits every screen in light and dark in the real browser (contrast, names, labels, focus, target size, reduced motion, 320 px) and found two faults, fixed: no focus ring on the selected Insights / AI Assist tab, and a tab panel named by a tab that does not exist on one-half screens. Unit tests 2,729 of 2,729. Still waiting for your three decisions (R3, R5, rest of R6). |
+| 2026-11-01 | **Arabic, shortcuts, self-hosted install and the minified build** (`4038b82` and the commits around it). You said: self-hosted for now; Arabic as well as English; Mac and Windows, Chrome and Edge; do all steps; take the best approach; AI answers in the ticket's language and the panel's. Built by Claude with four parallel workers (one per area of the panel) and a one-off codemod for the first 756 texts; every text has an Arabic entry and a test keeps it so. Unit tests 2,784; end-to-end 1,057. Not seen by anyone who reads Arabic yet: the wording is the model's (glossary in `docs/i18n-arabic.md`). |
