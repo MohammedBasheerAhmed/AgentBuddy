@@ -81,7 +81,9 @@ async function describeFailure(ctx, id) {
   const windows = await boxed(
     ctx.ext(async () => {
       const all = await chrome.windows.getAll({ populate: true });
-      return all.map((w) => `window ${w.id} ${w.type} focused=${w.focused} state=${w.state} tabs=[${(w.tabs || []).map((tab) => `${tab.id}${tab.active ? '*' : ''}:${(tab.url || '').replace(/^chrome-extension:\/\/[a-z]+\//, 'ext/').slice(0, 40)}`).join(', ')}]`);
+      const last = await chrome.windows.getLastFocused();
+      const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      return [`last focused window ${last.id}; the panel would look at tab ${active?.id} ${(active?.url || '').slice(0, 60)}`].concat(all.map((w) => `window ${w.id} ${w.type} focused=${w.focused} state=${w.state} tabs=[${(w.tabs || []).map((tab) => `${tab.id}${tab.active ? '*' : ''}:${(tab.url || '').replace(/^chrome-extension:\/\/[a-z]+\//, 'ext/').slice(0, 40)}`).join(', ')}]`));
     }),
     ['(the control page did not answer)']
   );

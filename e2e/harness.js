@@ -297,6 +297,17 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
   /** Run a function inside the control page (an extension page, so chrome.runtime/storage/scripting/tabs are there). */
   ctx.ext = (fn, ...args) => ctx.ctl.evaluate(fn, ...args);
 
+  // The panel is a small popup window here (see openPanel), and it reads "the active tab of the last focused window". `focused:false`
+  // keeps the main window in front on Windows, but headless Chrome on Linux (CI) lets the popup take the focus (when it opens and
+  // when a button in it is pressed), so the panel then looked at itself and never found the ServiceNow tab. The control page asks
+  // for the main window's focus back several times a second; a window that is already in front is not changed.
+  await ctx.ctl
+    .evaluate(async () => {
+      const main = (await chrome.windows.getCurrent()).id;
+      setInterval(() => chrome.windows.update(main, { focused: true }).catch(() => {}), 250);
+    })
+    .catch(() => {});
+
   /** Merge a patch into the extension settings (the way saveSettings does) and optionally store the AI key (key store mode 'local'). */
   ctx.configure = async (patch, { key } = {}) => {
     await ctx.ext(async (settingsKey, patch, keyArg) => {
