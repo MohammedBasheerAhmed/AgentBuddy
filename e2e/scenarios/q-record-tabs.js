@@ -118,6 +118,8 @@ module.exports = {
     await waitForText(p, data.CHECKLIST_TASK_NUMBER, { timeout: 20000 });
     await openCard(p, 'Fulfilment checklist');
     await waitPanel(ctx, p, 'the ticks after the reload', async () => (await p.$$('ul[aria-label="Steps"] input[type="checkbox"]')).length === 3, { timeout: 20000 });
+    // (the steps are drawn first and the ticks are read from the session store a moment later: on a slow runner the first look is too early)
+    await ctx.waitUntil('the ticks to come back', async () => JSON.stringify(await ticked()) === '[true,false,true]', { timeout: 10000 }).catch(() => {});
     t.check('after the panel was reloaded the same two steps are still ticked', JSON.stringify(await ticked()) === '[true,false,true]', JSON.stringify(await ticked()));
     t.check('...and the progress line says so', /2 of 3/.test(await text()));
 
