@@ -322,48 +322,20 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
 
   // On Linux (CI) headless Chrome makes the popup the last focused window about 350 ms after it has loaded (the log above shows it),
   // although it was created with focused:false; Windows does not. The panel then read itself and never found the ServiceNow tab.
-  // Whenever the popup is the last focused window, put the main window back, trying one way after the other and saying which works.
+  // Whenever the popup is the last focused window, the main window is put back. Only taking its focus away and giving it back
+  // works there (tried on CI: a plain windows.update focused:true, and bringToFront of its tab, change nothing).
   if (process.platform !== 'win32') {
-    const tried = new Map();
-    let busy = false;
-    const lastFocusedIsMain = (main) => ctx.ext(async (m) => (await chrome.windows.getLastFocused()).id === m, main);
-    const ways = [
-      ['windows.update focused', (main) => ctx.ext((m) => chrome.windows.update(m, { focused: true }), main)],
-      [
-        'bringToFront of the active tab',
-        async (main) => {
-          const url = await ctx.ext(async (m) => (await chrome.tabs.query({ active: true, windowId: m }))[0]?.url || '', main);
-          const page = (await browser.pages()).find((x) => x.url() === url);
-          if (page) await page.bringToFront();
-        },
-      ],
-      [
-        'focus away and back',
-        async (main) => {
-          await ctx.ext(async (m) => {
-            await chrome.windows.update(m, { focused: false }).catch(() => {});
-            await chrome.windows.update(m, { focused: true });
-          }, main);
-        },
-      ],
-    ];
     const main = await ctx.ext(async () => (await chrome.windows.getCurrent()).id);
+    let busy = false;
     const timer = setInterval(async () => {
       if (busy) return;
       busy = true;
       try {
-        if (await lastFocusedIsMain(main)) return;
-        for (const [name, way] of ways) {
-          await way(main).catch(() => {});
-          await sleep(120);
-          const worked = await lastFocusedIsMain(main).catch(() => false);
-          tried.set(name, [...(tried.get(name) || []), worked]);
-          if (!tried.has('reported:' + name)) {
-            tried.set('reported:' + name, true);
-            console.log(`  info  focus: "${name}" ${worked ? 'put the main window back in front' : 'did not change the last focused window'}`);
-          }
-          if (worked) break;
-        }
+        await ctx.ext(async (m) => {
+          if ((await chrome.windows.getLastFocused()).id === m) return;
+          await chrome.windows.update(m, { focused: false }).catch(() => {});
+          await chrome.windows.update(m, { focused: true });
+        }, main);
       } catch {
         /* the browser is closing, or the control page is busy: look again at the next tick */
       } finally {
