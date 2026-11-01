@@ -19,6 +19,11 @@
   },
   "side_panel": { "default_path": "sidepanel.html" },
   "options_ui": { "page": "options.html", "open_in_tab": true },
+  "commands": {
+    "open-panel": { "suggested_key": { "default": "Alt+Shift+1", "mac": "MacCtrl+Shift+1" }, "description": "Open Agent Buddy" },
+    "summarise": { "suggested_key": { "default": "Alt+Shift+2", "mac": "MacCtrl+Shift+2" }, "description": "Summarise this ticket (shows what will be sent first)" },
+    "reply": { "suggested_key": { "default": "Alt+Shift+3", "mac": "MacCtrl+Shift+3" }, "description": "Draft a reply to this ticket (shows what will be sent first)" }
+  },
   "storage": { "managed_schema": "managed_schema.json" },
   "content_security_policy": {
     "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"

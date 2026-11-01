@@ -1,0 +1,30 @@
+/* Right to left (Arabic). The other files use logical properties (margin-inline-start, text-align: start, inset-inline-end ...), so the
+   layout turns by itself when the page says dir="rtl" (src/i18n/useLanguage.js). What is left is here: shapes that point a way,
+   the fonts, and the marks that would break Arabic letters. This file is last on purpose (the areas are joined in alphabetical order). */
+
+/* Arabic letters are joined: spacing between letters or capitals would break the words. */
+:root[dir='rtl'] *, :root[dir='rtl'] *::before, :root[dir='rtl'] *::after { letter-spacing: normal !important; text-transform: none !important; }
+
+/* System Arabic fonts first (Segoe UI and Tahoma on Windows, Geeza Pro and SF Arabic on macOS); Latin text keeps Inter where it is loaded. */
+:root[dir='rtl'] {
+  --ab-font: "Segoe UI", Tahoma, "SF Arabic", "Geeza Pro", "Noto Sans Arabic", "Noto Naskh Arabic", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+:root[dir='rtl'] body { line-height: 1.6; }
+/* Slanted Arabic letters look wrong; emphasis in Arabic is the weight. */
+:root[dir='rtl'] em, :root[dir='rtl'] i, :root[dir='rtl'] cite { font-style: normal; font-weight: 600; }
+
+/* A chevron is a corner drawn by rotating a square: folded, it points the way the text goes (right in English, left in Arabic);
+   open it points down in both. Only the folded state turns. */
+:root[dir='rtl'] .ab-act-chevron:not(.is-open),
+:root[dir='rtl'] .ab-quick-chevron:not(.ab-quick-chevron-open),
+:root[dir='rtl'] [aria-expanded='false'] .ab-cardx-chevron,
+:root[dir='rtl'] [aria-expanded='false'] .ab-mw-fold-chevron,
+:root[dir='rtl'] .ab-mw-fold-toggle:not([aria-expanded='true']) .ab-mw-fold-chevron { transform: rotate(135deg); }
+
+/* Any other mark that points forwards or back: put the class on it. */
+:root[dir='rtl'] .ab-flip { transform: scaleX(-1); }
+
+/* A record number, an address or code inside an Arabic sentence is read left to right and kept whole. */
+:root[dir='rtl'] .ab-mono, :root[dir='rtl'] code, :root[dir='rtl'] [data-ltr] { direction: ltr; unicode-bidi: isolate; }
+/* Text typed by the person follows the language they type in. */
+:root[dir='rtl'] input[type='text'], :root[dir='rtl'] input:not([type]), :root[dir='rtl'] textarea { unicode-bidi: plaintext; }

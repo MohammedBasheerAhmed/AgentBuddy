@@ -8,3 +8,8 @@ dist/
 .build-tmp-*/
 dist-enterprise/
 release/
+
+# The self-hosted install (scripts/selfhost.js): the signing key and what is packed
+selfhost/
+*.pem
+*.crx

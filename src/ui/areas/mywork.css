@@ -58,7 +58,7 @@
 /* ---- "Showing 200 of 340. Open the full list", follow-up actions, the access line ---- */
 .ab-mw-cap { margin: 0; }
 .ab-mw-more-link { color: var(--ab-accent); font-weight: 600; }
-.ab-mw-follow-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-left: 2px; }
+.ab-mw-follow-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-inline-start: 2px; }
 .ab-mw-follow-act .ab-hint:empty { display: none; }
 .ab-mw-access { margin: 0; }
 

@@ -7,6 +7,7 @@ import { checkExtensionSender } from '../lib/senderCheck.js';
 import { keyStore, loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
 import { instancePattern, isInstanceAllowed, normalizeInstance } from '../policy/policy.js';
 import { BAR_TYPES, barAiOn, handleBarMessage, restrictStorageAccess, retireOpenTabs } from './bar.js';
+import { handleCommand } from './commands.js';
 import { LAUNCH_KEY } from '../lib/launch.js';
 import { describeInstances, reinjectAfterInstalled, wantedInstances } from './instances.js';
 
@@ -127,6 +128,12 @@ const barDeps = {
   // storage.session: the panel can read it, a content script cannot
   saveLaunch: (launch) => chrome.storage.session.set({ [LAUNCH_KEY]: launch }),
 };
+
+// The keyboard shortcuts (manifest commands; src/background/commands.js): open the panel, or open it and start Summarise / Draft a reply.
+// (No await before handleCommand: the panel can only be opened while the key press is still being handled.)
+chrome.commands?.onCommand.addListener((command, tab) => {
+  handleCommand(command, tab, { ...barDeps, pageState: (tabId) => chrome.tabs.sendMessage(tabId, { type: MSG.PAGE_STATE }) }).catch(() => {});
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {

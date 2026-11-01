@@ -30,7 +30,7 @@ button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 .icon:hover { background: var(--ab-bg-sunken); }
 
 .actions { display: flex; flex-direction: column; gap: 4px; }
-.act { width: 100%; padding: 7px 10px; text-align: left; border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius-sm); background: var(--ab-bg-raised); font-weight: 550; }
+.act { width: 100%; padding: 7px 10px; text-align: start; border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius-sm); background: var(--ab-bg-raised); font-weight: 550; }
 .act:hover:not(:disabled) { background: var(--ab-bg-sunken); }
 /* No opacity here: the browser's visibility check (bar.js) counts a see-through button as not in plain view. */
 .act:disabled, .act-first:disabled { cursor: not-allowed; background: var(--ab-bg-sunken); border-color: var(--ab-border); color: var(--ab-fg-muted); }

@@ -16,6 +16,7 @@
 // An enterprise build compiles a policy into the extension (src/policy/baked.js). It is a floor under whatever the browser's managed
 // policy says: the two are combined with mergePolicies(), which keeps the stricter side of every setting.
 import { BAKED_POLICY } from './baked.js';
+import { t, tm } from '../i18n/core.js'; // (the mechanism only: the Arabic texts are registered by the pages that show these messages)
 import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from '../reports/layoutFile.js';
 
@@ -165,7 +166,7 @@ export function normalizeEndpoint(input) {
 
 // ---- Reading one policy -----------------------------------------------------------------------------------------------------
 
-const BLOCKED_ENDPOINT = 'The AI address in your organisation\'s policy is not valid, so Agent Buddy sends nothing. Ask your administrator.';
+const BLOCKED_ENDPOINT = tm("The AI address in your organisation's policy is not valid, so Agent Buddy sends nothing. Ask your administrator.");
 
 function budgetOf(value) {
   const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
@@ -289,7 +290,7 @@ function readPolicy(raw) {
     // Customer accounts the Account card and the Glance mark as "Priority account" (N28).
     priorityAccounts: readPriorityAccounts(p.priorityAccounts),
     // Not a policy key: '' or the reason no AI call may be made under this policy.
-    aiBlocked: endpoint && !endpoint.ok ? BLOCKED_ENDPOINT : '',
+    aiBlocked: endpoint && !endpoint.ok ? t(BLOCKED_ENDPOINT) : '',
   };
 }
 
@@ -339,7 +340,7 @@ export function mergePolicies(floorInput, managedInput) {
   const reasons = [a.aiBlocked, b.aiBlocked].filter(Boolean);
   const pinned = (key) => {
     if (a[key] && b[key] && a[key] !== b[key]) {
-      reasons.push('Your organisation\'s policies name two different AI endpoints, so Agent Buddy sends nothing. Ask your administrator.');
+      reasons.push(t("Your organisation's policies name two different AI endpoints, so Agent Buddy sends nothing. Ask your administrator."));
       return b[key];
     }
     return b[key] || a[key] || null;
@@ -349,7 +350,7 @@ export function mergePolicies(floorInput, managedInput) {
     const common = b.allowedModels.filter((m) => a.allowedModels.includes(m));
     if (common.length) allowedModels = common;
     else {
-      reasons.push('Your organisation\'s policies allow no AI model in common, so Agent Buddy sends nothing. Ask your administrator.');
+      reasons.push(t("Your organisation's policies allow no AI model in common, so Agent Buddy sends nothing. Ask your administrator."));
       allowedModels = b.allowedModels;
     }
   }
@@ -651,14 +652,14 @@ export function checkProviderAllowed({ provider, model, baseUrl }, policy) {
   if (policy?.aiBlocked) return { ok: false, reason: String(policy.aiBlocked) };
   const pinnedProvider = norm(policy?.aiProvider);
   if (pinnedProvider && norm(provider) !== pinnedProvider) {
-    return { ok: false, reason: `Your organisation only allows the "${pinnedProvider}" AI provider.` };
+    return { ok: false, reason: t('Your organisation only allows the "{provider}" AI provider.', { provider: pinnedProvider }) };
   }
   // Provider ids are compared in lower case, and the list is not checked against the providers this version knows: a provider added
   // later (or one the organisation misspelt) simply matches nothing.
   if (Array.isArray(policy?.allowedProviders)) {
     const allowed = lowerList(policy.allowedProviders);
     if (!allowed.includes(norm(provider))) {
-      return { ok: false, reason: allowed.length ? `Your organisation allows these AI providers only: ${allowed.join(', ')}.` : 'Your organisation allows no AI provider. Ask your administrator.' };
+      return { ok: false, reason: allowed.length ? t('Your organisation allows these AI providers only: {list}.', { list: allowed.join(', ') }) : t('Your organisation allows no AI provider. Ask your administrator.') };
     }
   }
   if (policy?.aiBaseUrl) {
@@ -666,11 +667,11 @@ export function checkProviderAllowed({ provider, model, baseUrl }, policy) {
     const want = normalizeEndpoint(policy.aiBaseUrl);
     const got = normalizeEndpoint(String(baseUrl || ''));
     if (!want.ok || !got.ok || want.url !== got.url) {
-      return { ok: false, reason: 'Your organisation requires its own AI endpoint. Use the address set by your administrator.' };
+      return { ok: false, reason: t('Your organisation requires its own AI endpoint. Use the address set by your administrator.') };
     }
   }
   if (policy?.allowedModels && policy.allowedModels.length && !policy.allowedModels.includes(String(model ?? '').trim())) {
-    return { ok: false, reason: `Your organisation allows these models only: ${policy.allowedModels.join(', ')}.` };
+    return { ok: false, reason: t('Your organisation allows these models only: {list}.', { list: policy.allowedModels.join(', ') }) };
   }
   return { ok: true, reason: '' };
 }
@@ -724,42 +725,42 @@ export function effectiveSettings(user, policyInput) {
     // The policy is a floor: a stricter personal choice is kept.
     floors.piiMode = policy.piiMode;
     if (strictness(values.piiMode) < strictness(policy.piiMode)) values.piiMode = policy.piiMode;
-    if (values.piiMode === policy.piiMode) lock('piiMode', 'Set by your organisation.');
+    if (values.piiMode === policy.piiMode) lock('piiMode', t('Set by your organisation.'));
   }
   if (policy.previewMode) {
     // Also a floor: a person may choose to see the outgoing text more often than the policy asks, never less often.
     floors.previewMode = policy.previewMode;
     if (PREVIEW_RANK[values.previewMode] < PREVIEW_RANK[policy.previewMode]) values.previewMode = policy.previewMode;
-    if (values.previewMode === policy.previewMode) lock('previewMode', 'Set by your organisation.');
+    if (values.previewMode === policy.previewMode) lock('previewMode', t('Set by your organisation.'));
   }
   if (policy.keyStorage) {
     values.keyStorage = policy.keyStorage;
-    lock('keyStorage', 'Set by your organisation.');
+    lock('keyStorage', t('Set by your organisation.'));
   }
   if (policy.aiProvider) {
     values.provider = policy.aiProvider;
-    lock('provider', 'Set by your organisation.');
+    lock('provider', t('Set by your organisation.'));
   } else if (policy.allowedProviders?.length && !policy.allowedProviders.includes(norm(values.provider))) {
     // A provider the organisation does not allow is replaced by the first one it does; the person may still pick among those.
     values.provider = policy.allowedProviders[0];
   }
   if (policy.aiBaseUrl) {
     values.baseUrls = { ...values.baseUrls, [values.provider]: policy.aiBaseUrl };
-    lock('baseUrl', 'Set by your organisation.');
+    lock('baseUrl', t('Set by your organisation.'));
   }
   if (policy.allowedModels?.length && !policy.allowedModels.includes(values.models?.[values.provider])) {
     values.models = { ...values.models, [values.provider]: policy.allowedModels[0] };
-    lock('model', `Allowed by your organisation: ${policy.allowedModels.join(', ')}.`);
+    lock('model', t('Allowed by your organisation: {list}.', { list: policy.allowedModels.join(', ') }));
   } else if (policy.allowedModels?.length) {
-    lock('model', `Allowed by your organisation: ${policy.allowedModels.join(', ')}.`);
+    lock('model', t('Allowed by your organisation: {list}.', { list: policy.allowedModels.join(', ') }));
   }
   if (policy.allowedInstances) {
     values.instances = (Array.isArray(values.instances) ? values.instances : []).filter((o) => isInstanceAllowed(o, policy));
-    lock('instances', 'Only instances approved by your organisation can be enabled.');
+    lock('instances', t('Only instances approved by your organisation can be enabled.'));
   }
   if (policy.disablePageBar) {
     values.pageBar = false;
-    lock('pageBar', 'Switched off by your organisation.');
+    lock('pageBar', t('Switched off by your organisation.'));
   }
   // Work profiles: only known ids; the HR profile only where the organisation has approved HR work in Agent Buddy (it names the
   // profile in allowedProfiles, or allows HR content); a policy's locked set replaces the person's choice.
@@ -767,17 +768,17 @@ export function effectiveSettings(user, policyInput) {
   let profiles = (Array.isArray(values.profiles) ? values.profiles : []).filter((id) => PROFILE_IDS.includes(id));
   if (policy.lockedProfiles) {
     profiles = [...policy.lockedProfiles];
-    lock('profiles', 'Set by your organisation.');
+    lock('profiles', t('Set by your organisation.'));
   }
   if (policy.allowedProfiles) profiles = profiles.filter((id) => policy.allowedProfiles.includes(id));
   if (!hrApproved) profiles = profiles.filter((id) => id !== 'hr');
   values.profiles = unique(profiles);
-  if (!policy.aiEnabled) lock('ai', 'Switched off by your organisation.');
+  if (!policy.aiEnabled) lock('ai', t('Switched off by your organisation.'));
   // A key supplied by the organisation wins, so people never have to handle one. It is used only when the same policy pins where it
   // goes (aiProvider or aiBaseUrl): an organisation key must never be sent to whatever provider the person picks.
   const keyUsable = Boolean(policy.providedApiKey && (policy.aiProvider || policy.aiBaseUrl));
   values.providedApiKey = keyUsable ? policy.providedApiKey : '';
-  if (keyUsable) lock('apiKey', 'Supplied by your organisation.');
+  if (keyUsable) lock('apiKey', t('Supplied by your organisation.'));
 
   return { values, locked, policy, floors };
 }

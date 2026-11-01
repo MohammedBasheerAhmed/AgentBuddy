@@ -7,7 +7,7 @@
 .ab-act-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ab-act-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
-.ab-act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-width: 0; text-align: left; padding: 8px 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); color: var(--ab-fg); cursor: pointer; }
+.ab-act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-width: 0; text-align: start; padding: 8px 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); color: var(--ab-fg); cursor: pointer; }
 .ab-act:hover:not(:disabled) { border-color: var(--ab-ai-line); background: var(--ab-ai-soft); }
 .ab-act:focus-visible { outline: 2px solid var(--ab-ai); outline-offset: 2px; }
 .ab-act:disabled { cursor: not-allowed; opacity: 0.6; }
@@ -19,7 +19,7 @@
 /* The one main action: filled, in the AI colour (the shared ab-btn-ai of shell.css; the description follows its text colour). */
 .ab-act-primary .ab-act-desc { color: var(--ab-ai-fg); }
 
-.ab-act-caution { margin: 0 0 0 10px; font-size: var(--ab-text-xs); color: var(--ab-warn); }
+.ab-act-caution { margin-inline-start: 10px; font-size: var(--ab-text-xs); color: var(--ab-warn); }
 .ab-act-empty { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
 
 /* More actions, by group */

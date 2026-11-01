@@ -6,9 +6,17 @@
 // shown with t(table[x])). A call that is not a plain text is listed as "dynamic" and fails the check.
 const fs = require('fs');
 const path = require('path');
-const esbuild = require('esbuild');
 
-const ROOT = path.join(__dirname, '..', '..');
+// The repository root: this file is also bundled into a test, where __dirname is a temp folder, so look upwards for src/i18n.
+function findRoot() {
+  for (let dir = __dirname; ; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, 'package.json')) && fs.existsSync(path.join(dir, 'src', 'i18n'))) return dir;
+    if (path.dirname(dir) === dir) return process.cwd();
+  }
+}
+const ROOT = findRoot();
+// (a computed path keeps esbuild from bundling esbuild into a test)
+const esbuild = require(path.join(ROOT, 'node_modules', 'esbuild'));
 const SRC = path.join(ROOT, 'src');
 
 function walk(dir, out = []) {
@@ -34,10 +42,17 @@ function unescapeText(raw, quote) {
 const STR = '(?:\'((?:\\\\.|[^\'\\\\\\n])*)\'|"((?:\\\\.|[^"\\\\\\n])*)")';
 const CALL_ONE = new RegExp(`(?<![\\w.$])(t|tm|tx)\\(\\s*${STR}`, 'g');
 const CALL_PLURAL = new RegExp(`(?<![\\w.$])tn\\(\\s*[^,()]+(?:\\([^()]*\\))?[^,()]*,\\s*${STR}\\s*,\\s*${STR}`, 'g');
-// a call whose first argument is not a quoted text: t(label), t(`..`), t('a' + b)
-const DYNAMIC = /(?<![\w.$])(?:t|tm|tx)\(\s*(?!['"])[^)\s]/g;
+// A call that cannot be read: t(`..`), t(a + b), t(f(x)), and a tm() or tx() whose text is not written out. (t(NAME) and t(TABLE[key]) are
+// fine: they show a text that was marked with tm() where it is written.)
+const DYNAMIC = /(?<![\w.$])(?:(?:t|tm|tx)\(\s*(?:`|[A-Za-z_$][\w$.]*\s*[+(]|[0-9({!\[])|(?:tm|tx)\((?!\s*['"]))/g;
 const DYNAMIC_PLUS = new RegExp(`(?<![\\w.$])(?:t|tm|tx)\\(\\s*${STR}\\s*\\+`, 'g');
 const DYNAMIC_PLURAL = /(?<![\w.$])tn\(\s*[^,()]+(?:\([^()]*\))?[^,()]*,\s*(?!['"])[^\s]/g;
+
+// Comments are not code: blank them out (keeping the line breaks, so the line numbers stay right).
+const withoutComments = (code) =>
+  code
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/g, (m, before) => before);
 
 const lineOf = (code, index) => code.slice(0, index).split('\n').length;
 const paramsOf = (text) => [...text.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)].map((m) => m[1]).sort().join(',');
@@ -51,7 +66,7 @@ function collect(files) {
     keys.get(key).push({ file: path.relative(ROOT, file).replace(/\\/g, '/'), line, plural });
   };
   for (const file of files) {
-    const code = fs.readFileSync(file, 'utf8');
+    const code = withoutComments(fs.readFileSync(file, 'utf8'));
     if (!/\b(?:t|tm|tn|tx)\(/.test(code)) continue;
     for (const m of code.matchAll(CALL_ONE)) {
       const raw = m[2] !== undefined ? m[2] : m[3];

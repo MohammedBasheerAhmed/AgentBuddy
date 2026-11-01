@@ -4,6 +4,9 @@
 //
 //   npm run package                        node build.js (into dist/), then zip dist/
 //   node scripts/package.js --dist <dir>   zip a build that is already in <dir> (node build.js --out <dir>); nothing is rebuilt
+//   npm run package -- --minify            the release: minified bundles in release/agentbuddy-<version>.zip, and next to it
+//                                          release/agentbuddy-<version>-readable.zip, the same source built without minifying, which is
+//                                          what a security reviewer reads (the code is the same; `npm run repro -- --minify` rebuilds both)
 //
 // The zip is reproducible: entries in a fixed order, every file dated 1980-01-01 (or SOURCE_DATE_EPOCH), no extra fields, so the
 // same build gives the same bytes and the same SHA-256 (scripts/repro-check.js does the same for the build itself).
@@ -118,11 +121,12 @@ function fail(message) {
 }
 
 function main(argv) {
+  const minify = argv.includes('--minify');
   const at = argv.indexOf('--dist');
   const given = at >= 0 ? argv[at + 1] : '';
   if (at >= 0 && (!given || given.startsWith('--'))) fail('--dist needs a folder, for example --dist dist');
   const dist = given ? path.resolve(given) : path.join(root, 'dist');
-  if (!given) execFileSync(process.execPath, [path.join(root, 'build.js')], { cwd: root, stdio: 'inherit' });
+  if (!given) execFileSync(process.execPath, [path.join(root, 'build.js'), ...(minify ? ['--minify'] : [])], { cwd: root, stdio: 'inherit' });
 
   const manifestPath = path.join(dist, 'manifest.json');
   if (!fs.existsSync(manifestPath)) fail(`${path.relative(root, dist) || dist} has no manifest.json. Build first (node build.js).`);
@@ -142,6 +146,22 @@ function main(argv) {
   fs.writeFileSync(path.join(outDir, `${name}.sha256`), `${hash}  ${name}\n`);
   console.log(`Wrote release/${name} (${listFiles(dist).length} files, ${zip.length} bytes)`);
   console.log(`SHA-256 ${hash}  (release/${name}.sha256)`);
+
+  if (minify && !given) {
+    // The copy for the security review: the same source, bundles not minified, in its own zip.
+    const readableDir = path.join(root, '.build-tmp-readable');
+    fs.rmSync(readableDir, { recursive: true, force: true });
+    execFileSync(process.execPath, [path.join(root, 'build.js'), '--out', readableDir], { cwd: root, stdio: 'inherit' });
+    const readableZip = zipFolder(readableDir, Number.isFinite(epoch) && epoch > 0 ? { date: new Date(epoch * 1000) } : {});
+    fs.rmSync(readableDir, { recursive: true, force: true });
+    const readableName = `agentbuddy-${manifest.version}-readable.zip`;
+    fs.writeFileSync(path.join(outDir, readableName), readableZip);
+    const readableHash = crypto.createHash('sha256').update(readableZip).digest('hex');
+    fs.writeFileSync(path.join(outDir, `${readableName}.sha256`), `${readableHash}  ${readableName}
+`);
+    console.log(`Wrote release/${readableName} (for the security review, not minified, ${readableZip.length} bytes)`);
+    console.log(`SHA-256 ${readableHash}  (release/${readableName}.sha256)`);
+  }
 }
 
 if (require.main === module) main(process.argv.slice(2));

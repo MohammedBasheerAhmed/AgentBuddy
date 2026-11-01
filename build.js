@@ -4,6 +4,8 @@
 //   node build.js --out <folder>                    the same build into another folder (reviewers, scripts/repro-check.js)
 //   node build.js --enterprise <config.json>        an enterprise build into dist-enterprise/ (or --out <folder>): the instances,
 //                                                   the AI endpoint and the policy in the config are compiled in (docs/deployment.md)
+//   node build.js --minify                          the same build with the bundles minified (what is shipped: smaller, faster to
+//                                                   load; the unminified build of the same source is the one a reviewer reads)
 //   node build.js --watch                           rebuild on change (static files are copied once)
 //
 // The normal build is unaffected by the enterprise options: same manifest, same bundles, src/policy/baked.js left as it is (null).
@@ -19,17 +21,18 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const opts = { watch: false, out: '', enterprise: '' };
+  const opts = { watch: false, minify: false, out: '', enterprise: '' };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const eq = arg.indexOf('=');
     const flag = eq > 0 ? arg.slice(0, eq) : arg;
     if (flag === '--watch' && eq < 0) opts.watch = true;
+    else if (flag === '--minify' && eq < 0) opts.minify = true;
     else if (flag === '--out' || flag === '--enterprise') {
       const value = eq > 0 ? arg.slice(eq + 1) : argv[(i += 1)];
       if (!value || value.startsWith('--')) fail(`${flag} needs a value, for example ${flag === '--out' ? '--out build-check' : '--enterprise enterprise/example.json'}.`);
       opts[flag.slice(2)] = value;
-    } else fail(`unknown option "${arg}". Options: --out <folder>, --enterprise <config.json>, --watch.`);
+    } else fail(`unknown option "${arg}". Options: --out <folder>, --enterprise <config.json>, --minify, --watch.`);
   }
   return opts;
 }
@@ -103,7 +106,7 @@ const bakedPlugins = () => {
 
 const common = {
   bundle: true,
-  minify: false,
+  minify: opts.minify, // whitespace, names and syntax; the code is the same, so the tests of the unminified build hold (npm run repro -- --minify)
   sourcemap: false, // no source maps in the shipped build: the review pack ships the source instead
   logLevel: 'info',
   loader: { '.js': 'jsx', '.jsx': 'jsx', '.css': 'text' },
@@ -113,7 +116,7 @@ const common = {
   legalComments: 'none',
   // The path comments esbuild writes are relative to this folder, so the output does not depend on where the build is started.
   absWorkingDir: rootDir,
-  // React's production build: smaller, no development warnings. Not minified, so the bundle stays readable for review.
+  // React's production build: smaller, no development warnings. Minified only with --minify; the default stays readable for review.
   define: { 'process.env.NODE_ENV': '"production"' },
   ...(enterprise ? { plugins: bakedPlugins() } : {}),
 };

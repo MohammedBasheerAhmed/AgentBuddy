@@ -262,6 +262,64 @@ Check an enterprise build: the build prints the instances, the AI endpoint, `hos
 --enterprise enterprise/<name>.json` builds it twice and compares every file. Add `dist-enterprise/` to the files your version control
 ignores.
 
+## Self-hosted install: your own web server, installed and updated by policy
+
+This is the route when Agent Buddy is not in the Chrome Web Store or the Edge Add-ons site. The browsers install it from an address
+you control and check that address for new versions by themselves. `scripts/selfhost.js` makes the files; no other tool is needed.
+
+**What you need first**
+
+- Managed computers. Chrome and Edge install an extension from outside their store only when the computer is managed: Windows
+  joined to a domain or enrolled in Intune (Group Policy or MDM), macOS enrolled in an MDM (a configuration profile), or any computer
+  whose browser is enrolled in Chrome Browser Cloud Management / Edge management. On an unmanaged Windows or Mac the browser refuses
+  it, whatever the files say. If an agent's computer is not managed, use the store or an unpacked pilot install instead.
+- A web address, https only, with a certificate the browsers trust (an internal certificate authority must be trusted by the
+  computers), for example `https://extensions.corp.example/agentbuddy/`. Any static file server will do. Only the `.crx` and
+  `update.xml` go there; never the key.
+- Chrome 116 or later (the manifest's minimum) and any current Edge.
+
+**Once: the signing key**
+
+```
+node scripts/selfhost.js init          # writes selfhost/agentbuddy-key.pem and prints the extension id
+```
+
+The key decides the extension id (the id is derived from it) and who may publish an update: every installed copy accepts a package
+signed with it. Back it up somewhere private (a password manager, a vault), keep it off the web server and out of the repository
+(`selfhost/` and `*.pem` are ignored). Lose it and the id changes: every computer would have to install it again. Two people should
+be able to find it.
+
+**Every release**
+
+1. Raise `version` in `manifest.json` and `package.json` (the browsers update only to a higher version).
+2. Build: `npm run build` (the normal build) or `npm run build:enterprise -- enterprise/<name>.json` (your hosts and policy compiled in; its
+   `updateUrl` is the address of `update.xml` below).
+3. Pack: `node scripts/selfhost.js pack --base-url https://extensions.corp.example/agentbuddy`. It writes `selfhost/out/`:
+   `agentbuddy-<version>.crx` (the signed package), `update.xml` (what the browsers poll), `policies/` (the policy files of
+   `docs/review-pack/policies/` with your extension id and update address filled in), and `SHA256SUMS`.
+4. Upload the `.crx` and `update.xml` to the address. Keep the older `.crx` files there for a while.
+5. The first time only: deploy the policy files (below). After that, browsers find the new version within hours (Chrome checks about
+   every five hours; `chrome://extensions` > Update forces it, `edge://extensions` the same).
+
+**Deploying the policy** (from `selfhost/out/policies/`, see "Policy files for Chrome and Edge" for what each file is)
+
+| Computers | Use |
+|---|---|
+| Windows, Chrome or Edge | `chrome-windows.reg` / `edge-windows.reg`: Group Policy Preferences, Intune, or any registry deployment. |
+| macOS, Chrome or Edge | `chrome-macos.mobileconfig` / `edge-macos.mobileconfig` through your MDM. |
+| Chrome Browser Cloud Management or Google Admin | `google-admin-console.json` and the force-install entry `<id>;<address of update.xml>`. |
+
+Each file already holds the line that installs Agent Buddy (`ExtensionInstallForcelist`) next to the recommended Agent Buddy policy.
+
+**Check it**: on one computer open `chrome://policy` (or `edge://policy`) and press Reload policies; open `chrome://extensions`: Agent
+Buddy is there, "Installed by your administrator", with the id you were given. Then `node scripts/selfhost.js verify <file.crx>`
+shows the same id for the package you uploaded. Pilot with a few agents before everyone.
+
+**What was and was not verified here**: the package was compared with one that Chrome's own `--pack-extension` made from the same folder
+and key (same header size and layout; both verify and give the same id) and `tests/selfhost.test.js` checks the signature and the id.
+The install on a managed computer and the update poll were **not** tried: do that with the pilot above and tell us what the browser
+says if it refuses.
+
 ## Installing for everyone
 
 1. Build: `npm ci && npm run build` (or the enterprise build above). The `dist/` (or `dist-enterprise/`) folder is the extension.

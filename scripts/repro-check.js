@@ -16,12 +16,14 @@ const { hashFolder, toSha256Sum, compareHashes } = require('./lib/hashes.js');
 const root = path.join(__dirname, '..');
 const argv = process.argv.slice(2);
 let enterprise = '';
+let minify = false;
 let write = '';
 for (let i = 0; i < argv.length; i += 1) {
   if (argv[i] === '--enterprise') enterprise = argv[(i += 1)] || '';
+  else if (argv[i] === '--minify') minify = true;
   else if (argv[i] === '--write') write = argv[(i += 1)] || '';
   else {
-    console.error(`Unknown option ${argv[i]}. Usage: node scripts/repro-check.js [--enterprise <config.json>] [--write <file>]`);
+    console.error(`Unknown option ${argv[i]}. Usage: node scripts/repro-check.js [--enterprise <config.json>] [--minify] [--write <file>]`);
     process.exit(1);
   }
 }
@@ -29,7 +31,7 @@ for (let i = 0; i < argv.length; i += 1) {
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'agentbuddy-repro-'));
 const build = (name) => {
   const out = path.join(work, name);
-  const args = [path.join(root, 'build.js'), '--out', out, ...(enterprise ? ['--enterprise', path.resolve(enterprise)] : [])];
+  const args = [path.join(root, 'build.js'), '--out', out, ...(enterprise ? ['--enterprise', path.resolve(enterprise)] : []), ...(minify ? ['--minify'] : [])];
   // Started from another folder on purpose: the output must not depend on where the build runs.
   const result = spawnSync(process.execPath, args, { cwd: name === 'a' ? root : work, encoding: 'utf8' });
   if (result.status !== 0) {

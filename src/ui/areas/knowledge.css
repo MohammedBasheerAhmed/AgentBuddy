@@ -21,14 +21,14 @@
 .ab-kb-cluster.ab-kb-picked { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
 .ab-kb-articles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .ab-kb-articles li { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
-.ab-kb-open { justify-content: flex-start; text-align: left; height: auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
-.ab-kb-pairs { margin: 8px 0 0; padding-left: 18px; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); }
+.ab-kb-open { justify-content: flex-start; text-align: start; height: auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.ab-kb-pairs { margin: 8px 0 0; padding-inline-start: 18px; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); }
 
 /* ---- the chat tab ---- */
 .ab-kb-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: var(--ab-text-sm); }
 .ab-kb-facts dt { color: var(--ab-fg-muted); }
 .ab-kb-facts dd { margin: 0; overflow-wrap: anywhere; }
-.ab-kb-quote { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--ab-border-strong); background: var(--ab-bg-subtle); color: var(--ab-fg); overflow-wrap: anywhere; white-space: pre-wrap; }
+.ab-kb-quote { margin: 8px 0 0; padding: 6px 10px; border-inline-start: 3px solid var(--ab-border-strong); background: var(--ab-bg-subtle); color: var(--ab-fg); overflow-wrap: anywhere; white-space: pre-wrap; }
 .ab-kb-quote-head { display: block; margin-bottom: 2px; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-fg-muted); }
 
 /* ---- The Knowledge screen (round 3) ---- */

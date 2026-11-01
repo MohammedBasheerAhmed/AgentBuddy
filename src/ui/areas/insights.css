@@ -9,11 +9,11 @@
 .ab-glance-title { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ab-glance-vip { flex: none; white-space: nowrap; font-size: var(--ab-text-xs); font-weight: 700; letter-spacing: 0.04em; padding: 0 6px; border-radius: 999px; border: 1px solid var(--ab-warn-line); background: var(--ab-warn-soft); color: var(--ab-warn); }
 .ab-glance-bit { font-size: var(--ab-text-sm); }
-.ab-glance-bit + .ab-glance-bit::before { content: '·'; color: var(--ab-fg-muted); margin-right: 6px; }
+.ab-glance-bit + .ab-glance-bit::before { content: '·'; color: var(--ab-fg-muted); margin-inline-end: 6px; }
 .ab-glance-soft .ab-glance-bit { color: var(--ab-fg-muted); }
 .ab-glance-warn { color: var(--ab-warn); font-weight: 600; }
 .ab-glance-danger { color: var(--ab-danger); font-weight: 650; }
-.ab-glance-outage { display: block; width: 100%; text-align: left; margin-top: 4px; padding: 5px 8px; border-radius: var(--ab-radius-sm); border: 1px solid var(--ab-danger-line); background: var(--ab-danger-soft); color: var(--ab-danger); font-size: var(--ab-text-sm); font-weight: 600; cursor: pointer; }
+.ab-glance-outage { display: block; width: 100%; text-align: start; margin-top: 4px; padding: 5px 8px; border-radius: var(--ab-radius-sm); border: 1px solid var(--ab-danger-line); background: var(--ab-danger-soft); color: var(--ab-danger); font-size: var(--ab-text-sm); font-weight: 600; cursor: pointer; }
 .ab-glance-outage:hover { border-color: var(--ab-danger); }
 
 /* ---- a record row in a card (a real link) ---- */
@@ -29,7 +29,7 @@
 /* ---- groups inside a card ---- */
 .ab-ins-group { border-top: 1px solid var(--ab-border); padding-top: 4px; }
 .ab-ins-group:first-child { border-top: 0; padding-top: 0; }
-.ab-ins-group-toggle { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 6px 2px; cursor: pointer; border-radius: var(--ab-radius-sm); color: var(--ab-fg); }
+.ab-ins-group-toggle { display: flex; align-items: center; gap: 8px; width: 100%; text-align: start; border: 0; background: transparent; padding: 6px 2px; cursor: pointer; border-radius: var(--ab-radius-sm); color: var(--ab-fg); }
 .ab-ins-group-toggle[aria-expanded='true'] .ab-cardx-chevron { transform: rotate(45deg); }
 .ab-ins-group-title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .ab-ins-group-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 6px; }
@@ -53,7 +53,7 @@
 
 /* ---- N12 steps ---- */
 .ab-ins-step { display: flex; flex-direction: column; gap: 3px; }
-.ab-ins-steptext { margin: 0 0 0 8px; padding-left: 8px; border-left: 2px solid var(--ab-accent-line); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+.ab-ins-steptext { margin-inline-start: 8px; padding-inline-start: 8px; border-inline-start: 2px solid var(--ab-accent-line); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
 
 /* ---- N20 which email fits ---- */
 .ab-ins-choices { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -67,9 +67,9 @@
 .ab-ins-email { margin: 0; padding: 8px; max-height: 16rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--ab-font); font-size: var(--ab-text-sm); border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); color: var(--ab-fg); }
 
 /* ---- N24 journey ---- */
-.ab-ins-timeline { display: flex; flex-direction: column; gap: 0; border-left: 2px solid var(--ab-border); margin-left: 4px; }
-.ab-ins-event { display: flex; flex-direction: column; gap: 0; padding: 3px 0 5px 10px; position: relative; }
-.ab-ins-event::before { content: ''; position: absolute; left: -5px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ab-bg-raised); border: 2px solid var(--ab-accent-line); }
+.ab-ins-timeline { display: flex; flex-direction: column; gap: 0; border-inline-start: 2px solid var(--ab-border); margin-inline-start: 4px; }
+.ab-ins-event { display: flex; flex-direction: column; gap: 0; padding-block: 3px 5px; padding-inline: 10px 0; position: relative; }
+.ab-ins-event::before { content: ''; position: absolute; inset-inline-start: -5px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ab-bg-raised); border: 2px solid var(--ab-accent-line); }
 .ab-ins-when { font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
 .ab-ins-what { font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
 .ab-ins-detail { color: var(--ab-fg-muted); }

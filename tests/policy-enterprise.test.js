@@ -179,7 +179,8 @@ test('the enterprise manifest grants exactly the configured hosts and connects t
   assert.deepEqual(m.permissions, manifest.permissions);
   assert.equal(m.version_name, '0.1.0 Example Corp');
   assert.equal(m.update_url, 'https://ext.example.com/agentbuddy/update.xml');
-  for (const key of ['content_scripts', 'web_accessible_resources', 'externally_connectable', 'commands', 'key']) assert.equal(m[key], undefined, key);
+  for (const key of ['content_scripts', 'web_accessible_resources', 'externally_connectable', 'key']) assert.equal(m[key], undefined, key);
+  assert.deepEqual(m.commands, manifest.commands, 'the keyboard shortcuts are the same in an enterprise build');
   const csp = m.content_security_policy.extension_pages;
   assert.match(csp, /connect-src https:\/\/ai-gateway\.example\.com;/);
   assert.ok(!/connect-src[^;]*(https:(\s|;)|localhost|\*)/.test(csp), 'no https: wildcard, no localhost');

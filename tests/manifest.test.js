@@ -20,7 +20,11 @@ test('nothing is injected statically and nothing is exposed to web pages', () =>
   assert.equal(manifest.content_scripts, undefined, 'content scripts are registered at run time, only on enabled instances');
   assert.equal(manifest.web_accessible_resources, undefined);
   assert.equal(manifest.externally_connectable, undefined);
-  assert.equal(manifest.commands, undefined);
+});
+
+test('the only commands are the three keyboard shortcuts (open the panel, summarise, draft a reply): keys are a suggestion the person can change, and a command adds no permission', () => {
+  assert.deepEqual(Object.keys(manifest.commands).sort(), ['open-panel', 'reply', 'summarise']);
+  assert.ok(!Object.keys(manifest.commands).some((c) => c.startsWith('_')), 'no built-in command such as _execute_action');
 });
 
 test('no permission that reads browsing data or intercepts traffic', () => {

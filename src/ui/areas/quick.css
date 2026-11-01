@@ -3,11 +3,11 @@
 
 .ab-quick { border: 1px solid var(--ab-border); background: var(--ab-bg-subtle); border-radius: var(--ab-radius); padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
 .ab-quick-head { display: flex; align-items: center; gap: 6px; }
-.ab-quick-toggle { flex: 1; display: flex; align-items: center; gap: 8px; padding: 2px 0; border: 0; background: transparent; cursor: pointer; font-weight: 650; text-align: left; color: var(--ab-fg); }
+.ab-quick-toggle { flex: 1; display: flex; align-items: center; gap: 8px; padding: 2px 0; border: 0; background: transparent; cursor: pointer; font-weight: 650; text-align: start; color: var(--ab-fg); }
 .ab-quick-chevron { width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 120ms ease; }
 .ab-quick-chevron-open { transform: rotate(45deg); }
 .ab-quick-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.ab-quick-ai .ab-ai-badge { margin-left: -2px; }
+.ab-quick-ai .ab-ai-badge { margin-inline-start: -2px; }
 .ab-quick-insight { border-color: var(--ab-accent-line); }
 .ab-quick-insight:hover:not(:disabled) { background: var(--ab-accent-soft); }
 .ab-quick-choose { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }

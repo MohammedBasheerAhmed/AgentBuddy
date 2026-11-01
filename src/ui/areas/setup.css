@@ -5,7 +5,7 @@
 .ab-firstrun-act .ab-row { flex-wrap: wrap; }
 .ab-turnon { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .ab-turnon .ab-sub, .ab-turnon .ab-hint { margin: 0; overflow-wrap: anywhere; }
-.ab-turnon-anyway .ab-btn { margin-left: 2px; }
+.ab-turnon-anyway .ab-btn { margin-inline-start: 2px; }
 .ab-setup-open .ab-row, .ab-setup-site .ab-row { margin-top: 6px; }
 
 /* What you work on (src/options/ProfilePicker.jsx): in the first-run card and in Settings */
