@@ -10,21 +10,32 @@ what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` 
 
 ## Where to pick up (updated 2026-11-01)
 
-Everything planned is built and on GitHub (`62b4d42`, `6e93694`, `61fb3c7`). Status: 77 ready for review, 1 partly built (R1),
-3 need you (V1 to V3), 3 agreed for later (R3, R5, R6). Nothing has been seen on the real instance yet. In this order:
+Everything planned is built and on GitHub (`62b4d42` to the latest commit on `main`). Status: 77 ready for review, 1 partly built
+(R1), 3 need you (V1 to V3), 3 agreed for later (R3, R5, R6). Nothing has been seen on the real instance yet.
 
-1. **V1, the real-instance walk-through.** Reload Agent Buddy in the already-open Chrome from `D:\AgentBuddy\dist` (no separate
-   automation window), sign in to dev364920 yourself, and walk a real ticket screen by screen. Answer the open questions in
-   `docs/live-questions/`, these four first: the email form takes Insert or forces Copy (`compose.md` 3), Chrome accepts the
-   `defaultDashboard` policy as one object (`policy.md` 15), priority-account names match the case (`policy.md` 16), the labels of
-   a Workspace's notes boxes (`checks.md` 20).
-2. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (the key is entered by you in Settings, never in chat).
-3. **R1, end-to-end on GitHub.** The checks job passes; the e2e job (allowed to fail) does not pass on `ubuntu-latest` yet: 265
-   pass, 21 fail in run 41260411478. Seven scenarios (b, d, g, i, j, l, m) time out waiting in the side panel, then the harness's
-   control page is lost and every later scenario fails at once. Also move `actions/checkout`, `setup-node` and `upload-artifact`
-   off Node 20 (GitHub warns).
-4. **Later, as agreed:** R3 deployment path, R5 performance, R6 accessibility, shortcuts and languages (shortcuts need a manifest
-   change, which the build rules forbid without your approval).
+Why those two labels: **R1 is partly built** because its e2e job does not pass on GitHub yet (the checks job does). **R3, R5 and
+R6 are "agreed for later"** because Claude left them out of round 3 to wait for your decisions; you did not ask for that.
+
+**When you say "continue", Claude starts here:**
+
+1. **Ask you the three decisions** that hold back R3, R5 and R6:
+   - R3: Chrome Web Store, or self-hosted (your own update address, the extension pushed by Chrome policy)?
+   - R5: OK to ship minified bundles (the content script is 380 KB on every ServiceNow page), with a readable copy kept for the
+     security review?
+   - R6: keyboard shortcuts yes or no (they need a manifest `commands` change, which the build rules forbid without your
+     approval), and which languages, if any?
+2. **Without waiting for the answers, build what needs no decision:**
+   - R1: make the e2e job pass on GitHub's `ubuntu-latest`. In run 41260411478 it was 265 pass, 21 fail: seven scenarios (b, d, g,
+     i, j, l, m) time out waiting in the side panel, then the harness's control page is lost and every later scenario fails at
+     once. Also move `actions/checkout`, `setup-node` and `upload-artifact` off Node 20 (GitHub warns).
+   - R6, the part that needs no approval: an accessibility pass and a dark-mode check of every screen.
+3. **Then R3, R5 and the rest of R6**, as you decided.
+4. **V1, the real-instance walk-through, whenever you are at Chrome** (it can go first if you are). Reload Agent Buddy in the
+   already-open Chrome from `D:\AgentBuddy\dist` (no separate automation window), sign in to dev364920 yourself, and walk a real
+   ticket screen by screen. Answer the open questions in `docs/live-questions/`, these four first: the email form takes Insert or
+   forces Copy (`compose.md` 3), Chrome accepts the `defaultDashboard` policy as one object (`policy.md` 15), priority-account names
+   match the case (`policy.md` 16), the labels of a Workspace's notes boxes (`checks.md` 20).
+5. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (you enter the key in Settings, never in chat).
 
 How to check a change: `node tests/run.js` (unit, 2,725), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
 (965 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
@@ -341,6 +352,7 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-10-30 | **Build everything planned now** ("implement whatever has been planned and make the best UI/UX"), with as many agents as useful. Eight agents in parallel with fixed file ownership (`docs/round3.md`); the lead builds the frame and integrates. Not in this round: R3 deployment path, R5 performance, R6 accessibility/shortcuts (keyboard shortcuts need a manifest change). |
 | 2026-10-31 | **Finish everything** that was partly built: N1 (refresh after Save), N4 (notes typed on a Workspace), N17 (organisation dashboard: policy `defaultDashboard`), N28 (priority accounts: policy `priorityAccounts`, a list of account names, since ServiceNow has no standard column), AI0.1 (unlock the key in the panel), AI9 (email draft into the email form, which opens in a new tab; the subject keeps the ticket number), and R7. R3, R5 and R6 stay agreed for later. |
 | 2026-11-01 | **Push round 3 to GitHub** (`main`, as for every earlier round). The MohammedBasheerAhmed login got the `workflow` permission so the CI file could be pushed. |
+| 2026-11-01 | R3, R5 and R6 were held back from round 3 by Claude, not by you; they wait for three decisions (store or self-hosted, minify, shortcuts and languages). On "continue", Claude asks those first and meanwhile builds R1 (e2e on GitHub) and the accessibility and dark-mode part of R6. |
 
 ## Baseline (2026-10-30, before any change)
 
