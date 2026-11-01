@@ -4,6 +4,7 @@ import RecordLink from './RecordLink.jsx';
 import ErrorNote from './ErrorNote.jsx';
 import { plainNote, plainSource } from './plainAccess.js';
 import { retryDelay } from './reports/useReport.js';
+import { t } from '../i18n/index.js';
 
 const RISK_LABEL = { breached: 'SLA breached', 'at-risk': 'SLA at risk' };
 
@@ -80,14 +81,14 @@ export default function MyDayView({ page }) {
   const hint = accessText(state.access);
 
   return (
-    <section className="ab-card" aria-label="My day" aria-busy={busy}>
+    <section className="ab-card" aria-label={t('My day')} aria-busy={busy}>
       <div className="ab-row ab-myday-head">
-        <h2 className="ab-h">My day</h2>
+        <h2 className="ab-h">{t('My day')}</h2>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={busy}>{busy ? 'Reading…' : 'Refresh'}</button>
       </div>
-      <p className="ab-sub">Your open tickets, most urgent first. A click opens one in this tab; Ctrl+click or right-click opens a new tab.</p>
+      <p className="ab-sub">{t('Your open tickets, most urgent first. A click opens one in this tab; Ctrl+click or right-click opens a new tab.')}</p>
 
-      {busy && !state.items.length && <p className="ab-note" role="status">Reading your queue…</p>}
+      {busy && !state.items.length && <p className="ab-note" role="status">{t('Reading your queue…')}</p>}
       {state.phase === 'error' && <ErrorNote error={state.error} onRetry={load} />}
       {state.phase === 'ready' && state.items.length === 0 && (
         <p className={`ab-note ${state.empty === 'unseen' || state.empty === 'unread' ? 'ab-note-warn' : 'ab-note-ok'}`}>{emptyText(state.empty)}</p>

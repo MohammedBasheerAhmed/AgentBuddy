@@ -4,6 +4,7 @@ import { arrangeChanges } from '../../../insights/changes.js';
 import { useRecordRead } from './data.js';
 import { useReport } from './useInsight.js';
 import { ItemLink, Notes, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N25, recent changes on this configuration item or service: changes whose window touched the last 7 days or touches the next 3.
 // "What changed?" is the first question on an infrastructure incident. Read by the ticket's own CI and service ids.
@@ -21,7 +22,7 @@ export default function ChangesCard({ page, eff, record, active, setSummary, set
   return (
     <>
       {status === 'skipped' && <p className="ab-hint">{data.access[0].note}</p>}
-      {known && !items.length && <p className="ab-hint">No change on this ticket's configuration item or service in the last 7 days or the next 3.</p>}
+      {known && !items.length && <p className="ab-hint">{t("No change on this ticket's configuration item or service in the last 7 days or the next 3.")}</p>}
       {items.length > 0 && (
         <ShowMore
           items={items}

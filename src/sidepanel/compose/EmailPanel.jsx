@@ -11,6 +11,7 @@ import { recommendEmails, parseEmailDraft, emailFormUrl, EMAIL_TYPES } from '../
 import { internalTextsOf } from '../../safeSend/review.js';
 import { currentFromPage, emailClientTarget, matchesExpect } from '../../lib/fillable.js';
 import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, useFill } from './shared.js';
+import { t } from '../../i18n/index.js';
 
 const isEmailFeature = (feature) => Boolean(feature?.id) && EMAIL_TYPES.some((t) => t.featureId === feature.id);
 
@@ -24,7 +25,7 @@ function TypeRow({ type, why, primary, disabled, offReason, onDraft }) {
         {offReason && <span className="ab-locked">{offReason}</span>}
       </div>
       <button type="button" className={`ab-btn ab-btn-sm${primary ? ' ab-btn-primary' : ''}`} disabled={disabled} onClick={onDraft} aria-label={`Draft: ${type.label}`}>
-        Draft
+        {t('Draft')}
       </button>
     </li>
   );
@@ -41,14 +42,14 @@ export function DraftActions({ page, run, fill, target, internalTexts }) {
   const onOtherEmail = Boolean(expect) && Boolean(emailClientTarget(page.href)) && !matchesExpect(expect, currentFromPage(page));
 
   return (
-    <section className="ab-card ab-compose-actions" aria-label="Use the draft">
-      <h3 className="ab-h">Use the draft</h3>
+    <section className="ab-card ab-compose-actions" aria-label={t('Use the draft')}>
+      <h3 className="ab-h">{t('Use the draft')}</h3>
       <div className="ab-row">
         <button type="button" className="ab-btn ab-btn-sm" disabled={!draft.subject} onClick={() => fill.copy(draft.subject)}>
-          Copy subject
+          {t('Copy subject')}
         </button>
         <button type="button" className="ab-btn ab-btn-sm" disabled={!draft.body} onClick={() => fill.copy(draft.body)}>
-          Copy body
+          {t('Copy body')}
         </button>
       </div>
       <div className="ab-row">
@@ -58,7 +59,7 @@ export function DraftActions({ page, run, fill, target, internalTexts }) {
           disabled={!url}
           onClick={() => setOpened(openUrl(page, url))}
         >
-          Open the email form
+          {t('Open the email form')}
         </button>
         <button
           type="button"
@@ -70,7 +71,7 @@ export function DraftActions({ page, run, fill, target, internalTexts }) {
         </button>
       </div>
       <ReviewHints hints={hintsFor('body', draft.body, { people: run.people, scan: run.scan, internalTexts })} />
-      {onOtherEmail && <p className="ab-note ab-note-warn" role="status">This email form is for another ticket. Open the email form for this draft again, or use Copy.</p>}
+      {onOtherEmail && <p className="ab-note ab-note-warn" role="status">{t('This email form is for another ticket. Open the email form for this draft again, or use Copy.')}</p>}
       <FillFeedback fill={fill} />
       <p className="ab-hint">
         {opened ? 'The email form is opening in this tab. When it is ready, press Insert, or paste what you copied. ' : ''}
@@ -166,26 +167,26 @@ export default function EmailPanel({ page, eff, active }) {
   return (
     <div className="ab-compose-stack">
       {!record && !showResult && (
-        <p className="ab-note">Open a ticket (an incident, request, case or similar) to get email suggestions that fit it. Agent Buddy reads it with your own session.</p>
+        <p className="ab-note">{t('Open a ticket (an incident, request, case or similar) to get email suggestions that fit it. Agent Buddy reads it with your own session.')}</p>
       )}
 
       {record && <AiKeyNote eff={eff} what="this" />}
 
       {record && idle && (
-        <section className="ab-card" aria-label="Suggested emails">
+        <section className="ab-card" aria-label={t('Suggested emails')}>
           <div className="ab-row ab-compose-head">
-            <h3 className="ab-h">Which email fits?</h3>
+            <h3 className="ab-h">{t('Which email fits?')}</h3>
             <span className="ab-spacer" />
             <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={recs.state === 'loading'}>
-              Check again
+              {t('Check again')}
             </button>
           </div>
-          {recs.state === 'loading' && <p className="ab-note" role="status">Reading the ticket with your session…</p>}
+          {recs.state === 'loading' && <p className="ab-note" role="status">{t('Reading the ticket with your session…')}</p>}
           {recs.state === 'error' && <ErrorNote error={recs.error} onRetry={load} />}
           {ready && (
             <>
               {ready.facts.length > 0 && (
-                <div className="ab-tags" aria-label="What the suggestions are based on">
+                <div className="ab-tags" aria-label={t('What the suggestions are based on')}>
                   {ready.facts.map((f) => (
                     <span key={f} className="ab-tag">{f}</span>
                   ))}
@@ -195,11 +196,11 @@ export default function EmailPanel({ page, eff, active }) {
               {ready.picks.length > 0 ? (
                 <ul className="ab-compose-rows">{ready.picks.map((p, i) => row(p, { why: p.why, primary: i === 0 }))}</ul>
               ) : (
-                <p className="ab-sub ab-compose-gap">Nothing stands out for this ticket. Pick a kind of email below if you need one.</p>
+                <p className="ab-sub ab-compose-gap">{t('Nothing stands out for this ticket. Pick a kind of email below if you need one.')}</p>
               )}
               {ready.others.length > 0 && (
                 <>
-                  <h4 className="ab-compose-sub">Other emails</h4>
+                  <h4 className="ab-compose-sub">{t('Other emails')}</h4>
                   <ul className="ab-compose-rows">{ready.others.map((t) => row(t))}</ul>
                 </>
               )}

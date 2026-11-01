@@ -3,6 +3,7 @@ import { Tile, DataTable } from '../charts/index.js';
 import DrillLink from '../charts/DrillLink.jsx';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
+import { t } from '../../i18n/index.js';
 
 // Tiles that mean "look at this" when they are not zero.
 const TONE = { breached: 'bad', dueSoon: 'warn', stale: 'warn', unassigned: 'warn' };
@@ -39,7 +40,7 @@ export function OverviewBody({ d, env }) {
       </div>
       {picked && (
         <div className="ab-pick" role="group" aria-label={`Open ${picked.label} in ServiceNow`}>
-          <span className="ab-hint">Open in ServiceNow:</span>
+          <span className="ab-hint">{t('Open in ServiceNow:')}</span>
           {picked.drills.map((dr) =>
             hrefOf(dr) ? (
               <DrillLink key={dr.table} className="ab-btn ab-btn-sm ab-pick-link" href={hrefOf(dr)} onOpen={() => env.openList(dr.table, dr.query)} label={`${dr.label}: ${dr.count}. Open the list.`}>
@@ -55,9 +56,9 @@ export function OverviewBody({ d, env }) {
       )}
       {d.perTable?.length > 1 && (
         <details className="ab-details">
-          <summary>By table</summary>
+          <summary>{t('By table')}</summary>
           <DataTable
-            caption="Overview by table"
+            caption={t('Overview by table')}
             columns={[
               { key: 'label', label: 'Table' },
               { key: 'open', label: 'Open', align: 'right' },
@@ -82,8 +83,8 @@ export default function OverviewView({ widget, env }) {
   const d = state.result?.data;
   return (
     <SectionShell
-      title="Overview"
-      help="Where the queue stands right now."
+      title={t('Overview')}
+      help={t('Where the queue stands right now.')}
       state={state}
       env={env}
       widgetId={widget?.id}

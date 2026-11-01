@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffective } from '../sidepanel/useEffective.js';
 import ReportsDashboard from '../sidepanel/reports/ReportsDashboard.jsx';
 import { checkSourceTab, nextSource, parseTabId } from './sourceTab.js';
+import { t } from '../i18n/index.js';
 
 const MESSAGES = {
   'no-tab': 'This page needs a ServiceNow tab to read from. Open ServiceNow, open the Agent Buddy side panel, choose Team and press "Open full page".',
@@ -50,26 +51,25 @@ export default function DashboardApp() {
   return (
     <main className="ab-dashboard-page">
       <div className="ab-dashboard-head">
-        <h1>Agent Buddy: team dashboard</h1>
-        {origin && <span className="ab-sub">Reading from {origin} with your own session</span>}
+        <h1>{t('Agent Buddy: team dashboard')}</h1>
+        {origin && <span className="ab-sub">{t('Reading from {origin} with your own session', { origin })}</span>}
       </div>
       {source.status === 'checking' || !eff.ready ? (
-        <p className="ab-sub" role="status">Checking the ServiceNow tab…</p>
+        <p className="ab-sub" role="status">{t('Checking the ServiceNow tab…')}</p>
       ) : source.status === 'ready' ? (
         <>
           {source.reconnecting && (
             <p className="ab-note ab-note-warn" role="status">
-              The ServiceNow tab is not answering right now (it may be loading a page). The numbers below stay as they were. When the tab is
-              back, press Refresh for new numbers.
+              {t('The ServiceNow tab is not answering right now (it may be loading a page). The numbers below stay as they were. When the tab is back, press Refresh for new numbers.')}
             </p>
           )}
           <ReportsDashboard page={source.page} eff={eff} layout="page" />
         </>
       ) : (
         <section className="ab-card" role="alert">
-          <h2 className="ab-h">Open ServiceNow and reload</h2>
+          <h2 className="ab-h">{t('Open ServiceNow and reload')}</h2>
           <p className="ab-sub">{MESSAGES[source.status]}</p>
-          <button type="button" className="ab-btn" onClick={check}>Check again</button>
+          <button type="button" className="ab-btn" onClick={check}>{t('Check again')}</button>
         </section>
       )}
     </main>

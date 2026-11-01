@@ -18,6 +18,7 @@ import MyWorkView from './mywork/index.js';
 import { TeamInsights, TeamAssist } from './team/index.js';
 import { WriteInsights, WriteAssist } from './write/index.js';
 import { KnowledgeInsights, KnowledgeAssist } from './knowledgeScreen/index.js';
+import { t } from '../i18n/index.js';
 
 // The panel's screens (TRACKER.md 2.1): Ticket is the record that is open (or the setup / open-a-ticket help); the others work from any
 // page of an enabled ServiceNow site. Which screens a person sees comes from their work profiles and the organisation's policy
@@ -48,7 +49,7 @@ function Header({ base }) {
   const instance = base ? instanceOf(base) : null;
   return (
     <header className="ab-header">
-      <span className="ab-brand">Agent Buddy</span>
+      <span className="ab-brand">{t('Agent Buddy')}</span>
       {instance && (
         <span className="ab-instance" title={`Reading ${instance.host} with your own session`}>
           {instance.short}
@@ -74,7 +75,7 @@ function ScreenTabs({ screens, value, onChange }) {
     buttons.current[screens[next].id]?.focus();
   };
   return (
-    <nav className="ab-screens" role="tablist" aria-label="Agent Buddy screens" onKeyDown={onKeyDown}>
+    <nav className="ab-screens" role="tablist" aria-label={t('Agent Buddy screens')} onKeyDown={onKeyDown}>
       {screens.map((s) => (
         <button
           key={s.id}
@@ -228,7 +229,7 @@ function Panel() {
   if (!eff.ready) {
     return (
       <div className="ab-app">
-        <main className="ab-main"><p className="ab-sub">Loading…</p></main>
+        <main className="ab-main"><p className="ab-sub">{t('Loading…')}</p></main>
       </div>
     );
   }

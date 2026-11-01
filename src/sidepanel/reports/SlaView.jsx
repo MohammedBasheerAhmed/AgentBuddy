@@ -5,6 +5,7 @@ import TicketList from './TicketList.jsx';
 import { useSection } from './useSection.js';
 import { useMinuteClock } from './hooks.js';
 import { dueText } from './format.js';
+import { t } from '../../i18n/index.js';
 
 const SERIES = [
   { key: 'breached', label: 'Breached', tone: 'bad' },
@@ -30,13 +31,13 @@ export function SlaBody({ d, env, now }) {
   return (
     <>
       <div className="ab-tiles">
-        <Tile label="Breached" value={d.counts.breached} tone={d.counts.breached > 0 ? 'bad' : 'neutral'} hint="SLA already breached" />
-        <Tile label="At risk" value={d.counts.atRisk} tone={d.counts.atRisk > 0 ? 'warn' : 'neutral'} hint={`${d.atRiskPercent}% or more of the time used`} />
-        <Tile label="Due soon" value={d.counts.dueSoon} tone={d.counts.dueSoon > 0 ? 'warn' : 'neutral'} hint={`Ends within ${d.dueSoonHours} hours`} />
+        <Tile label={t('Breached')} value={d.counts.breached} tone={d.counts.breached > 0 ? 'bad' : 'neutral'} hint={t('SLA already breached')} />
+        <Tile label={t('At risk')} value={d.counts.atRisk} tone={d.counts.atRisk > 0 ? 'warn' : 'neutral'} hint={`${d.atRiskPercent}% or more of the time used`} />
+        <Tile label={t('Due soon')} value={d.counts.dueSoon} tone={d.counts.dueSoon > 0 ? 'warn' : 'neutral'} hint={`Ends within ${d.dueSoonHours} hours`} />
       </div>
 
       <TicketList
-        caption="Closest to breaking"
+        caption={t('Closest to breaking')}
         items={d.top}
         env={env}
         meta={(t) => slaFacts(t, at)}
@@ -45,9 +46,9 @@ export function SlaBody({ d, env, now }) {
 
       {(owners.length > 0 || groups.length > 1) && (
         <details className="ab-details">
-          <summary>Who holds the risk</summary>
-          {owners.length > 0 && <StackedBar title="SLA risk by owner" rows={owners} series={SERIES} labelHeader="Owner" />}
-          {groups.length > 1 && <StackedBar title="SLA risk by group" rows={groups} series={SERIES} labelHeader="Group" />}
+          <summary>{t('Who holds the risk')}</summary>
+          {owners.length > 0 && <StackedBar title={t('SLA risk by owner')} rows={owners} series={SERIES} labelHeader="Owner" />}
+          {groups.length > 1 && <StackedBar title={t('SLA risk by group')} rows={groups} series={SERIES} labelHeader="Group" />}
         </details>
       )}
     </>
@@ -61,8 +62,8 @@ export default function SlaView({ widget, env }) {
   const ok = d && d.available !== false;
   return (
     <SectionShell
-      title="SLA risk radar"
-      help="SLAs that are breached, nearly used up, or due soon."
+      title={t('SLA risk radar')}
+      help={t('SLAs that are breached, nearly used up, or due soon.')}
       state={state}
       env={env}
       widgetId={widget?.id}

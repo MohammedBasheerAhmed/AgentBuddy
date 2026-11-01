@@ -6,6 +6,7 @@ import { followUps, followUpReason, followUpText, followUpAction, FOLLOW_UP_DAY_
 import { fullListUrl } from '../../mywork/links.js';
 import { agoText, spanText, dueToday } from '../../mywork/time.js';
 import { TicketRow, Fold, FilterChips, copyText } from './parts.jsx';
+import { t } from '../../i18n/index.js';
 
 // The four cards of the My work screen (N13 My queue, approvals waiting on me, N27 Follow-ups due, N14 Unassigned in my groups).
 // Every one is Insights: facts read with the person's own session, nothing sent anywhere, no AI.
@@ -36,7 +37,7 @@ function FullList({ page, table, query, children = 'Open the full list' }) {
   const url = fullListUrl(page, table, query);
   if (!url) return null;
   return (
-    <RecordLink page={page} url={url} className="ab-mw-more-link" title="Opens the list in ServiceNow, in this tab. Ctrl+click for a new tab.">
+    <RecordLink page={page} url={url} className="ab-mw-more-link" title={t('Opens the list in ServiceNow, in this tab. Ctrl+click for a new tab.')}>
       {children}
     </RecordLink>
   );
@@ -63,7 +64,7 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
   const row = (item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} />;
 
   return (
-    <CardFrame id="mywork-queue" title="My queue" summary={queueSummary(queue, items)} attention={breached ? 'danger' : atRisk ? 'warn' : ''}>
+    <CardFrame id="mywork-queue" title={t('My queue')} summary={queueSummary(queue, items)} attention={breached ? 'danger' : atRisk ? 'warn' : ''}>
       {chips.length > 0 && <FilterChips chips={chips} value={filter} onChange={setFilter} />}
       {g.now.length > 0 ? (
         <ShowMore items={g.now} limit={5} render={row} className="ab-list ab-mw-list" />
@@ -71,7 +72,7 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
         <EmptyNote
           action={
             <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setFilter('')}>
-              Clear the filter
+              {t('Clear the filter')}
             </button>
           }
         >
@@ -87,12 +88,12 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
         </p>
       )}
       {g.waiting.length > 0 && (
-        <Fold title="Waiting on the customer or others" count={g.waiting.length}>
+        <Fold title={t('Waiting on the customer or others')} count={g.waiting.length}>
           <ShowMore items={g.waiting} limit={5} render={row} className="ab-list ab-mw-list" />
         </Fold>
       )}
       {g.resolved.length > 0 && (
-        <Fold title="Resolved, awaiting closure" count={g.resolved.length}>
+        <Fold title={t('Resolved, awaiting closure')} count={g.resolved.length}>
           <ShowMore items={g.resolved} limit={5} render={row} className="ab-list ab-mw-list" />
         </Fold>
       )}
@@ -120,7 +121,7 @@ export function ApprovalsCard({ page, approvals, now }) {
     </div>
   );
   return (
-    <CardFrame id="mywork-approvals" title="Approvals waiting on you" summary={String(approvals.total || items.length)} attention={overdue ? 'warn' : ''}>
+    <CardFrame id="mywork-approvals" title={t('Approvals waiting on you')} summary={String(approvals.total || items.length)} attention={overdue ? 'warn' : ''}>
       <ShowMore items={items} limit={3} render={row} className="ab-list ab-mw-list" />
       {approvals.total > items.length && (
         <p className="ab-hint ab-mw-cap">
@@ -153,7 +154,7 @@ function FollowUpRow({ page, entry, now, onOpen }) {
       </RecordLink>
       {action && (
         <div className="ab-mw-follow-act">
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={copy} title="Copies a short text with the ticket number and title. Nothing is sent.">
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={copy} title={t('Copies a short text with the ticket number and title. Nothing is sent.')}>
             {action}
           </button>
           <span className="ab-hint" role="status">
@@ -175,17 +176,17 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
   return (
     <CardFrame
       id="mywork-followups"
-      title="Follow-ups due"
+      title={t('Follow-ups due')}
       summary={summary}
       actions={
         <>
           <label className="ab-mw-sr" htmlFor={selectId}>
-            Follow up after
+            {t('Follow up after')}
           </label>
-          <select id={selectId} className="ab-select ab-select-sm" value={days} onChange={(e) => setDays(Number(e.target.value))} title="How long a customer may wait for a word">
+          <select id={selectId} className="ab-select ab-select-sm" value={days} onChange={(e) => setDays(Number(e.target.value))} title={t('How long a customer may wait for a word')}>
             {FOLLOW_UP_DAY_CHOICES.map((d) => (
               <option key={d} value={d}>
-                after {d} days
+                {t('after {d} days', { d })}
               </option>
             ))}
           </select>
@@ -208,7 +209,7 @@ export function GroupsCard({ page, groups, now, onOpen }) {
   const oldest = items[0]?.openedAt;
   const summary = items.length ? [`${groups.total > items.length ? groups.total : items.length} waiting`, oldest ? `oldest ${spanText(now - oldest)}` : ''].filter(Boolean).join(' · ') : '';
   return (
-    <CardFrame id="mywork-groups" title="Unassigned in my groups" summary={summary}>
+    <CardFrame id="mywork-groups" title={t('Unassigned in my groups')} summary={summary}>
       {items.length > 0 ? (
         <ShowMore items={items} limit={3} render={(item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} where="group" />} className="ab-list ab-mw-list" />
       ) : (

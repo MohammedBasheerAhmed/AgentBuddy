@@ -6,6 +6,7 @@ import ErrorNote from '../ErrorNote.jsx';
 import { aiNeedsText } from '../aiReady.js';
 import { useLoader } from '../checks/useLoader.js';
 import { chatOverviewOf } from '../../insights/chat.js';
+import { t } from '../../i18n/index.js';
 
 // D1, D2: the facts about this chat (who, how many messages, how long the customer has waited, what they said last) with no
 // AI, and one-click buttons for the two AI features. The messages are read with the person's own session; when the chat tables
@@ -46,12 +47,12 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
     <>
       <section className="ab-card">
         <div className="ab-row ab-kb-head">
-          <h2 className="ab-h">This chat</h2>
+          <h2 className="ab-h">{t('This chat')}</h2>
           <span className="ab-spacer" />
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>{t('Refresh')}</button>
         </div>
-        <p className="ab-sub">Read with your own session. Nothing here is sent to an AI.</p>
-        {phase === 'loading' && <p className="ab-note" role="status">Reading the conversation…</p>}
+        <p className="ab-sub">{t('Read with your own session. Nothing here is sent to an AI.')}</p>
+        {phase === 'loading' && <p className="ab-note" role="status">{t('Reading the conversation…')}</p>}
         {phase === 'error' && <ErrorNote error={error} onRetry={load} />}
 
         {noMessages && (
@@ -64,9 +65,9 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
           <>
             <div className="ab-tags">
               <span className="ab-tag">{o.count} message{o.count === 1 ? '' : 's'}</span>
-              {o.canTellSides && <span className="ab-tag">{o.byCustomer} from the customer</span>}
-              {o.canTellSides && <span className="ab-tag">{o.byAgent} from agents</span>}
-              {o.byBot > 0 && <span className="ab-tag">{o.byBot} from a bot</span>}
+              {o.canTellSides && <span className="ab-tag">{t('{byCustomer} from the customer', { byCustomer: o.byCustomer })}</span>}
+              {o.canTellSides && <span className="ab-tag">{t('{byAgent} from agents', { byAgent: o.byAgent })}</span>}
+              {o.byBot > 0 && <span className="ab-tag">{t('{byBot} from a bot', { byBot: o.byBot })}</span>}
               <span className="ab-tag">{o.ended ? 'chat ended' : 'chat open'}</span>
             </div>
             {o.waitingMinutes !== null && (
@@ -74,23 +75,23 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
                 The customer has been waiting {describeMinutes(o.waitingMinutes)} for an answer.
               </p>
             )}
-            {!o.canTellSides && <p className="ab-hint">This instance does not say who sent each message, so waiting time cannot be worked out.</p>}
+            {!o.canTellSides && <p className="ab-hint">{t('This instance does not say who sent each message, so waiting time cannot be worked out.')}</p>}
             <dl className="ab-kb-facts">
               {o.durationMinutes !== null && (
                 <>
-                  <dt>Lasted</dt>
+                  <dt>{t('Lasted')}</dt>
                   <dd>{describeMinutes(o.durationMinutes)}</dd>
                 </>
               )}
               {o.firstResponseMinutes !== null && (
                 <>
-                  <dt>First reply after</dt>
+                  <dt>{t('First reply after')}</dt>
                   <dd>{describeMinutes(o.firstResponseMinutes)}</dd>
                 </>
               )}
               {o.participants.length > 0 && (
                 <>
-                  <dt>Taking part</dt>
+                  <dt>{t('Taking part')}</dt>
                   <dd>{o.participants.map((p) => `${p.name}${ROLE[p.role] ? ` (${ROLE[p.role]})` : ''}`).join(', ')}</dd>
                 </>
               )}
@@ -108,11 +109,11 @@ export default function ChatRecordView({ page, eff, record, run, aiReady, active
       </section>
 
       <section className="ab-card">
-        <h2 className="ab-h">With AI</h2>
-        <p className="ab-sub">The chat goes through the privacy filter first. Replies are never sent for you: copy the one you want into the chat.</p>
+        <h2 className="ab-h">{t('With AI')}</h2>
+        <p className="ab-sub">{t('The chat goes through the privacy filter first. Replies are never sent for you: copy the one you want into the chat.')}</p>
         {/* A disabled button says why, next to it (greyed text alone does not). */}
         {!aiReady && <p className="ab-hint">{aiNeedsText(eff, 'these buttons') || 'Add an AI key in Settings to use these buttons.'}</p>}
-        {aiReady && noMessages && <p className="ab-hint">There are no messages to work with.</p>}
+        {aiReady && noMessages && <p className="ab-hint">{t('There are no messages to work with.')}</p>}
         <div className="ab-row">
           {button(summary, true)}
           {button(reply, false)}

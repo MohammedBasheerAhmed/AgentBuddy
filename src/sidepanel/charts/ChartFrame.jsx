@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 import DataTable from './DataTable.jsx';
 import { patternFor, toneClass } from './geometry.js';
+import { t } from '../../i18n/index.js';
 
 /** An id that is safe inside url(#...) and unique per chart instance (React's useId has colons in it). */
 export function useUid(prefix = 'abc-') {
@@ -71,7 +72,7 @@ export default function ChartFrame({ title, summary, table, children, legend, ac
             {actions}
             {canTable ? (
               <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-chart-toggle" aria-pressed={tableOn} onClick={() => setShowTable((v) => !v)}>
-                Show as table
+                {t('Show as table')}
               </button>
             ) : null}
           </div>

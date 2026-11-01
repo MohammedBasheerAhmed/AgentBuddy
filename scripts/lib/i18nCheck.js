@@ -1,0 +1,128 @@
+// The check behind tests/i18n.test.js and `node scripts/i18n-check.js [folder or file ...]`: every text the code passes to t(), tn()
+// or tm() has an Arabic entry, no entry is left over, and each entry has the same {name}s as its English text.
+//
+// The keys are read from the source with patterns, not by running the code, so a text has to be written out in full where it is
+// passed: t('Open'), not t(label) or t('Open ' + x). Texts kept in a table are marked with tm('Open') where they are written (and
+// shown with t(table[x])). A call that is not a plain text is listed as "dynamic" and fails the check.
+const fs = require('fs');
+const path = require('path');
+const esbuild = require('esbuild');
+
+const ROOT = path.join(__dirname, '..', '..');
+const SRC = path.join(ROOT, 'src');
+
+function walk(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full, out);
+    else if (/\.(js|jsx)$/.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+
+function unescapeText(raw, quote) {
+  return raw.replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g, (all, c) => {
+    if (c[0] === 'u' && c.length === 5) return String.fromCharCode(parseInt(c.slice(1), 16));
+    if (c[0] === 'x' && c.length === 3) return String.fromCharCode(parseInt(c.slice(1), 16));
+    if (c === 'n') return '\n';
+    if (c === 't') return '\t';
+    if (c === '\n') return '';
+    return c;
+  });
+}
+
+const STR = '(?:\'((?:\\\\.|[^\'\\\\\\n])*)\'|"((?:\\\\.|[^"\\\\\\n])*)")';
+const CALL_ONE = new RegExp(`(?<![\\w.$])(t|tm)\\(\\s*${STR}`, 'g');
+const CALL_PLURAL = new RegExp(`(?<![\\w.$])tn\\(\\s*[^,()]+(?:\\([^()]*\\))?[^,()]*,\\s*${STR}\\s*,\\s*${STR}`, 'g');
+// a call whose first argument is not a quoted text: t(label), t(`..`), t('a' + b)
+const DYNAMIC = /(?<![\w.$])(?:t|tm)\(\s*(?!['"])[^)\s]/g;
+const DYNAMIC_PLUS = new RegExp(`(?<![\\w.$])(?:t|tm)\\(\\s*${STR}\\s*\\+`, 'g');
+const DYNAMIC_PLURAL = /(?<![\w.$])tn\(\s*[^,()]+(?:\([^()]*\))?[^,()]*,\s*(?!['"])[^\s]/g;
+
+const lineOf = (code, index) => code.slice(0, index).split('\n').length;
+const paramsOf = (text) => [...text.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)].map((m) => m[1]).sort().join(',');
+
+/** Every key used in the files: Map key -> [{ file, line, plural }] and the dynamic calls. */
+function collect(files) {
+  const keys = new Map();
+  const dynamic = [];
+  const add = (key, file, line, plural) => {
+    if (!keys.has(key)) keys.set(key, []);
+    keys.get(key).push({ file: path.relative(ROOT, file).replace(/\\/g, '/'), line, plural });
+  };
+  for (const file of files) {
+    const code = fs.readFileSync(file, 'utf8');
+    if (!/\b(?:t|tm|tn)\(/.test(code)) continue;
+    for (const m of code.matchAll(CALL_ONE)) {
+      const raw = m[2] !== undefined ? m[2] : m[3];
+      add(unescapeText(raw), file, lineOf(code, m.index), false);
+    }
+    for (const m of code.matchAll(CALL_PLURAL)) {
+      const one = unescapeText(m[1] !== undefined ? m[1] : m[2]);
+      const other = unescapeText(m[3] !== undefined ? m[3] : m[4]);
+      add(`${one}|${other}`, file, lineOf(code, m.index), true);
+    }
+    for (const re of [DYNAMIC, DYNAMIC_PLUS, DYNAMIC_PLURAL]) {
+      for (const m of code.matchAll(re)) dynamic.push({ file: path.relative(ROOT, file).replace(/\\/g, '/'), line: lineOf(code, m.index), text: code.slice(m.index, m.index + 60).split('\n')[0] });
+    }
+  }
+  return { keys, dynamic };
+}
+
+/** The Arabic catalogue, loaded from the source (it is an ES module). */
+function loadCatalogue(language = 'ar') {
+  const entry = path.join(SRC, 'i18n', language, 'index.js');
+  const built = esbuild.buildSync({ entryPoints: [entry], bundle: true, format: 'cjs', platform: 'node', write: false, logLevel: 'silent' });
+  const module_ = { exports: {} };
+  // eslint-disable-next-line no-new-func -- the bundle is our own source, built a moment ago
+  new Function('module', 'exports', built.outputFiles[0].text)(module_, module_.exports);
+  const table = module_.exports.AR || module_.exports[language.toUpperCase()] || Object.values(module_.exports)[0] || {};
+  return table;
+}
+
+const PLURAL_CATEGORIES = ['zero', 'one', 'two', 'few', 'many', 'other'];
+
+/**
+ * @param {{ only?: string[], whole?: boolean }} [options] only: folders or files (relative to src or the repo) to look at;
+ *   whole: also report entries no text uses (only meaningful when every file is read, so it is off with `only`)
+ * @returns {{ missing, extra, params, dynamic, badPlural, used, entries }}
+ */
+function checkI18n(options = {}) {
+  const only = (options.only || []).map((p) => path.resolve(ROOT, p.replace(/^src[\\/]/, 'src/'))).map((p) => (fs.existsSync(p) ? p : path.join(SRC, path.relative(ROOT, p).replace(/^src[\\/]/, ''))));
+  const skip = ['i18n', 'pii'].map((d) => path.join(SRC, d) + path.sep); // pii: patterns that only look like calls
+  const all = walk(SRC).filter((f) => !skip.some((s) => f.startsWith(s)));
+  const files = only.length ? all.filter((f) => only.some((p) => f === p || f.startsWith(p + path.sep))) : all;
+  const { keys, dynamic } = collect(files);
+  const table = loadCatalogue();
+  const missing = [];
+  const params = [];
+  const badPlural = [];
+  for (const [key, where] of keys) {
+    const entry = table[key];
+    if (entry === undefined || entry === '' || entry === null) {
+      missing.push({ key, where: where[0] });
+      continue;
+    }
+    if (where[0].plural) {
+      const [one, other] = key.split('|');
+      if (typeof entry !== 'object') {
+        badPlural.push({ key, why: 'a text with a count needs an object with the plural forms (zero, one, two, few, many, other)' });
+        continue;
+      }
+      const absent = PLURAL_CATEGORIES.filter((c) => !entry[c]);
+      if (absent.length) badPlural.push({ key, why: `missing forms: ${absent.join(', ')}` });
+      for (const form of Object.keys(entry)) if (!PLURAL_CATEGORIES.includes(form)) badPlural.push({ key, why: `unknown form "${form}"` });
+      for (const [form, text] of Object.entries(entry)) {
+        if (paramsOf(String(text)) !== paramsOf(other) && paramsOf(String(text)) !== paramsOf(one)) params.push({ key: `${key} [${form}]`, english: paramsOf(other), arabic: paramsOf(String(text)) });
+      }
+    } else if (typeof entry !== 'string') {
+      badPlural.push({ key, why: 'an object is only for texts with a count (tn)' });
+    } else if (paramsOf(entry) !== paramsOf(key)) {
+      params.push({ key, english: paramsOf(key), arabic: paramsOf(entry) });
+    }
+  }
+  const extra = options.whole && !only.length ? Object.keys(table).filter((k) => !keys.has(k)) : [];
+  return { missing, extra, params, dynamic, badPlural, used: keys.size, entries: Object.keys(table).length };
+}
+
+module.exports = { checkI18n, collect, loadCatalogue, walk };

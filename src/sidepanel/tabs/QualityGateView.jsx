@@ -5,6 +5,7 @@ import { read } from '../ask.js';
 import { LoadNotes } from '../checks/Bits.jsx';
 import { CheckList, CheckSummary } from '../checks/CheckList.jsx';
 import { useLoader } from '../checks/useLoader.js';
+import { t } from '../../i18n/index.js';
 
 // C2, "Check before you resolve". Reads the saved ticket and, where the page has a classic form, what has been typed on it but
 // not saved yet (on a Workspace page: the notes boxes only), and lists what is worth a second look. It only advises: nothing is blocked, changed or sent. The optional AI
@@ -39,10 +40,10 @@ export default function QualityGateView({ page, eff, record, run, aiReady, activ
     <>
       <section className="ab-card">
         <div className="ab-row ab-chk-between">
-          <h2 className="ab-h ab-chk-h">Check before you resolve</h2>
-          <button type="button" className="ab-btn ab-btn-sm" onClick={reload} disabled={state.phase === 'loading'}>Check again</button>
+          <h2 className="ab-h ab-chk-h">{t('Check before you resolve')}</h2>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={reload} disabled={state.phase === 'loading'}>{t('Check again')}</button>
         </div>
-        <p className="ab-sub">Advice only: nothing is blocked or changed. Worked out on this computer; nothing is sent to an AI.</p>
+        <p className="ab-sub">{t('Advice only: nothing is blocked or changed. Worked out on this computer; nothing is sent to an AI.')}</p>
         {view && (
           <p className="ab-hint" role="note">
             {view.formSource === 'boxes'
@@ -56,22 +57,22 @@ export default function QualityGateView({ page, eff, record, run, aiReady, activ
 
       <LoadNotes state={state} onRetry={reload} />
       {view && (
-        <section className="ab-card" aria-label="Results">
+        <section className="ab-card" aria-label={t('Results')}>
           <CheckSummary summary={view.summary} />
           <CheckList checks={view.checks} />
         </section>
       )}
 
       {canImprove && data && (
-        <section className="ab-card" aria-label="Resolution notes">
-          <h2 className="ab-h ab-chk-h">Resolution notes</h2>
-          <p className="ab-sub">Rewrites the notes you have started into cause, fix and verification, using only what the ticket says.</p>
+        <section className="ab-card" aria-label={t('Resolution notes')}>
+          <h2 className="ab-h ab-chk-h">{t('Resolution notes')}</h2>
+          <p className="ab-sub">{t('Rewrites the notes you have started into cause, fix and verification, using only what the ticket says.')}</p>
           <div className="ab-row">
             <button type="button" className="ab-btn" disabled={!aiReady || run.busy} onClick={() => run.run(improve, { getPack: getImprovePack })}>
               {improve.title}
             </button>
           </div>
-          {!aiReady && <p className="ab-hint">Add an AI key in Settings to use this button. The checks above work without one.</p>}
+          {!aiReady && <p className="ab-hint">{t('Add an AI key in Settings to use this button. The checks above work without one.')}</p>}
         </section>
       )}
     </>

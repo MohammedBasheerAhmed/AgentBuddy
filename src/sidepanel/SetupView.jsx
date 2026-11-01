@@ -5,6 +5,7 @@ import { isAiReady } from './aiReady.js';
 import { plainError } from './ask.js';
 import { firstRunSteps } from './firstRun.js';
 import { useActiveInstances, useSiteCheck } from './usePage.js';
+import { t } from '../i18n/index.js';
 
 // What the browser said when it did not turn the site on, and the next step. A refused prompt and a prompt that never appeared (an
 // organisation's browser policy can block site access) look the same from here, so both are named.
@@ -50,9 +51,9 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
   }
 
   if (!page?.origin) {
-    return <p className="ab-sub">Open your ServiceNow instance in this tab, then click the Agent Buddy button in the browser toolbar. You can also add its address in Settings.</p>;
+    return <p className="ab-sub">{t('Open your ServiceNow instance in this tab, then click the Agent Buddy button in the browser toolbar. You can also add its address in Settings.')}</p>;
   }
-  if (!isInstanceAllowed(page.origin, eff?.policy)) return <p className="ab-note ab-note-warn">Your organisation has not approved this site for Agent Buddy.</p>;
+  if (!isInstanceAllowed(page.origin, eff?.policy)) return <p className="ab-note ab-note-warn">{t('Your organisation has not approved this site for Agent Buddy.')}</p>;
 
   const host = page.origin.replace('https://', '');
   const errorNote = error ? (
@@ -61,7 +62,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
     </p>
   ) : null;
 
-  if (verdict === 'checking') return <p className="ab-sub" role="status">Checking this page…</p>;
+  if (verdict === 'checking') return <p className="ab-sub" role="status">{t('Checking this page…')}</p>;
   if (verdict === 'servicenow') {
     return (
       <div className="ab-turnon">
@@ -70,7 +71,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
         </p>
         <div className="ab-row">
           <button type="button" className={`ab-btn${primary ? ' ab-btn-primary' : ''}`} disabled={busy} onClick={enable}>
-            Turn on for this site
+            {t('Turn on for this site')}
           </button>
         </div>
         {errorNote}
@@ -86,7 +87,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
       <p className="ab-hint ab-turnon-anyway">
         Is <span className="ab-mono">{host}</span> your ServiceNow on its own web address?{' '}
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={busy} onClick={enable}>
-          Turn on anyway
+          {t('Turn on anyway')}
         </button>
       </p>
       {errorNote}
@@ -109,7 +110,7 @@ export default function SetupView({ page, eff, lastSeen = null, onChanged = () =
     if (firstRun.show) return null; // "Open a ticket" is the card's last step
     return (
       <section className="ab-card ab-setup-open">
-        <h2 className="ab-h">Open a ticket</h2>
+        <h2 className="ab-h">{t('Open a ticket')}</h2>
         <p className="ab-sub">
           {page.surface === 'portal'
             ? 'Open a ticket, request or case on this portal and Agent Buddy offers help for it here.'
@@ -118,7 +119,7 @@ export default function SetupView({ page, eff, lastSeen = null, onChanged = () =
         {onOpenScreen && (
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => onOpenScreen('mywork')}>
-              See my work
+              {t('See my work')}
             </button>
           </div>
         )}
@@ -132,7 +133,7 @@ export default function SetupView({ page, eff, lastSeen = null, onChanged = () =
     if (page.origin && firstRun.show && firstRun.next === 'site') return null;
     return (
       <section className="ab-card ab-setup-site">
-        <h2 className="ab-h">Not turned on for this page</h2>
+        <h2 className="ab-h">{t('Not turned on for this page')}</h2>
         <TurnOnSite page={page} eff={eff} onChanged={onChanged} primary={!firstRun.show} />
       </section>
     );

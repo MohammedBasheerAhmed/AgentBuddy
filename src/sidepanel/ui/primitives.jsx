@@ -1,4 +1,5 @@
 import React, { useId, useState } from 'react';
+import { t } from '../../i18n/index.js';
 
 // Small building blocks every screen uses, so the panel looks and behaves the same everywhere (TRACKER.md 2.3 and 2.4):
 //   AiBadge       the one mark every AI element carries (never an Insights element)
@@ -101,7 +102,7 @@ export function HalfRule({ half, destination = '' }) {
   return (
     <p className="ab-halfrule ab-halfrule-insights">
       <ShieldMark />
-      <span>Stays in ServiceNow. Nothing is sent anywhere.</span>
+      <span>{t('Stays in ServiceNow. Nothing is sent anywhere.')}</span>
     </p>
   );
 }
@@ -125,7 +126,7 @@ export function HalfSwitch({ value, onChange, idBase, assist = true, assistNote 
     e.currentTarget.querySelector(`#${idBase}-tab-${next}`)?.focus();
   };
   return (
-    <div className="ab-halfswitch" role="tablist" aria-label="Insights or AI Assist" onKeyDown={onKeyDown}>
+    <div className="ab-halfswitch" role="tablist" aria-label={t('Insights or AI Assist')} onKeyDown={onKeyDown}>
       {tabs.map((t) => (
         <button
           key={t.id}

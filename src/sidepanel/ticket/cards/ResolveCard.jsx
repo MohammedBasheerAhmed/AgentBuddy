@@ -8,6 +8,7 @@ import { Tag } from '../../checks/Bits.jsx';
 import { allowSensitiveOf, read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { CardJump, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N4, "Ready to resolve?": what is worth a second look before the ticket is resolved (notes, close code, did the customer answer,
 // open child work, a linked problem or article, personal data in the text, a hold reason). It reads what is typed on the form and
@@ -73,7 +74,7 @@ export default function ResolveCard({ page, eff, record, header, active, setSumm
           />
           <div className="ab-ins-foot">
             <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>
-              Check again
+              {t('Check again')}
             </QuietButton>
           </div>
         </>

@@ -2,6 +2,7 @@ import React, { useId, useMemo, useRef, useEffect, useState } from 'react';
 import { describeTarget, reviewInsert } from '../../../insertFlow.js';
 import { isCustomerVisible } from '../../../../lib/fillable.js';
 import ReviewHints from '../../../ReviewHints.jsx';
+import { t } from '../../../../i18n/index.js';
 
 const MAX_EDIT = 8000;
 
@@ -39,9 +40,9 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
   if (!target) {
     return (
       <div className="ab-insert-editor">
-        <p className="ab-note ab-note-warn" role="status">There is no box on this form this text can go into. Use Copy.</p>
+        <p className="ab-note ab-note-warn" role="status">{t('There is no box on this form this text can go into. Use Copy.')}</p>
         <div className="ab-row">
-          <button type="button" className="ab-btn ab-btn-sm" onClick={onCancel}>Close</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={onCancel}>{t('Close')}</button>
         </div>
       </div>
     );
@@ -61,7 +62,7 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
     <div className="ab-insert-editor" role="group" aria-labelledby={`${ids}-label`}>
       {usable.length > 1 && (
         <div className="ab-field">
-          <label className="ab-label" htmlFor={`${ids}-target`}>Goes into</label>
+          <label className="ab-label" htmlFor={`${ids}-target`}>{t('Goes into')}</label>
           <select
             id={`${ids}-target`}
             className="ab-select"
@@ -102,7 +103,7 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
       </div>
       {modes.length > 1 && (
         <fieldset className="ab-insert-modes">
-          <legend className="ab-sub">What is already in {name}</legend>
+          <legend className="ab-sub">{t('What is already in {name}', { name })}</legend>
           <label className="ab-radio">
             <input type="radio" name={`${ids}-mode`} value="append" checked={chosen === 'append'} onChange={() => setMode('append')} />
             Keep it, add this below
@@ -123,15 +124,15 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
             ))}
           </ul>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => go(true)}>Insert anyway</button>
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { setFindings(null); box.current?.focus(); }}>Keep editing</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => go(true)}>{t('Insert anyway')}</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { setFindings(null); box.current?.focus(); }}>{t('Keep editing')}</button>
           </div>
         </div>
       ) : (
         <>
           {live.serious.length > 0 && (
             <div className="ab-note ab-note-warn" role="status">
-              <strong>Check this before you insert:</strong>
+              <strong>{t('Check this before you insert:')}</strong>
               <ul className="ab-findings">
                 {live.serious.map((f, i) => (
                   <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
@@ -146,7 +147,7 @@ export default function InsertEditor({ targets, initial, textFor, review, page, 
         <button type="button" className="ab-btn ab-btn-sm ab-btn-ai" disabled={busy || !text.trim()} onClick={() => go(false)}>
           {chosen === 'replace' ? `Replace ${name}` : `Insert into ${name}`}
         </button>
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={busy} onClick={onCancel}>Cancel</button>
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={busy} onClick={onCancel}>{t('Cancel')}</button>
       </div>
     </div>
   );

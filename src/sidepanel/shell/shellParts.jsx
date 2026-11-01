@@ -3,6 +3,7 @@ import { PROVIDERS, providerName, resolveProviderConfig } from '../../providers/
 import { modelChoices } from '../../lib/modelChoices.js';
 import { saveSettings } from '../../lib/storage.js';
 import { activeProfiles, aiOffByPolicy, missingProfileFor } from '../../profiles/profiles.js';
+import { t } from '../../i18n/index.js';
 
 // Pieces of the panel frame that more than one screen uses (owner: the lead, docs/round3.md).
 
@@ -45,12 +46,12 @@ export function ModelSwitch({ eff }) {
   const current = eff.values.models?.[eff.values.provider] || def.defaultModel;
   const choices = modelChoices({ def, current, loaded: eff.values.modelLists?.[eff.values.provider], allowed: eff.policy?.allowedModels });
   if (!current && !choices.length) return null;
-  if (eff.locked?.model || choices.length < 2) return <span className="ab-tag ab-mono ab-model" title="The AI model in use. Change it in Settings.">{current}</span>;
+  if (eff.locked?.model || choices.length < 2) return <span className="ab-tag ab-mono ab-model" title={t('The AI model in use. Change it in Settings.')}>{current}</span>;
   return (
     <select
       className="ab-select ab-select-sm ab-model"
-      aria-label="AI model"
-      title="The AI model in use. Pick another to switch."
+      aria-label={t('AI model')}
+      title={t('The AI model in use. Pick another to switch.')}
       value={current}
       onChange={(e) => saveSettings({ models: { ...eff.values.models, [eff.values.provider]: e.target.value } }).catch(() => {})}
     >
@@ -63,9 +64,9 @@ export function ModelSwitch({ eff }) {
 export function AiSkippedNote() {
   return (
     <div className="ab-note ab-keynote">
-      <p className="ab-keynote-text">AI Assist is off on this computer. Insights works without it.</p>
+      <p className="ab-keynote-text">{t('AI Assist is off on this computer. Insights works without it.')}</p>
       <button type="button" className="ab-btn ab-btn-sm" onClick={() => saveSettings({ aiSkipped: false }).catch(() => {})}>
-        Turn AI Assist on
+        {t('Turn AI Assist on')}
       </button>
     </div>
   );
@@ -83,7 +84,7 @@ export function ProfileHint({ kind, eff }) {
   return (
     <div className="ab-profilehint" role="note">
       <p>{hint.text}</p>
-      <button type="button" className="ab-btn ab-btn-sm" onClick={add}>Show them</button>
+      <button type="button" className="ab-btn ab-btn-sm" onClick={add}>{t('Show them')}</button>
       <button
         type="button"
         className="ab-btn ab-btn-quiet ab-btn-sm"
@@ -92,7 +93,7 @@ export function ProfileHint({ kind, eff }) {
           redraw((n) => n + 1);
         }}
       >
-        Not now
+        {t('Not now')}
       </button>
     </div>
   );
@@ -101,7 +102,7 @@ export function ProfileHint({ kind, eff }) {
 /** The settings mark in the header: a gear that opens the settings page. */
 export function SettingsButton() {
   return (
-    <button type="button" className="ab-iconbtn" aria-label="Settings" title="Settings" onClick={() => chrome.runtime.openOptionsPage()}>
+    <button type="button" className="ab-iconbtn" aria-label={t('Settings')} title={t('Settings')} onClick={() => chrome.runtime.openOptionsPage()}>
       <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
         <path
           d="M6.9 1.5h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3-1.9-.4V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6z"

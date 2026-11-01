@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 
 /**
  * Low-severity findings of the review (src/safeSend/review.js) as a short list that never blocks anything: another person's name,
@@ -8,7 +9,7 @@ export default function ReviewHints({ hints }) {
   if (!Array.isArray(hints) || !hints.length) return null;
   return (
     <div className="ab-note" role="note" style={{ marginTop: 8 }}>
-      <strong>Worth a look:</strong>
+      <strong>{t('Worth a look:')}</strong>
       <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
         {hints.map((f, i) => (
           <li key={i}>

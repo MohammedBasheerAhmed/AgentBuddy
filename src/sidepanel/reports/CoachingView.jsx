@@ -7,6 +7,7 @@ import { PER_PERSON_NOTE, flagPerPersonScoring } from '../../reports/ai/scoring.
 import { AiBlocked, AiButton, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { isSensitiveReportTable } from '../../reports/engine/constants.js';
 import { plural } from './format.js';
+import { t } from '../../i18n/index.js';
 
 const FEATURE_ID = 'coaching-snapshot';
 const DAY = 86400000;
@@ -35,7 +36,7 @@ export function coachingNeeds(eff) {
 function Frame({ bare, children }) {
   if (bare) return <div className="ab-coach">{children}</div>;
   return (
-    <AiShell title="Coaching snapshot" help="A rubric review of a sample of tickets one group resolved, for its team lead.">
+    <AiShell title={t('Coaching snapshot')} help={t('A rubric review of a sample of tickets one group resolved, for its team lead.')}>
       {children}
     </AiShell>
   );
@@ -73,17 +74,17 @@ function OneGroupPicker({ tabId, blocked, myGroups, groupsNote, value, onPick })
   return (
     <div className="ab-picker">
       {myGroups?.length > 0 ? (
-        <div className="ab-chips" role="group" aria-label="Your groups">
-          <span className="ab-hint">Your groups:</span>
+        <div className="ab-chips" role="group" aria-label={t('Your groups')}>
+          <span className="ab-hint">{t('Your groups:')}</span>
           {myGroups.map(choice)}
         </div>
       ) : (
         groupsNote && <p className="ab-hint">{groupsNote}</p>
       )}
-      <label className="ab-label" htmlFor="ab-coach-group-search">Or find a group by name</label>
-      <input id="ab-coach-group-search" className="ab-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type at least two letters" autoComplete="off" />
+      <label className="ab-label" htmlFor="ab-coach-group-search">{t('Or find a group by name')}</label>
+      <input id="ab-coach-group-search" className="ab-input" value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Type at least two letters')} autoComplete="off" />
       {found.note && <p className="ab-hint" role="status">{found.note}</p>}
-      {found.groups.length > 0 && <div className="ab-chips" role="group" aria-label="Groups found">{found.groups.map(choice)}</div>}
+      {found.groups.length > 0 && <div className="ab-chips" role="group" aria-label={t('Groups found')}>{found.groups.map(choice)}</div>}
     </div>
   );
 }
@@ -97,7 +98,7 @@ export function CoachingSample({ result, dayLabel }) {
   return (
     <div className="ab-coach-sample">
       {n === 0 ? (
-        <p className="ab-note ab-note-warn">No ticket resolved by {result.group.name} in these days could be read, so there is nothing to review.</p>
+        <p className="ab-note ab-note-warn">{t('No ticket resolved by {name} in these days could be read, so there is nothing to review.', { name: result.group.name })}</p>
       ) : (
         <>
           <p className="ab-note ab-note-ok">
@@ -122,7 +123,7 @@ export default function CoachingView({ env, eff }) {
   const needs = gate ? '' : coachingNeeds(eff);
   if (gate) {
     return (
-      <AiShell title="Coaching snapshot" help="A rubric review of the written work of a group, for its team lead.">
+      <AiShell title={t('Coaching snapshot')} help={t('A rubric review of the written work of a group, for its team lead.')}>
         <AiBlocked>{gate === 'off' ? 'Your organisation has turned the coaching snapshot off.' : 'Your organisation has not switched coaching on.'}</AiBlocked>
       </AiShell>
     );
@@ -197,15 +198,15 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
     <Frame bare={bare}>
       <p className="ab-note ab-note-warn ab-coach-reminder">{COACHING_REMINDER}</p>
       <details className="ab-details">
-        <summary>What it reads and sends</summary>
+        <summary>{t('What it reads and sends')}</summary>
         <p className="ab-hint">
-        You pick one group and some days. Agent Buddy picks up to {COACHING_LIMITS.sampleMax} resolved tickets by a fixed rule (evenly over the dates, whoever worked on them), reads only their close notes, close code and the customer-visible comments the group&apos;s agents wrote, and asks the AI to rate the writing and to find group-level themes. The AI is told not to name, score or rank people, and its answer is checked for that. Nothing is stored.
+        {t("You pick one group and some days. Agent Buddy picks up to {sampleMax} resolved tickets by a fixed rule (evenly over the dates, whoever worked on them), reads only their close notes, close code and the customer-visible comments the group's agents wrote, and asks the AI to rate the writing and to find group-level themes. The AI is told not to name, score or rank people, and its answer is checked for that. Nothing is stored.", { sampleMax: COACHING_LIMITS.sampleMax })}
         </p>
       </details>
       {needs && <p className="ab-note ab-note-warn" role="status">{needs}</p>}
 
       <fieldset className="ab-fieldset">
-        <legend className="ab-label">Group</legend>
+        <legend className="ab-label">{t('Group')}</legend>
         <OneGroupPicker
           tabId={env.page.tabId}
           blocked={env.blocked}
@@ -222,15 +223,15 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
 
       <div className="ab-row ab-coach-controls">
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-coach-from">First day</label>
+          <label className="ab-label" htmlFor="ab-coach-from">{t('First day')}</label>
           <input id="ab-coach-from" type="date" className="ab-input" value={fromDay} max={toDay} onChange={(e) => { setFromDay(e.target.value); invalidate(); }} />
         </div>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-coach-to">Last day</label>
+          <label className="ab-label" htmlFor="ab-coach-to">{t('Last day')}</label>
           <input id="ab-coach-to" type="date" className="ab-input" value={toDay} min={fromDay} onChange={(e) => { setToDay(e.target.value); invalidate(); }} />
         </div>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-coach-size">Tickets to review</label>
+          <label className="ab-label" htmlFor="ab-coach-size">{t('Tickets to review')}</label>
           <select id="ab-coach-size" className="ab-select" value={size} onChange={(e) => { setSize(Number(e.target.value)); invalidate(); }}>
             {SAMPLE_CHOICES.map((n) => (
               <option key={n} value={n}>{n}</option>
@@ -242,14 +243,14 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
 
       <div className="ab-row">
         <button type="button" className="ab-btn ab-btn-sm" disabled={!group || Boolean(rangeProblem) || sample.phase === 'reading' || Boolean(needs)} onClick={pick}>
-          Pick the sample
+          {t('Pick the sample')}
         </button>
         <AiButton eff={eff} disabled={!ready || !aiReady || run.busy || Boolean(needs)} onClick={go}>
-          Write the coaching snapshot
+          {t('Write the coaching snapshot')}
         </AiButton>
       </div>
       {!aiReady && <AiKeyLine eff={eff} />}
-      {sample.phase === 'reading' && <p className="ab-note" role="status">Reading the sample with your session…</p>}
+      {sample.phase === 'reading' && <p className="ab-note" role="status">{t('Reading the sample with your session…')}</p>}
       {sample.phase === 'error' && <ErrorNote error={sample.error} onRetry={pick} />}
       <CoachingSample result={sample.result} dayLabel={dayLabel} />
 
@@ -258,7 +259,7 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
         run={run}
         eff={eff}
         featureId={FEATURE_ID}
-        heading="Coaching snapshot"
+        heading={t('Coaching snapshot')}
         notice={notice}
         withhold={verdict?.tripped ? { note: PER_PERSON_NOTE, findings: verdict.findings } : null}
       />

@@ -3,6 +3,7 @@
 import React from 'react';
 import { Tag } from './Bits.jsx';
 import { plainNote } from '../plainAccess.js';
+import { t } from '../../i18n/index.js';
 
 const LABEL = { warn: ['Look at this', 'warn'], info: ['Note', ''], ok: ['Fine', 'ok'] };
 
@@ -13,7 +14,7 @@ export function CheckSummary({ summary }) {
 
 export function CheckList({ checks }) {
   return (
-    <ul className="ab-chk-list" aria-label="Checks">
+    <ul className="ab-chk-list" aria-label={t('Checks')}>
       {checks.map((c) => {
         const [word, tone] = LABEL[c.status] || LABEL.info;
         return (

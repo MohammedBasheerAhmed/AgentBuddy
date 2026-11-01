@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import { t } from '../i18n/index.js';
 
 export const BOUNDARY_TEXT = 'Something went wrong in this part of Agent Buddy. Try again, or reload the panel.';
 
@@ -34,13 +35,13 @@ export default class ErrorBoundary extends Component {
         <p className="ab-boundary-text">{BOUNDARY_TEXT}</p>
         <div className="ab-row">
           <button type="button" className="ab-btn ab-btn-sm" onClick={() => this.setState({ failed: false })}>
-            Try again
+            {t('Try again')}
           </button>
           <button type="button" className="ab-btn ab-btn-sm" onClick={() => window.location.reload()}>
-            Reload the panel
+            {t('Reload the panel')}
           </button>
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => chrome.runtime.openOptionsPage()}>
-            Open Settings
+            {t('Open Settings')}
           </button>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { LANGUAGES, REWRITE_PRESETS, buildComposePack, formReadRefusal, mergePeo
 import { currentFromPage, expectFromPage, matchesExpect, wrongRecordText } from '../../lib/fillable.js';
 import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, readRecordPeople, useFill } from './shared.js';
 import { AiBadge } from '../ui/primitives.jsx';
+import { t } from '../../i18n/index.js';
 
 const isRewriteFeature = (feature) => Boolean(feature?.id) && REWRITE_PRESETS.some((p) => p.featureId === feature.id);
 const SIMPLE = REWRITE_PRESETS.filter((p) => !p.needsLanguage);
@@ -110,9 +111,9 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
     <div className="ab-compose-stack">
       {showKeyNote && <AiKeyNote eff={eff} what="this" />}
 
-      <section className="ab-compose-input" aria-label="Text to rewrite">
+      <section className="ab-compose-input" aria-label={t('Text to rewrite')}>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-rewrite-text">Text to rewrite</label>
+          <label className="ab-label" htmlFor="ab-rewrite-text">{t('Text to rewrite')}</label>
           <textarea
             id="ab-rewrite-text"
             ref={textBox}
@@ -123,13 +124,13 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
               setText(e.target.value);
               if (!e.target.value.trim()) setProvenance(null);
             }}
-            placeholder="Paste or type the text here"
+            placeholder={t('Paste or type the text here')}
           />
           <span className="ab-hint">{text.length.toLocaleString()} of {MAX_FORM_TEXT.toLocaleString()} characters</span>
         </div>
 
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-rewrite-field">Form field</label>
+          <label className="ab-label" htmlFor="ab-rewrite-field">{t('Form field')}</label>
           <div className="ab-row">
             <select id="ab-rewrite-field" className="ab-select ab-compose-select" value={target} onChange={(e) => setTarget(e.target.value)}>
               {FORM_FIELDS.map((f) => (
@@ -137,29 +138,29 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
               ))}
             </select>
             <button type="button" className="ab-btn ab-btn-sm" disabled={reading} onClick={useForm}>
-              Use what I typed in the form
+              {t('Use what I typed in the form')}
             </button>
           </div>
-          <span className="ab-hint">The rewritten text can go back into this field.</span>
+          <span className="ab-hint">{t('The rewritten text can go back into this field.')}</span>
           {status && <p className={`ab-note ab-note-${status.kind}`} role="status">{status.text}</p>}
         </div>
 
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-rewrite-names">Names to hide from the AI (optional)</label>
-          <input id="ab-rewrite-names" className="ab-input" value={names} onChange={(e) => setNames(e.target.value)} placeholder="Abel Tuter, Priya Raman" autoComplete="off" />
+          <label className="ab-label" htmlFor="ab-rewrite-names">{t('Names to hide from the AI (optional)')}</label>
+          <input id="ab-rewrite-names" className="ab-input" value={names} onChange={(e) => setNames(e.target.value)} placeholder={t('Abel Tuter, Priya Raman')} autoComplete="off" />
           <span className="ab-hint">
-            The people on the open ticket are hidden automatically. Names only written in the text cannot be found by pattern, so list them here. Check the preview before sending.
+            {t('The people on the open ticket are hidden automatically. Names only written in the text cannot be found by pattern, so list them here. Check the preview before sending.')}
           </span>
         </div>
 
         <div className="ab-label ab-write-ailabel">
           Rewrite it <AiBadge title={'Sends the masked text to the AI you chose, after a preview.'} />
         </div>
-        <div className="ab-row ab-compose-presets" role="group" aria-label="Rewrite presets">
+        <div className="ab-row ab-compose-presets" role="group" aria-label={t('Rewrite presets')}>
           {SIMPLE.map((p) => button(p))}
         </div>
-        <div className="ab-row ab-compose-presets" role="group" aria-label="Translate">
-          <label className="ab-sub" htmlFor="ab-rewrite-language">Language</label>
+        <div className="ab-row ab-compose-presets" role="group" aria-label={t('Translate')}>
+          <label className="ab-sub" htmlFor="ab-rewrite-language">{t('Language')}</label>
           <select id="ab-rewrite-language" className="ab-select ab-compose-select" value={language} onChange={(e) => setLanguage(e.target.value)}>
             {LANGUAGES.map((l) => (
               <option key={l.code} value={l.code}>{l.name}</option>
@@ -199,8 +200,8 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
  */
 export function RewriteResultActions({ field, fill, made, wrongRecord, hints, onPut, onUseAsText }) {
   return (
-    <section className="ab-card ab-compose-actions" aria-label="Use the rewrite">
-      <h3 className="ab-h">Use it in the form</h3>
+    <section className="ab-card ab-compose-actions" aria-label={t('Use the rewrite')}>
+      <h3 className="ab-h">{t('Use it in the form')}</h3>
       <p className="ab-hint">
         Goes into: {field.label}
         {made?.number ? ` of ${made.number}` : ''}. Change the field above if you need another one.
@@ -217,12 +218,12 @@ export function RewriteResultActions({ field, fill, made, wrongRecord, hints, on
           {fill.inserted[`${field.name}:replace`] ? 'Inserted' : 'Replace what is in the form'}
         </button>
         <button type="button" className="ab-btn ab-btn-sm ab-btn-quiet" disabled={fill.busy} onClick={onUseAsText}>
-          Use as my text
+          {t('Use as my text')}
         </button>
       </div>
       <p className="ab-hint">{field.singleLine ? 'This replaces what is in the form: it is a one-line field.' : 'This replaces what is in the form if you choose Replace. Add below keeps it.'}</p>
       <FillFeedback fill={fill} />
-      <p className="ab-hint">Nothing is saved or sent. You press Save in the form yourself.</p>
+      <p className="ab-hint">{t('Nothing is saved or sent. You press Save in the form yourself.')}</p>
     </section>
   );
 }

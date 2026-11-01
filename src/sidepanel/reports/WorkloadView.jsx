@@ -3,6 +3,7 @@ import { Tile, StackedBar, HeatStrip } from '../charts/index.js';
 import TicketList from './TicketList.jsx';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
+import { t } from '../../i18n/index.js';
 
 // Tones for the state classes (colour is never the only cue: the legend and every value are written out).
 const CLASS_TONE = { new: 'c1', working: 'c2', waiting: 'c3', resolved: 'c4', other: 'neutral' };
@@ -48,17 +49,17 @@ export function WorkloadBody({ d, env }) {
   return (
     <>
       <div className="ab-tiles">
-        <Tile label="Open" value={d.totals.open} unavailable={d.totals.open === null} hint={d.totals.openPartial ? 'Some tables could not be counted' : 'Active tickets'} />
-        {d.totals.unassigned !== null && <Tile label="Unassigned" value={d.totals.unassigned} tone={d.totals.unassigned > 0 ? 'warn' : 'neutral'} hint="Nobody owns them" />}
-        <Tile label={`No update in ${d.staleDays}+ days`} value={d.totals.stale} unavailable={d.totals.stale === null} tone={d.totals.stale > 0 ? 'warn' : 'neutral'} hint="Open and untouched" />
-        {d.pingPong.available && <Tile label={`Reassigned ${d.pingPong.threshold}+ times`} value={d.pingPong.count} tone={d.pingPong.count > 0 ? 'warn' : 'neutral'} hint="Handed from group to group" />}
-        {d.totals.resolvedActive > 0 && <Tile label="Resolved, not closed" value={d.totals.resolvedActive} hint="Waiting to close. Not counted as open." />}
+        <Tile label={t('Open')} value={d.totals.open} unavailable={d.totals.open === null} hint={d.totals.openPartial ? 'Some tables could not be counted' : 'Active tickets'} />
+        {d.totals.unassigned !== null && <Tile label={t('Unassigned')} value={d.totals.unassigned} tone={d.totals.unassigned > 0 ? 'warn' : 'neutral'} hint={t('Nobody owns them')} />}
+        <Tile label={`No update in ${d.staleDays}+ days`} value={d.totals.stale} unavailable={d.totals.stale === null} tone={d.totals.stale > 0 ? 'warn' : 'neutral'} hint={t('Open and untouched')} />
+        {d.pingPong.available && <Tile label={`Reassigned ${d.pingPong.threshold}+ times`} value={d.pingPong.count} tone={d.pingPong.count > 0 ? 'warn' : 'neutral'} hint={t('Handed from group to group')} />}
+        {d.totals.resolvedActive > 0 && <Tile label={t('Resolved, not closed')} value={d.totals.resolvedActive} hint={t('Waiting to close. Not counted as open.')} />}
       </div>
 
       {age.open > 0 ? (
-        <HeatStrip title="How long tickets have been open" cells={age.buckets.map((b) => ({ key: b.key, label: b.label, value: b.count }))} total={age.open} unit="tickets" onDrill={ageDrill} hrefFor={links ? (cell) => hrefTo(env, ageTarget(cell)) : undefined} labelHeader="Age" valueHeader="Open tickets" />
+        <HeatStrip title={t('How long tickets have been open')} cells={age.buckets.map((b) => ({ key: b.key, label: b.label, value: b.count }))} total={age.open} unit="tickets" onDrill={ageDrill} hrefFor={links ? (cell) => hrefTo(env, ageTarget(cell)) : undefined} labelHeader="Age" valueHeader="Open tickets" />
       ) : (
-        <p className="ab-hint">No open tickets to age.</p>
+        <p className="ab-hint">{t('No open tickets to age.')}</p>
       )}
 
       {d.byAssignee.length > 0 && (
@@ -76,7 +77,7 @@ export function WorkloadBody({ d, env }) {
       )}
       {d.byGroup.length > 0 && (
         <StackedBar
-          title="Open work by group"
+          title={t('Open work by group')}
           rows={rowsOf(d.byGroup)}
           series={series}
           labelHeader="Group"
@@ -98,7 +99,7 @@ export default function WorkloadView({ widget, env }) {
   const state = useSection('workload', widget, env);
   const d = state.result?.data;
   return (
-    <SectionShell title="Workload and ageing" help="Open work by person and group, how old it is, and where it is stuck." state={state} env={env} widgetId={widget?.id}>
+    <SectionShell title={t('Workload and ageing')} help={t('Open work by person and group, how old it is, and where it is stuck.')} state={state} env={env} widgetId={widget?.id}>
       {d && <WorkloadBody d={d} env={env} />}
     </SectionShell>
   );

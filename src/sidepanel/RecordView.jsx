@@ -13,6 +13,7 @@ import { aiNeedsText, isAiReady } from './aiReady.js';
 import { describeHeader, headerPhase } from './recordHeader.js';
 import { launchIsForPage } from '../lib/launch.js';
 import { panelShowsBar } from '../features/quick.js';
+import { t } from '../i18n/index.js';
 
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
 const needsStricter = (feature, mode) => Boolean(feature.requires?.minMode) && (MODE_RANK[mode] ?? 0) < (MODE_RANK[feature.requires.minMode] ?? 0);
@@ -128,7 +129,7 @@ export default function RecordView({ page, eff, launch = null, onLaunchDone = ()
 
   return (
     <div className="ab-pane" ref={root}>
-      <section className="ab-card ab-record" aria-label="Open record">
+      <section className="ab-card ab-record" aria-label={t('Open record')}>
         <span className="ab-record-number">{card.number}</span>
         <span className={`ab-record-title${card.titleKind === 'text' ? '' : ' ab-muted'}`}>{card.title}</span>
         <div className="ab-tags">
@@ -140,21 +141,21 @@ export default function RecordView({ page, eff, launch = null, onLaunchDone = ()
 
       {panelShowsBar(features.length) && <QuickBar kind={kind} features={features} eff={eff} disabled={!aiReady || !idle} onRun={(f) => start(f, 'quick')} />}
 
-      {run.phase === 'done' && <p className="ab-hint">One answer at a time: close the answer below to choose another action.</p>}
+      {run.phase === 'done' && <p className="ab-hint">{t('One answer at a time: close the answer below to choose another action.')}</p>}
       {launchNote && <p className="ab-note ab-note-warn" role="status">{launchNote}</p>}
 
       <AiKeyNote eff={eff} what="these actions" also={`${noAiTabs} work without a key.`} />
 
-      <Tabs idBase="ab-rec" label="Record tools" tabs={tabs} value={shown} onChange={chooseTab} />
+      <Tabs idBase="ab-rec" label={t('Record tools')} tabs={tabs} value={shown} onChange={chooseTab} />
 
       <TabPanel idBase="ab-rec" id="actions" hidden={shown !== 'actions'} className="ab-pane">
         {idle && (
-          <section className="ab-features" aria-label="Actions">
+          <section className="ab-features" aria-label={t('Actions')}>
             {features.map((f) => (
               <button key={f.id} type="button" className="ab-feature" data-feature={f.id} disabled={!aiReady} onClick={() => start(f, 'list')}>
                 <span className="ab-feature-title">{f.title}</span>
                 <span className="ab-feature-desc">{f.description}</span>
-                {needsStricter(f, eff.values.piiMode) && <span className="ab-feature-desc">Needs Strict privacy mode. Change it in Settings.</span>}
+                {needsStricter(f, eff.values.piiMode) && <span className="ab-feature-desc">{t('Needs Strict privacy mode. Change it in Settings.')}</span>}
               </button>
             ))}
           </section>

@@ -11,6 +11,7 @@ import { snippetTargets } from '../../snippets/targets.js';
 import { downloadText } from '../reports/download.js';
 import { ShowMore } from '../ui/primitives.jsx';
 import { FillFeedback, ReviewHints, hintsFor, useFill } from './shared.js';
+import { t } from '../../i18n/index.js';
 
 // N21 Snippets: canned replies with {{variables}} filled from the open ticket, inserted into a field of its form (the person presses
 // Save). Three sources, one list: the organisation's (policy `orgSnippets`, read-only, marked), the person's own (this browser,
@@ -29,7 +30,7 @@ function PreviewBox({ preview, label }) {
     <>
       <div className="ab-output ab-compose-preview" aria-label={label}>{preview.text}</div>
       {hints.length > 0 && (
-        <ul className="ab-compose-list ab-locked" aria-label="Variables without a value">
+        <ul className="ab-compose-list ab-locked" aria-label={t('Variables without a value')}>
           {hints.map((h) => (
             <li key={h.name}>
               <span className="ab-mono">{token(h.name)}</span>: {h.hint}
@@ -321,16 +322,16 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
         <section className="ab-compose-editor" aria-label={editor.id ? 'Edit snippet' : 'New snippet'}>
           <h3 className="ab-h">{editor.id ? 'Edit snippet' : 'New snippet'}</h3>
           <div className="ab-field">
-            <label className="ab-label" htmlFor="ab-snip-title">Title</label>
+            <label className="ab-label" htmlFor="ab-snip-title">{t('Title')}</label>
             <input id="ab-snip-title" ref={titleRef} className="ab-input" maxLength={LIMITS.title} value={editor.title} onChange={(e) => setEditor({ ...editor, title: e.target.value })} />
           </div>
           <div className="ab-field">
-            <label className="ab-label" htmlFor="ab-snip-shortcut">Search word (optional)</label>
-            <input id="ab-snip-shortcut" className="ab-input" maxLength={LIMITS.shortcut} value={editor.shortcut} onChange={(e) => setEditor({ ...editor, shortcut: e.target.value })} placeholder="info" autoComplete="off" />
-            <span className="ab-hint">One word to find it fast in the search box: letters, digits, dash, underscore or slash.</span>
+            <label className="ab-label" htmlFor="ab-snip-shortcut">{t('Search word (optional)')}</label>
+            <input id="ab-snip-shortcut" className="ab-input" maxLength={LIMITS.shortcut} value={editor.shortcut} onChange={(e) => setEditor({ ...editor, shortcut: e.target.value })} placeholder={t('info')} autoComplete="off" />
+            <span className="ab-hint">{t('One word to find it fast in the search box: letters, digits, dash, underscore or slash.')}</span>
           </div>
           <div className="ab-field">
-            <label className="ab-label" htmlFor="ab-snip-body">Text</label>
+            <label className="ab-label" htmlFor="ab-snip-body">{t('Text')}</label>
             <textarea id="ab-snip-body" ref={bodyRef} className="ab-textarea ab-compose-text" maxLength={LIMITS.body} value={editor.body} onChange={(e) => setEditor({ ...editor, body: e.target.value })} />
             <span className="ab-hint">{editor.body.length.toLocaleString()} of {LIMITS.body.toLocaleString()} characters</span>
           </div>
@@ -351,9 +352,9 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
                   <li key={v.name} className="ab-compose-row">
                     <div className="ab-compose-row-text">
                       <span className="ab-mono">{token(v.name)}</span>
-                      <span className="ab-sub">{v.description} (for example {v.example})</span>
+                      <span className="ab-sub">{t('{description} (for example {example})', { description: v.description, example: v.example })}</span>
                     </div>
-                    <button type="button" className="ab-btn ab-btn-sm" onClick={() => addVariable(v.name)} aria-label={`Add ${v.name} to the text`}>Add</button>
+                    <button type="button" className="ab-btn ab-btn-sm" onClick={() => addVariable(v.name)} aria-label={`Add ${v.name} to the text`}>{t('Add')}</button>
                   </li>
                 ))}
               </ul>
@@ -364,13 +365,13 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
               Agent Buddy does not know {unknown.length === 1 ? 'this variable' : 'these variables'}: {unknown.map((n) => token(n)).join(', ')}. Check the spelling, or add a fallback.
             </p>
           )}
-          <h4 className="ab-compose-sub">Preview</h4>
+          <h4 className="ab-compose-sub">{t('Preview')}</h4>
           <p className="ab-hint">{sourceNote}</p>
-          <PreviewBox preview={shown(editor.body)} label="Preview of the snippet" />
+          <PreviewBox preview={shown(editor.body)} label={t('Preview of the snippet')} />
           {editError && <p className="ab-note ab-note-danger" role="alert">{editError}</p>}
           <div className="ab-row ab-compose-gap">
-            <button type="button" className="ab-btn ab-btn-sm" onClick={save}>Save</button>
-            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => { setEditor(null); setEditError(''); }}>Cancel</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={save}>{t('Save')}</button>
+            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => { setEditor(null); setEditError(''); }}>{t('Cancel')}</button>
           </div>
         </section>
       </div>
@@ -385,20 +386,20 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
   return (
     <div className="ab-compose-stack" ref={box}>
       <div className="ab-field">
-        <label className="ab-label" htmlFor="ab-snip-search">Search</label>
-        <input id="ab-snip-search" className="ab-input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title, search word or text" autoComplete="off" />
+        <label className="ab-label" htmlFor="ab-snip-search">{t('Search')}</label>
+        <input id="ab-snip-search" className="ab-input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Title, search word or text')} autoComplete="off" />
       </div>
-      {!loaded && <p className="ab-sub">Loading…</p>}
+      {!loaded && <p className="ab-sub">{t('Loading…')}</p>}
       {loaded && list.length === 0 && (
         <div className="ab-empty">
-          <p className="ab-empty-text">No snippets yet. A snippet is a reply you write once and reuse, with values from the ticket filled in.</p>
+          <p className="ab-empty-text">{t('No snippets yet. A snippet is a reply you write once and reuse, with values from the ticket filled in.')}</p>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" onClick={addStarters}>Add three examples</button>
-            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" data-snippet-new="" onClick={startNew}>Write my own</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={addStarters}>{t('Add three examples')}</button>
+            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" data-snippet-new="" onClick={startNew}>{t('Write my own')}</button>
           </div>
         </div>
       )}
-      {loaded && list.length > 0 && results.length === 0 && <p className="ab-sub">Nothing matches "{query}".</p>}
+      {loaded && list.length > 0 && results.length === 0 && <p className="ab-sub">{t('Nothing matches "{query}".', { query })}</p>}
       {results.length > 0 && (
         <ShowMore
           items={results}
@@ -419,7 +420,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
               }}
             >
               <span className="ab-feature-title">
-                {s.title} {s.shortcut && <span className="ab-tag">{s.shortcut}</span>} {isOrgSnippet(s) && <span className="ab-tag ab-snip-org">From your organisation</span>}
+                {s.title} {s.shortcut && <span className="ab-tag">{s.shortcut}</span>} {isOrgSnippet(s) && <span className="ab-tag ab-snip-org">{t('From your organisation')}</span>}
               </span>
               <span className="ab-feature-desc">{firstLine(s.body).slice(0, 90)}</span>
             </button>
@@ -434,28 +435,28 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
             <span className="ab-spacer" />
             {key && (
               <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setPackNonce((n) => n + 1)} disabled={packState.state === 'loading'}>
-                Refresh values
+                {t('Refresh values')}
               </button>
             )}
           </div>
           <p className="ab-hint">{sourceNote}</p>
-          <PreviewBox preview={detail} label="Snippet as it will be inserted" />
+          <PreviewBox preview={detail} label={t('Snippet as it will be inserted')} />
           {/* what the reader would see: low-severity findings never block, but they are shown */}
           {target?.customerVisible && <ReviewHints hints={hintsFor(target.field, actual(selected.body).text, { people: realPack?.people || [] })} />}
 
           {askMissing && askMissing.id === selected.id && (
             <div className="ab-note ab-note-warn" role="alert">
-              <strong>Some values are missing.</strong> If you insert now, these stay as written in the text:{' '}
+              <strong>{t('Some values are missing.')}</strong> If you insert now, these stay as written in the text:{' '}
               {realMissing.map((n) => token(n)).join(', ')}.
               <div className="ab-row ab-compose-gap">
-                <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => insertSnippet(selected, true)}>Insert anyway</button>
-                <button type="button" className="ab-btn ab-btn-sm" onClick={() => setAskMissing(null)}>Cancel</button>
+                <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => insertSnippet(selected, true)}>{t('Insert anyway')}</button>
+                <button type="button" className="ab-btn ab-btn-sm" onClick={() => setAskMissing(null)}>{t('Cancel')}</button>
               </div>
             </div>
           )}
 
           <div className="ab-row ab-snip-insert">
-            <label className="ab-sub" htmlFor="ab-snip-target">Insert into</label>
+            <label className="ab-sub" htmlFor="ab-snip-target">{t('Insert into')}</label>
             <select id="ab-snip-target" className="ab-select ab-compose-select" value={target?.field || ''} onChange={(e) => { setTargetField(e.target.value); clearNotes(); }}>
               {targets.map((t) => (
                 <option key={t.field} value={t.field}>{t.label}</option>
@@ -471,17 +472,17 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
             >
               {fill.inserted[insertKey] ? 'Inserted' : 'Insert'}
             </button>
-            <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.copy(actual(selected.body).text)}>Copy</button>
-            {!fromOrg && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => startEdit(selected)}>Edit</button>}
+            <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.copy(actual(selected.body).text)}>{t('Copy')}</button>
+            {!fromOrg && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => startEdit(selected)}>{t('Edit')}</button>}
             {!fromOrg &&
               (confirmDelete === selected.id ? (
                 <>
-                  <span className="ab-sub">Delete this snippet?</span>
-                  <button type="button" className="ab-btn ab-btn-danger ab-btn-sm" onClick={() => remove(selected.id)}>Yes, delete</button>
-                  <button type="button" className="ab-btn ab-btn-sm" onClick={() => setConfirmDelete('')}>No</button>
+                  <span className="ab-sub">{t('Delete this snippet?')}</span>
+                  <button type="button" className="ab-btn ab-btn-danger ab-btn-sm" onClick={() => remove(selected.id)}>{t('Yes, delete')}</button>
+                  <button type="button" className="ab-btn ab-btn-sm" onClick={() => setConfirmDelete('')}>{t('No')}</button>
                 </>
               ) : (
-                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setConfirmDelete(selected.id)}>Delete</button>
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setConfirmDelete(selected.id)}>{t('Delete')}</button>
               ))}
           </div>
           <FillFeedback fill={fill} />
@@ -505,30 +506,30 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
       )}
 
       <div className="ab-row">
-        {list.length > 0 && <button type="button" className="ab-btn ab-btn-sm" data-snippet-new="" onClick={startNew}>New snippet</button>}
+        {list.length > 0 && <button type="button" className="ab-btn ab-btn-sm" data-snippet-new="" onClick={startNew}>{t('New snippet')}</button>}
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-expanded={backup} onClick={() => setBackup((v) => !v)}>
-          Back up or share
+          {t('Back up or share')}
         </button>
       </div>
       {backup && (
-        <section className="ab-snip-backup" aria-label="Back up or share">
+        <section className="ab-snip-backup" aria-label={t('Back up or share')}>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={own.length === 0} onClick={saveFile}>Save to a file</button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => fileRef.current?.click()}>Add from a file</button>
-            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={own.length === 0} onClick={copyAll}>Copy as text</button>
-            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-expanded={pasteOpen} onClick={() => setPasteOpen((v) => !v)}>Paste instead</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={own.length === 0} onClick={saveFile}>{t('Save to a file')}</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => fileRef.current?.click()}>{t('Add from a file')}</button>
+            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={own.length === 0} onClick={copyAll}>{t('Copy as text')}</button>
+            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-expanded={pasteOpen} onClick={() => setPasteOpen((v) => !v)}>{t('Paste instead')}</button>
           </div>
-          <input ref={fileRef} id="ab-snip-file" type="file" accept=".json,application/json" aria-label="Snippet file to add" tabIndex={-1} hidden onChange={chooseFile} />
+          <input ref={fileRef} id="ab-snip-file" type="file" accept=".json,application/json" aria-label={t('Snippet file to add')} tabIndex={-1} hidden onChange={chooseFile} />
           {pasteOpen && (
             <div className="ab-field">
-              <label className="ab-label" htmlFor="ab-snip-import">Paste the snippets here</label>
-              <textarea id="ab-snip-import" className="ab-textarea ab-compose-text" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"format":"agent-buddy-snippets", ...}' />
+              <label className="ab-label" htmlFor="ab-snip-import">{t('Paste the snippets here')}</label>
+              <textarea id="ab-snip-import" className="ab-textarea ab-compose-text" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={t('{"format":"agent-buddy-snippets", ...}')} />
               <div className="ab-row">
-                <button type="button" className="ab-btn ab-btn-sm" disabled={!importText.trim()} onClick={importPasted}>Add these snippets</button>
+                <button type="button" className="ab-btn ab-btn-sm" disabled={!importText.trim()} onClick={importPasted}>{t('Add these snippets')}</button>
               </div>
             </div>
           )}
-          <span className="ab-hint">Your own snippets only. A snippet that repeats a search word or an existing title and text is skipped; nothing is overwritten.</span>
+          <span className="ab-hint">{t('Your own snippets only. A snippet that repeats a search word or an existing title and text is skipped; nothing is overwritten.')}</span>
         </section>
       )}
     </div>

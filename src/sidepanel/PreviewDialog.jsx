@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FOCUSABLE, dialogKeyAction, focusToRestore, inertOutside, outsideKeyAction, selectedTextIn } from './dialogKeys.js';
 import { maskMessage, splitPreview } from './runLogic.js';
+import { t } from '../i18n/index.js';
 
 const PLACEHOLDER = /(\[[A-Z_]{2,20}_\d+\])/;
 
@@ -165,13 +166,13 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
       <div className="ab-backdrop" role="presentation" ref={backdropRef} tabIndex={-1} onKeyDown={onKeyDown}>
         <div className="ab-dialog ab-dialog-short" role="dialog" aria-modal="true" aria-labelledby="ab-prev-title" aria-describedby="ab-prev-short">
           <div className="ab-dialog-head">
-            <h2 className="ab-h" id="ab-prev-title">Send to the AI?</h2>
+            <h2 className="ab-h" id="ab-prev-title">{t('Send to the AI?')}</h2>
             <p className="ab-sub">
               {feature.title} · to {destination} · masked: {maskSummary(prepared.stats)}
             </p>
           </div>
           <div className="ab-dialog-body">
-            <p className="ab-confirm-short" id="ab-prev-short">Uses {others} from other records. You checked the rest of what this action sends before.</p>
+            <p className="ab-confirm-short" id="ab-prev-short">{t('Uses {others} from other records. You checked the rest of what this action sends before.', { others })}</p>
           </div>
           <div className="ab-dialog-foot" style={{ flexWrap: 'wrap' }}>
             <button
@@ -183,10 +184,10 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
                 setView('data');
               }}
             >
-              Show what is sent
+              {t('Show what is sent')}
             </button>
-            <button type="button" className="ab-btn" onClick={onCancel}>Cancel</button>
-            <button type="button" className="ab-btn ab-btn-primary" ref={sendRef} onClick={() => onSend({ shown: false })}>Send to AI</button>
+            <button type="button" className="ab-btn" onClick={onCancel}>{t('Cancel')}</button>
+            <button type="button" className="ab-btn ab-btn-primary" ref={sendRef} onClick={() => onSend({ shown: false })}>{t('Send to AI')}</button>
           </div>
         </div>
       </div>
@@ -197,7 +198,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
     <div className="ab-backdrop" role="presentation" ref={backdropRef} tabIndex={-1} onKeyDown={onKeyDown}>
       <div className="ab-dialog" role="dialog" aria-modal="true" aria-labelledby="ab-prev-title">
         <div className="ab-dialog-head">
-          <h2 className="ab-h" id="ab-prev-title">Check what will be sent</h2>
+          <h2 className="ab-h" id="ab-prev-title">{t('Check what will be sent')}</h2>
           <p className="ab-sub">
             {feature.title} · to {destination} · masked: {maskSummary(prepared.stats)}
           </p>
@@ -210,19 +211,19 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
           <div ref={previewRef} onMouseUp={pickSelection} onKeyUp={pickSelection}>
             {shownView === 'data' ? (
               <>
-                <h3 className="ab-preview-h">Ticket data</h3>
-                <pre className="ab-preview ab-preview-data" tabIndex={0} aria-label="Ticket data that will be sent">
+                <h3 className="ab-preview-h">{t('Ticket data')}</h3>
+                <pre className="ab-preview ab-preview-data" tabIndex={0} aria-label={t('Ticket data that will be sent')}>
                   <Highlighted text={split.data} />
                 </pre>
                 <details className="ab-preview-rules">
-                  <summary>Rules sent with it</summary>
-                  <pre className="ab-preview-rules-text" tabIndex={0} aria-label="Fixed rules that are sent with it">
+                  <summary>{t('Rules sent with it')}</summary>
+                  <pre className="ab-preview-rules-text" tabIndex={0} aria-label={t('Fixed rules that are sent with it')}>
                     <Highlighted text={split.rules} />
                   </pre>
                 </details>
               </>
             ) : (
-              <pre className="ab-preview ab-preview-exact" tabIndex={0} aria-label="Exact text that will be sent">
+              <pre className="ab-preview ab-preview-exact" tabIndex={0} aria-label={t('Exact text that will be sent')}>
                 <Highlighted text={split.exact} />
               </pre>
             )}
@@ -234,8 +235,8 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
           )}
           {typeof onMask === 'function' && (
             <div className="ab-field" style={{ marginTop: 10, marginBottom: 0 }}>
-              <label className="ab-label" htmlFor="ab-mask-text">Mask this too</label>
-              <span className="ab-hint" id="ab-mask-hint">Select words above, or type them here. Every place they appear is masked.</span>
+              <label className="ab-label" htmlFor="ab-mask-text">{t('Mask this too')}</label>
+              <span className="ab-hint" id="ab-mask-hint">{t('Select words above, or type them here. Every place they appear is masked.')}</span>
               <div className="ab-row">
                 <input
                   id="ab-mask-text"
@@ -253,17 +254,17 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
                     mask();
                   }}
                 />
-                <button type="button" className="ab-btn" onClick={mask} disabled={!maskText.trim()}>Mask</button>
+                <button type="button" className="ab-btn" onClick={mask} disabled={!maskText.trim()}>{t('Mask')}</button>
               </div>
               <span className="ab-hint" id="ab-mask-status" role="status">{maskStatus}</span>
             </div>
           )}
         </div>
         <div className="ab-dialog-foot" style={{ flexWrap: 'wrap' }}>
-          {canSkipNext && !always && <span className="ab-hint" style={{ marginRight: 'auto' }}>You will not be asked again for this action.</span>}
-          {always && <span className="ab-hint" style={{ marginRight: 'auto' }}>This one includes other tickets, so you are always asked.</span>}
-          <button type="button" className="ab-btn" onClick={onCancel}>Cancel</button>
-          <button type="button" className="ab-btn ab-btn-primary" ref={sendRef} onClick={() => onSend({ shown: true })}>Send to AI</button>
+          {canSkipNext && !always && <span className="ab-hint" style={{ marginRight: 'auto' }}>{t('You will not be asked again for this action.')}</span>}
+          {always && <span className="ab-hint" style={{ marginRight: 'auto' }}>{t('This one includes other tickets, so you are always asked.')}</span>}
+          <button type="button" className="ab-btn" onClick={onCancel}>{t('Cancel')}</button>
+          <button type="button" className="ab-btn ab-btn-primary" ref={sendRef} onClick={() => onSend({ shown: true })}>{t('Send to AI')}</button>
         </div>
       </div>
     </div>

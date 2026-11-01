@@ -9,6 +9,7 @@ import { originOf, setPending } from './pendingDraft.js';
 import { choicesOf, createGuard, insertTargets, insertText, insertsForKind, performInsert, primaryOf } from './insertFlow.js';
 import ReviewHints from './ReviewHints.jsx';
 import InsertEditor from './ticket/assist/answers/InsertEditor.jsx';
+import { t } from '../i18n/index.js';
 
 const NO_TEXTS = []; // (one array, so the memoised review below is not redone on every render)
 
@@ -184,7 +185,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             {choices.map((c, i) => (
               <li key={i}>
                 <SafeText text={c} />
-                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={`Copy reply ${i + 1}`}>Copy this</button>
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={`Copy reply ${i + 1}`}>{t('Copy this')}</button>
               </li>
             ))}
           </ol>
@@ -202,9 +203,9 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             ))}
           </ul>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.spec, findings.key, true)}>Insert anyway</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.spec, findings.key, true)}>{t('Insert anyway')}</button>
             {/* The part that was about to be inserted, not the whole answer, in a box to change before it goes in. */}
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { const { key, value } = findings; setFindings(null); setNote(null); setEditing({ key, text: value }); }}>Edit first</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { const { key, value } = findings; setFindings(null); setNote(null); setEditing({ key, text: value }); }}>{t('Edit first')}</button>
           </div>
         </div>
       )}
@@ -259,12 +260,12 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             {feature.open.label || 'Open a new form'}
           </button>
         )}
-        <button type="button" className={`ab-btn ab-btn-sm${copyFirst ? ' ab-btn-primary' : ''}`} onClick={() => copy()}>Copy</button>
-        {onAgain && <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>Try again</button>}
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>Close</button>
+        <button type="button" className={`ab-btn ab-btn-sm${copyFirst ? ' ab-btn-primary' : ''}`} onClick={() => copy()}>{t('Copy')}</button>
+        {onAgain && <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>{t('Try again')}</button>}
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>{t('Close')}</button>
       </div>
-      {replacing && <p className="ab-hint" style={{ marginTop: 8 }}>A one-line field such as a title is replaced, not added to.</p>}
-      <p className="ab-hint" style={{ marginTop: 8 }}>AI can be wrong. Check the text before you use it.</p>
+      {replacing && <p className="ab-hint" style={{ marginTop: 8 }}>{t('A one-line field such as a title is replaced, not added to.')}</p>}
+      <p className="ab-hint" style={{ marginTop: 8 }}>{t('AI can be wrong. Check the text before you use it.')}</p>
     </section>
   );
 }

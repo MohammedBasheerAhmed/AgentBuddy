@@ -7,6 +7,7 @@ import { panelChecklistStore } from '../../checks/panelStore.js';
 import { allowSensitiveOf, read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { Group, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N6, the fulfilment checklist of a catalog task or requested item: steps found in the written instructions, ticked off by the agent.
 // The ONLY thing kept is which steps are ticked, as short hashes in the browser's session storage next to a salted record hash, never
@@ -74,15 +75,15 @@ export default function ChecklistCard({ page, eff, record, active, setSummary })
         <>
           <ProgressBar progress={progress} />
           <StepList steps={steps} done={done} onToggle={toggle} />
-          {progress.complete && <p className="ab-note ab-note-ok" role="status">Every step is ticked. Close the task when you are ready.</p>}
-          <p className="ab-hint">Your ticks are kept in this browser until it closes (not the step text).</p>
+          {progress.complete && <p className="ab-note ab-note-ok" role="status">{t('Every step is ticked. Close the task when you are ready.')}</p>}
+          <p className="ab-hint">{t('Your ticks are kept in this browser until it closes (not the step text).')}</p>
         </>
       ) : (
-        <p className="ab-hint">No steps were found in the written instructions. AI Assist can propose a list.</p>
+        <p className="ab-hint">{t('No steps were found in the written instructions. AI Assist can propose a list.')}</p>
       )}
       {message && <p className="ab-note ab-note-danger" role="alert">{message}</p>}
       {answers?.applicable && answers.available && answers.rows.length > 0 && (
-        <Group title="Request details" count={answers.rows.length}>
+        <Group title={t('Request details')} count={answers.rows.length}>
           <Facts rows={answers.rows.map((r) => ({ label: r.question, value: r.value, hidden: r.hidden }))} />
           <Hints lines={[answers.note]} />
         </Group>
@@ -90,11 +91,11 @@ export default function ChecklistCard({ page, eff, record, active, setSummary })
       <div className="ab-ins-foot">
         {steps.length > 0 && (
           <QuietButton onClick={clearTicks} disabled={!done.length}>
-            Clear ticks
+            {t('Clear ticks')}
           </QuietButton>
         )}
         <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>
-          Refresh
+          {t('Refresh')}
         </QuietButton>
       </div>
     </>

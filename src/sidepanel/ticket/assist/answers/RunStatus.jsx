@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { errorNextSteps, waitingText } from '../../../runLogic.js';
+import { t } from '../../../../i18n/index.js';
 
 /**
  * A clock that ticks while `on`: the time now, re-read every `ms`. Off, it does nothing (no timer left running).
@@ -30,7 +31,7 @@ export function RunProgress({ run, onStop, readingText = 'Reading the ticket wit
   return (
     <div className="ab-note ab-runstatus" role="status">
       <span className="ab-runstatus-text">{text}</span>
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onStop}>Stop waiting</button>
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onStop}>{t('Stop waiting')}</button>
     </div>
   );
 }
@@ -49,13 +50,13 @@ export function RunError({ error, code = '', onRetry, onDismiss }) {
       <p className="ab-errnote-text">{error}</p>
       <div className="ab-row">
         {steps.retry && onRetry && (
-          <button type="button" className="ab-btn ab-btn-sm" onClick={onRetry}>Try again</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={onRetry}>{t('Try again')}</button>
         )}
         {steps.settings && (
-          <button type="button" className="ab-btn ab-btn-sm" onClick={() => chrome.runtime.openOptionsPage()}>Open Settings</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => chrome.runtime.openOptionsPage()}>{t('Open Settings')}</button>
         )}
         {onDismiss && (
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onDismiss}>Dismiss</button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onDismiss}>{t('Dismiss')}</button>
         )}
       </div>
     </div>

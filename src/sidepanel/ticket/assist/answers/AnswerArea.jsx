@@ -5,6 +5,7 @@ import { isBusyPhase } from '../../../useRun.js';
 import { otherRecordsSummary, previewStyle } from '../../../runLogic.js';
 import AnswerCard from './AnswerCard.jsx';
 import { RunError, RunProgress, useTick } from './RunStatus.jsx';
+import { t } from '../../../../i18n/index.js';
 
 /**
  * The answer area at the top of the Ticket screen's AI Assist half (AI0.4). Where the person looks:
@@ -67,7 +68,7 @@ export default function AnswerArea({ assist, page, eff, record, active = true })
   if (!answers.length && phase === 'idle' && !assist.elsewhere.length) return null;
 
   return (
-    <div className="ab-answers" ref={root} aria-label="Answers" role="region">
+    <div className="ab-answers" ref={root} aria-label={t('Answers')} role="region">
       <RunProgress run={assist} onStop={assist.reset} />
       {phase === 'error' && <RunError error={assist.error} code={assist.errorCode} onRetry={assist.again} onDismiss={assist.reset} />}
       {prepared && (
@@ -100,7 +101,7 @@ export default function AnswerArea({ assist, page, eff, record, active = true })
         />
       ))}
       {assist.elsewhere.length > 0 && (
-        <ul className="ab-answers-elsewhere" aria-label="Other tickets">
+        <ul className="ab-answers-elsewhere" aria-label={t('Other tickets')}>
           {assist.elsewhere.map((line) => (
             <li key={line.key}>{line.text}</li>
           ))}

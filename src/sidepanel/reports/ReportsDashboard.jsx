@@ -24,6 +24,7 @@ import BuilderEditor from './BuilderEditor.jsx';
 import MoreMenu from './MoreMenu.jsx';
 import ExportPanel from './ExportPanel.jsx';
 import { dashboardNotes } from './SectionShell.jsx';
+import { t } from '../../i18n/index.js';
 
 const AUTO_MS = 5 * 60 * 1000;
 // Coming back to the Team screen after this long reads the numbers again (TRACKER.md 2.4: fast and honest).
@@ -58,7 +59,7 @@ function NameField({ value, onCommit, disabled }) {
   const commit = () => text.trim() && text.trim() !== value && onCommit(text);
   return (
     <div className="ab-field">
-      <label className="ab-label" htmlFor="ab-dash-name">Dashboard name</label>
+      <label className="ab-label" htmlFor="ab-dash-name">{t('Dashboard name')}</label>
       <input id="ab-dash-name" className="ab-input" maxLength={CAPS.name} value={text} disabled={disabled} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()} />
     </div>
   );
@@ -67,10 +68,10 @@ function NameField({ value, onCommit, disabled }) {
 function WidgetTools({ index, count, onMove, onEdit, onRemove, label }) {
   return (
     <div className="ab-widget-tools" role="group" aria-label={`Change ${label}`}>
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(-1)} disabled={index === 0}>Move up</button>
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(1)} disabled={index === count - 1}>Move down</button>
-      {onEdit && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onEdit}>Edit</button>}
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onRemove}>Remove</button>
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(-1)} disabled={index === 0}>{t('Move up')}</button>
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(1)} disabled={index === count - 1}>{t('Move down')}</button>
+      {onEdit && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onEdit}>{t('Edit')}</button>}
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onRemove}>{t('Remove')}</button>
     </div>
   );
 }
@@ -244,12 +245,12 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
   if (disabled) {
     return (
       <section className="ab-card">
-        <h2 className="ab-h">Team and queue</h2>
-        <p className="ab-sub">Your organisation has turned reports off.</p>
+        <h2 className="ab-h">{t('Team and queue')}</h2>
+        <p className="ab-sub">{t('Your organisation has turned reports off.')}</p>
       </section>
     );
   }
-  if (!ready || !dash) return <p className="ab-sub" role="status">Loading your dashboards…</p>;
+  if (!ready || !dash) return <p className="ab-sub" role="status">{t('Loading your dashboards…')}</p>;
 
   const { shown: widgets, hidden: aiSections } = visibleWidgets(dash.widgets, { policy, customize: customize && canEdit });
   const notes = [
@@ -318,23 +319,23 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       {sessionLost && (
         <div className="ab-note ab-note-warn ab-dash-session" role="alert">
           <p>{SESSION_TEXT}</p>
-          <button type="button" className="ab-btn ab-btn-sm" onClick={refresh}>Try again</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={refresh}>{t('Try again')}</button>
         </div>
       )}
 
       <div className="ab-dash-toolbar ab-dash-top">
         <label className="ab-dash-select">
-          <span className="ab-chart-sr">Dashboard</span>
+          <span className="ab-chart-sr">{t('Dashboard')}</span>
           <select className="ab-select ab-select-quiet" value={dash.id} onChange={(e) => update((s) => setActive(s, e.target.value))}>
             {state.dashboards.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </label>
-        <button type="button" className="ab-chip ab-scope-chip" aria-expanded={scopeOpen} aria-controls="ab-dash-scope" onClick={() => setScopeOpen((o) => !o)} title="Whose tickets, and which tables">
+        <button type="button" className="ab-chip ab-scope-chip" aria-expanded={scopeOpen} aria-controls="ab-dash-scope" onClick={() => setScopeOpen((o) => !o)} title={t('Whose tickets, and which tables')}>
           {scopeChipText(dash.scope, context.data)}
         </button>
-        <MoreMenu label="More: refresh, customize, export, print" items={menu} />
+        <MoreMenu label={t('More: refresh, customize, export, print')} items={menu} />
       </div>
       <p className="ab-statusline" role="status">
         {notice ? `${notice} ` : ''}
@@ -343,9 +344,9 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
         {auto ? ' · refreshes every 5 minutes' : ''}
       </p>
 
-      {status === 'newer' && <p className="ab-note ab-note-warn">Your saved dashboards were made by a newer version of Agent Buddy, so the ready-made ones are shown and nothing is saved.</p>}
-      {status === 'corrupt' && <p className="ab-note ab-note-warn">Your saved dashboards could not be read, so the ready-made ones are shown.</p>}
-      {saveFailed && <p className="ab-note ab-note-warn">Your changes could not be saved on this computer.</p>}
+      {status === 'newer' && <p className="ab-note ab-note-warn">{t('Your saved dashboards were made by a newer version of Agent Buddy, so the ready-made ones are shown and nothing is saved.')}</p>}
+      {status === 'corrupt' && <p className="ab-note ab-note-warn">{t('Your saved dashboards could not be read, so the ready-made ones are shown.')}</p>}
+      {saveFailed && <p className="ab-note ab-note-warn">{t('Your changes could not be saved on this computer.')}</p>}
 
       {scopeOpen && (
         <div id="ab-dash-scope">
@@ -367,45 +368,45 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       {exporting && <ExportPanel name={dash.name} entries={loadedEntries} order={widgetIds} mask={mask} setMask={setMask} maskMode={maskMode} onClose={() => setExporting(false)} />}
 
       {customize && canEdit && (
-        <section className="ab-card ab-customize" aria-label="Customize this dashboard">
+        <section className="ab-card ab-customize" aria-label={t('Customize this dashboard')}>
           <NameField value={dash.name} onCommit={(name) => update((s) => renameDashboard(s, dash.id, name))} />
           <div className="ab-row">
             <label className="ab-widget-select">
-              <span className="ab-chart-sr">Section to add</span>
+              <span className="ab-chart-sr">{t('Section to add')}</span>
               <select className="ab-select" value={adding} onChange={(e) => setAdding(e.target.value)}>
                 {addableSections(policy).map((s) => (
                   <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
               </select>
             </label>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addWidget(s, dash.id, { type: 'section', section: adding }))} disabled={dash.widgets.length >= CAPS.widgets}>Add section</button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setEditing({})} disabled={dash.widgets.length >= CAPS.widgets}>Add custom report</button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setCustomize(false)}>Done</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addWidget(s, dash.id, { type: 'section', section: adding }))} disabled={dash.widgets.length >= CAPS.widgets}>{t('Add section')}</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setEditing({})} disabled={dash.widgets.length >= CAPS.widgets}>{t('Add custom report')}</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setCustomize(false)}>{t('Done')}</button>
           </div>
           <p className="ab-hint">{sectionById(adding)?.description}</p>
           <details className="ab-details">
-            <summary>More</summary>
+            <summary>{t('More')}</summary>
             <div className="ab-row">
-              <button type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addDashboard(s, { name: 'New dashboard', scope: dash.scope }))} disabled={state.dashboards.length >= CAPS.dashboards}>New dashboard</button>
+              <button type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addDashboard(s, { name: 'New dashboard', scope: dash.scope }))} disabled={state.dashboards.length >= CAPS.dashboards}>{t('New dashboard')}</button>
               {missingPresets.map((p) => (
-                <button key={p.id} type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addPresetDashboard(s, p.id))}>Add "{p.name}"</button>
+                <button key={p.id} type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addPresetDashboard(s, p.id))}>{t('Add "{name}"', { name: p.name })}</button>
               ))}
-              <button type="button" className="ab-btn ab-btn-sm" onClick={saveLayout}>Save layout as a file</button>
-              <button type="button" className="ab-btn ab-btn-sm" onClick={() => fileInput.current?.click()} disabled={state.dashboards.length >= CAPS.dashboards}>Load a layout file</button>
+              <button type="button" className="ab-btn ab-btn-sm" onClick={saveLayout}>{t('Save layout as a file')}</button>
+              <button type="button" className="ab-btn ab-btn-sm" onClick={() => fileInput.current?.click()} disabled={state.dashboards.length >= CAPS.dashboards}>{t('Load a layout file')}</button>
               <input ref={fileInput} type="file" accept="application/json,.json" className="ab-offscreen" tabIndex={-1} aria-hidden="true" onChange={loadLayout} />
               {state.dashboards.length > 1 &&
                 (confirmRemove ? (
                   <>
-                    <span className="ab-hint">Remove "{dash.name}"?</span>
-                    <button type="button" className="ab-btn ab-btn-danger ab-btn-sm" onClick={() => { update((s) => removeDashboard(s, dash.id)); setConfirmRemove(false); }}>Yes, remove</button>
-                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setConfirmRemove(false)}>Keep it</button>
+                    <span className="ab-hint">{t('Remove "{name}"?', { name: dash.name })}</span>
+                    <button type="button" className="ab-btn ab-btn-danger ab-btn-sm" onClick={() => { update((s) => removeDashboard(s, dash.id)); setConfirmRemove(false); }}>{t('Yes, remove')}</button>
+                    <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setConfirmRemove(false)}>{t('Keep it')}</button>
                   </>
                 ) : (
-                  <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setConfirmRemove(true)}>Remove this dashboard</button>
+                  <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setConfirmRemove(true)}>{t('Remove this dashboard')}</button>
                 ))}
             </div>
           </details>
-          <p className="ab-hint">Only the layout is saved, on this computer and for this instance: sections, order, groups. Never numbers or names.</p>
+          <p className="ab-hint">{t('Only the layout is saved, on this computer and for this instance: sections, order, groups. Never numbers or names.')}</p>
         </section>
       )}
 
@@ -422,7 +423,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       )}
 
       {context.phase === 'error' && !context.data && context.code !== 'SESSION_EXPIRED' && <ErrorNote error={context.error} onRetry={refresh} />}
-      {context.phase === 'loading' && !context.data && <p className="ab-note" role="status">Checking which tables you can read…</p>}
+      {context.phase === 'loading' && !context.data && <p className="ab-note" role="status">{t('Checking which tables you can read…')}</p>}
       {noTables && (
         <p className="ab-note ab-note-warn">
           No ticket table is available for this dashboard. {usableIds.length ? 'Turn a table on under the scope above.' : 'You cannot read incidents, requests, cases, problems, changes or change tasks with your roles.'}
@@ -467,7 +468,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
                   {tools}
                   <section className="ab-card ab-widget" aria-label={section.label}>
                     <h2 className="ab-h">{section.label}</h2>
-                    <p className="ab-hint">This is under AI Assist now. Remove it from this dashboard.</p>
+                    <p className="ab-hint">{t('This is under AI Assist now. Remove it from this dashboard.')}</p>
                   </section>
                 </div>
               );
@@ -481,7 +482,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
               </div>
             );
           })}
-          {!dash.widgets.length && <p className="ab-sub">This dashboard is empty. Choose Customize in the ⋯ menu to add sections.</p>}
+          {!dash.widgets.length && <p className="ab-sub">{t('This dashboard is empty. Choose Customize in the ⋯ menu to add sections.')}</p>}
           {aiSections.length > 0 && <p className="ab-hint">{andList(aiSections)} {aiSections.length === 1 ? 'is' : 'are'} under AI Assist.</p>}
         </div>
       )}

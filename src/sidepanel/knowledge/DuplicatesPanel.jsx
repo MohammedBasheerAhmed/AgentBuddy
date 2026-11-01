@@ -12,6 +12,7 @@ import ErrorNote from '../ErrorNote.jsx';
 import { plainNote } from '../plainAccess.js';
 import { compareLocked, compareStillCurrent, selectionKey } from './duplicatesState.js';
 import { DUPLICATE_COLUMNS, duplicateRows, exportFileName } from '../knowledgeScreen/articleInfo.js';
+import { t } from '../../i18n/index.js';
 
 // N18 Duplicate article finder (Insights, no AI): pick a knowledge base (and, if you like, a category), see groups of published
 // articles whose titles read alike, page through more titles, pick one group and compare the TEXT of its articles. Titles and counts
@@ -210,17 +211,17 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
 
   return (
     <div className="ab-kbx-tool">
-      <p className="ab-hint">Compares titles of published articles, 300 at a time, newest changed first. Text is only read inside a group you pick.</p>
-      {scopes.phase === 'loading' && <p className="ab-sub" role="status">Looking for knowledge bases…</p>}
+      <p className="ab-hint">{t('Compares titles of published articles, 300 at a time, newest changed first. Text is only read inside a group you pick.')}</p>
+      {scopes.phase === 'loading' && <p className="ab-sub" role="status">{t('Looking for knowledge bases…')}</p>}
       {scopes.phase === 'error' && <ErrorNote error={scopes.error} onRetry={loadScopes} />}
-      {scopes.phase === 'ready' && scopes.items.length === 0 && <EmptyNote>No published articles are available to you.</EmptyNote>}
+      {scopes.phase === 'ready' && scopes.items.length === 0 && <EmptyNote>{t('No published articles are available to you.')}</EmptyNote>}
       <Notes access={scopes.access} />
       {scopes.items.length > 0 && (
         <>
           <div className="ab-field">
-            <label className="ab-label" htmlFor="ab-kb-base">Knowledge base</label>
+            <label className="ab-label" htmlFor="ab-kb-base">{t('Knowledge base')}</label>
             <select id="ab-kb-base" className="ab-select" value={kb} disabled={reading} onChange={(e) => chooseKb(e.target.value)}>
-              <option value="">Choose one…</option>
+              <option value="">{t('Choose one…')}</option>
               {scopes.items.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} ({s.count})</option>
               ))}
@@ -228,9 +229,9 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
           </div>
           {categories.length > 0 && (
             <div className="ab-field">
-              <label className="ab-label" htmlFor="ab-kb-category">Category (optional)</label>
+              <label className="ab-label" htmlFor="ab-kb-category">{t('Category (optional)')}</label>
               <select id="ab-kb-category" className="ab-select" value={category} onChange={(e) => chooseCategory(e.target.value)}>
-                <option value="">All categories</option>
+                <option value="">{t('All categories')}</option>
                 {categories.map((s) => (
                   <option key={s.id} value={s.id}>{s.name} ({s.count})</option>
                 ))}
@@ -238,7 +239,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
             </div>
           )}
           <div className="ab-row">
-            <button type="button" className="ab-btn" disabled={!kb || reading} onClick={find}>Find duplicates</button>
+            <button type="button" className="ab-btn" disabled={!kb || reading} onClick={find}>{t('Find duplicates')}</button>
           </div>
         </>
       )}
@@ -246,13 +247,13 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
       {reading && (
         <p className="ab-sub" role="status">
           Comparing titles…{' '}
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>Stop</button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>{t('Stop')}</button>
         </p>
       )}
       {found?.phase === 'error' && <ErrorNote error={found.error} onRetry={find} />}
 
       {found && found.phase !== 'loading' && found.phase !== 'error' && (
-        <section className="ab-kbx-results" aria-label="Duplicate groups">
+        <section className="ab-kbx-results" aria-label={t('Duplicate groups')}>
           <p className="ab-sub">
             {comparedText(articles.length, found.total)}{' '}
             {clusters.length ? `${clusters.length} group${clusters.length === 1 ? '' : 's'} read alike.` : 'No near-duplicates found.'}
@@ -273,7 +274,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
                 <div className="ab-row">
                   <strong>{c.articles.length} articles{c.exactTitle ? ' with the same title' : ' that read alike'}</strong>
                   <span className="ab-spacer" />
-                  <button type="button" className="ab-btn ab-btn-sm" disabled={locked} onClick={() => pick(c)}>Compare</button>
+                  <button type="button" className="ab-btn ab-btn-sm" disabled={locked} onClick={() => pick(c)}>{t('Compare')}</button>
                 </div>
                 {c.sharedWords.length > 0 && <div className="ab-tags">{c.sharedWords.map((w) => <span key={w} className="ab-tag">{w}</span>)}</div>}
                 <ul className="ab-kb-articles">
@@ -286,13 +287,13 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
                     </li>
                   ))}
                 </ul>
-                <p className="ab-hint">Most read: {c.keep.number}</p>
+                <p className="ab-hint">{t('Most read: {number}', { number: c.keep.number })}</p>
               </div>
             )}
           />
           {clusters.length > 0 && (
             <div className="ab-row">
-              <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={exportGroups}>Export groups (CSV)</button>
+              <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={exportGroups}>{t('Export groups (CSV)')}</button>
             </div>
           )}
           {note && <p className="ab-hint" role="status">{note}</p>}
@@ -300,9 +301,9 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
       )}
 
       {picked && (
-        <section className="ab-kbx-compare" aria-label="Compare the text">
-          <h3 className="ab-h" ref={mergeHeading} tabIndex={-1}>Compare the text</h3>
-          <p className="ab-sub">Choose two to {MERGE_MAX_ARTICLES} articles.</p>
+        <section className="ab-kbx-compare" aria-label={t('Compare the text')}>
+          <h3 className="ab-h" ref={mergeHeading} tabIndex={-1}>{t('Compare the text')}</h3>
+          <p className="ab-sub">{t('Choose two to {MERGE_MAX_ARTICLES} articles.', { MERGE_MAX_ARTICLES })}</p>
           <ul className="ab-kb-articles">
             {picked.cluster.articles.map((a) => (
               <li key={a.sysId}>
@@ -329,7 +330,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
                 ))}
               </ul>
               <Notes access={picked.texts.access} />
-              <p className="ab-hint">To draft one merged article from these, switch to AI Assist.</p>
+              <p className="ab-hint">{t('To draft one merged article from these, switch to AI Assist.')}</p>
             </>
           )}
         </section>

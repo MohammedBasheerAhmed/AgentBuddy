@@ -5,6 +5,7 @@ import { Facts, Hints, Tag } from '../../checks/Bits.jsx';
 import { allowSensitiveOf, read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { Group, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N5, request status: who to chase, in one line on top; then what it is waiting for, the due date and SLA, the approvals, the tasks
 // and the answers to the request questions (folded). On a catalog task the status is the requested item's. No AI: the message for
@@ -53,9 +54,9 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
       {status.caveats.length > 0 && <p className="ab-hint">{status.caveats.join(' ')}</p>}
 
       {approvals.applicable && (
-        <Group title="Approvals" count={approvals.available ? approvals.rows.length : undefined}>
-          {!approvals.available && <p className="ab-hint">The approvals could not be read, so they are not shown.</p>}
-          {approvals.available && !approvals.rows.length && <p className="ab-hint">No approvals are recorded.</p>}
+        <Group title={t('Approvals')} count={approvals.available ? approvals.rows.length : undefined}>
+          {!approvals.available && <p className="ab-hint">{t('The approvals could not be read, so they are not shown.')}</p>}
+          {approvals.available && !approvals.rows.length && <p className="ab-hint">{t('No approvals are recorded.')}</p>}
           {approvals.rows.map((a, i) => (
             <div key={i} className="ab-ins-kv">
               <span>{a.who}</span>
@@ -66,8 +67,8 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
       )}
       {chain.applicable && (
         <Group title={chain.title} count={chain.available ? chain.rows.length : undefined}>
-          {!chain.available && <p className="ab-hint">{chain.title} could not be read, so they are not shown.</p>}
-          {chain.available && !chain.rows.length && <p className="ab-hint">None recorded.</p>}
+          {!chain.available && <p className="ab-hint">{t('{title} could not be read, so they are not shown.', { title: chain.title })}</p>}
+          {chain.available && !chain.rows.length && <p className="ab-hint">{t('None recorded.')}</p>}
           {chain.rows.map((r, i) => (
             <div key={`${r.number}:${i}`} className={`ab-ins-kv${r.current ? ' ab-ins-current' : ''}`}>
               <span>
@@ -82,16 +83,16 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
         </Group>
       )}
       {answers.applicable && (
-        <Group title="Answers to the request questions" count={answers.available ? answers.rows.length : undefined}>
+        <Group title={t('Answers to the request questions')} count={answers.available ? answers.rows.length : undefined}>
           {!answers.available && <p className="ab-hint">{answers.note}</p>}
-          {answers.available && !answers.rows.length && <p className="ab-hint">No answers are recorded for this item.</p>}
+          {answers.available && !answers.rows.length && <p className="ab-hint">{t('No answers are recorded for this item.')}</p>}
           {answers.rows.length > 0 && <Facts rows={answers.rows.map((r) => ({ label: r.question, value: r.value, hidden: r.hidden }))} />}
           <Hints lines={[answers.available ? answers.note : '']} />
         </Group>
       )}
       <div className="ab-ins-foot">
         <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>
-          Refresh
+          {t('Refresh')}
         </QuietButton>
       </div>
     </>

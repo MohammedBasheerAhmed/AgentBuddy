@@ -5,6 +5,7 @@ import { relativeText } from '../../../insights/time.js';
 import { useRecordRead, useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N24, the ticket journey: opened, assigned and passed between groups, state changes, the conversation's key moments, SLA events,
 // resolved. Newest first, three then "Show all". The path between groups needs the field history, which many users may not read;
@@ -54,9 +55,9 @@ export default function JourneyCard({ page, eff, record, active, setSummary, set
           )}
         />
       ) : (
-        <p className="ab-hint">No dated events could be read for this ticket.</p>
+        <p className="ab-hint">{t('No dated events could be read for this ticket.')}</p>
       )}
-      {audit.phase === 'loading' && !audit.data && <p className="ab-hint" role="status">Reading the field history…</p>}
+      {audit.phase === 'loading' && !audit.data && <p className="ab-hint" role="status">{t('Reading the field history…')}</p>}
       {journey.note && audit.data && <p className="ab-hint">{journey.note}</p>}
     </>
   );

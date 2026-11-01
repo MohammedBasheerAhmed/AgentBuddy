@@ -4,6 +4,7 @@ import { featureById, isFeatureAvailable } from '../../../../features/registry.j
 import { profilesOfFeature, shownFor } from '../../../../profiles/profiles.js';
 import { MAX_ASK_CHARS, askProblem, clipAsk, withQuestion } from '../../../../features/packs/assist.js';
 import { recordBlock } from '../actions/plan.js';
+import { t } from '../../../../i18n/index.js';
 
 /**
  * "Ask about this ticket" (AI0.5): a question box. The question goes to the AI like everything else (permission, masking, the
@@ -37,10 +38,10 @@ export default function AskBox({ assist, eff, record }) {
   };
 
   return (
-    <form className="ab-ask" onSubmit={submit} aria-label="Ask about this ticket">
+    <form className="ab-ask" onSubmit={submit} aria-label={t('Ask about this ticket')}>
       <label className="ab-ask-label" htmlFor={`${id}-q`}>
-        <AiBadge title="Your question and the ticket go to the AI, masked, after a preview." />
-        <span>Ask about this ticket</span>
+        <AiBadge title={t('Your question and the ticket go to the AI, masked, after a preview.')} />
+        <span>{t('Ask about this ticket')}</span>
       </label>
       <div className="ab-ask-row">
         <input
@@ -50,7 +51,7 @@ export default function AskBox({ assist, eff, record }) {
           value={text}
           maxLength={MAX_ASK_CHARS}
           autoComplete="off"
-          placeholder="When did the customer last reply?"
+          placeholder={t('When did the customer last reply?')}
           aria-describedby={problem ? `${id}-why` : undefined}
           onChange={(e) => {
             setText(e.target.value);
@@ -58,7 +59,7 @@ export default function AskBox({ assist, eff, record }) {
           }}
         />
         <button type="submit" className="ab-btn ab-btn-sm" data-feature="ask-ticket" disabled={assist.busy}>
-          Ask
+          {t('Ask')}
         </button>
       </div>
       {problem && (

@@ -8,6 +8,7 @@ import { Facts, Hints, LoadNotes, Section } from '../checks/Bits.jsx';
 import { ProgressBar, StepList } from '../checks/ChecklistSteps.jsx';
 import { panelChecklistStore } from '../checks/panelStore.js';
 import { useLoader } from '../checks/useLoader.js';
+import { t } from '../../i18n/index.js';
 
 // G6, fulfilment checklist for a catalog task or a requested item. The steps are worked out on this computer from the written
 // instructions (no AI needed); the agent ticks them off. The ONLY thing saved is which steps are ticked, as short hashes next
@@ -86,8 +87,8 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
     <>
       <section className="ab-card">
         <div className="ab-row ab-chk-between">
-          <h2 className="ab-h ab-chk-h">Fulfilment checklist</h2>
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={reload} disabled={state.phase === 'loading'}>Refresh</button>
+          <h2 className="ab-h ab-chk-h">{t('Fulfilment checklist')}</h2>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={reload} disabled={state.phase === 'loading'}>{t('Refresh')}</button>
         </div>
         <p className="ab-sub">
           {aiSteps ? 'The steps your AI proposed.' : 'Steps found in the written instructions.'} Your ticks are kept on this computer (not the step text).
@@ -98,15 +99,15 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
       <LoadNotes state={state} onRetry={reload} />
 
       {data && (
-        <section className="ab-card" aria-label="Checklist">
+        <section className="ab-card" aria-label={t('Checklist')}>
           {steps.length > 0 ? (
             <>
               <ProgressBar progress={progress} />
               <StepList steps={steps} done={done} onToggle={toggle} />
-              {progress.complete && <p className="ab-note ab-note-ok" role="status">Every step is ticked. Close the task when you are ready.</p>}
+              {progress.complete && <p className="ab-note ab-note-ok" role="status">{t('Every step is ticked. Close the task when you are ready.')}</p>}
               <div className="ab-row">
-                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={clearTicks} disabled={done.length === 0}>Clear ticks</button>
-                {aiSteps && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setAiSteps(null)}>Back to the written steps</button>}
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={clearTicks} disabled={done.length === 0}>{t('Clear ticks')}</button>
+                {aiSteps && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setAiSteps(null)}>{t('Back to the written steps')}</button>}
               </div>
             </>
           ) : (
@@ -121,24 +122,24 @@ export default function FulfilmentChecklistView({ page, eff, record, run, aiRead
       {proposed.length > 0 && !sameAsShown && (
         <p className="ab-note" role="status">
           The AI proposed {proposed.length} step{proposed.length === 1 ? '' : 's'}.{' '}
-          <button type="button" className="ab-btn ab-btn-sm" onClick={() => setAiSteps(proposed)}>Use this list</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => setAiSteps(proposed)}>{t('Use this list')}</button>
         </p>
       )}
 
       {canPropose && data && (
-        <section className="ab-card" aria-label="Propose a checklist">
-          <p className="ab-sub">Not happy with the list? The AI can write a cleaner one from the instructions and the answers. You choose whether to use it.</p>
+        <section className="ab-card" aria-label={t('Propose a checklist')}>
+          <p className="ab-sub">{t('Not happy with the list? The AI can write a cleaner one from the instructions and the answers. You choose whether to use it.')}</p>
           <div className="ab-row">
             <button type="button" className="ab-btn" disabled={!aiReady || run.busy} onClick={() => run.run(feature, { getPack: async () => mergeParentPack(data.own, data.parent) })}>
               {feature.title}
             </button>
           </div>
-          {!aiReady && <p className="ab-hint">Add an AI key in Settings to use this button. The checklist above works without one.</p>}
+          {!aiReady && <p className="ab-hint">{t('Add an AI key in Settings to use this button. The checklist above works without one.')}</p>}
         </section>
       )}
 
       {answers?.applicable && answers.available && answers.rows.length > 0 && (
-        <Section title="Request details" count={answers.rows.length} defaultOpen={false}>
+        <Section title={t('Request details')} count={answers.rows.length} defaultOpen={false}>
           <Facts rows={answers.rows.map((r) => ({ label: r.question, value: r.value, hidden: r.hidden }))} />
           <Hints lines={[answers.note]} />
         </Section>

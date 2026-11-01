@@ -4,6 +4,7 @@ import { stepsThatWorked } from '../../../insights/steps.js';
 import { useKnowledge, useLookalikes } from './data.js';
 import { useReport } from './useInsight.js';
 import { ItemLink, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N12, steps that worked before: what fixed the solved look-alikes and what the matching articles say to do, as one list, best match
 // first. The words are colleagues' own, cut to the first sentences. (AI next best actions are in AI Assist.)
@@ -31,7 +32,7 @@ export default function StepsCard({ page, eff, record, active, setSummary }) {
           )}
         />
       )}
-      {done && !items.length && (lookOk || kbOk) && <p className="ab-hint">No solved ticket or article with written steps matches this ticket yet.</p>}
+      {done && !items.length && (lookOk || kbOk) && <p className="ab-hint">{t('No solved ticket or article with written steps matches this ticket yet.')}</p>}
       {done && (
         <div className="ab-ins-foot">
           <QuietButton
@@ -40,7 +41,7 @@ export default function StepsCard({ page, eff, record, active, setSummary }) {
               kb.reload();
             }}
           >
-            Refresh
+            {t('Refresh')}
           </QuietButton>
         </div>
       )}

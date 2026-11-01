@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import ErrorNote from '../ErrorNote.jsx';
+import { t } from '../../i18n/index.js';
 
 // The frame every report widget sits in: title, one line of help, a calm loading line, the picture, and the few facts that belong
 // to this section only (denominators). Kept quiet on purpose (TRACKER.md 2.4):
@@ -40,7 +41,7 @@ export default function SectionShell({ title, help, state, env, widgetId, facts 
       </div>
       {help && <p className="ab-sub ab-widget-help">{help}</p>}
 
-      {phase === 'loading' && !result && <p className="ab-note" role="status">Reading the numbers…</p>}
+      {phase === 'loading' && !result && <p className="ab-note" role="status">{t('Reading the numbers…')}</p>}
       {phase === 'error' && !sessionLost && (
         <div className="ab-widget-error">
           <ErrorNote error={`${error}${result ? ' The numbers below are from the last read that worked.' : ''}`} onRetry={state.reload} />

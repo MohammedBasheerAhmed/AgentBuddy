@@ -2,6 +2,7 @@ import React, { useId, useState } from 'react';
 import RecordLink from '../RecordLink.jsx';
 import { slaText, idleText, agoText } from '../../mywork/time.js';
 import { priorityRank } from '../../mywork/rank.js';
+import { t } from '../../i18n/index.js';
 
 // The small pieces the My work cards share: a ticket line, a fold, the filter chips, copying a template. Styles: src/ui/areas/mywork.css.
 
@@ -77,7 +78,7 @@ export function FilterChips({ chips, value, onChange, limit = 3 }) {
   // The chip that is on always shows, even when it is one of the folded ones.
   const shown = more ? chips : chips.filter((c, i) => i < limit || i === onIndex);
   return (
-    <div className="ab-mw-chips" role="group" aria-label="Filter the queue">
+    <div className="ab-mw-chips" role="group" aria-label={t('Filter the queue')}>
       {shown.map((c) => (
         <button key={c.id} type="button" className="ab-mw-filter" aria-pressed={value === c.id} onClick={() => onChange(value === c.id ? '' : c.id)}>
           {c.label} <span className="ab-mw-count">{c.count}</span>

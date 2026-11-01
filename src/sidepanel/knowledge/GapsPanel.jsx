@@ -7,6 +7,7 @@ import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import Notes from './Notes.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { TOPIC_COLUMNS, exportFileName, topicRows } from '../knowledgeScreen/articleInfo.js';
+import { t } from '../../i18n/index.js';
 
 // N19 Knowledge-gap radar (Insights, no AI): "articles to write". Recently resolved incidents (and cases) are grouped by what they
 // are about, the ones that already have a knowledge article are left out when that can be read, and the groups are ranked by how
@@ -113,19 +114,19 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
 
   return (
     <div className="ab-kbx-tool">
-      <p className="ab-hint">Topics that keep coming up in resolved tickets without an article. Looks at titles, categories and items only; at most the newest 500.</p>
+      <p className="ab-hint">{t('Topics that keep coming up in resolved tickets without an article. Looks at titles, categories and items only; at most the newest 500.')}</p>
       <div className="ab-kbx-controls">
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-gap-days">Resolved in the last</label>
+          <label className="ab-label" htmlFor="ab-gap-days">{t('Resolved in the last')}</label>
           <select id="ab-gap-days" className="ab-select" value={days} disabled={loading} onChange={(e) => setDays(Number(e.target.value))}>
-            {DAYS.map((d) => <option key={d} value={d}>{d} days</option>)}
+            {DAYS.map((d) => <option key={d} value={d}>{t('{d} days', { d })}</option>)}
           </select>
         </div>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-gap-scope">Whose tickets</label>
+          <label className="ab-label" htmlFor="ab-gap-scope">{t('Whose tickets')}</label>
           <select id="ab-gap-scope" className="ab-select" value={scope} disabled={loading} onChange={(e) => setScope(e.target.value)}>
             <option value="all">Everything I can see{Number.isFinite(scopes.total) ? ` (${n(scopes.total)})` : ''}</option>
-            <option value="mine">My groups</option>
+            <option value="mine">{t('My groups')}</option>
             {scopes.categories.map((c) => (
               <option key={c.value} value={`cat:${c.value}`}>Category: {c.name} ({n(c.count)})</option>
             ))}
@@ -133,32 +134,32 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
         </div>
       </div>
       <fieldset className="ab-field ab-fieldset">
-        <legend className="ab-label">Tickets to look at</legend>
+        <legend className="ab-label">{t('Tickets to look at')}</legend>
         <label className="ab-check"><input type="checkbox" checked={incidents} disabled={loading} onChange={(e) => setIncidents(e.target.checked)} /> Incidents</label>
         <label className="ab-check"><input type="checkbox" checked={cases} disabled={loading} onChange={(e) => setCases(e.target.checked)} /> Customer service cases</label>
       </fieldset>
       <div className="ab-row">
-        <button type="button" className="ab-btn" disabled={!tables.length || loading} onClick={find}>Find topics</button>
+        <button type="button" className="ab-btn" disabled={!tables.length || loading} onClick={find}>{t('Find topics')}</button>
       </div>
 
       {loading && (
         <p className="ab-sub" role="status">
           Reading resolved tickets…{' '}
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>Stop</button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>{t('Stop')}</button>
         </p>
       )}
       {state?.phase === 'error' && <ErrorNote error={state.error} onRetry={find} />}
 
       {data && (
-        <section className="ab-kbx-results" aria-label="Topics without an article">
+        <section className="ab-kbx-results" aria-label={t('Topics without an article')}>
           <p className="ab-sub">
             {lookedAtText(data, scopeWords(data.scope, scopes.categories))}
             {data.link.known ? ` ${n(data.withArticle)} already had an article.` : ''}
           </p>
           {data.note && <p className="ab-note ab-note-warn" role="status">{data.note}</p>}
           <Notes access={data.access} />
-          {data.clusters.length === 0 && data.scanned > 0 && <EmptyNote>No topic came up more than once. Try a longer window or a wider scope.</EmptyNote>}
-          {data.scanned === 0 && <EmptyNote>No resolved tickets were found in that window and scope.</EmptyNote>}
+          {data.clusters.length === 0 && data.scanned > 0 && <EmptyNote>{t('No topic came up more than once. Try a longer window or a wider scope.')}</EmptyNote>}
+          {data.scanned === 0 && <EmptyNote>{t('No resolved tickets were found in that window and scope.')}</EmptyNote>}
           <ShowMore
             items={data.clusters}
             className="ab-list"
@@ -170,7 +171,7 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
                   <span className="ab-tag">{c.count} ticket{c.count === 1 ? '' : 's'}</span>
                 </div>
                 <div className="ab-tags">
-                  {c.withFix > 0 && <span className="ab-tag">{c.withFix} with a written fix</span>}
+                  {c.withFix > 0 && <span className="ab-tag">{t('{withFix} with a written fix', { withFix: c.withFix })}</span>}
                   {c.category && <span className="ab-tag">{c.category}</span>}
                   {c.ci && <span className="ab-tag">{c.ci}</span>}
                 </div>
@@ -189,9 +190,9 @@ export default function GapsPanel({ page, active = true, onFound = () => {} }) {
           {data.clusters.length > 0 && (
             <>
               <div className="ab-row">
-                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={exportTopics}>Export topics (CSV)</button>
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={exportTopics}>{t('Export topics (CSV)')}</button>
               </div>
-              <p className="ab-hint">To draft an outline for one of these, switch to AI Assist.</p>
+              <p className="ab-hint">{t('To draft an outline for one of these, switch to AI Assist.')}</p>
             </>
           )}
           {note && <p className="ab-hint" role="status">{note}</p>}

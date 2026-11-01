@@ -15,6 +15,7 @@ import { madeWithoutText } from '../../../../features/parts.js';
 import ReviewHints from '../../../ReviewHints.jsx';
 import InsertEditor from './InsertEditor.jsx';
 import { LANGUAGES, ago, answerPrimary, baseFeatureOf, plainOf, refineChoices, titleOf } from './logic.js';
+import { t } from '../../../../i18n/index.js';
 
 const NO_TEXTS = [];
 const sendToTab = (tabId, message) => chrome.tabs.sendMessage(tabId, message);
@@ -193,7 +194,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
       <section className="ab-answer is-folded" data-answer={answer.id} aria-label={title}>
         <button type="button" className="ab-answer-fold" aria-expanded="false" onClick={() => onToggle(true)}>
           <span className="ab-cardx-chevron" aria-hidden="true" />
-          <span className="ab-answer-fold-text">Earlier: {title}</span>
+          <span className="ab-answer-fold-text">{t('Earlier: {title}', { title })}</span>
           <span className="ab-answer-when">· {when}{answer.unseen ? ' · new' : ''}</span>
         </button>
       </section>
@@ -217,7 +218,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   };
   const copyButton = (main) => (
     <button type="button" className={`ab-btn ab-btn-sm${main ? ' ab-btn-ai' : ''}`} onClick={() => copy()}>
-      Copy
+      {t('Copy')}
     </button>
   );
   // What else the card offers, under More: the other boxes, the edit box, a blank form to open, Try again.
@@ -240,15 +241,15 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
       <div className="ab-answer-head">
         <button type="button" id={headId} className="ab-answer-toggle" aria-expanded="true" onClick={() => onToggle(false)}>
           <span className="ab-cardx-chevron" aria-hidden="true" />
-          <AiBadge title="Written by AI. It can be wrong: check it before you use it." />
+          <AiBadge title={t('Written by AI. It can be wrong: check it before you use it.')} />
           <span className="ab-answer-title">{title}</span>
           <span className="ab-answer-when">{when}</span>
         </button>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-answer-close" onClick={() => onClose(answer)}>
-          Close
+          {t('Close')}
         </button>
       </div>
-      {question && <p className="ab-answer-q">You asked: {question}</p>}
+      {question && <p className="ab-answer-q">{t('You asked: {question}', { question })}</p>}
       {answer.notice && <p className="ab-note ab-note-warn" role="status">{answer.notice}</p>}
       <div className="ab-output">
         {choices.length ? (
@@ -257,7 +258,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
               <li key={i}>
                 <SafeText text={c} />
                 <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={`Copy reply ${i + 1}`}>
-                  Copy this
+                  {t('Copy this')}
                 </button>
               </li>
             ))}
@@ -279,8 +280,8 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
             ))}
           </ul>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={inserting} onClick={() => insert(findings.target, findings.text, findings.mode, true)}>Insert anyway</button>
-            <button type="button" className="ab-btn ab-btn-sm" disabled={inserting} onClick={() => startEdit(findings.target, findings.text)}>Edit first</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={inserting} onClick={() => insert(findings.target, findings.text, findings.mode, true)}>{t('Insert anyway')}</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={inserting} onClick={() => startEdit(findings.target, findings.text)}>{t('Edit first')}</button>
           </div>
         </div>
       )}
@@ -307,11 +308,11 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
               <>
                 {emailUrl && (
                   <button type="button" className="ab-btn ab-btn-sm ab-btn-ai" onClick={openEmailForm}>
-                    Open the email form
+                    {t('Open the email form')}
                   </button>
                 )}
                 <button type="button" className={`ab-btn ab-btn-sm${emailUrl ? '' : ' ab-btn-ai'}`} disabled={!email.body} onClick={() => copy('', email.body)}>
-                  Copy body
+                  {t('Copy body')}
                 </button>
               </>
             ) : (
@@ -320,8 +321,8 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                 {primary === 'insert' ? copyButton(false) : first ? insertButton(first, false) : null}
               </>
             )}
-            <MenuButton id={`${headId}-refine`} label="Refine" open={menu === 'refine'} onToggle={() => setMenu(menu === 'refine' ? '' : 'refine')} />
-            <MenuButton id={`${headId}-more`} label="More" open={menu === 'more'} onToggle={() => setMenu(menu === 'more' ? '' : 'more')} />
+            <MenuButton id={`${headId}-refine`} label={t('Refine')} open={menu === 'refine'} onToggle={() => setMenu(menu === 'refine' ? '' : 'refine')} />
+            <MenuButton id={`${headId}-more`} label={t('More')} open={menu === 'more'} onToggle={() => setMenu(menu === 'more' ? '' : 'more')} />
           </div>
           {menu === 'refine' && (
             <RefineMenu
@@ -336,7 +337,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
             />
           )}
           {menu === 'more' && (
-            <MenuPanel id={`${headId}-more`} label="More for this answer" onClose={() => setMenu('')}>
+            <MenuPanel id={`${headId}-more`} label={t('More for this answer')} onClose={() => setMenu('')}>
               {email && (
                 <>
                   <button
@@ -349,7 +350,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                       copy('', email.subject);
                     }}
                   >
-                    Copy subject
+                    {t('Copy subject')}
                   </button>
                   <button
                     type="button"
@@ -359,13 +360,13 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                       copy();
                     }}
                   >
-                    Copy all
+                    {t('Copy all')}
                   </button>
                 </>
               )}
               {targets.length > 0 && (
                 <button type="button" className="ab-menu-item" disabled={inserting || wrongRecord} onClick={() => startEdit(first)}>
-                  Edit before inserting
+                  {t('Edit before inserting')}
                 </button>
               )}
               {otherTargets.map((t) => (
@@ -409,7 +410,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                   onAgain(answer);
                 }}
               >
-                Try again
+                {t('Try again')}
               </button>
             </MenuPanel>
           )}
@@ -471,13 +472,13 @@ function RefineMenu({ id, eff, busy, onPick, onClose }) {
   const own = choices.find((p) => p.needsText);
   if (!choices.length) {
     return (
-      <MenuPanel id={id} label="Refine this answer" onClose={onClose}>
-        <p className="ab-hint">Your organisation has switched the rewrite tools off.</p>
+      <MenuPanel id={id} label={t('Refine this answer')} onClose={onClose}>
+        <p className="ab-hint">{t('Your organisation has switched the rewrite tools off.')}</p>
       </MenuPanel>
     );
   }
   return (
-    <MenuPanel id={id} label="Refine this answer" onClose={onClose}>
+    <MenuPanel id={id} label={t('Refine this answer')} onClose={onClose}>
       <div className="ab-menu-row">
         {simple.map((p) => (
           <button key={p.id} type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => onPick(p)}>
@@ -487,14 +488,14 @@ function RefineMenu({ id, eff, busy, onPick, onClose }) {
       </div>
       {translate && (
         <div className="ab-menu-row">
-          <label className="ab-sub" htmlFor={`${ids}-lang`}>Translate to</label>
+          <label className="ab-sub" htmlFor={`${ids}-lang`}>{t('Translate to')}</label>
           <select id={`${ids}-lang`} className="ab-select ab-refine-lang" value={language} onChange={(e) => setLanguage(e.target.value)}>
             {LANGUAGES.map((l) => (
               <option key={l.code} value={l.code}>{l.name}</option>
             ))}
           </select>
           <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => onPick(translate, { language })}>
-            Translate
+            {t('Translate')}
           </button>
         </div>
       )}
@@ -507,7 +508,7 @@ function RefineMenu({ id, eff, busy, onPick, onClose }) {
             onPick(own, { instruction });
           }}
         >
-          <label className="ab-sub" htmlFor={`${ids}-own`}>Your own instruction</label>
+          <label className="ab-sub" htmlFor={`${ids}-own`}>{t('Your own instruction')}</label>
           <input
             id={`${ids}-own`}
             className="ab-input ab-refine-own"
@@ -515,11 +516,11 @@ function RefineMenu({ id, eff, busy, onPick, onClose }) {
             value={instruction}
             maxLength={500}
             autoComplete="off"
-            placeholder="Two sentences, and mention the reboot"
+            placeholder={t('Two sentences, and mention the reboot')}
             onChange={(e) => setInstruction(e.target.value)}
           />
           <button type="submit" className="ab-btn ab-btn-sm" disabled={busy || instruction.trim().length < 5}>
-            Rewrite
+            {t('Rewrite')}
           </button>
         </form>
       )}

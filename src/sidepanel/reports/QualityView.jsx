@@ -4,6 +4,7 @@ import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
 import { TREND_CHOICES } from '../../reports/engine/quality.js';
 import { hours, plural } from './format.js';
+import { t } from '../../i18n/index.js';
 
 const pct = (n) => `${Math.round(n * 10) / 10}%`;
 
@@ -57,15 +58,15 @@ export default function QualityView({ widget, env }) {
   const ok = d && d.available !== false;
   return (
     <SectionShell
-      title="Quality and trend"
-      help="Opened against resolved, how fast tickets are solved, and what comes back."
+      title={t('Quality and trend')}
+      help={t('Opened against resolved, how fast tickets are solved, and what comes back.')}
       state={state}
       env={env}
       widgetId={widget?.id}
       facts={ok ? [d.trend.label] : []}
       actions={
         <label className="ab-widget-select">
-          <span className="ab-chart-sr">Period</span>
+          <span className="ab-chart-sr">{t('Period')}</span>
           <select className="ab-select" value={widget?.params?.trend || 'day-30'} onChange={(e) => env.setWidgetParams(widget, { trend: e.target.value })} disabled={!widget || !env.canEdit}>
             {TREND_CHOICES.map((c) => (
               <option key={c.id} value={c.id}>{c.label}</option>

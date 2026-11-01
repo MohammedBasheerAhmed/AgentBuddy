@@ -17,6 +17,7 @@ import { featureState } from '../reports/aiShared.jsx';
 import { hrReportsAllowed, scopeChipText } from '../reports/ReportsDashboard.jsx';
 import { readLabel } from '../reports/format.js';
 import { teamShare } from './teamShare.js';
+import { t } from '../../i18n/index.js';
 
 // Results this half read itself carry ids starting with this, so they never take the place of what the Insights half loaded.
 const ASSIST = 'assist:';
@@ -118,9 +119,9 @@ export default function TeamAssist({ page, eff, active }) {
   }, [context.code]);
 
   if (policy && !isFeatureEnabled('reports', policy)) {
-    return <p className="ab-note">Your organisation has turned reports off.</p>;
+    return <p className="ab-note">{t('Your organisation has turned reports off.')}</p>;
   }
-  if (!ready || !dash) return <p className="ab-sub" role="status">Loading your dashboards…</p>;
+  if (!ready || !dash) return <p className="ab-sub" role="status">{t('Loading your dashboards…')}</p>;
 
   // The dashboard's sections, read here only while no Insights dashboard is on screen for this tab (otherwise those widgets load them).
   const headless = woke && share.live === 0 ? dash.widgets.filter((w) => w.type === 'section' && sectionById(w.section) && !sectionById(w.section).ai) : [];
@@ -141,12 +142,12 @@ export default function TeamAssist({ page, eff, active }) {
       {sessionLost && (
         <div className="ab-note ab-note-warn ab-dash-session" role="alert">
           <p>{SESSION_TEXT}</p>
-          <button type="button" className="ab-btn ab-btn-sm" onClick={retry}>Try again</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={retry}>{t('Try again')}</button>
         </div>
       )}
 
-      <CardFrame id="team-handover" title="Hand-over note" summary={`Last ${hours} hours · ${scopeText}`} actions={<AiBadge />}>
-        <HoursPicker hours={hours} onChange={setHours} label="Period of the hand-over" />
+      <CardFrame id="team-handover" title={t('Hand-over note')} summary={`Last ${hours} hours · ${scopeText}`} actions={<AiBadge />}>
+        <HoursPicker hours={hours} onChange={setHours} label={t('Period of the hand-over')} />
         {handover ? (
           handover.data?.available === false ? (
             <p className="ab-note">{handover.data.reason || 'There is nothing to hand over.'}</p>
@@ -156,14 +157,14 @@ export default function TeamAssist({ page, eff, active }) {
         ) : own.phase === 'error' && own.code !== 'SESSION_EXPIRED' ? (
           <ErrorNote error={own.error} onRetry={own.reload} />
         ) : !sessionLost && woke && tables.length ? (
-          <p className="ab-note" role="status">Reading the hand-over numbers…</p>
+          <p className="ab-note" role="status">{t('Reading the hand-over numbers…')}</p>
         ) : context.data && !tables.length ? (
-          <p className="ab-note">No ticket table is available, so there is nothing to hand over.</p>
+          <p className="ab-note">{t('No ticket table is available, so there is nothing to hand over.')}</p>
         ) : null}
         <HandoverAi result={handover?.data?.available === false ? null : handover} page={page} eff={eff} hours={hours} primary={handoverOn} />
       </CardFrame>
 
-      <CardFrame id="team-explain" title="Explain this dashboard" summary={`${dash.name} · ${scopeText}`} actions={<AiBadge />}>
+      <CardFrame id="team-explain" title={t('Explain this dashboard')} summary={`${dash.name} · ${scopeText}`} actions={<AiBadge />}>
         <ExplainBody entries={explainEntries(entries)} page={page} eff={eff} primary={!handoverOn} />
       </CardFrame>
 
@@ -172,7 +173,7 @@ export default function TeamAssist({ page, eff, active }) {
           Coaching snapshot: {gate === 'off' ? 'turned off by your organisation.' : 'off until your organisation switches coaching on.'}
         </p>
       ) : (
-        <CardFrame id="team-coaching" title="Coaching snapshot" summary="One group, a sample of resolved tickets" actions={<AiBadge />} defaultOpen={false}>
+        <CardFrame id="team-coaching" title={t('Coaching snapshot')} summary={t('One group, a sample of resolved tickets')} actions={<AiBadge />} defaultOpen={false}>
           <CoachingTool env={{ page, tables, blocked, myGroups: context.data?.groups || [], groupsNote: context.data?.groupsNote || '' }} eff={eff} needs={coachingNeeds(eff)} bare />
         </CardFrame>
       )}

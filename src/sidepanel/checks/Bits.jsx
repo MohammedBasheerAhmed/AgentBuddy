@@ -2,6 +2,7 @@
 // are given (React escapes every string, so ticket text is never markup).
 import React from 'react';
 import ErrorNote from '../ErrorNote.jsx';
+import { t } from '../../i18n/index.js';
 
 /** A collapsible card with a title and an optional count. */
 export function Section({ title, count, children, defaultOpen = true }) {
@@ -46,7 +47,7 @@ export function Hints({ lines }) {
 export function LoadNotes({ state, onRetry }) {
   return (
     <>
-      {state.phase === 'loading' && !state.data && <p className="ab-note" role="status">Looking…</p>}
+      {state.phase === 'loading' && !state.data && <p className="ab-note" role="status">{t('Looking…')}</p>}
       {state.phase === 'error' && <ErrorNote error={state.error} onRetry={onRetry} />}
     </>
   );

@@ -6,6 +6,7 @@ import { firstSentences } from '../../../insights/steps.js';
 import { useHistory, useLookalikes, useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { Group, ItemLink, Notes, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N2, related tickets: the caller's earlier tickets (with the repeat flag and the last fix that worked), solved look-alikes, and other
 // open tickets on the same item. Folded groups with counts, three items each, then "Show all". Every ticket opens in a new tab next to
@@ -42,7 +43,7 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
         <ReadState state={history} what="earlier tickets" onRetry={history.reload} />
         {sig?.lastResolved && (
           <p className="ab-ins-fix">
-            <strong>Last fix that worked ({sig.lastResolved.number}):</strong> {firstSentences(sig.lastResolved.close_notes, 220)}
+            <strong>{t('Last fix that worked ({number}):', { number: sig.lastResolved.number })}</strong> {firstSentences(sig.lastResolved.close_notes, 220)}
           </p>
         )}
         {earlier.length > 0 && <ShowMore items={[...earlier].reverse()} render={(item) => <ItemLink key={item.sysId} page={page} item={item} line={historyLine(item)} />} />}
@@ -50,7 +51,7 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
         <Notes access={history.data?.access} />
       </Group>
 
-      <Group title="Solved look-alikes" count={look.data ? hits.length : undefined}>
+      <Group title={t('Solved look-alikes')} count={look.data ? hits.length : undefined}>
         <ReadState state={look} what="solved tickets like this one" onRetry={look.reload} />
         {hits.length > 0 && (
           <ShowMore
@@ -58,12 +59,12 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
             render={(h) => <ItemLink key={h.sysId} page={page} item={h} line={list(h.why).slice(0, 2).join('; ')} extra={h.close_notes ? `Fix: ${firstSentences(h.close_notes, 160)}` : ''} />}
           />
         )}
-        {look.data && !hits.length && <p className="ab-hint">No similar solved tickets found.</p>}
+        {look.data && !hits.length && <p className="ab-hint">{t('No similar solved tickets found.')}</p>}
         <Notes access={look.data?.access} />
       </Group>
 
       {outage && outage.hits.length > 0 && (
-        <Group title="Open on the same item" count={outage.hits.length}>
+        <Group title={t('Open on the same item')} count={outage.hits.length}>
           <ShowMore
             items={outage.hits}
             render={(h) => <ItemLink key={h.sysId} page={page} item={h} line={[h.state, Number.isFinite(h.hoursAgo) ? `${h.hoursAgo} h ago` : '', h.assignment_group].filter(Boolean).join(' · ')} />}
@@ -73,7 +74,7 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
 
       <div className="ab-ins-foot">
         <QuietButton onClick={refresh} disabled={history.phase === 'loading' || look.phase === 'loading'}>
-          Refresh
+          {t('Refresh')}
         </QuietButton>
       </div>
     </>

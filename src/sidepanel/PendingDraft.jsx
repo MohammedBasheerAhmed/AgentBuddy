@@ -9,6 +9,7 @@ import { read } from './ask.js';
 import { applyFieldStates, createGuard, insertTargets, insertText, readFieldStates, reviewInsert } from './insertFlow.js';
 import { auditInsert } from '../lib/storage.js';
 import { EMAIL_NEXT, insertedNote, isCustomerVisible } from '../lib/fillable.js';
+import { t } from '../i18n/index.js';
 
 const NO_TEXTS = [];
 const sendToTab = (tabId, message) => chrome.tabs.sendMessage(tabId, message);
@@ -37,14 +38,14 @@ export default function PendingDraft({ page, eff }) {
       return pendingFits(inserted, page) ? (
         <p className="ab-note ab-note-ok" role="status">
           The draft is in the email form. Review it. {EMAIL_NEXT}{' '}
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setInserted(null)}>Close</button>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setInserted(null)}>{t('Close')}</button>
         </p>
       ) : null;
     }
     return inserted && page.newRecord?.table === inserted.table ? (
       <p className="ab-note ab-note-ok" role="status">
         {insertedNote({ ok: true }, { field: 'text', table: inserted.table })}{' '}
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setInserted(null)}>Close</button>
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setInserted(null)}>{t('Close')}</button>
       </p>
     ) : null;
   }
@@ -223,11 +224,11 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
   return (
     <section className="ab-card ab-pending-email" aria-labelledby={headId}>
       <div className="ab-pending-email-head">
-        <AiBadge title="Written by AI. It can be wrong: check it before you send it." />
+        <AiBadge title={t('Written by AI. It can be wrong: check it before you send it.')} />
         <h2 className="ab-h ab-pending-email-title" id={headId}>
           Email draft for {draft.number || 'this ticket'}
         </h2>
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={clearPending}>Close</button>
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={clearPending}>{t('Close')}</button>
       </div>
       <div className="ab-output">
         <SafeText text={draft.text} />
@@ -241,7 +242,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
             ))}
           </ul>
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.target, findings.text, findings.mode, true)}>Insert anyway</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.target, findings.text, findings.mode, true)}>{t('Insert anyway')}</button>
             <button
               type="button"
               className="ab-btn ab-btn-sm"
@@ -253,7 +254,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
                 setEditing({ key: target.key, text });
               }}
             >
-              Edit first
+              {t('Edit first')}
             </button>
           </div>
         </div>
@@ -277,7 +278,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
           <div className="ab-row ab-pending-email-actions">
             {button(subject, true)}
             {button(body, !subject)}
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => copy()}>Copy body</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => copy()}>{t('Copy body')}</button>
           </div>
           <p className="ab-hint">{hint}</p>
         </>

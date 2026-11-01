@@ -8,6 +8,7 @@ import { buildFillMessage, auditRefFromPage, fillReasonText, isCustomerVisible, 
 import { createGuard, performInsert } from '../insertFlow.js';
 import { resolveProviderConfig } from '../../providers/config.js';
 import ReviewHints from '../ReviewHints.jsx';
+import { t } from '../../i18n/index.js';
 
 export { ReviewHints };
 
@@ -197,7 +198,7 @@ export function FillFeedback({ fill }) {
           <ReviewHints hints={findings.hints} />
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.insert(findings.spec, { people: findings.people, scan: findings.scan, internalTexts: findings.internalTexts, internalPhrases: findings.internalPhrases, force: true })}>
-              Insert anyway
+              {t('Insert anyway')}
             </button>
             <button
               type="button"
@@ -209,7 +210,7 @@ export function FillFeedback({ fill }) {
                 fill.copy(value, 'Not inserted.');
               }}
             >
-              Edit first (copy instead)
+              {t('Edit first (copy instead)')}
             </button>
           </div>
         </div>

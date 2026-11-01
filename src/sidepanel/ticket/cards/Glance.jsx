@@ -3,6 +3,7 @@ import { buildGlance } from '../../../insights/glance.js';
 import { PRIORITY_ACCOUNT_MARK, isPriorityAccount } from '../../../insights/priorityAccount.js';
 import { useTicketFacts } from './data.js';
 import { showCard } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N1, the ticket at a glance, over both halves of the Ticket screen. Three short lines at most:
 //   INC0010001  VPN keeps disconnecting                       [VIP] [Priority account: a case's account the policy names]
@@ -64,15 +65,15 @@ export default function Glance({ page, eff, record, header, headPhase, quickBar 
   const priorityAccount = isPriorityAccount(facts.data?.pack?.fields?.account, eff?.policy?.priorityAccounts);
 
   return (
-    <section className="ab-card ab-glance" aria-label="Ticket at a glance">
+    <section className="ab-card ab-glance" aria-label={t('Ticket at a glance')}>
       <div className="ab-glance-line ab-glance-head">
         <span className="ab-record-number">{g.number}</span>
         <span className={`ab-glance-title${g.titleKind === 'text' ? '' : ' ab-muted'}`} title={g.titleKind === 'text' ? g.title : undefined}>
           {g.title}
         </span>
         {g.vip && (
-          <span className="ab-glance-vip" title="The caller is marked VIP in ServiceNow.">
-            VIP
+          <span className="ab-glance-vip" title={t('The caller is marked VIP in ServiceNow.')}>
+            {t('VIP')}
           </span>
         )}
         {priorityAccount && (
@@ -100,7 +101,7 @@ export default function Glance({ page, eff, record, header, headPhase, quickBar 
         </p>
       )}
       {g.outage && (
-        <button type="button" className="ab-glance-outage" onClick={() => showCard('outage', onShowCard)} title="Show the tickets">
+        <button type="button" className="ab-glance-outage" onClick={() => showCard('outage', onShowCard)} title={t('Show the tickets')}>
           <span aria-hidden="true">!</span> {g.outage.line}
         </button>
       )}

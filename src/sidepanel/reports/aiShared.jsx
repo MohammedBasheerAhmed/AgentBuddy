@@ -9,6 +9,7 @@ import { aiNeedsText, isAiReady } from '../aiReady.js';
 import AiKeyNote from '../AiKeyNote.jsx';
 import { AiBadge } from '../ui/primitives.jsx';
 import { destinationOf } from '../shell/shellParts.jsx';
+import { t } from '../../i18n/index.js';
 
 export { isAiReady };
 
@@ -108,7 +109,7 @@ export function AiResult({ run, eff, featureId, heading, notice = [], withhold =
               ))}
             </ul>
           )}
-          <button type="button" className="ab-btn ab-btn-sm" onClick={() => setShown(true)}>Show the answer anyway</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => setShown(true)}>{t('Show the answer anyway')}</button>
         </div>
       ) : (
         <div className="ab-output">
@@ -118,12 +119,12 @@ export function AiResult({ run, eff, featureId, heading, notice = [], withhold =
       {note && <p className="ab-note ab-note-ok" role="status">{note}</p>}
       <div className="ab-row ab-ai-actions">
         {/* Not filled: the one filled button of the screen is the action that wrote this. */}
-        {!held && <button type="button" className="ab-btn ab-btn-sm" onClick={copy}>Copy</button>}
-        {!held && <button type="button" className="ab-btn ab-btn-sm" onClick={() => window.print()}>Print</button>}
-        {run.again && <button type="button" className="ab-btn ab-btn-sm" onClick={run.again}>Try again</button>}
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={run.reset}>Close</button>
+        {!held && <button type="button" className="ab-btn ab-btn-sm" onClick={copy}>{t('Copy')}</button>}
+        {!held && <button type="button" className="ab-btn ab-btn-sm" onClick={() => window.print()}>{t('Print')}</button>}
+        {run.again && <button type="button" className="ab-btn ab-btn-sm" onClick={run.again}>{t('Try again')}</button>}
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={run.reset}>{t('Close')}</button>
       </div>
-      <p className="ab-hint">AI can be wrong. Check the text before you use it.</p>
+      <p className="ab-hint">{t('AI can be wrong. Check the text before you use it.')}</p>
     </section>
   );
 }

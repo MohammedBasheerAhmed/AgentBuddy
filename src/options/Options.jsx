@@ -19,6 +19,7 @@ import { diagnosticsText } from './diagnostics.js';
 import ProfilePicker from './ProfilePicker.jsx';
 import Tabs from '../sidepanel/Tabs.jsx';
 import { panelId, tabId } from '../sidepanel/tabKeys.js';
+import { t } from '../i18n/index.js';
 
 const KEY_MODE_TEXT = {
   local: "Kept in Agent Buddy's own storage in this browser. ServiceNow pages cannot read it, but anyone who can read your browser profile on disk can. Use a key with a spend limit.",
@@ -121,8 +122,8 @@ function DraftInput({ value, onSave, delay = 300, ...rest }) {
 // What is saved for this provider, so a person can see that the key was really taken: a short preview and its length, and on request
 // the whole key (hidden again after a few seconds). Never offered for a key the organisation supplies (that branch has no key box).
 function SavedKeyLine({ def, keyMode, wanted, apiKey, shown, onToggle }) {
-  if (keyMode === 'none') return <span className="ab-hint" id="key-saved">No key is saved for {def.label}.</span>;
-  if (!apiKey) return <span className="ab-hint" id="key-saved">A key is saved but locked. Unlock it above with your passphrase.</span>;
+  if (keyMode === 'none') return <span className="ab-hint" id="key-saved">{t('No key is saved for {label}.', { label: def.label })}</span>;
+  if (!apiKey) return <span className="ab-hint" id="key-saved">{t('A key is saved but locked. Unlock it above with your passphrase.')}</span>;
   const { preview, length } = keyPreview(apiKey);
   return (
     <span className="ab-hint" id="key-saved">
@@ -176,13 +177,13 @@ function AzureFields({ eff, change, model, setStatus }) {
   return (
     <>
       <div className="ab-field">
-        <label className="ab-label" htmlFor="baseurl">Resource address (required)</label>
+        <label className="ab-label" htmlFor="baseurl">{t('Resource address (required)')}</label>
         <DraftInput
           id="baseurl"
           className="ab-input ab-mono"
           value={typed}
           readOnly={lockedAddress}
-          placeholder="https://your-resource.openai.azure.com"
+          placeholder={t('https://your-resource.openai.azure.com')}
           aria-invalid={addressProblem ? true : undefined}
           aria-describedby={describedBy('baseurl-hint', addressProblem && 'baseurl-error')}
           onSave={saveAddress}
@@ -198,12 +199,12 @@ function AzureFields({ eff, change, model, setStatus }) {
 
       {/* Technical details, folded: most resources use the recommended form. Open when the older form is chosen or its version is wrong. */}
       <details className="ab-more" open={az.form === 'deployment' && !az.apiVersionOk}>
-        <summary>Technical details: how Agent Buddy calls Azure</summary>
+        <summary>{t('Technical details: how Agent Buddy calls Azure')}</summary>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="azure-form">How to call it</label>
+          <label className="ab-label" htmlFor="azure-form">{t('How to call it')}</label>
           <select id="azure-form" className="ab-select" value={az.form} aria-describedby="azure-form-hint" onChange={(e) => change({ azure: { ...(v.azure || {}), form: e.target.value } })}>
-            <option value="v1">v1 API (recommended): /openai/v1</option>
-            <option value="deployment">Deployment address with an api-version (older resources)</option>
+            <option value="v1">{t('v1 API (recommended): /openai/v1')}</option>
+            <option value="deployment">{t('Deployment address with an api-version (older resources)')}</option>
           </select>
           <span className="ab-hint" id="azure-form-hint">
             {az.form === 'v1'
@@ -214,7 +215,7 @@ function AzureFields({ eff, change, model, setStatus }) {
 
         {az.form === 'deployment' && (
           <div className="ab-field">
-            <label className="ab-label" htmlFor="azure-version">API version</label>
+            <label className="ab-label" htmlFor="azure-version">{t('API version')}</label>
             <DraftInput
               id="azure-version"
               className="ab-input ab-mono"
@@ -225,13 +226,13 @@ function AzureFields({ eff, change, model, setStatus }) {
               onSave={(text) => change({ azure: { ...(v.azure || {}), apiVersion: text.trim() } })}
             />
             <FieldError id="azure-version-error" text={az.apiVersionOk ? '' : 'An API version looks like 2024-10-21 or 2025-04-01-preview.'} />
-            <span className="ab-hint" id="azure-version-hint">Leave empty for {AZURE_DEFAULT_API_VERSION}. Use the version your administrator gave you if it differs.</span>
+            <span className="ab-hint" id="azure-version-hint">{t('Leave empty for {AZURE_DEFAULT_API_VERSION}. Use the version your administrator gave you if it differs.', { AZURE_DEFAULT_API_VERSION })}</span>
           </div>
         )}
       </details>
 
       <div className="ab-field">
-        <label className="ab-label" htmlFor="model">Deployment name (required)</label>
+        <label className="ab-label" htmlFor="model">{t('Deployment name (required)')}</label>
         <DraftInput
           id="model"
           className="ab-input ab-mono"
@@ -241,26 +242,25 @@ function AzureFields({ eff, change, model, setStatus }) {
           onSave={(text) => change({ models: { ...v.models, azure: text.trim() } })}
         />
         <span className="ab-hint" id="model-hint">
-          The name of the deployment in Azure AI Foundry, under Deployments (it can differ from the model&apos;s name). Azure does not give a key a
-          list of deployments, so there is no &quot;Load models&quot; here.
+          {t('The name of the deployment in Azure AI Foundry, under Deployments (it can differ from the model\'s name). Azure does not give a key a list of deployments, so there is no "Load models" here.')}
         </span>
         <Locked why={eff.locked.model} />
       </div>
 
       {!eff.locked.model && (
         <div className="ab-field">
-          <label className="ab-label" htmlFor="azure-deployments">Other deployments to switch between (optional)</label>
+          <label className="ab-label" htmlFor="azure-deployments">{t('Other deployments to switch between (optional)')}</label>
           <DraftInput
             id="azure-deployments"
             className="ab-input ab-mono"
             value={otherIds.join(', ')}
-            placeholder="gpt-5-mini, gpt-5"
+            placeholder={t('gpt-5-mini, gpt-5')}
             aria-invalid={deploymentsError ? true : undefined}
             aria-describedby={describedBy('azure-deployments-hint', deploymentsError && 'azure-deployments-error')}
             onSave={saveDeployments}
           />
           <FieldError id="azure-deployments-error" text={deploymentsError} />
-          <span className="ab-hint" id="azure-deployments-hint">Separate names with commas. They appear in the model switch at the top of the side panel.</span>
+          <span className="ab-hint" id="azure-deployments-hint">{t('Separate names with commas. They appear in the model switch at the top of the side panel.')}</span>
         </div>
       )}
     </>
@@ -492,21 +492,21 @@ export function ProviderSection({ eff, reload }) {
     <>
       <button type="button" className="ab-btn" onClick={test} disabled={Boolean(busy)}>{busy === 'test' ? 'Testing…' : 'Test connection'}</button>
       {busy === 'test' && (
-        <button type="button" className="ab-btn ab-btn-quiet" onClick={() => running.current?.abort()}>Cancel</button>
+        <button type="button" className="ab-btn ab-btn-quiet" onClick={() => running.current?.abort()}>{t('Cancel')}</button>
       )}
     </>
   );
 
   return (
     <section className="ab-section" aria-labelledby="h-provider">
-      <h2 className="ab-h" id="h-provider">AI provider</h2>
-      <p className="ab-sub">Use any provider you have a key for, Azure OpenAI, a company gateway, or a model on this computer.</p>
+      <h2 className="ab-h" id="h-provider">{t('AI provider')}</h2>
+      <p className="ab-sub">{t('Use any provider you have a key for, Azure OpenAI, a company gateway, or a model on this computer.')}</p>
 
       <div className="ab-field">
-        <label className="ab-label" htmlFor="provider">Provider</label>
+        <label className="ab-label" htmlFor="provider">{t('Provider')}</label>
         <select id="provider" className="ab-select" value={v.provider} disabled={Boolean(eff.locked.provider)} aria-describedby={providerNote ? 'provider-note' : undefined} onChange={(e) => { setStatus(null); change({ provider: e.target.value }); }}>
           {offered.map((id) => <option key={id} value={id}>{PROVIDERS[id].label}</option>)}
-          {!offered.includes(v.provider) && <option value={v.provider} disabled>{def.label} (not allowed)</option>}
+          {!offered.includes(v.provider) && <option value={v.provider} disabled>{t('{label} (not allowed)', { label: def.label })}</option>}
         </select>
         {providerNote && <span className="ab-note ab-note-warn" id="provider-note" role="status">{providerNote}</span>}
         <Locked why={eff.locked.provider} />
@@ -519,7 +519,7 @@ export function ProviderSection({ eff, reload }) {
           {/* A provider with its own fixed address: that address is a technical detail, folded. */}
           {!def.userBaseUrl && def.baseUrl && (
             <details className="ab-more">
-              <summary>Technical details: the address requests go to</summary>
+              <summary>{t('Technical details: the address requests go to')}</summary>
               <p className="ab-hint">
                 <span className="ab-mono">{def.baseUrl}</span> (the provider&apos;s own address). Only masked text is sent there, after you have seen it.
               </p>
@@ -533,7 +533,7 @@ export function ProviderSection({ eff, reload }) {
                 className="ab-input ab-mono"
                 value={def.baseUrl || baseUrlTyped}
                 readOnly={!def.userBaseUrl || Boolean(eff.locked.baseUrl)}
-                placeholder="https://your-gateway.example.com/v1"
+                placeholder={t('https://your-gateway.example.com/v1')}
                 aria-invalid={!baseCheck.ok ? true : undefined}
                 aria-describedby={describedBy('baseurl-hint', !baseCheck.ok && 'baseurl-error')}
                 onSave={(text) => change({ baseUrls: { ...v.baseUrls, [v.provider]: text } })}
@@ -552,19 +552,19 @@ export function ProviderSection({ eff, reload }) {
           )}
 
           <div className="ab-field">
-            <label className="ab-label" htmlFor="model">Model</label>
+            <label className="ab-label" htmlFor="model">{t('Model')}</label>
             <DraftInput id="model" className="ab-input ab-mono" list="models" value={model} disabled={Boolean(eff.locked.model)} aria-describedby="model-hint" onSave={(text) => change({ models: { ...v.models, [v.provider]: text.trim() } })} />
             <datalist id="models">{choices.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</datalist>
             {listable && !eff.locked.model && (
               <div className="ab-row" style={{ marginTop: 6 }}>
                 {loadedModels.length > 0 && (
-                  <select id="model-pick" className="ab-select" aria-label="Pick a model from the list" value={choices.some((c) => c.id === model) ? model : ''} onChange={(e) => e.target.value && change({ models: { ...v.models, [v.provider]: e.target.value } })}>
-                    {!choices.some((c) => c.id === model) && <option value="">Pick a model…</option>}
+                  <select id="model-pick" className="ab-select" aria-label={t('Pick a model from the list')} value={choices.some((c) => c.id === model) ? model : ''} onChange={(e) => e.target.value && change({ models: { ...v.models, [v.provider]: e.target.value } })}>
+                    {!choices.some((c) => c.id === model) && <option value="">{t('Pick a model…')}</option>}
                     {choices.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                   </select>
                 )}
                 <button type="button" id="load-models" className="ab-btn" onClick={loadModels} disabled={Boolean(busy)}>{busy === 'models' ? 'Loading…' : loadedModels.length ? 'Reload the list' : 'Load models from the server'}</button>
-                {busy === 'models' && <button type="button" className="ab-btn ab-btn-quiet" onClick={() => running.current?.abort()}>Cancel</button>}
+                {busy === 'models' && <button type="button" className="ab-btn ab-btn-quiet" onClick={() => running.current?.abort()}>{t('Cancel')}</button>}
               </div>
             )}
             <span className="ab-hint" id="model-hint">
@@ -579,13 +579,13 @@ export function ProviderSection({ eff, reload }) {
 
       {eff.locked.apiKey ? (
         <>
-          <p className="ab-note ab-note-ok">The AI key is provided by your organisation. It is never shown here.</p>
+          <p className="ab-note ab-note-ok">{t('The AI key is provided by your organisation. It is never shown here.')}</p>
           <div className="ab-row" style={{ marginTop: 8 }}>{testButtons}</div>
         </>
       ) : (
         <>
           <div className="ab-field">
-            <label className="ab-label" htmlFor="keystorage">Where to keep the key</label>
+            <label className="ab-label" htmlFor="keystorage">{t('Where to keep the key')}</label>
             <select id="keystorage" className="ab-select" value={v.keyStorage} disabled={Boolean(eff.locked.keyStorage)} aria-describedby="keystorage-hint" onChange={(e) => changeKeyStorage(e.target.value)}>
               {KEY_STORAGE_MODES.map((m) => <option key={m} value={m}>{KEY_MODE_LABEL[m]}</option>)}
             </select>
@@ -602,7 +602,7 @@ export function ProviderSection({ eff, reload }) {
               </div>
               {needsEncryption && (
                 <span className="ab-hint" id="unlock-hint">
-                  Your organisation requires the key to be encrypted, so the key saved earlier is not used until it has a passphrase (at least {MIN_PASSPHRASE} characters).
+                  {t('Your organisation requires the key to be encrypted, so the key saved earlier is not used until it has a passphrase (at least {MIN_PASSPHRASE} characters).', { MIN_PASSPHRASE })}
                 </span>
               )}
             </div>
@@ -631,23 +631,23 @@ export function ProviderSection({ eff, reload }) {
           </div>
           {v.keyStorage === 'encrypted' && (
             <div className="ab-field">
-              <label className="ab-label" htmlFor="pass">Passphrase</label>
+              <label className="ab-label" htmlFor="pass">{t('Passphrase')}</label>
               <input id="pass" type="password" className="ab-input" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} onKeyDown={onEnter(() => cleanKey(key) && saveKey())} autoComplete="new-password" aria-describedby="pass-hint" />
               <span className="ab-hint" id="pass-hint">
-                At least {MIN_PASSPHRASE} characters; a few words are easy to remember and hard to guess. There is no way to recover a forgotten passphrase: you would enter the key again.
+                {t('At least {MIN_PASSPHRASE} characters; a few words are easy to remember and hard to guess. There is no way to recover a forgotten passphrase: you would enter the key again.', { MIN_PASSPHRASE })}
               </span>
               {(keyMode === 'local' || keyMode === 'session') && !cleanKey(key) && (
                 <div className="ab-row" style={{ marginTop: 6 }}>
-                  <button type="button" className="ab-btn" onClick={encryptSaved} disabled={!passphrase || Boolean(busy)}>Encrypt the saved key</button>
+                  <button type="button" className="ab-btn" onClick={encryptSaved} disabled={!passphrase || Boolean(busy)}>{t('Encrypt the saved key')}</button>
                 </div>
               )}
             </div>
           )}
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-primary" onClick={saveKey} disabled={busy === 'key'}>Save key</button>
+            <button type="button" className="ab-btn ab-btn-primary" onClick={saveKey} disabled={busy === 'key'}>{t('Save key')}</button>
             {keyMode !== 'none' && (
               <button type="button" className="ab-btn" onClick={removeKey}>
-                Remove saved key
+                {t('Remove saved key')}
               </button>
             )}
             {testButtons}
@@ -690,35 +690,35 @@ export function UsageSection({ eff }) {
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
   return (
     <section className="ab-section" aria-labelledby="h-usage">
-      <h2 className="ab-h" id="h-usage">Usage and limits</h2>
+      <h2 className="ab-h" id="h-usage">{t('Usage and limits')}</h2>
       <p className="ab-sub">
         Counted on this computer from the usage log (no text is kept). Today: {fmt(today.calls)} call{today.calls === 1 ? '' : 's'}, {fmt(today.tokens)} tokens.
         This month: {fmt(month.calls)} calls, {fmt(month.tokens)} tokens.
       </p>
       <p className={`ab-note ${limit.left === 0 ? 'ab-note-warn' : ''}`} id="limit-applies" role="status">{limit.text}</p>
       <div className="ab-field" style={{ marginTop: 12 }}>
-        <label className="ab-label" htmlFor="cap-tokens">Your own daily token limit</label>
+        <label className="ab-label" htmlFor="cap-tokens">{t('Your own daily token limit')}</label>
         <DraftInput
           id="cap-tokens"
           className="ab-input"
           inputMode="numeric"
           value={own.dailyTokens ? String(own.dailyTokens) : ''}
-          placeholder="No limit"
+          placeholder={t('No limit')}
           aria-invalid={errors.dailyTokens ? true : undefined}
           aria-describedby={describedBy('cap-tokens-hint', errors.dailyTokens && 'cap-tokens-error')}
           onSave={(text) => saveLimit('dailyTokens', text)}
         />
         <FieldError id="cap-tokens-error" text={errors.dailyTokens} />
-        <span className="ab-hint" id="cap-tokens-hint">Nothing is sent once today&apos;s tokens reach it. Leave empty for no limit of your own.</span>
+        <span className="ab-hint" id="cap-tokens-hint">{t("Nothing is sent once today's tokens reach it. Leave empty for no limit of your own.")}</span>
       </div>
       <div className="ab-field">
-        <label className="ab-label" htmlFor="cap-calls">Your own daily limit of AI calls</label>
+        <label className="ab-label" htmlFor="cap-calls">{t('Your own daily limit of AI calls')}</label>
         <DraftInput
           id="cap-calls"
           className="ab-input"
           inputMode="numeric"
           value={own.dailyCalls ? String(own.dailyCalls) : ''}
-          placeholder="No limit"
+          placeholder={t('No limit')}
           aria-invalid={errors.dailyCalls ? true : undefined}
           aria-describedby={errors.dailyCalls ? 'cap-calls-error' : undefined}
           onSave={(text) => saveLimit('dailyCalls', text)}
@@ -748,10 +748,10 @@ export function PrivacySection({ eff, reload }) {
   };
   return (
     <section className="ab-section" aria-labelledby="h-privacy">
-      <h2 className="ab-h" id="h-privacy">Privacy</h2>
-      <p className="ab-sub">Before anything goes to an AI, Agent Buddy hides names, email addresses, phone and card numbers and other personal data. These two choices say how strictly, and when you see the text first.</p>
+      <h2 className="ab-h" id="h-privacy">{t('Privacy')}</h2>
+      <p className="ab-sub">{t('Before anything goes to an AI, Agent Buddy hides names, email addresses, phone and card numbers and other personal data. These two choices say how strictly, and when you see the text first.')}</p>
       <div className="ab-field">
-        <label className="ab-label" htmlFor="pii">Personal-data protection</label>
+        <label className="ab-label" htmlFor="pii">{t('Personal-data protection')}</label>
         <select
           id="pii"
           className="ab-select"
@@ -766,7 +766,7 @@ export function PrivacySection({ eff, reload }) {
         {piiFloor ? <span className="ab-locked" id="pii-floor">Your organisation requires at least {PII_LABEL[piiFloor]}.</span> : <Locked why={eff.locked.piiMode} />}
       </div>
       <div className="ab-field">
-        <label className="ab-label" htmlFor="preview">Check what is sent</label>
+        <label className="ab-label" htmlFor="preview">{t('Check what is sent')}</label>
         <select
           id="preview"
           className="ab-select"
@@ -798,19 +798,18 @@ function QuickBarSection({ eff, reload }) {
   };
   return (
     <section className="ab-section" aria-labelledby="h-quick">
-      <h2 className="ab-h" id="h-quick">Quick actions</h2>
+      <h2 className="ab-h" id="h-quick">{t('Quick actions')}</h2>
       <p className="ab-sub">
-        A short bar of the main actions for the ticket that is open: at the top of the side panel, and as a small tab on the edge of the ServiceNow
-        page. Choose which actions it holds with Choose in the panel.
+        {t('A short bar of the main actions for the ticket that is open: at the top of the side panel, and as a small tab on the edge of the ServiceNow page. Choose which actions it holds with Choose in the panel.')}
       </p>
       <label className="ab-check">
         <input id="page-bar" type="checkbox" checked={v.pageBar !== false} disabled={Boolean(eff.locked.pageBar)} onChange={(e) => change({ pageBar: e.target.checked })} />
-        <span>Show the bar on ServiceNow pages. A click opens the side panel and starts the action there.</span>
+        <span>{t('Show the bar on ServiceNow pages. A click opens the side panel and starts the action there.')}</span>
       </label>
       <Locked why={eff.locked.pageBar} />
       <label className="ab-check" style={{ marginTop: 6 }}>
         <input id="panel-bar" type="checkbox" checked={v.quickBarOpen !== false} onChange={(e) => change({ quickBarOpen: e.target.checked })} />
-        <span>Keep the bar open at the top of the side panel.</span>
+        <span>{t('Keep the bar open at the top of the side panel.')}</span>
       </label>
       <Status status={status} />
     </section>
@@ -887,41 +886,41 @@ export function InstancesSection({ eff, reload }) {
 
   return (
     <section className="ab-section" aria-labelledby="h-instances">
-      <h2 className="ab-h" id="h-instances">ServiceNow instances</h2>
+      <h2 className="ab-h" id="h-instances">{t('ServiceNow instances')}</h2>
       <p className="ab-sub">
         {hostAccess() === 'granted'
           ? 'Agent Buddy only runs on instances you turn on. This build was given access to the instances your organisation approved when it was installed, so the browser does not ask.'
           : 'Agent Buddy only runs on instances you turn on. The browser asks you to confirm each one the first time.'}
       </p>
-      {instances.length === 0 && managed.length === 0 && <p className="ab-note">No instance is turned on yet.</p>}
+      {instances.length === 0 && managed.length === 0 && <p className="ab-note">{t('No instance is turned on yet.')}</p>}
       <ul className="ab-sites">
         {instances.map((o) => (
           <li key={o} className="ab-row ab-site">
             <span className="ab-mono">{o}</span>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => remove(o)} aria-label={`Turn off ${o}`}>Turn off</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => remove(o)} aria-label={`Turn off ${o}`}>{t('Turn off')}</button>
           </li>
         ))}
         {managed.map((o) => (
           <li key={o} className="ab-row ab-site">
             <span className="ab-mono">{o}</span>
-            <span className="ab-locked">Turned on by your organisation</span>
+            <span className="ab-locked">{t('Turned on by your organisation')}</span>
           </li>
         ))}
       </ul>
-      <label className="ab-label" htmlFor="instance">Instance address</label>
+      <label className="ab-label" htmlFor="instance">{t('Instance address')}</label>
       <div className="ab-row">
         <input
           id="instance"
           className="ab-input ab-mono"
           style={{ flex: 1 }}
-          placeholder="https://yourcompany.service-now.com"
+          placeholder={t('https://yourcompany.service-now.com')}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           onKeyDown={onEnter(() => !busy && add())}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'instance-error' : undefined}
         />
-        <button type="button" className="ab-btn ab-btn-primary" onClick={add} disabled={busy}>Turn on</button>
+        <button type="button" className="ab-btn ab-btn-primary" onClick={add} disabled={busy}>{t('Turn on')}</button>
       </div>
       {eff.locked.instances && <Locked why={eff.locked.instances} />}
       <FieldError id="instance-error" text={error} />
@@ -937,7 +936,7 @@ export function PolicySection({ eff }) {
   const known = off.filter((id) => !unknown.includes(String(id).trim().toLowerCase()));
   return (
     <section className="ab-section" aria-labelledby="h-policy">
-      <h2 className="ab-h" id="h-policy">Your organisation&apos;s policy</h2>
+      <h2 className="ab-h" id="h-policy">{t("Your organisation's policy")}</h2>
       {known.length > 0 && (
         <p className="ab-sub">
           Switched off by your organisation: <span className="ab-mono">{known.join(', ')}</span>.
@@ -981,20 +980,19 @@ function AuditSection({ eff }) {
 
   return (
     <section className="ab-section" aria-labelledby="h-audit">
-      <h2 className="ab-h" id="h-audit">Activity log</h2>
+      <h2 className="ab-h" id="h-audit">{t('Activity log')}</h2>
       <p className="ab-sub">
-        A local record of what Agent Buddy did: which action, which table, how many items were masked, tokens and outcome. It never stores ticket
-        text, names or the AI&apos;s answers.
+        {t("A local record of what Agent Buddy did: which action, which table, how many items were masked, tokens and outcome. It never stores ticket text, names or the AI's answers.")}
       </p>
       <div className="ab-row" style={{ marginBottom: 8 }}>
-        <button type="button" className="ab-btn ab-btn-sm" onClick={exportCsv} disabled={!canExport || !log.length}>Export CSV</button>
-        <button type="button" className="ab-btn ab-btn-sm" onClick={clear} disabled={!log.length}>Clear log</button>
-        {!canExport && <span className="ab-locked">Export is switched off by your organisation.</span>}
+        <button type="button" className="ab-btn ab-btn-sm" onClick={exportCsv} disabled={!canExport || !log.length}>{t('Export CSV')}</button>
+        <button type="button" className="ab-btn ab-btn-sm" onClick={clear} disabled={!log.length}>{t('Clear log')}</button>
+        {!canExport && <span className="ab-locked">{t('Export is switched off by your organisation.')}</span>}
       </div>
       <Status status={status} />
-      {log.length === 0 ? <p className="ab-note">Nothing yet.</p> : (
+      {log.length === 0 ? <p className="ab-note">{t('Nothing yet.')}</p> : (
         <table className="ab-table">
-          <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Table</th><th scope="col">Masked</th><th scope="col">Outcome</th></tr></thead>
+          <thead><tr><th scope="col">{t('Time')}</th><th scope="col">{t('Action')}</th><th scope="col">{t('Table')}</th><th scope="col">{t('Masked')}</th><th scope="col">{t('Outcome')}</th></tr></thead>
           <tbody>
             {log.slice(0, 40).map((e, i) => (
               <tr key={i}><td>{String(e.time || '').replace('T', ' ').slice(0, 16)}</td><td>{e.feature}</td><td>{e.table}</td><td>{e.masked}</td><td>{e.outcome}{e.reason ? ` (${e.reason})` : ''}</td></tr>
@@ -1064,11 +1062,11 @@ function StoredDataSection({ eff, onCleared }) {
 
   return (
     <section className="ab-section" aria-labelledby="h-stored">
-      <h2 className="ab-h" id="h-stored">Stored data</h2>
+      <h2 className="ab-h" id="h-stored">{t('Stored data')}</h2>
       <p className="ab-sub">
-        This is everything Agent Buddy keeps in this browser. It never keeps ticket text, names or the AI&apos;s answers.
+        {t("This is everything Agent Buddy keeps in this browser. It never keeps ticket text, names or the AI's answers.")}
       </p>
-      {items === null ? <p className="ab-sub">Loading…</p> : (
+      {items === null ? <p className="ab-sub">{t('Loading…')}</p> : (
         <ul style={{ paddingLeft: 18 }}>
           {items.map((item) => (
             <li key={item.id}>
@@ -1081,18 +1079,18 @@ function StoredDataSection({ eff, onCleared }) {
       )}
       {!confirming ? (
         <div className="ab-row">
-          <button type="button" className="ab-btn" onClick={() => { setResult(null); setConfirming(true); }}>Clear everything stored by Agent Buddy</button>
+          <button type="button" className="ab-btn" onClick={() => { setResult(null); setConfirming(true); }}>{t('Clear everything stored by Agent Buddy')}</button>
         </div>
       ) : (
         <div className="ab-note ab-note-warn" role="alertdialog" aria-labelledby="clear-title" aria-describedby="clear-text">
-          <strong id="clear-title">Remove everything?</strong>{' '}
+          <strong id="clear-title">{t('Remove everything?')}</strong>{' '}
           <span id="clear-text">
             Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards and checklist ticks are deleted, and the ServiceNow
             sites you turned on are turned off. This cannot be undone.{budgeted ? " The AI usage log stays while your organisation sets a daily limit." : ''}
           </span>
           <div className="ab-row" style={{ marginTop: 8 }}>
             <button type="button" ref={confirmButton} className="ab-btn ab-btn-danger ab-btn-sm" onClick={clearEverything} disabled={busy}>{busy ? 'Removing…' : 'Yes, remove everything'}</button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setConfirming(false)} disabled={busy}>{t('Cancel')}</button>
           </div>
         </div>
       )}
@@ -1120,17 +1118,17 @@ export function ProfilesSection({ eff, reload }) {
   };
   return (
     <section className="ab-section" aria-labelledby="h-profiles">
-      <h2 className="ab-h" id="h-profiles">What you work on</h2>
-      <p className="ab-sub">Agent Buddy shows the tools for this work first. Tick everything that applies.</p>
+      <h2 className="ab-h" id="h-profiles">{t('What you work on')}</h2>
+      <p className="ab-sub">{t('Agent Buddy shows the tools for this work first. Tick everything that applies.')}</p>
       <ProfilePicker eff={eff} onSave={change} instant idBase="profile" />
       <label className="ab-check" htmlFor="show-everything">
         <input id="show-everything" type="checkbox" checked={v.showEverything === true} onChange={(e) => change({ showEverything: e.target.checked })} />
-        <span>Show everything: every card and action, whatever you work on.</span>
+        <span>{t('Show everything: every card and action, whatever you work on.')}</span>
       </label>
       {!aiOffByOrg && (
         <label className="ab-check" htmlFor="ai-skipped">
           <input id="ai-skipped" type="checkbox" checked={v.aiSkipped === true} onChange={(e) => change({ aiSkipped: e.target.checked })} />
-          <span>Skip AI for now: use Agent Buddy without AI. Everything under Insights still works.</span>
+          <span>{t('Skip AI for now: use Agent Buddy without AI. Everything under Insights still works.')}</span>
         </label>
       )}
       <Status status={status} />
@@ -1158,15 +1156,15 @@ export function FollowUpSection({ eff, reload }) {
   }
   return (
     <section className="ab-section" aria-labelledby="h-followup">
-      <h2 className="ab-h" id="h-followup">My work</h2>
+      <h2 className="ab-h" id="h-followup">{t('My work')}</h2>
       <div className="ab-field">
-        <label className="ab-label" htmlFor="follow-up-days">Follow-ups due after</label>
+        <label className="ab-label" htmlFor="follow-up-days">{t('Follow-ups due after')}</label>
         <select id="follow-up-days" className="ab-select" value={String(value)} aria-describedby="follow-up-hint" onChange={(e) => change(e.target.value)}>
           {FOLLOW_UP_CHOICES.map((d) => (
-            <option key={d} value={String(d)}>{d} days</option>
+            <option key={d} value={String(d)}>{t('{d} days', { d })}</option>
           ))}
         </select>
-        <span className="ab-hint" id="follow-up-hint">A customer who has not had an update, or has not answered, for this long shows under follow-ups in My work.</span>
+        <span className="ab-hint" id="follow-up-hint">{t('A customer who has not had an update, or has not answered, for this long shows under follow-ups in My work.')}</span>
       </div>
       <Status status={status} />
     </section>
@@ -1212,15 +1210,15 @@ export function DiagnosticsSection({ eff }) {
 
   return (
     <section className="ab-section" aria-labelledby="h-diagnostics">
-      <h2 className="ab-h" id="h-diagnostics">Help from support</h2>
-      <p className="ab-sub">Copies the versions, your settings without any key, your organisation&apos;s policy in short and the last problems. No ticket content.</p>
+      <h2 className="ab-h" id="h-diagnostics">{t('Help from support')}</h2>
+      <p className="ab-sub">{t("Copies the versions, your settings without any key, your organisation's policy in short and the last problems. No ticket content.")}</p>
       <div className="ab-row">
-        <button type="button" className="ab-btn" onClick={copy}>Copy diagnostics</button>
+        <button type="button" className="ab-btn" onClick={copy}>{t('Copy diagnostics')}</button>
       </div>
       <Status status={status} />
       {text && (
         <details className="ab-more">
-          <summary>What was copied</summary>
+          <summary>{t('What was copied')}</summary>
           <pre className="ab-diagnostics" tabIndex={0}>{text}</pre>
         </details>
       )}
@@ -1241,10 +1239,9 @@ export function AiAssistPage({ eff, reload, epoch }) {
   if (eff.policy?.aiEnabled === false) {
     return (
       <section className="ab-section" aria-labelledby="h-ai-off">
-        <h2 className="ab-h" id="h-ai-off">AI is switched off</h2>
+        <h2 className="ab-h" id="h-ai-off">{t('AI is switched off')}</h2>
         <p className="ab-sub">
-          Your organisation has switched off AI in Agent Buddy. Everything under Insights still works: facts, lists, checks and templates, read
-          from ServiceNow with your own session. Nothing is sent anywhere.
+          {t('Your organisation has switched off AI in Agent Buddy. Everything under Insights still works: facts, lists, checks and templates, read from ServiceNow with your own session. Nothing is sent anywhere.')}
         </p>
       </section>
     );
@@ -1290,11 +1287,11 @@ export default function Options() {
     }
   }, [reload]);
 
-  if (failed) return <div className="ab-page"><p className="ab-note ab-note-danger" role="alert">{failed} Close this tab and open Settings again.</p></div>;
-  if (!eff) return <div className="ab-page"><p className="ab-sub">Loading…</p></div>;
+  if (failed) return <div className="ab-page"><p className="ab-note ab-note-danger" role="alert">{t('{failed} Close this tab and open Settings again.', { failed })}</p></div>;
+  if (!eff) return <div className="ab-page"><p className="ab-sub">{t('Loading…')}</p></div>;
   return (
     <main className="ab-page">
-      <h1 className="ab-h ab-page-title">Agent Buddy settings</h1>
+      <h1 className="ab-h ab-page-title">{t('Agent Buddy settings')}</h1>
       <SettingsPages eff={eff} reload={reload} epoch={epoch} onCleared={() => { setEpoch((n) => n + 1); reload(); }} />
     </main>
   );
@@ -1327,26 +1324,24 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
   const managedNote = Object.keys(eff.locked).some((k) => !eff.floors?.[k]);
   return (
     <>
-      <Tabs idBase="ab-settings" label="Settings pages" className="ab-row ab-settings-tabs" tabs={PAGES} value={page} onChange={choose} />
-      {managedNote && <p className="ab-note ab-note-warn">Some settings are managed by your organisation and cannot be changed.</p>}
+      <Tabs idBase="ab-settings" label={t('Settings pages')} className="ab-row ab-settings-tabs" tabs={PAGES} value={page} onChange={choose} />
+      {managedNote && <p className="ab-note ab-note-warn">{t('Some settings are managed by your organisation and cannot be changed.')}</p>}
       <div id={panelId('ab-settings', 'basics')} role="tabpanel" aria-labelledby={tabId('ab-settings', 'basics')} hidden={page !== 'basics'}>
-        <p className="ab-sub ab-page-intro">Where Agent Buddy works, what you work on, how personal data is protected, and what it keeps on this computer.</p>
+        <p className="ab-sub ab-page-intro">{t('Where Agent Buddy works, what you work on, how personal data is protected, and what it keeps on this computer.')}</p>
         <InstancesSection eff={eff} reload={reload} />
         <ProfilesSection eff={eff} reload={reload} />
         <FollowUpSection eff={eff} reload={reload} />
         <QuickBarSection eff={eff} reload={reload} />
-        {Object.keys(eff.floors || {}).length > 0 && <p className="ab-note">Your organisation sets a minimum for some privacy settings. You can always choose a stricter one.</p>}
+        {Object.keys(eff.floors || {}).length > 0 && <p className="ab-note">{t('Your organisation sets a minimum for some privacy settings. You can always choose a stricter one.')}</p>}
         <PrivacySection eff={eff} reload={reload} />
         <PolicySection eff={eff} />
         <AuditSection key={`audit-${epoch}`} eff={eff} />
         <StoredDataSection key={`stored-${epoch}`} eff={eff} onCleared={onCleared} />
         <DiagnosticsSection eff={eff} />
         <section className="ab-section" aria-labelledby="h-leaves">
-          <h2 className="ab-h" id="h-leaves">What leaves your computer</h2>
+          <h2 className="ab-h" id="h-leaves">{t('What leaves your computer')}</h2>
           <p className="ab-sub">
-            Only two things: reads from your own ServiceNow instance, and the masked text sent to the AI address you chose. Agent Buddy has no server,
-            no analytics and no tracking. It never saves or changes a ServiceNow record by itself: when you choose Insert it fills the field on the open
-            form and you press Save.
+            {t('Only two things: reads from your own ServiceNow instance, and the masked text sent to the AI address you chose. Agent Buddy has no server, no analytics and no tracking. It never saves or changes a ServiceNow record by itself: when you choose Insert it fills the field on the open form and you press Save.')}
           </p>
         </section>
       </div>

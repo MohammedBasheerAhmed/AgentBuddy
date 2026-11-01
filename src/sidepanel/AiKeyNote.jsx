@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import { aiNeeds, aiNeedsText } from './aiReady.js';
 import { keyStore } from '../lib/storage.js';
+import { t } from '../i18n/index.js';
 
 /**
  * Open Settings, on one of its two pages: '' (Basics) or 'ai' (AI Assist). A page is opened as its own address (options.html#ai, an
@@ -70,7 +71,7 @@ export function KeyUnlock({ eff, primary = false }) {
       <div className="ab-note ab-note-warn ab-keynote">
         <p className="ab-keynote-text">{CHOOSE_TEXT}</p>
         <button type="button" className="ab-btn ab-btn-sm" onClick={() => openSettings('ai')}>
-          Open Settings
+          {t('Open Settings')}
         </button>
       </div>
     );
@@ -108,7 +109,7 @@ export function KeyUnlock({ eff, primary = false }) {
         </p>
       )}
       <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => openSettings('ai')}>
-        Forgot it? Enter the key again in Settings
+        {t('Forgot it? Enter the key again in Settings')}
       </button>
     </div>
   );
@@ -132,7 +133,7 @@ export default function AiKeyNote({ eff, what = 'these actions', also = '' }) {
         {also ? ` ${also}` : ''}
       </p>
       <button type="button" className="ab-btn ab-btn-sm" onClick={() => openSettings('ai')}>
-        Open Settings
+        {t('Open Settings')}
       </button>
     </div>
   );

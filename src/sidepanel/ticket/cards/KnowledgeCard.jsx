@@ -4,6 +4,7 @@ import { articleShareUrl } from '../../../insights/links.js';
 import { useKnowledge } from './data.js';
 import { useReport } from './useInsight.js';
 import { CopyButton, ItemLink, Notes, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N3, knowledge for this ticket: published articles that match its words, best first. "Copy link" copies the article's reading
 // address (the portal's article page, or the classic article view) to paste into a reply.
@@ -26,18 +27,18 @@ export default function KnowledgeCard({ page, eff, record, active, setSummary })
             return (
               <div key={h.sysId} className="ab-ins-row">
                 <ItemLink page={page} item={{ ...h, table: 'kb_knowledge' }} line={[h.knowledgeBase, h.viewCount ? `${h.viewCount} views` : ''].filter(Boolean).join(' · ')} extra={clip(h.excerpt, 160)} />
-                {share && <CopyButton value={share} label="Copy link" title="Copy the article's address to share it with the customer" />}
+                {share && <CopyButton value={share} label={t('Copy link')} title={t("Copy the article's address to share it with the customer")} />}
               </div>
             );
           }}
         />
       )}
-      {kb.data && !hits.length && !kb.error && <p className="ab-hint">No published article matches the words of this ticket. Try the Knowledge screen to search yourself.</p>}
+      {kb.data && !hits.length && !kb.error && <p className="ab-hint">{t('No published article matches the words of this ticket. Try the Knowledge screen to search yourself.')}</p>}
       <Notes access={kb.data?.access} />
       {kb.data && (
         <div className="ab-ins-foot">
           <QuietButton onClick={kb.reload} disabled={kb.phase === 'loading'}>
-            Refresh
+            {t('Refresh')}
           </QuietButton>
         </div>
       )}

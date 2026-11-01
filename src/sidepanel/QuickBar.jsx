@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { MAX_QUICK, QUICK_CARDS, QUICK_LABELS, isQuickCard, isQuickId, quickItems } from '../features/quick.js';
 import { saveSettings } from '../lib/storage.js';
 import { AiBadge } from './ui/primitives.jsx';
+import { t } from '../i18n/index.js';
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const cardId = (card) => `card:${card}`;
@@ -71,7 +72,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
   const toggle = (id) => setPins(shownIds.includes(id) ? shownIds.filter((x) => x !== id) : [...shownIds, id].slice(0, MAX_QUICK));
 
   return (
-    <section className="ab-quick" aria-label="Quick actions">
+    <section className="ab-quick" aria-label={t('Quick actions')}>
       <div className="ab-quick-head">
         <button type="button" className="ab-quick-toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
           <span className={`ab-quick-chevron${open ? ' ab-quick-chevron-open' : ''}`} aria-hidden="true" />
@@ -87,7 +88,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
       {open && (
         <div id={bodyId}>
           {!choosing && (
-            <div className="ab-quick-actions" role="group" aria-label="Quick actions">
+            <div className="ab-quick-actions" role="group" aria-label={t('Quick actions')}>
               {items.map((a) =>
                 a.ai ? (
                   <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-btn-ai-quiet ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={`${a.label} (AI)`} onClick={() => onRun(byId.get(a.id))}>
@@ -95,7 +96,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
                     <AiBadge label="" title={AI_HOVER} />
                   </button>
                 ) : (
-                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-quick-insight" title="Opens the card in Insights. Stays in ServiceNow." onClick={() => onShowCard(a.card)}>
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-quick-insight" title={t('Opens the card in Insights. Stays in ServiceNow.')} onClick={() => onShowCard(a.card)}>
                     {a.label}
                   </button>
                 )
@@ -105,7 +106,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
 
           {choosing && (
             <fieldset className="ab-quick-choose">
-              <legend className="ab-hint">Pick up to {MAX_QUICK} for this kind of record. The AI ones also show on the ServiceNow page.</legend>
+              <legend className="ab-hint">{t('Pick up to {MAX_QUICK} for this kind of record. The AI ones also show on the ServiceNow page.', { MAX_QUICK })}</legend>
               {pinnable.map((p) => {
                 const on = shownIds.includes(p.id);
                 return (
@@ -118,7 +119,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
               })}
               {pins[kind]?.length > 0 && (
                 <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setPins(null)}>
-                  Use the suggested ones
+                  {t('Use the suggested ones')}
                 </button>
               )}
             </fieldset>

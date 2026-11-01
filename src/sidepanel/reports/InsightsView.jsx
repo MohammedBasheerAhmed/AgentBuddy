@@ -3,6 +3,7 @@ import { useRun } from '../useRun.js';
 import { buildInsightsPack, checkInsightsNote, describeInputs, INSIGHT_MAX_WORDS } from '../../reports/ai/insights.js';
 import { AiBlocked, AiButton, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { andList, readLabel } from './format.js';
+import { t } from '../../i18n/index.js';
 
 const FEATURE_ID = 'dashboard-insights';
 const NONE = [];
@@ -22,7 +23,7 @@ export function insightChecks(text) {
 export function InsightsInputs({ entries }) {
   const inputs = describeInputs(entries);
   if (!inputs.used.length) {
-    return <p className="ab-note">There are no numbers to explain yet. They come from the dashboard under Insights: wait for it to load, or add Overview, Workload, SLA, Quality or Request fulfilment to it (Customize).</p>;
+    return <p className="ab-note">{t('There are no numbers to explain yet. They come from the dashboard under Insights: wait for it to load, or add Overview, Workload, SLA, Quality or Request fulfilment to it (Customize).')}</p>;
   }
   return (
     <>
@@ -63,21 +64,21 @@ export function ExplainBody({ entries, page, eff, primary = false }) {
   return (
     <>
       {!available ? (
-        <AiBlocked>Your organisation has turned this off.</AiBlocked>
+        <AiBlocked>{t('Your organisation has turned this off.')}</AiBlocked>
       ) : (
         <>
           <InsightsInputs entries={entries} />
-          <p className="ab-hint">Sends counts, trends, group names, ticket numbers and assignees (masked); no titles, descriptions or notes. The preview shows exactly what will be sent.</p>
+          <p className="ab-hint">{t('Sends counts, trends, group names, ticket numbers and assignees (masked); no titles, descriptions or notes. The preview shows exactly what will be sent.')}</p>
           {!aiReady && <AiKeyLine eff={eff} />}
           <div className="ab-row">
             <AiButton eff={eff} primary={primary} disabled={!aiReady || !hasInputs || run.busy} onClick={go}>
-              Explain these numbers
+              {t('Explain these numbers')}
             </AiButton>
           </div>
         </>
       )}
       <RunProgress run={run} eff={eff} page={page} readingText="Getting the numbers ready…" />
-      <AiResult run={run} eff={eff} featureId={FEATURE_ID} heading="What the numbers say" notice={shown ? insightChecks(run.result) : []} />
+      <AiResult run={run} eff={eff} featureId={FEATURE_ID} heading={t('What the numbers say')} notice={shown ? insightChecks(run.result) : []} />
     </>
   );
 }
@@ -87,7 +88,7 @@ export function ExplainBody({ entries, page, eff, primary = false }) {
 export default function InsightsView({ env, eff }) {
   const entries = useSyncExternalStore(env.loaded ? env.loaded.subscribe : noopSubscribe, env.loaded ? env.loaded.snapshot : getNone, getNone);
   return (
-    <AiShell title="Explain this dashboard" help="What stands out in the numbers, likely reasons (as hypotheses) and three suggested actions.">
+    <AiShell title={t('Explain this dashboard')} help={t('What stands out in the numbers, likely reasons (as hypotheses) and three suggested actions.')}>
       <ExplainBody entries={entries} page={env.page} eff={eff} />
     </AiShell>
   );

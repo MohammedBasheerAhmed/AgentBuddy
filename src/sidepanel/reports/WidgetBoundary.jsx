@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import { t } from '../../i18n/index.js';
 
 export const WIDGET_BROKEN_TEXT = 'This section could not be drawn. The rest of the dashboard is not affected.';
 
@@ -35,7 +36,7 @@ export default class WidgetBoundary extends Component {
         </div>
         <p className="ab-note ab-note-warn" role="alert">{WIDGET_BROKEN_TEXT}</p>
         <div className="ab-row">
-          <button type="button" className="ab-btn ab-btn-sm" onClick={() => this.setState({ failed: false })}>Try again</button>
+          <button type="button" className="ab-btn ab-btn-sm" onClick={() => this.setState({ failed: false })}>{t('Try again')}</button>
         </div>
       </section>
     );

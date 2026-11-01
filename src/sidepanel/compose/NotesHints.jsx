@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { read, plainError } from '../ask.js';
 import { peopleFromNames } from '../../compose/rewrite.js';
+import { t } from '../../i18n/index.js';
 
 // Suggestions for the fields Notes to ticket never fills itself: caller, category, assignment group (src/compose/notesHints.js). No
 // AI: they come from a read with the person's own session, a moment after the proposal is shown (and again on "Look again" after
@@ -51,11 +52,11 @@ export default function NotesHints({ page, text, names }) {
   if (routing?.group) lines.push(`Assignment group: ${routing.group.name} (${routing.group.count} of ${routing.looked})`);
 
   return (
-    <div className="ab-write-hints" aria-label="Suggestions for caller, category and group">
-      <h4 className="ab-compose-sub">Suggestions to pick on the form</h4>
-      {state.phase === 'reading' && <p className="ab-sub" role="status">Looking at similar resolved {kind}…</p>}
+    <div className="ab-write-hints" aria-label={t('Suggestions for caller, category and group')}>
+      <h4 className="ab-compose-sub">{t('Suggestions to pick on the form')}</h4>
+      {state.phase === 'reading' && <p className="ab-sub" role="status">{t('Looking at similar resolved {kind}…', { kind })}</p>}
       {state.phase === 'error' && <p className="ab-hint">{state.error}</p>}
-      {state.phase === 'ready' && lines.length === 0 && <p className="ab-hint">No clear caller, category or group from similar {kind}.</p>}
+      {state.phase === 'ready' && lines.length === 0 && <p className="ab-hint">{t('No clear caller, category or group from similar {kind}.', { kind })}</p>}
       {lines.length > 0 && (
         <ul className="ab-compose-list">
           {lines.map((l) => (
@@ -68,7 +69,7 @@ export default function NotesHints({ page, text, names }) {
           {state.for && state.for !== askFor ? 'Look again for the new short description' : 'Look again'}
         </button>
       </div>
-      <p className="ab-hint">Read with your session, not by AI. Agent Buddy does not fill caller, category or group.</p>
+      <p className="ab-hint">{t('Read with your session, not by AI. Agent Buddy does not fill caller, category or group.')}</p>
     </div>
   );
 }

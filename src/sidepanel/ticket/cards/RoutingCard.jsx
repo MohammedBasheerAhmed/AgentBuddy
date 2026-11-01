@@ -4,6 +4,7 @@ import { routingVote } from '../../../insights/routing.js';
 import { useLookalikes, useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ItemLink, Notes, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N10, where similar tickets went: a count over the solved look-alikes' own assignment groups and categories. A hint for routing, not
 // a rule; the AI version (with reasons) is in AI Assist.
@@ -31,7 +32,7 @@ export default function RoutingCard({ page, eff, record, active, setSummary }) {
     <>
       <p className={`ab-ins-line${vote.strong ? '' : ' ab-ins-soft'}`}>{vote.line}.</p>
       {vote.detail && <p className="ab-hint">{vote.detail}</p>}
-      {!vote.strong && <p className="ab-hint">The look-alikes do not agree much: treat this as a weak hint.</p>}
+      {!vote.strong && <p className="ab-hint">{t('The look-alikes do not agree much: treat this as a weak hint.')}</p>}
       {examples.length > 0 && <ShowMore items={examples} render={(h) => <ItemLink key={h.sysId} page={page} item={h} line={[h.category, h.subcategory].filter(Boolean).join(' / ')} />} />}
       {others.length > 0 && <p className="ab-hint">Also: {others.map((g) => `${g.name} (${g.count})`).join(', ')}.</p>}
       <Notes access={look.data.access} />

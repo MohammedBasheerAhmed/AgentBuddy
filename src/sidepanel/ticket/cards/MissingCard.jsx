@@ -5,6 +5,7 @@ import { stateBucket } from '../../../insights/order.js';
 import { useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N11, missing details: key facts that are empty or vague (configuration item, who else is affected, the error text, a way to reach
 // the caller, steps to reproduce), each with why it matters. Plain rules on the `glance` read. The AI "questions to ask" is in AI Assist.
@@ -20,8 +21,8 @@ export default function MissingCard({ page, eff, record, header, active, setSumm
   if (!result) return <ReadState state={ticket} what="this ticket" onRetry={ticket.reload} />;
   return (
     <>
-      {!result.textRead && <p className="ab-hint">The text of this record is not read (a sensitive record), so only the fields are checked.</p>}
-      {!n && <p className="ab-hint">The key details are there: a configuration item, a description with the error, who is affected and how to reach them.</p>}
+      {!result.textRead && <p className="ab-hint">{t('The text of this record is not read (a sensitive record), so only the fields are checked.')}</p>}
+      {!n && <p className="ab-hint">{t('The key details are there: a configuration item, a description with the error, who is affected and how to reach them.')}</p>}
       {n > 0 && (
         <ShowMore
           items={result.items}

@@ -14,6 +14,7 @@ import { openNewRecord } from '../openRecord.js';
 import { AiBadge } from '../ui/primitives.jsx';
 import { shownFor } from '../../profiles/profiles.js';
 import NotesHints from './NotesHints.jsx';
+import { t } from '../../i18n/index.js';
 
 const FEATURE_ID = 'notes-to-ticket';
 const FIELD_NAMES = { short_description: 'Short description', description: 'Description', impact: 'Impact', urgency: 'Urgency', contact_type: 'Contact type' };
@@ -155,22 +156,22 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
     <div className="ab-compose-stack">
       {showKeyNote && <AiKeyNote eff={eff} what="this" />}
 
-      <section className="ab-compose-input" aria-label="Rough notes">
+      <section className="ab-compose-input" aria-label={t('Rough notes')}>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-notes-text">Rough notes from the call, chat or visit</label>
+          <label className="ab-label" htmlFor="ab-notes-text">{t('Rough notes from the call, chat or visit')}</label>
           <textarea
             id="ab-notes-text"
             className="ab-textarea ab-compose-text"
             value={notes}
             maxLength={MAX_FORM_TEXT}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="vpn down since this morning, error 809, tried restart, urgent for sales team..."
+            placeholder={t('vpn down since this morning, error 809, tried restart, urgent for sales team...')}
           />
         </div>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-notes-names">Names to hide from the AI (optional)</label>
-          <input id="ab-notes-names" className="ab-input" value={names} onChange={(e) => setNames(e.target.value)} placeholder="Abel Tuter, Priya Raman" autoComplete="off" />
-          <span className="ab-hint">Emails, phone numbers and card numbers are hidden automatically. A name written only in the notes cannot be found by pattern, so list it here. Check the preview before sending.</span>
+          <label className="ab-label" htmlFor="ab-notes-names">{t('Names to hide from the AI (optional)')}</label>
+          <input id="ab-notes-names" className="ab-input" value={names} onChange={(e) => setNames(e.target.value)} placeholder={t('Abel Tuter, Priya Raman')} autoComplete="off" />
+          <span className="ab-hint">{t('Emails, phone numbers and card numbers are hidden automatically. A name written only in the notes cannot be found by pattern, so list it here. Check the preview before sending.')}</span>
         </div>
         <div className="ab-row">
           {/* filled only while it is the next step (notes typed, no proposal yet): one filled button on the screen at a time */}
@@ -184,39 +185,39 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
       <RunPanel run={run} eff={eff} page={page} readingText="Getting ready…" />
 
       {showReview && (
-        <section className="ab-card ab-compose-actions" aria-label="Review before filling the form">
-          <h3 className="ab-h">Review, then fill the form</h3>
+        <section className="ab-card ab-compose-actions" aria-label={t('Review before filling the form')}>
+          <h3 className="ab-h">{t('Review, then fill the form')}</h3>
           <div className="ab-field">
-            <label className="ab-label" htmlFor="ab-notes-short">Short description</label>
+            <label className="ab-label" htmlFor="ab-notes-short">{t('Short description')}</label>
             <input id="ab-notes-short" className="ab-input" maxLength={160} value={values.shortDescription} onChange={set('shortDescription')} />
           </div>
           <div className="ab-field">
-            <label className="ab-label" htmlFor="ab-notes-desc">Description</label>
+            <label className="ab-label" htmlFor="ab-notes-desc">{t('Description')}</label>
             <textarea id="ab-notes-desc" className="ab-textarea ab-compose-text" value={values.description} onChange={set('description')} />
           </div>
           <div className="ab-compose-grid">
             <div className="ab-field">
-              <label className="ab-label" htmlFor="ab-notes-impact">Impact</label>
+              <label className="ab-label" htmlFor="ab-notes-impact">{t('Impact')}</label>
               <select id="ab-notes-impact" className="ab-select" value={values.impact} onChange={set('impact')}>
-                <option value="">Leave as is</option>
+                <option value="">{t('Leave as is')}</option>
                 {LEVELS.map((l) => (
                   <option key={l.value} value={l.label}>{l.label}</option>
                 ))}
               </select>
             </div>
             <div className="ab-field">
-              <label className="ab-label" htmlFor="ab-notes-urgency">Urgency</label>
+              <label className="ab-label" htmlFor="ab-notes-urgency">{t('Urgency')}</label>
               <select id="ab-notes-urgency" className="ab-select" value={values.urgency} onChange={set('urgency')}>
-                <option value="">Leave as is</option>
+                <option value="">{t('Leave as is')}</option>
                 {LEVELS.map((l) => (
                   <option key={l.value} value={l.label}>{l.label}</option>
                 ))}
               </select>
             </div>
             <div className="ab-field">
-              <label className="ab-label" htmlFor="ab-notes-contact">Contact type</label>
+              <label className="ab-label" htmlFor="ab-notes-contact">{t('Contact type')}</label>
               <select id="ab-notes-contact" className="ab-select" value={values.contactType} onChange={set('contactType')}>
-                <option value="">Leave as is</option>
+                <option value="">{t('Leave as is')}</option>
                 {CONTACT_TYPES.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
@@ -239,7 +240,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
           <NotesHints key={proposalNo} page={page} text={values.shortDescription} names={names} />
           {proposal.questions.length > 0 && (
             <>
-              <h4 className="ab-compose-sub">Questions still to ask</h4>
+              <h4 className="ab-compose-sub">{t('Questions still to ask')}</h4>
               <ol className="ab-compose-list">
                 {proposal.questions.map((q, i) => (
                   <li key={i}>{q}</li>
@@ -259,15 +260,15 @@ ${values.description}`.trim(), { people: run.people, scan: run.scan }).hints} />
 
           {warnings && (
             <div className="ab-note ab-note-warn" role="alert">
-              <strong>Check before filling:</strong>
+              <strong>{t('Check before filling:')}</strong>
               <ul className="ab-compose-list">
                 {warnings.map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}
               </ul>
               <div className="ab-row">
-                <button type="button" className="ab-btn ab-btn-sm" onClick={() => fillForm(true)}>Fill anyway</button>
-                <button type="button" className="ab-btn ab-btn-sm" onClick={() => setWarnings(null)}>Cancel</button>
+                <button type="button" className="ab-btn ab-btn-sm" onClick={() => fillForm(true)}>{t('Fill anyway')}</button>
+                <button type="button" className="ab-btn ab-btn-sm" onClick={() => setWarnings(null)}>{t('Cancel')}</button>
               </div>
             </div>
           )}
@@ -277,16 +278,16 @@ ${values.description}`.trim(), { people: run.people, scan: run.scan }).hints} />
               {filled ? 'Filled' : 'Fill the form'}
             </button>
             <button type="button" className="ab-btn ab-btn-sm" disabled={!values.shortDescription.trim()} onClick={() => fill.copy(values.shortDescription)}>
-              Copy short description
+              {t('Copy short description')}
             </button>
             <button type="button" className="ab-btn ab-btn-sm" disabled={!values.description.trim()} onClick={() => fill.copy(values.description)}>
-              Copy description
+              {t('Copy description')}
             </button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => fill.copy(allText)}>Copy all</button>
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => fill.copy(allText)}>{t('Copy all')}</button>
           </div>
           {outcome && <p className={`ab-note ab-note-${outcome.kind}`} role="status">{outcome.text}</p>}
           {fill.note && <p className={`ab-note ab-note-${fill.note.kind}`} role="status">{fill.note.text}</p>}
-          <p className="ab-hint">Nothing is saved or sent. You press Save in the form yourself.</p>
+          <p className="ab-hint">{t('Nothing is saved or sent. You press Save in the form yourself.')}</p>
         </section>
       )}
     </div>

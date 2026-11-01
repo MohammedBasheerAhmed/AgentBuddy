@@ -3,6 +3,7 @@ import ErrorBoundary from '../ErrorBoundary.jsx';
 import { CardFrame, EmptyNote } from '../ui/primitives.jsx';
 import { shownFor } from '../../profiles/profiles.js';
 import { INSIGHT_CARDS } from './cards/index.js';
+import { t } from '../../i18n/index.js';
 
 /** The cards for this record: its kind, the person's profiles, in order (`order` may be a number or a function of the record). */
 export function cardsFor(cards, record, header, eff) {
@@ -65,7 +66,7 @@ export default function TicketInsights({ page, eff, record, header, active, open
     return setters.current[id];
   }, []);
 
-  if (!cards.length) return <EmptyNote>Nothing to show for this kind of record yet.</EmptyNote>;
+  if (!cards.length) return <EmptyNote>{t('Nothing to show for this kind of record yet.')}</EmptyNote>;
 
   return (
     <div className="ab-cards" ref={root}>

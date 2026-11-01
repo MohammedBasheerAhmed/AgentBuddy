@@ -1,6 +1,7 @@
 import React from 'react';
 import { describeTile, formatNumber, toneClass } from './geometry.js';
 import DrillLink from './DrillLink.jsx';
+import { t } from '../../i18n/index.js';
 
 const ARROW = { up: '▲', down: '▼', flat: '▬' };
 const WORD = { up: 'Up', down: 'Down', flat: 'No change' };
@@ -28,11 +29,11 @@ export default function Tile({ label, value, hint, delta, tone = 'neutral', onOp
     <>
       <span className="ab-tile-label">{label}</span>
       {missing ? (
-        <span className="ab-tile-unavailable">Not available to you</span>
+        <span className="ab-tile-unavailable">{t('Not available to you')}</span>
       ) : busy ? (
         <span className="ab-tile-value ab-tile-loading">
           <span aria-hidden="true">…</span>
-          <span className="ab-chart-sr">Loading</span>
+          <span className="ab-chart-sr">{t('Loading')}</span>
         </span>
       ) : (
         <span className="ab-tile-value">{shown}</span>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { read } from '../ask.js';
+import { t } from '../../i18n/index.js';
 
 const KINDS = [
   { id: 'mine', label: 'Mine' },
@@ -35,24 +36,24 @@ function GroupPicker({ tabId, blocked, chosen, myGroups, onAdd }) {
   return (
     <div className="ab-picker">
       {mine.length > 0 && (
-        <div className="ab-chips" role="group" aria-label="Your groups">
-          <span className="ab-hint">Your groups:</span>
+        <div className="ab-chips" role="group" aria-label={t('Your groups')}>
+          <span className="ab-hint">{t('Your groups:')}</span>
           {mine.map((g) => (
             <button key={g.id} type="button" className="ab-chip ab-chip-add" onClick={() => onAdd(g)}>
-              Add {g.name}
+              {t('Add {name}', { name: g.name })}
             </button>
           ))}
         </div>
       )}
-      <label className="ab-label" htmlFor="ab-group-search">Find a group by name</label>
-      <input id="ab-group-search" className="ab-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type at least two letters" autoComplete="off" />
+      <label className="ab-label" htmlFor="ab-group-search">{t('Find a group by name')}</label>
+      <input id="ab-group-search" className="ab-input" value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Type at least two letters')} autoComplete="off" />
       {found.note && <p className="ab-hint" role="status">{found.note}</p>}
       {free(found.groups).length > 0 && (
         <ul className="ab-picker-list">
           {free(found.groups).map((g) => (
             <li key={g.id}>
               <button type="button" className="ab-btn ab-btn-sm" onClick={() => onAdd(g)}>
-                Add {g.name}
+                {t('Add {name}', { name: g.name })}
               </button>
             </li>
           ))}
@@ -95,7 +96,7 @@ export default function ScopeBar({ scope, tables, selected, context, tabId, bloc
 
   return (
     <div className="ab-scope">
-      <div className="ab-seg" role="group" aria-label="Whose tickets">
+      <div className="ab-seg" role="group" aria-label={t('Whose tickets')}>
         {KINDS.map((k) => (
           <button key={k.id} type="button" className="ab-btn ab-btn-sm ab-seg-btn" aria-pressed={k.id === 'chosen' ? showPicker : scope.kind === k.id} onClick={() => pick(k.id)} disabled={!canEdit}>
             {k.label}
@@ -106,7 +107,7 @@ export default function ScopeBar({ scope, tables, selected, context, tabId, bloc
       {scope.kind === 'groups' && context?.groups?.length > 0 && <p className="ab-hint">Covers: {context.groups.map((g) => g.name).join(', ')}</p>}
 
       {chosen.length > 0 && (
-        <ul className="ab-chips" aria-label="Chosen groups">
+        <ul className="ab-chips" aria-label={t('Chosen groups')}>
           {chosen.map((id) => (
             <li key={id} className="ab-chip">
               <span>{scope.groupNames?.[id] || 'Group'}</span>

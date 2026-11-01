@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { confirmedProfiles, profileChoices } from '../sidepanel/firstRun.js';
 import { profileById } from '../profiles/profiles.js';
+import { t } from '../i18n/index.js';
 
 /**
  * "What do you work on?": the work profiles as tick boxes, the main ones first and the add-ons below (TRACKER.md 2.5). Used by the
@@ -63,19 +64,19 @@ export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, ins
   return (
     <div className="ab-profiles">
       <fieldset className="ab-fieldset">
-        <legend className="ab-label">I work on</legend>
+        <legend className="ab-label">{t('I work on')}</legend>
         {choices.main.map(box)}
       </fieldset>
       {choices.addOns.length > 0 && (
         <fieldset className="ab-fieldset">
-          <legend className="ab-label">Also</legend>
+          <legend className="ab-label">{t('Also')}</legend>
           {choices.addOns.map(box)}
         </fieldset>
       )}
       {!instant && (
         <div className="ab-row">
           <button type="button" className={`ab-btn${primary ? ' ab-btn-primary' : ''}`} onClick={() => save(ticked)}>
-            Confirm
+            {t('Confirm')}
           </button>
         </div>
       )}

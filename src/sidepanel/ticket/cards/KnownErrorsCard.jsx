@@ -4,6 +4,7 @@ import { arrangeProblems } from '../../../insights/changes.js';
 import { useRecordRead } from './data.js';
 import { useReport } from './useInsight.js';
 import { CopyButton, ItemLink, Notes, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N26, known errors and open problems for this configuration item or service, workaround first: a fix may already exist.
 
@@ -35,14 +36,14 @@ export default function KnownErrorsCard({ page, eff, record, active, setSummary,
   return (
     <>
       {status === 'skipped' && <p className="ab-hint">{data.access[0].note}</p>}
-      {known && !items.length && <p className="ab-hint">No open problem or known error on this ticket's configuration item or service.</p>}
+      {known && !items.length && <p className="ab-hint">{t("No open problem or known error on this ticket's configuration item or service.")}</p>}
       {items.length > 0 && (
         <ShowMore
           items={items}
           render={(p) => (
             <div key={p.sysId} className="ab-ins-row">
               <ItemLink page={page} item={p} line={[p.knownError ? 'Known error' : 'Problem', p.state, p.priority].filter(Boolean).join(' · ')} extra={p.workaround ? `Workaround: ${clip(p.workaround, 220)}` : ''} />
-              {p.workaround && <CopyButton value={p.workaround} label="Copy workaround" />}
+              {p.workaround && <CopyButton value={p.workaround} label={t('Copy workaround')} />}
             </div>
           )}
         />

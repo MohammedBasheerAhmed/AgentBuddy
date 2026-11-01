@@ -4,6 +4,7 @@ import { destinationOf } from '../../../shell/shellParts.jsx';
 import { featureById } from '../../../../features/registry.js';
 import { actionPlan, offeredFeatures } from './plan.js';
 import { useChecklistNeed } from './useChecklistNeed.js';
+import { t } from '../../../../i18n/index.js';
 
 // The AI actions of the Ticket screen (TRACKER.md 3.5 and 2.4): the three that fit the ticket's state first, the first of them the one
 // primary button of the screen; everything else folded under "More actions", by what the agent is doing (Understand, Reply, Work it,
@@ -60,14 +61,14 @@ export default function ActionGroups({ page, eff, record, header = null, busy = 
 
   if (!plan.total) {
     return (
-      <section className="ab-acts" aria-label="AI actions">
-        <p className="ab-act-empty">No AI actions fit this record. Insights still has what can be read here.</p>
+      <section className="ab-acts" aria-label={t('AI actions')}>
+        <p className="ab-act-empty">{t('No AI actions fit this record. Insights still has what can be read here.')}</p>
       </section>
     );
   }
 
   return (
-    <section className="ab-acts" aria-label="AI actions" data-stage={plan.stage || 'unknown'}>
+    <section className="ab-acts" aria-label={t('AI actions')} data-stage={plan.stage || 'unknown'}>
       {plan.block && (
         <p className="ab-note ab-note-warn" role="note">
           {plan.block}

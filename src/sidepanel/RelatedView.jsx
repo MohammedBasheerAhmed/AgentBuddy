@@ -4,6 +4,7 @@ import RecordLink from './RecordLink.jsx';
 import Notes from './knowledge/Notes.jsx';
 import ErrorNote from './ErrorNote.jsx';
 import { readFailure } from './plainAccess.js';
+import { t } from '../i18n/index.js';
 
 // A2, A3, C4 and the outage check (E2): what happened before for this person, tickets solved like this one, open tickets on
 // the same service, and knowledge that may help. All of it is read with the person's own session and ranked locally: no AI
@@ -105,10 +106,10 @@ export default function RelatedView({ page, eff }) {
   return (
     <>
       <div className="ab-row" style={{ justifyContent: 'space-between' }}>
-        <span className="ab-sub">Found with your own session. Nothing here is sent to an AI. A ticket opens in a new tab next to this one.</span>
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
+        <span className="ab-sub">{t('Found with your own session. Nothing here is sent to an AI. A ticket opens in a new tab next to this one.')}</span>
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>{t('Refresh')}</button>
       </div>
-      {state.phase === 'loading' && !state.pack && <p className="ab-note" role="status">Looking…</p>}
+      {state.phase === 'loading' && !state.pack && <p className="ab-note" role="status">{t('Looking…')}</p>}
       {state.phase === 'error' && state.error?.kind === 'error' && <ErrorNote error={state.error.text} onRetry={load} />}
       {state.phase === 'error' && state.error && state.error.kind !== 'error' && <p className="ab-note" role="status">{state.error.text}</p>}
 
@@ -139,30 +140,30 @@ export default function RelatedView({ page, eff }) {
           )}
           {sig?.lastResolved && (
             <div className="ab-note ab-note-ok">
-              <strong>Last fix that worked ({sig.lastResolved.number}):</strong> {clip(sig.lastResolved.close_notes, 260)}
+              <strong>{t('Last fix that worked ({number}):', { number: sig.lastResolved.number })}</strong> {clip(sig.lastResolved.close_notes, 260)}
             </div>
           )}
           {[...items(history, 'items')].reverse().slice(0, 6).map((item) => (
             <Item key={item.sysId} page={page} item={item} line={`${item.state}${item.opened_at ? ` · opened ${item.opened_at.slice(0, 10)}` : ''}`} />
           ))}
-          {history.value && items(history, 'items').length === 0 && <p className="ab-hint">No earlier tickets found for this person.</p>}
+          {history.value && items(history, 'items').length === 0 && <p className="ab-hint">{t('No earlier tickets found for this person.')}</p>}
           <Notes access={history.value?.access} />
         </Section>
       )}
 
       {similar && (
-        <Section title="Solved before" count={similar.value ? items(similar, 'hits').length : undefined}>
+        <Section title={t('Solved before')} count={similar.value ? items(similar, 'hits').length : undefined}>
           <Failed failure={similar.failure} />
           {items(similar, 'hits').map((h) => (
             <Item key={h.sysId} page={page} item={h} line={Array.isArray(h.why) ? h.why.join('; ') : ''} extra={h.close_notes ? `Fix: ${clip(h.close_notes, 200)}` : ''} />
           ))}
-          {similar.value && items(similar, 'hits').length === 0 && <p className="ab-hint">No similar solved tickets found.</p>}
+          {similar.value && items(similar, 'hits').length === 0 && <p className="ab-hint">{t('No similar solved tickets found.')}</p>}
           <Notes access={similar.value?.access} />
         </Section>
       )}
 
       {openHits.length > 0 && (
-        <Section title="Same service, still open" count={openHits.length}>
+        <Section title={t('Same service, still open')} count={openHits.length}>
           {openHits.map((h) => (
             <Item key={h.sysId} page={page} item={h} line={`${h.state} · ${h.hoursAgo}h ago${h.assignment_group ? ` · ${h.assignment_group}` : ''}`} />
           ))}
@@ -171,12 +172,12 @@ export default function RelatedView({ page, eff }) {
       )}
 
       {knowledge && (
-        <Section title="Knowledge that may help" count={knowledge.value ? items(knowledge, 'hits').length : undefined}>
+        <Section title={t('Knowledge that may help')} count={knowledge.value ? items(knowledge, 'hits').length : undefined}>
           <Failed failure={knowledge.failure} />
           {items(knowledge, 'hits').map((h) => (
             <Item key={h.sysId} page={page} item={{ ...h, table: 'kb_knowledge' }} line={h.knowledgeBase} extra={clip(h.excerpt, 180)} />
           ))}
-          {knowledge.value && items(knowledge, 'hits').length === 0 && <p className="ab-hint">No matching published articles.</p>}
+          {knowledge.value && items(knowledge, 'hits').length === 0 && <p className="ab-hint">{t('No matching published articles.')}</p>}
           <Notes access={knowledge.value?.access} />
         </Section>
       )}

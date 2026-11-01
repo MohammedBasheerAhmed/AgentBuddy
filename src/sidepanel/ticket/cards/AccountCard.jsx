@@ -6,6 +6,7 @@ import { PRIORITY_ACCOUNT_MARK, isPriorityAccount } from '../../../insights/prio
 import { useRecordRead, useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { Group, ItemLink, Notes, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N28, the account at a glance (customer service cases): the account, its entitlement, product and asset, the account's other cases
 // (open first), and changes on the case's configuration item. The no-AI half of the account briefing (AI Assist writes the briefing).
@@ -54,9 +55,9 @@ export default function AccountCard({ page, eff, record, active, setSummary }) {
   ].filter((r) => r.value);
   return (
     <>
-      {!text(f.account) && <p className="ab-hint">This case has no account.</p>}
+      {!text(f.account) && <p className="ab-hint">{t('This case has no account.')}</p>}
       {rows.length > 0 && <Facts tight rows={rows} />}
-      <Group title="Other cases of this account" count={casesKnown ? list.length + (Number.isFinite(more) && more > 0 ? more : 0) : undefined} defaultOpen={open.length > 0}>
+      <Group title={t('Other cases of this account')} count={casesKnown ? list.length + (Number.isFinite(more) && more > 0 ? more : 0) : undefined} defaultOpen={open.length > 0}>
         <ReadState state={cases} what="the account's cases" onRetry={cases.reload} />
         {list.length > 0 && (
           <ShowMore
@@ -74,11 +75,11 @@ export default function AccountCard({ page, eff, record, active, setSummary }) {
         <Notes access={cases.data?.access} />
         {cases.data?.access?.find((a) => a?.status === 'ok' && a.note) && <p className="ab-hint">{cases.data.access.find((a) => a?.status === 'ok' && a.note).note}</p>}
       </Group>
-      <Group title="Recent changes on its configuration item" count={changes.data && (changes.data.access?.[0]?.status === 'ok' || changes.data.access?.[0]?.status === 'empty') ? arranged.items.length : undefined}>
+      <Group title={t('Recent changes on its configuration item')} count={changes.data && (changes.data.access?.[0]?.status === 'ok' || changes.data.access?.[0]?.status === 'empty') ? arranged.items.length : undefined}>
         <ReadState state={changes} what="changes" onRetry={changes.reload} />
         {arranged.items.length > 0 && <ShowMore items={arranged.items} render={(c) => <ItemLink key={c.sysId} page={page} item={c} line={[c.timing.line, c.state].filter(Boolean).join(' · ')} />} />}
         {changes.data?.access?.[0]?.status === 'skipped' && <p className="ab-hint">{changes.data.access[0].note}</p>}
-        {changes.data?.access?.[0]?.status === 'empty' && <p className="ab-hint">No change in the last 7 days.</p>}
+        {changes.data?.access?.[0]?.status === 'empty' && <p className="ab-hint">{t('No change in the last 7 days.')}</p>}
         <Notes access={changes.data?.access} />
       </Group>
     </>

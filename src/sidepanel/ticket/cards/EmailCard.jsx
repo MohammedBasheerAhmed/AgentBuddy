@@ -5,6 +5,7 @@ import { openInNewTab } from '../../openRecord.js';
 import { useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { CopyButton, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N20, which email fits: the kind of email this ticket needs now (from src/compose/emailRecommend.js: resolved and not told yet, waiting
 // on the customer, an approval waiting, an SLA missed...) and a plain template for it, filled from the ticket, to copy. What only the
@@ -38,7 +39,7 @@ export default function EmailCard({ page, eff, record, active, setSummary }) {
       {rec.facts.length > 0 && <p className="ab-hint">{rec.facts.join(' · ')}</p>}
       {rec.note && <p className="ab-note ab-note-warn">{rec.note}</p>}
       <fieldset className="ab-ins-choices">
-        <legend className="ab-ins-legend">Kind of email</legend>
+        <legend className="ab-ins-legend">{t('Kind of email')}</legend>
         {rec.picks.map((p) => (
           <label key={p.id} className={`ab-ins-choice${typeId === p.id ? ' is-on' : ''}`}>
             <input type="radio" name={group} value={p.id} checked={typeId === p.id} onChange={() => setChosen(p.id)} />
@@ -64,15 +65,15 @@ export default function EmailCard({ page, eff, record, active, setSummary }) {
       </fieldset>
       {filled && (
         <>
-          <pre className="ab-ins-email" aria-label="Email template">
+          <pre className="ab-ins-email" aria-label={t('Email template')}>
             {emailAsText(filled)}
           </pre>
-          {filled.placeholders > 0 && <p className="ab-hint">Fill in the parts in [brackets] before you send it.</p>}
+          {filled.placeholders > 0 && <p className="ab-hint">{t('Fill in the parts in [brackets] before you send it.')}</p>}
           <div className="ab-ins-foot">
-            <CopyButton value={() => emailAsText(filled)} label="Copy email" />
+            <CopyButton value={() => emailAsText(filled)} label={t('Copy email')} />
             {formUrl && (
               <QuietButton onClick={() => setOpened(openInNewTab(page, formUrl) ? 'The email form opened in a new tab.' : 'The email form could not be opened.')}>
-                Open the email form
+                {t('Open the email form')}
               </QuietButton>
             )}
           </div>

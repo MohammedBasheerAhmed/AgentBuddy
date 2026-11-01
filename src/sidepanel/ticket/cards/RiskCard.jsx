@@ -6,6 +6,7 @@ import { Tag } from '../../checks/Bits.jsx';
 import { useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N9, risk signals without AI: angry or urgent wording, capitals, chasers, reopen and reassignment counts, time waiting, the VIP flag,
 // the SLA, and a priority that looks too low for what the ticket shows. Each signal says why. From the `glance` read: no read of its own.
@@ -27,8 +28,8 @@ export default function RiskCard({ page, eff, record, active, setSummary, setAtt
   if (!risk) return <ReadState state={ticket} what="this ticket" onRetry={ticket.reload} />;
   return (
     <>
-      <p className="ab-hint">Counted with word and count rules, not a judgement: they miss sarcasm and other languages.</p>
-      {!risk.signals.length && <p className="ab-hint">Nothing in the wording, the counts or the SLA points to a risk.</p>}
+      <p className="ab-hint">{t('Counted with word and count rules, not a judgement: they miss sarcasm and other languages.')}</p>
+      {!risk.signals.length && <p className="ab-hint">{t('Nothing in the wording, the counts or the SLA points to a risk.')}</p>}
       {risk.signals.length > 0 && (
         <ShowMore
           items={risk.signals}
@@ -46,7 +47,7 @@ export default function RiskCard({ page, eff, record, active, setSummary, setAtt
           }}
         />
       )}
-      {!risk.customerKnown && risk.commentsRead > 0 && <p className="ab-hint">The customer could not be told apart from the agents, so the wording counts include everyone.</p>}
+      {!risk.customerKnown && risk.commentsRead > 0 && <p className="ab-hint">{t('The customer could not be told apart from the agents, so the wording counts include everyone.')}</p>}
     </>
   );
 }

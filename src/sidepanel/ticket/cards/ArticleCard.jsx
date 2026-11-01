@@ -5,6 +5,7 @@ import { ShowMore } from '../../ui/primitives.jsx';
 import { read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { Notes, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N7, article checks on the knowledge article that is open: length, structure, freshness, views, keywords, and secrets in the text.
 // Worked out here on what the context engine read; nothing is sent anywhere. (Suggestions from AI are in AI Assist.)
@@ -43,7 +44,7 @@ export default function ArticleCard({ page, record, active, setSummary, setAtten
   return (
     <>
       <div className="ab-tags">
-        <span className="ab-tag">{facts.words} words</span>
+        <span className="ab-tag">{t('{words} words', { words: facts.words })}</span>
         {facts.headings !== null && <span className="ab-tag">{facts.headings} heading{facts.headings === 1 ? '' : 's'}</span>}
         {facts.updatedDaysAgo !== null && <span className="ab-tag">changed {ago(facts.updatedDaysAgo)}</span>}
         {facts.views !== null && <span className="ab-tag">{facts.views} view{facts.views === 1 ? '' : 's'}</span>}
@@ -64,12 +65,12 @@ export default function ArticleCard({ page, record, active, setSummary, setAtten
           )}
         />
       ) : (
-        <p className="ab-note ab-note-ok">No problems found in this article.</p>
+        <p className="ab-note ab-note-ok">{t('No problems found in this article.')}</p>
       )}
       <Notes access={state.data.access} />
       <div className="ab-ins-foot">
         <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>
-          Check again
+          {t('Check again')}
         </QuietButton>
       </div>
     </>

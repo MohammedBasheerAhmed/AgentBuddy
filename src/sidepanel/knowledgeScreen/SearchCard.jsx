@@ -6,6 +6,7 @@ import Notes from '../knowledge/Notes.jsx';
 import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import { copyText } from '../reports/download.js';
 import { articleShareUrl, freshnessOf } from './articleInfo.js';
+import { t } from '../../i18n/index.js';
 
 // N23 Knowledge search, for everyone: a search box over the published articles the person can read, ranked like the ticket's
 // "Knowledge that may help" (src/context/knowledge.js searchKnowledgeText). GET only, with their own session; nothing is sent to an
@@ -80,22 +81,22 @@ export default function SearchCard({ page, active, onSummary = () => {} }) {
   return (
     <div className="ab-kbx-search">
       <div className="ab-row ab-kbx-searchrow" role="search">
-        <label className="ab-offscreen-label" htmlFor="ab-kb-search">Search knowledge</label>
-        <input id="ab-kb-search" className="ab-input" type="search" value={query} maxLength={200} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && search(e)} placeholder="Words from the problem, or an article number" autoComplete="off" />
-        <button type="button" className="ab-btn ab-btn-primary ab-btn-sm" onClick={search} disabled={!active || !query.trim() || state?.phase === 'reading'}>Search</button>
+        <label className="ab-offscreen-label" htmlFor="ab-kb-search">{t('Search knowledge')}</label>
+        <input id="ab-kb-search" className="ab-input" type="search" value={query} maxLength={200} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && search(e)} placeholder={t('Words from the problem, or an article number')} autoComplete="off" />
+        <button type="button" className="ab-btn ab-btn-primary ab-btn-sm" onClick={search} disabled={!active || !query.trim() || state?.phase === 'reading'}>{t('Search')}</button>
       </div>
 
-      {!state && <p className="ab-hint">Every published article you can read, best match first: the same ranking as on a ticket.</p>}
+      {!state && <p className="ab-hint">{t('Every published article you can read, best match first: the same ranking as on a ticket.')}</p>}
       {state?.phase === 'reading' && <p className="ab-sub" role="status">{state.slow ? 'Still searching the knowledge base. Large bases take a moment…' : 'Searching…'}</p>}
       {state?.phase === 'error' && <ErrorNote error={state.error} onRetry={search} />}
       {data && (
         <>
           {data.hits.length === 0 ? (
-            <EmptyNote>No published article you can read matches "{state.asked}". Try other words, or fewer.</EmptyNote>
+            <EmptyNote>{t('No published article you can read matches "{asked}". Try other words, or fewer.', { asked: state.asked })}</EmptyNote>
           ) : (
             <ShowMore items={data.hits} className="ab-list ab-kbx-hits" render={(hit) => <Hit key={hit.sysId} page={page} hit={hit} copied={copied === hit.sysId} onCopy={copy} />} />
           )}
-          {data.more && data.hits.length > 0 && <p className="ab-hint">More articles match. Add a word to narrow it down.</p>}
+          {data.more && data.hits.length > 0 && <p className="ab-hint">{t('More articles match. Add a word to narrow it down.')}</p>}
           <Notes access={data.access.filter((a) => a.status !== 'ok' && a.status !== 'empty')} />
         </>
       )}

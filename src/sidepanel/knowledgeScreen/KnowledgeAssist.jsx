@@ -9,6 +9,7 @@ import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { gapPack, mergePack } from '../../knowledge/parts.js';
 import { shownFor } from '../../profiles/profiles.js';
 import { useShared } from './shared.js';
+import { t } from '../../i18n/index.js';
 
 // The Knowledge screen, AI Assist half (knowledge managers): draft ONE article out of the duplicate group compared in Insights (AI26)
 // and an outline for a knowledge-gap topic found there (AI27). Each has its own run, so the answer of one survives a look at the
@@ -43,7 +44,7 @@ export function MergeDraft({ page, eff, primary = true }) {
   }, [merge?.at]);
 
   if (!merge?.texts) {
-    return <EmptyNote>Find duplicate articles in Insights, pick a group and compare its text. The group then shows up here.</EmptyNote>;
+    return <EmptyNote>{t('Find duplicate articles in Insights, pick a group and compare its text. The group then shows up here.')}</EmptyNote>;
   }
   const { texts } = merge;
   const articles = Array.isArray(texts.articles) ? texts.articles : [];
@@ -58,8 +59,8 @@ export function MergeDraft({ page, eff, primary = true }) {
         ))}
       </ul>
       {best && <p className="ab-hint">{best.a} and {best.b} share {pct(best.containment)} of the shorter text.</p>}
-      {!available && <p className="ab-note ab-note-warn">Your organisation has switched the merge draft off.</p>}
-      <p className="ab-hint">Hidden details show as placeholders such as [EMAIL_1]: put the real ones back before you publish.</p>
+      {!available && <p className="ab-note ab-note-warn">{t('Your organisation has switched the merge draft off.')}</p>}
+      <p className="ab-hint">{t('Hidden details show as placeholders such as [EMAIL_1]: put the real ones back before you publish.')}</p>
       <div className="ab-row">
         <AiButton primary={primary} disabled={!aiReady || !available || run.busy || articles.length < 2} onClick={() => run.run(feature, { getPack: async () => mergePack(articles, texts.access || [], texts.people || []) })}>
           {feature?.title || 'Draft a merged article'}
@@ -90,12 +91,12 @@ export function GapOutline({ page, eff, primary = true }) {
   }, [gaps?.at]);
 
   if (!clusters.length) {
-    return <EmptyNote>Find topics under "Articles to write" in Insights first. They then show up here.</EmptyNote>;
+    return <EmptyNote>{t('Find topics under "Articles to write" in Insights first. They then show up here.')}</EmptyNote>;
   }
   return (
     <>
       <fieldset className="ab-fieldset ab-kbx-topics">
-        <legend className="ab-label">Topic to outline</legend>
+        <legend className="ab-label">{t('Topic to outline')}</legend>
         <ShowMore
           items={clusters}
           className="ab-list"
@@ -109,8 +110,8 @@ export function GapOutline({ page, eff, primary = true }) {
           )}
         />
       </fieldset>
-      {!available && <p className="ab-note ab-note-warn">Your organisation has switched the outline off.</p>}
-      <p className="ab-hint">Only the topic words, the counts, the category and the item are sent: no ticket text.</p>
+      {!available && <p className="ab-note ab-note-warn">{t('Your organisation has switched the outline off.')}</p>}
+      <p className="ab-hint">{t('Only the topic words, the counts, the category and the item are sent: no ticket text.')}</p>
       <div className="ab-row">
         <AiButton primary={primary} disabled={!aiReady || !available || run.busy || !topic} onClick={() => run.run(feature, { getPack: async () => gapPack(topic, { days: gaps.days }) })}>
           {feature?.title || 'Draft an article outline'}
@@ -126,18 +127,18 @@ export function GapOutline({ page, eff, primary = true }) {
 export default function KnowledgeAssist({ page, eff }) {
   const [merge] = useShared(page, 'merge');
   if (!shownFor(KM_PROFILES, eff)) {
-    return <EmptyNote>Merging duplicate articles and outlining missing ones are for knowledge managers. Add the Knowledge manager work profile in Settings to use them.</EmptyNote>;
+    return <EmptyNote>{t('Merging duplicate articles and outlining missing ones are for knowledge managers. Add the Knowledge manager work profile in Settings to use them.')}</EmptyNote>;
   }
   const mergeReady = Boolean(merge?.texts);
   return (
     <div className="ab-kbx" data-half="assist">
       <AiKeyNote eff={eff} what="the merged drafts and outlines" />
-      <CardFrame id="kb-merge" title="Merge duplicate articles" summary={mergeReady ? 'A compared group is ready' : ''} actions={<AiBadge />}>
+      <CardFrame id="kb-merge" title={t('Merge duplicate articles')} summary={mergeReady ? 'A compared group is ready' : ''} actions={<AiBadge />}>
         <ErrorBoundary resetKey="merge">
           <MergeDraft page={page} eff={eff} primary />
         </ErrorBoundary>
       </CardFrame>
-      <CardFrame id="kb-outline" title="Outline a missing article" actions={<AiBadge />}>
+      <CardFrame id="kb-outline" title={t('Outline a missing article')} actions={<AiBadge />}>
         <ErrorBoundary resetKey="outline">
           <GapOutline page={page} eff={eff} primary={!mergeReady} />
         </ErrorBoundary>

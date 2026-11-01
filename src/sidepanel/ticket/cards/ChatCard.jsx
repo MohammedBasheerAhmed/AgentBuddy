@@ -4,6 +4,7 @@ import { CHAT_WAITING_WARN_MINUTES, chatOverviewOf } from '../../../insights/cha
 import { read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { Notes, QuietButton, ReadState } from './bits.jsx';
+import { t } from '../../../i18n/index.js';
 
 // N8, chat facts: how many messages, from whom, how long the customer has waited, how long it lasted, who takes part, and the
 // customer's last message. Read with the person's own session; when the chat tables are not readable it says so instead of showing an
@@ -36,9 +37,9 @@ export default function ChatCard({ page, record, active, setSummary, setAttentio
         <>
           <div className="ab-tags">
             <span className="ab-tag">{o.count} message{o.count === 1 ? '' : 's'}</span>
-            {o.canTellSides && <span className="ab-tag">{o.byCustomer} from the customer</span>}
-            {o.canTellSides && <span className="ab-tag">{o.byAgent} from agents</span>}
-            {o.byBot > 0 && <span className="ab-tag">{o.byBot} from a bot</span>}
+            {o.canTellSides && <span className="ab-tag">{t('{byCustomer} from the customer', { byCustomer: o.byCustomer })}</span>}
+            {o.canTellSides && <span className="ab-tag">{t('{byAgent} from agents', { byAgent: o.byAgent })}</span>}
+            {o.byBot > 0 && <span className="ab-tag">{t('{byBot} from a bot', { byBot: o.byBot })}</span>}
             <span className="ab-tag">{o.ended ? 'chat ended' : 'chat open'}</span>
           </div>
           {o.waitingMinutes !== null && (
@@ -46,23 +47,23 @@ export default function ChatCard({ page, record, active, setSummary, setAttentio
               The customer has been waiting {describeMinutes(o.waitingMinutes)} for an answer.
             </p>
           )}
-          {!o.canTellSides && <p className="ab-hint">This instance does not say who sent each message, so waiting time cannot be worked out.</p>}
+          {!o.canTellSides && <p className="ab-hint">{t('This instance does not say who sent each message, so waiting time cannot be worked out.')}</p>}
           <dl className="ab-kb-facts">
             {o.durationMinutes !== null && (
               <>
-                <dt>Lasted</dt>
+                <dt>{t('Lasted')}</dt>
                 <dd>{describeMinutes(o.durationMinutes)}</dd>
               </>
             )}
             {o.firstResponseMinutes !== null && (
               <>
-                <dt>First reply after</dt>
+                <dt>{t('First reply after')}</dt>
                 <dd>{describeMinutes(o.firstResponseMinutes)}</dd>
               </>
             )}
             {o.participants.length > 0 && (
               <>
-                <dt>Taking part</dt>
+                <dt>{t('Taking part')}</dt>
                 <dd>{o.participants.map((p) => `${p.name}${ROLE[p.role] ? ` (${ROLE[p.role]})` : ''}`).join(', ')}</dd>
               </>
             )}
@@ -79,7 +80,7 @@ export default function ChatCard({ page, record, active, setSummary, setAttentio
       <Notes access={access.filter((a) => a.source !== 'chat' || !noMessages)} />
       <div className="ab-ins-foot">
         <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>
-          Refresh
+          {t('Refresh')}
         </QuietButton>
       </div>
     </>

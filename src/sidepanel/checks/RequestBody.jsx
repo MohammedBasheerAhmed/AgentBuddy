@@ -1,6 +1,7 @@
 // The "Request" tab, drawn from the view model that src/checks/requestView.js builds. Pure drawing: no reads, no state.
 import React from 'react';
 import { Facts, Hints, Section, Tag } from './Bits.jsx';
+import { t } from '../../i18n/index.js';
 
 const HEADLINE = {
   done: ['Finished', 'ok'],
@@ -15,10 +16,10 @@ const HEADLINE = {
 export function StatusCard({ status }) {
   const [label, tone] = HEADLINE[status.state] || ['Status', ''];
   return (
-    <section className="ab-card ab-chk-status" aria-label="What it is waiting for">
+    <section className="ab-card ab-chk-status" aria-label={t('What it is waiting for')}>
       <div className="ab-row">
         <Tag tone={tone}>{label}</Tag>
-        <span className="ab-sub">What it is waiting for, and who owns it</span>
+        <span className="ab-sub">{t('What it is waiting for, and who owns it')}</span>
       </div>
       <p className="ab-chk-line">{status.line}</p>
       <Facts
@@ -43,24 +44,24 @@ export function RequestBody({ view }) {
       <StatusCard status={status} />
 
       {facts.length > 0 && (
-        <Section title="At a glance" defaultOpen>
+        <Section title={t('At a glance')} defaultOpen>
           <Facts rows={facts.map(([label, value]) => ({ label, value }))} tight />
         </Section>
       )}
 
       {answers.applicable && (
-        <Section title="Answers to the request questions" count={answers.available ? answers.rows.length : undefined}>
+        <Section title={t('Answers to the request questions')} count={answers.available ? answers.rows.length : undefined}>
           {!answers.available && <p className="ab-note ab-note-warn">{answers.note}</p>}
-          {answers.available && answers.rows.length === 0 && <p className="ab-hint">No answers are recorded for this item.</p>}
+          {answers.available && answers.rows.length === 0 && <p className="ab-hint">{t('No answers are recorded for this item.')}</p>}
           {answers.rows.length > 0 && <Facts rows={answers.rows.map((r) => ({ label: r.question, value: r.value, hidden: r.hidden }))} />}
           <Hints lines={[answers.available ? answers.note : '']} />
         </Section>
       )}
 
       {approvals.applicable && (
-        <Section title="Approvals" count={approvals.available ? approvals.rows.length : undefined}>
-          {!approvals.available && <p className="ab-note ab-note-warn">The approvals could not be read, so they are not shown.</p>}
-          {approvals.available && approvals.rows.length === 0 && <p className="ab-hint">No approvals are recorded.</p>}
+        <Section title={t('Approvals')} count={approvals.available ? approvals.rows.length : undefined}>
+          {!approvals.available && <p className="ab-note ab-note-warn">{t('The approvals could not be read, so they are not shown.')}</p>}
+          {approvals.available && approvals.rows.length === 0 && <p className="ab-hint">{t('No approvals are recorded.')}</p>}
           {approvals.rows.length > 0 && (
             <ul className="ab-chk-list">
               {approvals.rows.map((a, i) => (
@@ -79,20 +80,20 @@ export function RequestBody({ view }) {
 
       {chain.applicable && (
         <Section title={chain.title} count={chain.available ? chain.rows.length : undefined}>
-          {!chain.available && <p className="ab-note ab-note-warn">{chain.title} could not be read, so they are not shown.</p>}
-          {chain.available && chain.rows.length === 0 && <p className="ab-hint">None recorded.</p>}
+          {!chain.available && <p className="ab-note ab-note-warn">{t('{title} could not be read, so they are not shown.', { title: chain.title })}</p>}
+          {chain.available && chain.rows.length === 0 && <p className="ab-hint">{t('None recorded.')}</p>}
           {chain.rows.length > 0 && (
             <ul className="ab-chk-list">
               {chain.rows.map((r, i) => (
                 <li key={`${r.number}:${i}`} className={`ab-chk-item${r.current ? ' ab-chk-current' : ''}`}>
                   <span className="ab-chk-item-main">
                     <span className="ab-record-number">{r.number}</span> {r.label}
-                    {r.current && <span className="ab-sub"> (this one)</span>}
+                    {r.current && <span className="ab-sub"> {t('(this one)')}</span>}
                   </span>
                   <span className="ab-row">
                     <Tag tone={r.done ? 'ok' : r.open ? '' : 'warn'}>{r.state}</Tag>
                     <span className="ab-sub">{r.owner || 'not assigned'}</span>
-                    {r.due && <span className="ab-sub">due {r.due}</span>}
+                    {r.due && <span className="ab-sub">{t('due {due}', { due: r.due })}</span>}
                   </span>
                 </li>
               ))}

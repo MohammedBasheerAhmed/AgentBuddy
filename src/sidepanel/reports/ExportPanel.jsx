@@ -3,6 +3,7 @@ import { resultTables } from '../../reports/engine/index.js';
 import { exportFileName, maskTables, tablesToCsv, tablesToTsv } from '../../reports/exportTables.js';
 import { copyText, downloadText } from './download.js';
 import { dashboardTables } from './dashboardEnv.js';
+import { t } from '../../i18n/index.js';
 
 // F7, once per dashboard: everything on screen as one CSV or one table to paste, a single section when that is what is wanted, and
 // the "mask names and emails" switch. Files are made here, in the browser, from the results already loaded (memory only): nothing is
@@ -28,42 +29,42 @@ export default function ExportPanel({ name, entries, order, mask, setMask, maskM
   const copied = (ok) => say(ok ? 'Copied. Paste it into a spreadsheet or a mail.' : 'Could not copy. Use Download instead.');
 
   return (
-    <section className="ab-card ab-export-panel" aria-label="Export">
+    <section className="ab-card ab-export-panel" aria-label={t('Export')}>
       <div className="ab-widget-head">
-        <h2 className="ab-h">Export</h2>
+        <h2 className="ab-h">{t('Export')}</h2>
         <span className="ab-spacer" />
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>Close</button>
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>{t('Close')}</button>
       </div>
-      <p className="ab-sub">Made in your browser from the numbers on screen. Nothing is read again or sent anywhere.</p>
+      <p className="ab-sub">{t('Made in your browser from the numbers on screen. Nothing is read again or sent anywhere.')}</p>
       {!all.length ? (
-        <p className="ab-note">Nothing to export yet: wait for the numbers to load.</p>
+        <p className="ab-note">{t('Nothing to export yet: wait for the numbers to load.')}</p>
       ) : (
         <>
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => { downloadText(exportFileName(name), tablesToCsv(masked(all))); say(saved); }}>
-              Download all as CSV
+              {t('Download all as CSV')}
             </button>
             <button type="button" className="ab-btn ab-btn-sm" onClick={async () => copied(await copyText(tablesToTsv(masked(all))))}>
-              Copy all as a table
+              {t('Copy all as a table')}
             </button>
           </div>
           <label className="ab-check ab-export-mask">
             <input type="checkbox" checked={mask} onChange={(e) => setMask(e.target.checked)} />
-            <span>Mask names and emails</span>
+            <span>{t('Mask names and emails')}</span>
           </label>
-          {mask && <p className="ab-hint">People become Person 1, Person 2... A name in a title is found when the words around it mark it as one ("for Anna Schmidt", "spoke with Tom"). Check the file before you share it.</p>}
+          {mask && <p className="ab-hint">{t('People become Person 1, Person 2... A name in a title is found when the words around it mark it as one ("for Anna Schmidt", "spoke with Tom"). Check the file before you share it.')}</p>}
           {sections.length > 1 && (
             <details className="ab-details">
-              <summary>One section</summary>
+              <summary>{t('One section')}</summary>
               <ul className="ab-export-list">
                 {sections.map((s) => (
                   <li key={s.id} className="ab-export-item">
                     <span className="ab-export-name">{s.title}</span>
                     <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-label={`Download ${s.title} as CSV`} onClick={() => { downloadText(exportFileName(s.title), tablesToCsv(masked(s.tables))); say(saved); }}>
-                      Download CSV
+                      {t('Download CSV')}
                     </button>
                     <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-label={`Copy ${s.title} as a table`} onClick={async () => copied(await copyText(tablesToTsv(masked(s.tables))))}>
-                      Copy
+                      {t('Copy')}
                     </button>
                   </li>
                 ))}

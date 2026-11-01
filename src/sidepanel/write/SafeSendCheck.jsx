@@ -4,6 +4,7 @@ import ReviewHints from '../ReviewHints.jsx';
 import { ShowMore } from '../ui/primitives.jsx';
 import { FORM_FIELDS, MAX_FORM_TEXT } from '../../compose/formFields.js';
 import { checkTypedText, internalTextsOf } from '../../safeSend/review.js';
+import { t } from '../../i18n/index.js';
 
 // N22 "Check my comment": the safe-to-send check on what the agent TYPED into the form, before they press Post or Save. The same
 // review an insert gets (src/safeSend/review.js): personal data and secrets, another person's name or email, markup, links, words
@@ -103,7 +104,7 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
   return (
     <div className="ab-write-check">
       <div className="ab-row ab-write-check-row">
-        <label className="ab-sub" htmlFor="ab-check-field">Field</label>
+        <label className="ab-sub" htmlFor="ab-check-field">{t('Field')}</label>
         <select id="ab-check-field" className="ab-select ab-compose-select" value={field.name} onChange={(e) => { setFieldName(e.target.value); setState(null); }}>
           {CHECK_FIELDS.map((f) => (
             <option key={f.name} value={f.name}>{f.label}</option>
@@ -113,7 +114,7 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
           {buttonLabel(field)}
         </button>
       </div>
-      <p className="ab-hint">Checks what you typed for personal data, passwords and internal wording before the customer sees it.</p>
+      <p className="ab-hint">{t('Checks what you typed for personal data, passwords and internal wording before the customer sees it.')}</p>
 
       {state?.phase === 'reading' && <p className="ab-sub" role="status">{state.from === 'form' ? 'Reading the form…' : 'Checking…'}</p>}
       {state?.phase === 'note' && <p className="ab-note ab-note-warn" role="status">{state.note}</p>}
@@ -125,14 +126,14 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
       )}
       {result?.status === 'clean' && (
         <p className="ab-note ab-note-ok" role="status">
-          {where}: nothing to worry about found. This check cannot catch everything, so give it a last read.
+          {t('{where}: nothing to worry about found. This check cannot catch everything, so give it a last read.', { where })}
         </p>
       )}
       {result?.status === 'findings' && (
         <div className={`ab-note ${result.serious.length ? 'ab-note-warn' : ''}`} role="status">
           {result.serious.length > 0 && (
             <>
-              <strong>{where}: check before sending.</strong>
+              <strong>{t('{where}: check before sending.', { where })}</strong>
               <ShowMore
                 items={result.serious}
                 className="ab-compose-list ab-write-findings"
@@ -144,22 +145,22 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
               />
             </>
           )}
-          {result.serious.length === 0 && <strong>{where}: nothing serious found.</strong>}
+          {result.serious.length === 0 && <strong>{t('{where}: nothing serious found.', { where })}</strong>}
           <ReviewHints hints={result.hints} />
         </div>
       )}
-      {state?.partial && <p className="ab-hint">The ticket&apos;s people and notes could not be read, so names and copied notes were not compared.</p>}
+      {state?.partial && <p className="ab-hint">{t("The ticket's people and notes could not be read, so names and copied notes were not compared.")}</p>}
 
       {pasteOpen ? (
         <div className="ab-field">
-          <label className="ab-label" htmlFor="ab-check-paste">Text to check</label>
-          <textarea id="ab-check-paste" className="ab-textarea ab-compose-text" maxLength={MAX_FORM_TEXT} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="Paste the message you are about to send" />
+          <label className="ab-label" htmlFor="ab-check-paste">{t('Text to check')}</label>
+          <textarea id="ab-check-paste" className="ab-textarea ab-compose-text" maxLength={MAX_FORM_TEXT} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={t('Paste the message you are about to send')} />
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={!pasted.trim() || state?.phase === 'reading'} onClick={checkPasted}>Check this text</button>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={!pasted.trim() || state?.phase === 'reading'} onClick={checkPasted}>{t('Check this text')}</button>
           </div>
         </div>
       ) : (
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-write-paste" onClick={() => setPasteOpen(true)}>Paste the text instead</button>
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-write-paste" onClick={() => setPasteOpen(true)}>{t('Paste the text instead')}</button>
       )}
     </div>
   );
