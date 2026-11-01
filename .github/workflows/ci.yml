@@ -5,6 +5,13 @@ name: CI
 on:
   push:
   pull_request:
+  # Run by hand from the Actions tab, optionally only some end-to-end scenarios (for example "b,d"), to look at one failure in minutes.
+  workflow_dispatch:
+    inputs:
+      scenarios:
+        description: "End-to-end scenarios to run, comma separated (empty: all)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -15,8 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -44,8 +51,8 @@ jobs:
     env:
       CHROME_PATH: /usr/bin/google-chrome
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -59,10 +66,11 @@ jobs:
         # `runner` is not available in a job's env, only in a step's.
         env:
           AB_E2E_TMP: ${{ runner.temp }}/agentbuddy-e2e
-        run: npm run e2e
+          SCENARIOS: ${{ inputs.scenarios }}
+        run: node build.js && node e2e/run.js "$SCENARIOS"
       - name: Keep the screenshots of failed steps
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-screenshots
           path: ${{ runner.temp }}/agentbuddy-e2e/**/*.png

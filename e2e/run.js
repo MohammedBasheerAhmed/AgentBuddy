@@ -63,6 +63,33 @@ async function tidy(ctx) {
   for (const page of await Promise.race([ctx.browser.pages(), after(3000, [])])) if (page !== ctx.ctl) await boxed(page.close());
 }
 
+// What a failed scenario leaves behind, written so a run on a machine nobody can sit at (CI) still says what the browser looked like:
+// every open page (its address, what a person would read on it, a screenshot when the page paints), which window and tab the browser
+// calls active and focused (the side panel reads "the active tab of the last focused window"), and the last errors of the run.
+async function describeFailure(ctx, id) {
+  const boxed = (p, fallback) => Promise.race([Promise.resolve(p).catch(() => fallback), after(3000, fallback)]);
+  const say = (line) => console.log(`        ${line}`);
+  const pages = await boxed(ctx.browser.pages(), []);
+  say(`${pages.length} page(s) open after scenario ${id} failed`);
+  for (const page of pages) {
+    const url = page.url();
+    const text = await boxed(page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 300)), '(no text: the page did not answer)');
+    say(`page ${url.slice(0, 90)}  closed=${page.isClosed()}  text: ${text}`);
+    const file = await ctx.shot(page, `fail-${id}-${url.split('/').pop().slice(0, 20)}`);
+    if (file) say(`  screenshot -> ${file}`);
+  }
+  const windows = await boxed(
+    ctx.ext(async () => {
+      const all = await chrome.windows.getAll({ populate: true });
+      return all.map((w) => `window ${w.id} ${w.type} focused=${w.focused} state=${w.state} tabs=[${(w.tabs || []).map((tab) => `${tab.id}${tab.active ? '*' : ''}:${(tab.url || '').replace(/^chrome-extension:\/\/[a-z]+\//, 'ext/').slice(0, 40)}`).join(', ')}]`);
+    }),
+    ['(the control page did not answer)']
+  );
+  for (const line of windows) say(line);
+  for (const e of ctx.errors.slice(-6)) say(`error [${e.from}/${e.kind}] ${String(e.text).slice(0, 200)}`);
+  for (const c of ctx.consoleLog.filter((x) => x.from === 'service-worker').slice(-4)) say(`service worker [${c.type}] ${String(c.text).slice(0, 200)}`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const headed = args.includes('--headed') || process.env.E2E_HEADED === '1';
@@ -93,11 +120,7 @@ async function main() {
       const lines = String(err.stack || err).split('\n');
       const ours = lines.filter((l) => /[\\/]e2e[\\/]/.test(l) && !/[\\/]node_modules[\\/]/.test(l)).slice(0, 2).map((l) => l.trim().replace(/^at /, '').replace(/.*[\\/]e2e[\\/]/, 'e2e/'));
       t.check(`scenario ${s.id} ran to the end`, false, `${lines.slice(0, 2).join(' | ')} | at ${ours.join(' | ') || 'unknown'}`);
-      for (const page of await Promise.race([ctx.browser.pages(), after(3000, [])])) {
-        const url = page.url();
-        const file = await ctx.shot(page, `fail-${s.id}-${url.split('/').pop().slice(0, 20)}`);
-        if (file) console.log(`        screenshot of ${url.slice(0, 70)} -> ${file}`);
-      }
+      await describeFailure(ctx, s.id);
       await tidy(ctx);
     }
   }
