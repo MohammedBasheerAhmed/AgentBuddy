@@ -1,23 +1,17 @@
 import React, { useState } from 'react';
 import { Tile, DataTable } from '../charts/index.js';
+import TicketList from './TicketList.jsx';
+import { useMinuteClock } from './hooks.js';
+import { ageText, dueText } from './format.js';
 import { useRun } from '../useRun.js';
 import { HANDOVER_HOURS, HANDOVER_DEFAULT_HOURS } from '../../reports/engine/handover.js';
 import { HANDOVER_MAX_WORDS, NOTABLE_MAX, buildHandoverPack, checkHandoverNote } from '../../reports/ai/handover.js';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
-import { AiBlocked, AiResult, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
+import { AiBlocked, AiButton, AiResult, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { plural } from './format.js';
 
 const FEATURE_ID = 'shift-handover';
-
-const TICKET_COLUMNS = [
-  { key: 'number', label: 'Ticket' },
-  { key: 'title', label: 'Short description' },
-  { key: 'priority', label: 'Priority' },
-  { key: 'state', label: 'State' },
-  { key: 'owner', label: 'Owner', format: (v) => v || '(unassigned)' },
-  { key: 'group', label: 'Group' },
-];
 
 function Block({ title, children }) {
   return (
@@ -28,21 +22,14 @@ function Block({ title, children }) {
   );
 }
 
-/** A short list of tickets that opens the ticket on click. */
-function Tickets({ caption, items, extra = [], env }) {
-  return (
-    <DataTable
-      caption={caption}
-      columns={[...TICKET_COLUMNS, ...extra]}
-      rows={items}
-      onRowOpen={(row) => row.table && env.openTicket({ table: row.table, sysId: row.sysId })}
-      rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
-    />
-  );
-}
+// The facts on a ticket's second line in the hand-over lists.
+const who = (t) => t.owner || 'Unassigned';
+const slaLine = (now) => (t) => [dueText({ endMs: t.endMs, breached: t.risk === 'Breached', paused: t.paused, plannedEnd: t.plannedEnd }, now), t.risk === 'Breached' ? '' : `${t.percent}% used`, who(t), t.priority];
+const stateLine = (t) => [t.state, ageText(t.ageDays), who(t)];
+const eventLine = (t) => [t.priority, t.state, who(t), t.group];
 
 // One kind of event in the period: how many, the first few, and an honest line when it could not be counted.
-function Events({ title, list, hours, extra = [], env }) {
+function Events({ title, list, hours, meta, env }) {
   if (!list.available) {
     return (
       <Block title={title}>
@@ -53,23 +40,25 @@ function Events({ title, list, hours, extra = [], env }) {
   const total = list.total;
   return (
     <Block title={`${title}${total === null ? '' : `: ${total}`}`}>
-      {list.items.length === 0 ? (
-        <p className="ab-note ab-note-ok">{total === null ? 'None could be listed.' : `None in the last ${hours} hours.`}</p>
-      ) : (
-        <Tickets caption={title} items={list.items} extra={extra} env={env} />
-      )}
+      <TicketList items={list.items} env={env} meta={meta} empty={total === null ? 'None could be listed.' : `None in the last ${hours} hours.`} />
       {(list.capped || list.partial) && (
         <p className="ab-hint">
           {list.partial ? 'Some tables could not be read, so this may be incomplete. ' : ''}
-          {list.capped ? `Showing the first ${list.items.length}${total === null ? '' : ` of ${total}`}.` : ''}
+          {list.capped ? `Listing the first ${list.items.length}${total === null ? '' : ` of ${total}`}.` : ''}
         </p>
       )}
     </Block>
   );
 }
 
-/** The deterministic hand-over page for one result (`d` is result.data with d.available true). No AI is involved. */
-export function HandoverBody({ d, env }) {
+/**
+ * The deterministic hand-over page for one result (`d` is result.data with d.available true). No AI is involved: this is the
+ * complete hand-over (N16). The note written from it lives in the Team screen's AI Assist half (TeamAssist, AI28).
+ * `now` is for tests; the panel uses a minute clock so "due in 1 h 20 min" stays right.
+ */
+export function HandoverBody({ d, env, now }) {
+  const clock = useMinuteClock();
+  const at = Number.isFinite(now) ? now : clock;
   const s = d.snapshot;
   const w = d.waiting;
   const tone = (n, kind) => (n > 0 ? kind : 'neutral');
@@ -87,10 +76,13 @@ export function HandoverBody({ d, env }) {
       <Block title="Needs attention now">
         {!d.sla.available ? (
           <p className="ab-note">{d.sla.reason || 'SLA information is not available to you.'}</p>
-        ) : d.sla.top.length ? (
-          <Tickets caption="SLAs closest to breaking" items={d.sla.top} extra={[{ key: 'risk', label: 'SLA', format: (v, r) => `${v} ${r.percent}%` }, { key: 'plannedEnd', label: 'Due' }]} env={env} />
         ) : (
-          <p className="ab-note ab-note-ok">{d.sla.ticketsAtIssue ? 'The tickets at issue are listed when ticket details can be read.' : 'No SLA is breached or at risk right now.'}</p>
+          <TicketList
+            items={d.sla.top}
+            env={env}
+            meta={slaLine(at)}
+            empty={d.sla.ticketsAtIssue ? 'The tickets at issue are listed when ticket details can be read.' : 'No SLA is breached or at risk right now.'}
+          />
         )}
       </Block>
 
@@ -103,23 +95,26 @@ export function HandoverBody({ d, env }) {
           {w.approvals.team !== undefined && <Tile label="Approvals holding up requests" value={w.approvals.team} unavailable={w.approvals.team === null} hint="On requested items in this scope" />}
         </div>
         {w.partial && <p className="ab-hint">Some tables could not be counted, so these numbers may be low.</p>}
+        {w.oldest.length > 0 && <TicketList caption="Waiting the longest" items={w.oldest} env={env} meta={stateLine} />}
         {w.byState.length > 0 && (
-          <DataTable
-            caption="Waiting by state"
-            columns={[{ key: 'label', label: 'State' }, { key: 'kind', label: 'Waiting for', format: (v) => ({ customer: 'The customer', approval: 'An approval', other: 'Other' })[v] || v }, { key: 'count', label: 'Tickets', align: 'right' }]}
-            rows={w.byState}
-          />
+          <details className="ab-details">
+            <summary>Waiting by state</summary>
+            <DataTable
+              caption="Waiting by state"
+              columns={[{ key: 'label', label: 'State' }, { key: 'kind', label: 'Waiting for', format: (v) => ({ customer: 'The customer', approval: 'An approval', other: 'Other' })[v] || v }, { key: 'count', label: 'Tickets', align: 'right' }]}
+              rows={w.byState}
+            />
+          </details>
         )}
-        {w.oldest.length > 0 && <Tickets caption="Waiting the longest" items={w.oldest} extra={[{ key: 'ageDays', label: 'Age (days)', align: 'right' }]} env={env} />}
       </Block>
 
-      <Events title="Priority 1-2 opened" list={d.events.opened} hours={d.hours} extra={[{ key: 'openedAt', label: 'Opened' }]} env={env} />
-      <Events title="Priority 1-2 resolved" list={d.events.resolved} hours={d.hours} env={env} />
-      <Events title="SLAs breached" list={d.events.breaches} hours={d.hours} extra={[{ key: 'plannedEnd', label: 'Due' }]} env={env} />
-      <Events title="Handed over 3+ times and touched" list={d.events.reassigned} hours={d.hours} extra={[{ key: 'reassignments', label: 'Reassignments', align: 'right' }]} env={env} />
+      <Events title="Priority 1-2 opened" list={d.events.opened} hours={d.hours} meta={eventLine} env={env} />
+      <Events title="Priority 1-2 resolved" list={d.events.resolved} hours={d.hours} meta={eventLine} env={env} />
+      <Events title="SLAs breached" list={d.events.breaches} hours={d.hours} meta={slaLine(at)} env={env} />
+      <Events title="Handed over 3+ times and touched" list={d.events.reassigned} hours={d.hours} meta={(t) => [`${t.reassignments} moves`, who(t), t.group]} env={env} />
 
       <Block title="Oldest open">
-        {d.oldest.length ? <Tickets caption="Oldest open tickets" items={d.oldest} extra={[{ key: 'ageDays', label: 'Age (days)', align: 'right' }]} env={env} /> : <p className="ab-note">Nothing to show.</p>}
+        <TicketList items={d.oldest} env={env} meta={stateLine} empty="Nothing to show." />
       </Block>
     </>
   );
@@ -134,22 +129,28 @@ export function noteChecks(text) {
   return out;
 }
 
-/** The "Write the hand-over note" block. `result` is the engine result on screen: it is the note's only input. */
-export function HandoverAi({ result, page, eff, hours }) {
+/**
+ * AI28, "Write the hand-over note", in the Team screen's AI Assist half. `result` is the hand-over section's engine result (the
+ * tables the Insights half shows, N16): it is the note's only input; null while it is being read. `primary` makes the button the
+ * screen's one filled button.
+ */
+export function HandoverAi({ result, page, eff, hours, primary = true }) {
   const run = useRun({ page, eff, record: null });
   const [usedAt, setUsedAt] = useState(null);
   const { feature, available } = featureState(FEATURE_ID, eff.policy);
   const aiReady = isAiReady(eff);
   const blockedFields = eff.policy?.blockedFields || [];
+  const sensitivePrefixes = eff.policy?.sensitiveTablePrefixes || [];
   const shown = run.phase === 'done' && run.active?.id === FEATURE_ID;
-  const stale = shown && usedAt !== null && result.readAt > usedAt;
+  const stale = shown && usedAt !== null && Number(result?.readAt) > usedAt;
+  const ready = Boolean(result?.data && result.data.available !== false);
 
   function go() {
-    if (!feature || !available) return;
+    if (!feature || !available || !ready) return;
     setUsedAt(result.readAt);
     run.run(feature, {
       getPack: async () => {
-        const pack = buildHandoverPack(result, { blockedFields });
+        const pack = buildHandoverPack(result, { blockedFields, sensitivePrefixes });
         if (!pack) throw new Error('There is nothing to hand over yet. Wait for the numbers to load.');
         return pack;
       },
@@ -158,17 +159,18 @@ export function HandoverAi({ result, page, eff, hours }) {
 
   return (
     <div className="ab-handover-ai">
-      <h3 className="ab-h ab-handover-h">Write the hand-over note</h3>
       {!available ? (
-        <AiBlocked>The hand-over note is switched off by your organisation. The page above still works.</AiBlocked>
+        <AiBlocked>The hand-over note is switched off by your organisation. The hand-over tables under Insights still work.</AiBlocked>
       ) : (
         <>
           <p className="ab-hint">
-            The note is written from the figures above and up to {NOTABLE_MAX} notable tickets (number, type, priority, state, group, assignee and short description). The names of those assignees and of the people who raised those tickets are masked. A person named only inside a ticket title is not masked, so read the preview: it shows exactly what will be sent.
+            Written from the hand-over figures and up to {NOTABLE_MAX} notable tickets. Assignees and requesters are masked; a person named only inside a ticket title is not, so read the preview: it shows exactly what will be sent.
           </p>
           {!aiReady && <AiKeyLine eff={eff} />}
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!aiReady || run.busy} onClick={go}>Write the hand-over note</button>
+            <AiButton eff={eff} primary={primary} disabled={!aiReady || run.busy || !ready} onClick={go}>
+              Write the hand-over note
+            </AiButton>
           </div>
         </>
       )}
@@ -178,46 +180,45 @@ export function HandoverAi({ result, page, eff, hours }) {
         eff={eff}
         featureId={FEATURE_ID}
         heading={`Hand-over note, last ${hours} hours`}
-        notice={[...(stale ? ['The numbers on the page have been refreshed since this note was written.'] : []), ...(shown ? noteChecks(run.result) : [])]}
+        notice={[...(stale ? ['The hand-over numbers have been read again since this note was written.'] : []), ...(shown ? noteChecks(run.result) : [])]}
       />
     </div>
   );
 }
 
-// F4. What a lead hands to the next shift: where the queue stands, what is at risk, what waits on others, what happened lately.
-export default function HandoverView({ widget, env, eff }) {
-  // The period is a convenience for this view only; the saved dashboard keeps no numbers and no period.
-  const [hours, setHours] = useState(HANDOVER_DEFAULT_HOURS);
-  const state = useSection('handover', { ...widget, params: { ...(widget?.params || {}), hours } }, env);
-  const d = state.result?.data;
-  const ok = d && d.available !== false;
-
-  const picker = (
-    <div className="ab-seg" role="group" aria-label="Period">
+/** The period picker (8, 12 or 24 hours). */
+export function HoursPicker({ hours, onChange, label = 'Period' }) {
+  return (
+    <div className="ab-seg" role="group" aria-label={label}>
       {HANDOVER_HOURS.map((h) => (
-        <button key={h} type="button" className={`ab-btn ab-btn-sm${hours === h ? ' ab-btn-primary' : ''}`} aria-pressed={hours === h} onClick={() => setHours(h)}>
+        <button key={h} type="button" className="ab-btn ab-btn-sm ab-seg-btn" aria-pressed={hours === h} onClick={() => onChange(h)}>
           {h} hours
         </button>
       ))}
     </div>
   );
+}
+
+// F4 / N16. What a lead hands to the next shift: where the queue stands, what is at risk, what waits on others, what happened lately.
+// Insights only: no AI here. The period is a convenience of this view (the saved dashboard keeps no numbers and no period); the
+// result goes into env.loaded like every widget's, which is where the AI Assist half's hand-over note takes its figures from.
+export default function HandoverView({ widget, env }) {
+  const [hours, setHours] = useState(HANDOVER_DEFAULT_HOURS);
+  const state = useSection('handover', { ...widget, params: { ...(widget?.params || {}), hours } }, env);
+  const d = state.result?.data;
+  const ok = d && d.available !== false;
 
   return (
     <SectionShell
       title="Shift handover"
-      help="Where the queue stands, what is at risk, what waits on others and what happened lately. Works without AI."
+      help="Where the queue stands, what is at risk, what waits on others and what happened lately."
       state={state}
       env={env}
       widgetId={widget?.id}
-      actions={picker}
+      actions={<HoursPicker hours={hours} onChange={setHours} />}
       facts={ok ? [`Last ${d.hours} hours`] : []}
     >
-      {ok && (
-        <>
-          <HandoverBody d={d} env={env} />
-          <HandoverAi result={state.result} page={env.page} eff={eff} hours={d.hours} />
-        </>
-      )}
+      {ok && <HandoverBody d={d} env={env} />}
     </SectionShell>
   );
 }

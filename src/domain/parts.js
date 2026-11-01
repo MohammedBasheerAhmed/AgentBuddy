@@ -8,7 +8,7 @@
 //    says "not available" instead of "none" (an empty list is only written when the read worked and found nothing).
 //  - Part field names avoid the words Strict mode treats as sensitive (see isSensitiveField in src/pii/firewall.js).
 
-import { packToParts } from '../features/parts.js';
+import { notAvailablePart, packToParts, unavailable, unavailableText as listText } from '../features/parts.js';
 
 const present = (value) => String(value ?? '').trim();
 const join = (bits, sep = ', ') => bits.map(present).filter(Boolean).join(sep);
@@ -81,39 +81,9 @@ export function relatedText(key, pack) {
 
 // ---- What could not be read -----------------------------------------------------------------------------------
 
-const SOURCE_LABEL = {
-  task_sla: 'SLAs',
-  sysapproval_approver: 'Approvals',
-  task: 'Child tasks',
-  change_task: 'Change tasks',
-  incident: 'Linked incidents',
-  change_request: 'Other changes',
-  journal: 'Notes and comments',
-  sys_journal_field: 'Notes and comments',
-  sn_customerservice_case: "The account's other cases",
-};
-// People lookups only affect email addresses; the model has no use for hearing about them.
-const QUIET_SOURCES = new Set(['sys_user', 'csm_consumer', 'customer_contact']);
-
-const PHRASE = {
-  blocked: 'not allowed by your organisation (do not describe it as empty)',
-  denied: 'not readable by your user',
-  'empty-or-hidden': 'nothing visible to your user; it may exist but be hidden from them',
-  error: 'could not be read',
-};
-
-/** One line per part of the record the person's user could not read, or ''. Fixed wording: no text from the instance. */
-export function unavailableText(pack) {
-  const lines = [];
-  for (const a of Array.isArray(pack?.access) ? pack.access : []) {
-    if (!a || QUIET_SOURCES.has(a.source)) continue;
-    const phrase = a.status === 'skipped' ? present(a.note) : PHRASE[a.status];
-    if (!phrase) continue;
-    lines.push(`- ${SOURCE_LABEL[a.source] || String(a.source || 'Something').slice(0, 60)}: ${phrase}`);
-  }
-  if (!lines.length) return '';
-  return `These parts could not be read, so do not describe them as empty or as "none":\n${[...new Set(lines)].join('\n')}`;
-}
+/** One line per part of the record the person's user could not read, or ''. Fixed wording: no text from the instance. The list and
+ *  its wording are shared by every feature (src/features/parts.js); the pipeline adds the same part to every request. */
+export const unavailableText = (pack) => listText(unavailable(pack));
 
 // ---- The parts ---------------------------------------------------------------------------------------------------
 
@@ -143,7 +113,8 @@ export function domainParts(pack, { journal = 12, skipFields = [], labels = {}, 
     const text = relatedText(key, pack);
     if (text && TITLE[key]) parts.push({ label: TITLE[key][0], field: TITLE[key][1], text });
   }
-  const unreadable = unavailableText(pack);
-  if (unreadable) parts.push({ label: 'Data not available', field: 'data_not_available', text: unreadable });
+  // The pipeline adds this part to every request (with what it knows about notes left out); a feature's own parts carry it too.
+  const unreadable = notAvailablePart(unavailable(pack));
+  if (unreadable) parts.push(unreadable);
   return parts;
 }

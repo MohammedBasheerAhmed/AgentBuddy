@@ -124,3 +124,21 @@ CSM/catalog roles where the kind needs them). For each: what was assumed, how to
   preview on, and read both the outgoing text and the answer.
 - Whether a person named only in a sentence of another ticket's notes reaches the AI (known limit, shown in the preview). Reference material
   from other tickets is the main place this can happen.
+
+## Round 3: record detection and reading (F3, F4, Foundation)
+
+- **HR case tables.** Every table whose name starts with `sn_hr_` and has `case` as a word of its name (`sn_hr_core_case_payroll`,
+  `sn_hr_le_case`, `sn_hr_er_case`) is now kind `hr_case`; one ending in `_task` is not. Check the HR case classes on an instance with HR
+  Service Delivery (System Definition > Tables, name starts with sn_hr) and add an exception in `src/context/kinds.js` if one of them is
+  not a case.
+- **`/task.do?sys_id=...` and `/record/task/<id>`.** The content script reads `sys_class_name` of that one task row (through the policy
+  guard) and reports the real class to the panel and the bar. Check with an incident opened as `/task.do?sys_id=<incident sys_id>`.
+- **Blank forms on Next Experience.** A new record is recognised from `g_form.isNewRecord()` where the bridge reaches the form's frame
+  (`window.frames['gsft_main']`, seen on dev364920), else from the address (`.../params/target/incident.do%3Fsys_id%3D-1`,
+  `/record/<table>/-1`). Check "New" on an incident list in Next Experience and in a Workspace.
+- **Time limit.** Every Table and Aggregate API read stops after 20 seconds (`READ_TIMEOUT_MS`, `src/content/tableApi.js`) with "ServiceNow
+  did not answer within 20 seconds". A large My work or Team read on a slow instance may need longer; raise it there if real reads time out.
+- **401.** The cached session token (`g_ck`) is dropped when the instance answers 401 or a login page; the message says to sign in to
+  ServiceNow again. Check: let the session time out with the panel open, sign in again in another tab, press Try again.
+- **Missing tables.** A read answered "Invalid table" (Table API, HTTP 400) or 404 is now left out quietly (access status `skipped`,
+  never listed as "could not be read"). Check on an instance without CSM or HR that the Ticket screen shows no error for their tables.

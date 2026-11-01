@@ -279,7 +279,6 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
 .ab-widget-foot { margin: 10px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-xs); overflow-wrap: anywhere; }
 .ab-widget-select .ab-select { width: auto; max-width: 100%; padding: 3px 6px; font-size: var(--ab-text-sm); }
 .ab-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ab-export { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--ab-border); }
 .ab-export-mask { font-size: var(--ab-text-sm); align-items: center; }
 .ab-customize { display: flex; flex-direction: column; gap: 8px; }
 .ab-builder { display: flex; flex-direction: column; }
@@ -381,4 +380,63 @@ a.ab-stack-link { display: block; }
 @media print {
   /* Screen-only help and buttons. */
   .ab-dash-help, .ab-widget-error .ab-btn { display: none !important; }
+}
+
+/* ==== The Team screen, round 3 (src/sidepanel/team, ReportsDashboard.jsx): a quiet top row, short lists, one export menu, one
+   session banner; the AI Assist half uses the --ab-ai* tokens and the Insights half never does. Tokens from theme.css only. ==== */
+
+/* ---- the quiet top row: which dashboard, whose tickets, one menu ---- */
+.ab-dash-top { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; }
+.ab-dash-top .ab-dash-select { flex: 1 1 auto; min-width: 0; }
+.ab-select-quiet { border-color: transparent; background-color: transparent; font-weight: 650; padding-left: 4px; min-width: 0; text-overflow: ellipsis; }
+.ab-select-quiet:hover { border-color: var(--ab-border); }
+.ab-scope-chip { flex: none; cursor: pointer; padding: 2px 10px; color: var(--ab-fg); max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-scope-chip[aria-expanded='true'] { border-color: var(--ab-accent); }
+.ab-seg-btn[aria-pressed='true'] { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); color: var(--ab-fg); }
+
+/* ---- the "⋯" menu ---- */
+.ab-more { position: relative; flex: none; }
+.ab-more-btn { font-size: var(--ab-text-lg); line-height: 1; }
+.ab-more-btn[aria-expanded='true'] { background: var(--ab-bg-sunken); color: var(--ab-fg); }
+.ab-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column; min-width: 13rem; max-width: min(18rem, 90vw); padding: 4px; border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius); background: var(--ab-bg-raised); box-shadow: var(--ab-shadow); }
+.ab-menu-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-fg); font: inherit; text-align: left; cursor: pointer; }
+.ab-menu-item:hover, .ab-menu-item:focus-visible { background: var(--ab-accent-soft); }
+.ab-menu-item:disabled { color: var(--ab-fg-muted); cursor: not-allowed; }
+.ab-menu-tick { display: inline-block; width: 1em; color: var(--ab-accent); font-weight: 700; }
+
+/* ---- notes said once, the session banner, the export panel ---- */
+.ab-dash-notes > summary { color: var(--ab-fg-muted); }
+.ab-dash-notes-list { margin: 0; padding-left: 18px; color: var(--ab-fg-soft); font-size: var(--ab-text-sm); display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.ab-dash-session { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.ab-dash-session p { margin: 0; flex: 1 1 14em; }
+.ab-export-panel { display: flex; flex-direction: column; gap: 8px; }
+.ab-export-panel .ab-sub { margin: 0; }
+.ab-export-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ab-export-item { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.ab-export-name { flex: 1 1 10em; min-width: 0; font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+
+/* ---- short ticket lists instead of label/value tables ---- */
+.ab-tlist-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ab-tlist-caption { margin: 0; font-size: var(--ab-text-sm); font-weight: 650; color: var(--ab-fg-soft); }
+.ab-tlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-width: 0; }
+.ab-tlist-row { display: flex; flex-direction: column; gap: 1px; padding: 5px 0; border-bottom: 1px solid var(--ab-border); min-width: 0; }
+.ab-tlist-row:last-child { border-bottom: 0; }
+.ab-tlist-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.ab-tlist-number { flex: none; font-weight: 650; font-variant-numeric: tabular-nums; }
+.ab-tlist-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ab-fg); }
+.ab-tlist-meta { color: var(--ab-fg-muted); font-size: var(--ab-text-xs); overflow-wrap: anywhere; }
+
+/* ---- the AI Assist half: AI buttons and answers carry the AI colour (never used on Insights) ---- */
+.ab-team-assist { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* The AI buttons (ab-btn-ai, ab-btn-ai-quiet) are defined once in shell.css. */
+.ab-btn-ai:disabled, .ab-btn-ai-quiet:disabled { opacity: 0.55; cursor: not-allowed; }
+.ab-ai-result-h { display: flex; align-items: center; gap: 6px; }
+.ab-ai-result { border-color: var(--ab-ai-line); }
+.ab-team-assist .ab-handover-ai { border-top: 0; padding-top: 0; }
+.ab-team-coach-off { margin: 2px 0 0; }
+.ab-coach { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+@media print {
+  .ab-dash-top, .ab-more, .ab-menu, .ab-export-panel, .ab-dash-session, .ab-showmore, .ab-team-assist .ab-btn-ai, .ab-team-assist .ab-btn-ai-quiet { display: none !important; }
+  .ab-tlist-title { white-space: normal; }
 }

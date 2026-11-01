@@ -5,7 +5,9 @@
       "title": "Approved ServiceNow instances",
       "description": "Only these instances can be enabled. Exact https origins (https://acme.service-now.com) or wildcards with at least two names after *. (*.corp.example.com matches its sub-domains, not corp.example.com itself). An entry that is neither is ignored; a list with no usable entry allows no site. Leave unset to let people enable their own instance.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "aiProvider": {
       "title": "Required AI provider",
@@ -21,13 +23,17 @@
       "title": "Allowed AI providers",
       "description": "Provider ids people may choose from, for example [\"openai\", \"azure\"] to rule out every other vendor (such as deepseek). Not case-sensitive. An empty list allows no provider. aiProvider, when set, must be on this list.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "allowedModels": {
       "title": "Allowed models",
       "description": "Model ids (for Azure OpenAI: deployment names) people may use; the first is the default. Exact and case-sensitive.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "piiMode": {
       "title": "Minimum personal-data protection",
@@ -68,25 +74,33 @@
       "title": "Disabled features",
       "description": "Feature ids to switch off, for example coaching-snapshot. Not case-sensitive. The full list of ids is in docs/deployment.md.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "blockedTables": {
       "title": "Tables that are never read or sent",
       "description": "Table names (not case-sensitive). Agent Buddy refuses to read these tables, including the table of a related record, a reference answer, the journal of such a record and tasks of such a class, and it never sends their records to an AI. Needs the content script to see this policy; see docs/deployment.md.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "blockedFields": {
       "title": "Fields that are never sent",
       "description": "Column names (not case-sensitive). A part of the request that is one of these columns, or that carries one (for example the list of linked incidents carries short_description and close_notes), is refused and nothing is sent.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "sensitiveTablePrefixes": {
       "title": "Extra sensitive table families",
       "description": "Table-name prefixes that are treated like HR cases (for example x_acme_hr_ or x_acme_legal_): minimised reads, and no content sent unless allowHrContent is true. sn_hr_ is always included and cannot be removed here.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "allowHrContent": {
       "title": "Allow free text from HR cases",
@@ -113,6 +127,168 @@
       "title": "Switch off the quick-actions bar on ServiceNow pages",
       "description": "The only thing Agent Buddy shows inside a ServiceNow page is a small bar of main actions (a tab on the edge of the page). Set this to true to remove it for everyone; the side panel is not affected.",
       "type": "boolean"
+    },
+    "aiEnabled": {
+      "title": "AI Assist on",
+      "description": "false hides every AI Assist half and every AI action for everyone: Agent Buddy then works without AI (the Insights halves, which send nothing anywhere, stay). Leave unset or true to allow AI under the other keys.",
+      "type": "boolean"
+    },
+    "disabledSections": {
+      "title": "Hidden screens",
+      "description": "Screens of the panel to hide for everyone: mywork, team, write, knowledge. The Ticket screen cannot be hidden. Not case-sensitive; other words are ignored.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowedProfiles": {
+      "title": "Allowed work profiles",
+      "description": "Work profiles people may choose: it (IT service desk / resolver), req (request fulfilment), csm (customer service), hr (HR service delivery), lead (team lead), km (knowledge manager), mpc (major incident, problem, change). Leave unset to allow all. The hr profile also needs to be named here or allowHrContent to be true.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "lockedProfiles": {
+      "title": "Locked work profiles",
+      "description": "Work profiles set for everyone (ids as in allowedProfiles); people cannot change them. Leave unset to let people choose.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "orgSnippets": {
+      "title": "Organisation snippets",
+      "description": "Canned replies published for everyone, read-only in the panel: a list of objects with a text title (up to 80 characters), a text body (up to 4000) and an optional shortcut. Plain text only; at most 200 are used.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "shortcut": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "internalPhrases": {
+      "title": "Internal-only phrases",
+      "description": "Words and phrases the safe-to-send check flags in text going to a customer (internal team names, system names, project code names), on top of the built-in list. Not case-sensitive.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "defaultDashboard": {
+      "title": "Organisation dashboard",
+      "description": "One Team-screen dashboard for everyone: exactly what \"Save layout as a file\" writes for one dashboard, { \"kind\": \"agentbuddy-dashboard-layout\", \"version\": 1, \"dashboard\": { \"name\", \"scope\", \"tables\", \"widgets\" } }, at most 60000 characters. People with no dashboards yet start with it; others can add it from the dashboard menu. It is never locked. Leave \"tables\" out for every table (do not write null). A value that is not such a layout, or holds no section this version knows, is ignored.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "dashboard": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "scope": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "groupIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "groupNames": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "tables": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "widgets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "section": {
+                    "type": "string"
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "trend": {
+                        "type": "string"
+                      },
+                      "staleDays": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  "builder": {
+                    "type": "object",
+                    "properties": {
+                      "table": {
+                        "type": "string"
+                      },
+                      "presets": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "groupBy": {
+                        "type": "string"
+                      },
+                      "metric": {
+                        "type": "string"
+                      },
+                      "chart": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "priorityAccounts": {
+      "title": "Priority accounts",
+      "description": "Customer accounts marked \"Priority account\" on customer service cases, written as ServiceNow shows the account's name (case and spaces do not matter). At most 500 names of up to 100 characters; longer names and values that are not text are ignored.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   }
 }

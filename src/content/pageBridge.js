@@ -18,7 +18,8 @@ export function newRequestId() {
 }
 
 /**
- * Call an action exposed by src/page/bridge.js: getCsrfToken, getSessionInfo, getFormMeta, getFormValues, fillField.
+ * Call an action exposed by src/page/bridge.js: getCsrfToken, getSessionInfo, getFormMeta, getFormValues, getFieldStates,
+ * getBoxValues, fillField (the list in the bridge itself is the one that counts).
  * @returns {Promise<any>}
  */
 export function callPage(action, args = [], { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {

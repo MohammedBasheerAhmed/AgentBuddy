@@ -1,0 +1,63 @@
+import React, { useMemo } from 'react';
+import { ShowMore } from '../../ui/primitives.jsx';
+import { buildJourney, journeySummary } from '../../../insights/journey.js';
+import { relativeText } from '../../../insights/time.js';
+import { useRecordRead, useTicketFacts } from './data.js';
+import { useReport } from './useInsight.js';
+import { ReadState } from './bits.jsx';
+
+// N24, the ticket journey: opened, assigned and passed between groups, state changes, the conversation's key moments, SLA events,
+// resolved. Newest first, three then "Show all". The path between groups needs the field history, which many users may not read;
+// then the card says so and shows the counts.
+
+export default function JourneyCard({ page, eff, record, active, setSummary, setAttention }) {
+  const ticket = useTicketFacts({ page, record, eff, active });
+  const audit = useRecordRead({ page, record, eff, active, op: 'journey' });
+  const answer = ticket.data;
+  const journey = useMemo(() => {
+    if (!answer?.pack) return null;
+    const slasRead = (answer.slas?.access || []).every((a) => a?.status === 'ok' || a?.status === 'empty');
+    return buildJourney({ pack: answer.pack, slas: slasRead ? answer.slas?.items || [] : null, audit: audit.data || null, now: Date.now() });
+  }, [answer, audit.data]);
+  useReport(setSummary, journey ? journeySummary(journey) : '');
+  useReport(setAttention, journey && journey.reassignments !== null && journey.reassignments >= 3 ? 'warn' : '');
+
+  if (!journey) return <ReadState state={ticket} what="this ticket" onRetry={ticket.reload} />;
+  const now = Date.now();
+  const newestFirst = [...journey.events].reverse();
+  return (
+    <>
+      {journey.path.length > 1 && (
+        <p className="ab-ins-line">
+          Path: {journey.path.join(' > ')}
+        </p>
+      )}
+      {(journey.reassignments !== null || journey.reopens) && (
+        <p className="ab-hint">
+          {[journey.reassignments !== null && `Reassigned ${journey.reassignments} time${journey.reassignments === 1 ? '' : 's'}`, journey.reopens ? `reopened ${journey.reopens} time${journey.reopens === 1 ? '' : 's'}` : '', journey.now.group && `now with ${journey.now.group}${journey.now.owner ? ` (${journey.now.owner})` : ''}`]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
+      {newestFirst.length > 0 ? (
+        <ShowMore
+          items={newestFirst}
+          className="ab-ins-timeline"
+          render={(e, i) => (
+            <div key={`${e.kind}:${e.at}:${i}`} className="ab-ins-event">
+              <span className="ab-ins-when">{e.approx ? `about ${relativeText(e.at, now)}` : relativeText(e.at, now)}</span>
+              <span className="ab-ins-what">
+                {e.label}
+                {e.detail && <span className="ab-ins-detail"> {e.detail}</span>}
+              </span>
+            </div>
+          )}
+        />
+      ) : (
+        <p className="ab-hint">No dated events could be read for this ticket.</p>
+      )}
+      {audit.phase === 'loading' && !audit.data && <p className="ab-hint" role="status">Reading the field history…</p>}
+      {journey.note && audit.data && <p className="ab-hint">{journey.note}</p>}
+    </>
+  );
+}

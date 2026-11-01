@@ -7,8 +7,8 @@ import { readFailure } from './plainAccess.js';
 
 // A2, A3, C4 and the outage check (E2): what happened before for this person, tickets solved like this one, open tickets on
 // the same service, and knowledge that may help. All of it is read with the person's own session and ranked locally: no AI
-// call, no key needed, nothing leaves the browser. Items are real links: a click opens in the same tab, Ctrl+click or the
-// right-click menu opens a new one.
+// call, no key needed, nothing leaves the browser. Items are real links that open in a new tab next to the ticket, so the ticket
+// being worked on is never replaced (the Ticket screen's cards in src/sidepanel/ticket/cards replace this view).
 
 const CALLER_ROLES = ['caller', 'requested_for', 'contact', 'consumer', 'opened_by', 'requester'];
 
@@ -27,7 +27,7 @@ function Section({ title, count, children, defaultOpen = true }) {
 
 function Item({ page, item, line, extra }) {
   return (
-    <RecordLink page={page} item={item} className="ab-feature">
+    <RecordLink page={page} item={item} newTab className="ab-feature">
       <span className="ab-record-number">{item.number}</span>
       <span className="ab-feature-title">{item.short_description}</span>
       {line && <span className="ab-feature-desc">{line}</span>}
@@ -105,7 +105,7 @@ export default function RelatedView({ page, eff }) {
   return (
     <>
       <div className="ab-row" style={{ justifyContent: 'space-between' }}>
-        <span className="ab-sub">Found with your own session. Nothing here is sent to an AI. A click opens a ticket in this tab; Ctrl+click or right-click opens a new tab.</span>
+        <span className="ab-sub">Found with your own session. Nothing here is sent to an AI. A ticket opens in a new tab next to this one.</span>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={load} disabled={state.phase === 'loading'}>Refresh</button>
       </div>
       {state.phase === 'loading' && !state.pack && <p className="ab-note" role="status">Looking…</p>}

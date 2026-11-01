@@ -15,11 +15,34 @@ import { MSG, SITE_OFF_CODE } from '../lib/messages.js';
 import { contentScriptOrigin } from '../lib/senderCheck.js';
 import { kindForTable } from '../context/kinds.js';
 import { TABLE_RE } from '../context/util.js';
-import { isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
-import { quickActions } from '../features/quick.js';
+import { effectiveSettings, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
+import { quickActions, quickItems } from '../features/quick.js';
 import { FEATURE_ID_RE, makeLaunch } from '../lib/launch.js';
+import { aiAvailable } from '../profiles/profiles.js';
+import { resolveProviderConfig } from '../providers/config.js';
 
 export const BAR_TYPES = new Set([MSG.BAR_ACTIONS, MSG.BAR_LAUNCH]);
+
+/**
+ * May the bar offer AI actions? Not when the organisation switched AI off (`aiEnabled: false`) or its AI address is not valid, not
+ * when the person chose "Skip AI for now", and not when no key is saved for the provider in use (unless the organisation supplies
+ * one, or the provider needs none: a model on this computer). A click on an AI action would otherwise open the panel only to say
+ * "Add an AI key". Only WHETHER a key is saved is asked (keyMode: 'none' | 'local' | 'session' | 'encrypted'); the key itself is
+ * never read here. A locked encrypted key counts as saved: the panel asks for the passphrase.
+ * @param {object} settings the person's settings; @param {object} policy the normalised policy
+ * @param {{ keyMode: (provider: string) => Promise<string> }} deps
+ */
+export async function barAiOn(settings, policy, { keyMode }) {
+  const eff = effectiveSettings(settings, policy);
+  if (!aiAvailable(eff) || eff.policy.aiBlocked) return false;
+  if (eff.values.providedApiKey) return true;
+  if (resolveProviderConfig(eff.values, '').keyOptional) return true;
+  try {
+    return (await keyMode(eff.values.provider)) !== 'none';
+  } catch {
+    return true; // the store could not be asked: offer the action; the panel says what is missing
+  }
+}
 
 function siteOff() {
   const err = new Error('This site is not turned on.');
@@ -27,10 +50,30 @@ function siteOff() {
   return err;
 }
 
+// The Insights cards a ticket of these kinds has (src/sidepanel/ticket/cards): "Ready to resolve?" and "Related tickets".
+const CARD_KINDS = new Set(['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task']);
+
+/**
+ * What the bar offers for a record of this table. With AI: the AI actions (quick.js quickActions: the person's pins or the defaults,
+ * minus the policy). Without AI (switched off by the organisation, "Skip AI for now", no key saved): the items that need no AI
+ * ('card:ready', 'card:related'), which open a card of the Insights half; nothing is sent anywhere. Each item says which it is (`ai`).
+ * @returns {Promise<{ id: string, label: string, ai: boolean }[]>}
+ */
+export async function barActions({ table, settings, policy, deps }) {
+  const kind = kindForTable(table);
+  const aiOn = deps.aiOn ? await Promise.resolve(deps.aiOn(settings, policy)).catch(() => true) : true;
+  if (aiOn) return quickActions({ kind, pins: settings.quickPins, policy, aiOn: true }).map((a) => ({ id: a.id, label: a.label, ai: true }));
+  const cards = CARD_KINDS.has(kind) ? ['ready', 'related'] : [];
+  return quickItems({ kind, pins: settings.quickPins, policy, ai: false, cards })
+    .filter((item) => item.ai === false)
+    .map((item) => ({ id: item.id, label: item.label, ai: false }));
+}
+
 /**
  * @param {object} message { type, table?, sysId?, featureId? }
  * @param {object} sender  chrome's MessageSender
- * @param {object} deps    { runtimeId, activeInstances(), loadSettings(), loadPolicy(), openPanel(tabId), saveLaunch(launch), now() }
+ * @param {object} deps    { runtimeId, activeInstances(), loadSettings(), loadPolicy(), openPanel(tabId), saveLaunch(launch), now(),
+ *                          aiOn?(settings, policy) -> Promise<boolean> (barAiOn; absent = AI on) }
  */
 export async function handleBarMessage(message, sender, deps) {
   const origin = contentScriptOrigin(sender, deps.runtimeId);
@@ -63,7 +106,7 @@ export async function handleBarMessage(message, sender, deps) {
 
   // Hidden for this record: the organisation blocked the table, or it is HR content the organisation does not allow.
   const shown = bar && isTableAllowed(table, policy) && !(isSensitiveByPolicy(table, policy) && !policy.allowHrContent);
-  const actions = shown ? quickActions({ kind: kindForTable(table), pins: settings.quickPins, policy }) : [];
+  const actions = shown ? await barActions({ table, settings, policy, deps }) : [];
 
   if (message.type === MSG.BAR_ACTIONS) return { actions, bar };
 

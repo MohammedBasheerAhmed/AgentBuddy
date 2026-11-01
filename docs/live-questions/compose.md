@@ -17,8 +17,11 @@ instead of Insert" or a less specific email suggestion, never a wrong write.
    inside an iframe; the bridge only searches the top document and open shadow roots, so Insert may always answer "no form" and
    fall back to Copy. Check: draft, open the form, press "Insert into the email body". If it never works, either give the
    bridge a rule for the editor (`src/page/bridge.js`, not owned by this area) or remove the button and keep Copy body.
-3. **The draft's subject.** Not inserted at all (only copied): the client pre-fills a subject from its template and the control
-   name is unknown. If the subject field has a stable name, add a second `FILL_FIELD` call in `EmailPanel.jsx`.
+3. **The draft's subject.** Since round 3 the Ticket screen's email drafts are carried to the email form and offer "Insert
+   subject" (replace) and "Insert body" (append) there (`src/sidepanel/PendingDraft.jsx`, AI9). The subject keeps the ticket
+   number in front ("INC0010001: ...", `subjectWithNumber` in `pendingDraft.js`), because the client's own subject carried it.
+   Check: is the subject control called `subject` (g_form or DOM), and does a customer's reply to such an email still land on the
+   ticket (watermark in the body, or the number in the subject)? See also `assist.md` questions 16 to 18.
 4. **Words on the record.** The suggestions read English display values: states ("On Hold", "Resolved", "Closed Complete",
    "Canceled", "Awaiting Info"), hold reasons ("Awaiting Caller", "Awaiting User Info"), approval states ("Requested",
    "Rejected") and SLA stages ("In progress", "Completed", "Cancelled"). Check on the instance, including a non-English or
@@ -123,3 +126,33 @@ instead of Insert" or a less specific email suggestion, never a wrong write.
     the stored UTC values of `opened_at`, `resolved_at` and `closed_at` in `related.times` (spec key `times`), and the suggestion uses
     them unless the notes came from the record's own fields (then both sides are local). Check: an incident resolved a few minutes
     before the agent's last comment, with the user's time zone far from UTC; the suggestion says the person was already told.
+
+## Added 2026-10-30 (round 3: the Write screen)
+
+28. **"Check my comment" reads the unsaved comment through the page bridge** (`getFormMeta`, then `getFormValues` for `comments`,
+    `close_notes` or `description`; classic forms only, through the frame `gsft_main` as for Rewrite). It first checks that the open form
+    is the panel's record (`expect` in the `formValues` READ); another form answers "not the ticket open here". On a Workspace or a portal
+    there is no `g_form`, so the panel offers to check pasted text. Check on dev364920: type a comment on an incident (do not post it), press
+    "Check my comment"; the text it checks is what you typed. In Next Experience (classic form inside the unified navigation) the same.
+29. **The record's notes for the work-note overlap** are read with the new `send-check` spec (people and journal, no other columns). The
+    journal is the usual `sys_journal_field` read. Check that a fulfiller's journal read returns the work notes (it does for Rewrite and
+    the drafts already).
+30. **Organisation snippets come from the managed policy `orgSnippets`** and are never stored by the panel. Check with a managed policy in
+    Chrome/Edge (`chrome://policy`) that the list shows marked "From your organisation" and cannot be edited.
+31. **A snippet file** is saved with an `<a download>` on a `blob:` address from the side panel (no `downloads` permission). Check in
+    Chrome and Edge that the file lands in the downloads folder without a prompt that the panel cannot answer; if the browser asks where
+    to save, that is fine. The file input accepts `.json`; a file the browser names `application/octet-stream` is refused (rename it).
+32. **Snippet targets** are offered per kind of record (`src/snippets/targets.js`): incident and case: comments, work notes, resolution
+    notes, description; problem: also cause notes and workaround; the email form: body. A field that is not on the form answers "That field
+    is not on this form" and the text is copied instead. Check `cause_notes` and `workaround` on a problem form and `close_notes` on a case
+    (CSM forms may call it "Resolution notes" under another column).
+33. **Notes to ticket: "Open a blank incident / case"** navigates the same tab to `nav_to.do?uri=incident.do?sys_id=-1` (or
+    `sn_customerservice_case.do?sys_id=-1`), the classic form. Agents on Service Operations Workspace may prefer a new Workspace record
+    tab; the classic form is used because Fill needs `g_form`. Check that the blank case form opens for a CSM agent (some instances
+    restrict creating cases from the classic UI) and that the panel picks it up as a blank form (`page.newRecord`).
+34. **Suggestions for caller, category and group** (`src/compose/notesHints.js`, no AI): look-alikes are resolved tickets of the same table
+    whose `short_description` is LIKE one of up to four words of the proposed one (30 newest), voting on `category` (choice value) and
+    `assignment_group`; callers are active `sys_user` rows whose `name` is exactly a name typed under "Names to hide". Check: (a) a
+    fulfiller can read `sys_user.email` and `department` (field ACLs may blank them; the line then shows the name only); (b) `name=` with a
+    space in the value works in `sysparm_query` (it is URL-encoded by the Table API client); (c) category display values come back with
+    `sysparm_display_value=all`. Nothing is filled: caller, category and group are not in `FILLABLE_FIELDS`.

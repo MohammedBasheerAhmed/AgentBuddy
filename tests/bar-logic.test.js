@@ -4,14 +4,14 @@ import { ARM_MS, REASK_MS, cleanActions, clickNotice, clickVerdict, isGone, laun
 
 test('the bar starts folded on the right when nothing usable is stored', () => {
   for (const raw of [null, undefined, '', 'not json', '5', 'null', '[]', '{"open":"yes"}', '{"side":"top"}']) {
-    assert.deepEqual(parsePrefs(raw), { open: false, side: 'right' }, String(raw));
+    assert.deepEqual(parsePrefs(raw), { open: false, side: 'right', top: null }, String(raw));
   }
 });
 
 test('prefs round-trip, and only the two known choices survive', () => {
-  assert.deepEqual(parsePrefs(serializePrefs({ open: true, side: 'left' })), { open: true, side: 'left' });
-  assert.deepEqual(parsePrefs(serializePrefs({ open: false, side: 'right' })), { open: false, side: 'right' });
-  assert.deepEqual(parsePrefs('{"open":true,"side":"left","extra":"<img src=x>"}'), { open: true, side: 'left' });
+  assert.deepEqual(parsePrefs(serializePrefs({ open: true, side: 'left' })), { open: true, side: 'left', top: null });
+  assert.deepEqual(parsePrefs(serializePrefs({ open: false, side: 'right' })), { open: false, side: 'right', top: null });
+  assert.deepEqual(parsePrefs('{"open":true,"side":"left","extra":"<img src=x>"}'), { open: true, side: 'left', top: null });
   assert.equal(serializePrefs({ open: 1, side: 'up' }), '{"open":false,"side":"right"}');
 });
 
@@ -81,7 +81,78 @@ test('the visibility reports are folded into "visible since"', () => {
 
 test('the actions from the service worker are cleaned before they become buttons', () => {
   assert.deepEqual(cleanActions(null), []);
-  assert.deepEqual(cleanActions([{ id: 'a-b', label: 'Go' }, { id: 'A', label: 'x' }, { id: 'ok', label: '' }, { id: 'ok2', label: 5 }, { id: 'x'.repeat(65), label: 'x' }]), [{ id: 'a-b', label: 'Go' }]);
+  assert.deepEqual(cleanActions([{ id: 'a-b', label: 'Go' }, { id: 'A', label: 'x' }, { id: 'ok', label: '' }, { id: 'ok2', label: 5 }, { id: 'x'.repeat(65), label: 'x' }]), [{ id: 'a-b', label: 'Go', ai: true }]);
   assert.equal(cleanActions(Array.from({ length: 9 }, (_, i) => ({ id: `a${i}`, label: 'x', extra: '<b>' }))).length, 4);
-  assert.deepEqual(Object.keys(cleanActions([{ id: 'a', label: 'b', html: '<img>' }])[0]), ['id', 'label']);
+  assert.deepEqual(Object.keys(cleanActions([{ id: 'a', label: 'b', html: '<img>', ai: false }])[0]), ['id', 'label', 'ai']);
+  // `ai` comes from the id, never from the answer: only a card needs no AI.
+  assert.deepEqual(cleanActions([{ id: 'reply-draft', label: 'Draft', ai: false }, { id: 'card:ready', label: 'Ready to resolve?', ai: true }]).map((a) => a.ai), [true, false]);
+  assert.deepEqual(cleanActions([{ id: 'card:', label: 'x' }, { id: 'card:Ready', label: 'x' }, { id: 'cards:ready', label: 'x' }]), []);
+});
+
+// ---- the tab's place, the page's dialogs, an older copy after an update (F6, F1) ---------------------------------------------
+
+import { BAR_Z, DRAG_PX, TAKEOVER_EVENT, TOP_MAX, TOP_MIN, clampTop, contentTakeover, dragTop, pageHasModal, runtimeAlive, topFor } from '../src/content/barLogic.js';
+
+test('the tab can be dragged up or down: its place is a percentage kept inside the window, and it is remembered', () => {
+  assert.equal(clampTop(50), 50);
+  assert.equal(clampTop(0), TOP_MIN);
+  assert.equal(clampTop(250), TOP_MAX);
+  assert.equal(clampTop('41.26'), 41.3);
+  for (const bad of [null, undefined, '', 'top', NaN, Infinity, {}, []]) assert.equal(clampTop(bad), null, String(bad));
+  assert.deepEqual(parsePrefs(serializePrefs({ open: true, side: 'left', top: 61 })), { open: true, side: 'left', top: 61 });
+  assert.equal(serializePrefs({ open: false, side: 'right', top: 'x' }), '{"open":false,"side":"right"}', 'no place until it was moved');
+  assert.equal(parsePrefs('{"top":"<script>"}').top, null);
+});
+
+test('where the tab starts: above the middle on a form, lower on a Workspace (clear of its own icon strip); the person\'s place wins', () => {
+  assert.equal(topFor({ top: null }, 'classic'), 38);
+  assert.equal(topFor({ top: null }, 'workspace'), 72);
+  assert.equal(topFor({ top: null }, 'portal'), 38);
+  assert.equal(topFor({}, 'something else'), 38);
+  assert.equal(topFor({}, '__proto__'), 38);
+  assert.equal(topFor({ top: 20 }, 'workspace'), 20);
+});
+
+test('a press that moves less than a few pixels is a click; more moves the tab by the pointer\'s travel', () => {
+  assert.equal(dragTop({ startTop: 40, startY: 300, y: 300 + DRAG_PX - 1, height: 1000 }), null);
+  assert.equal(dragTop({ startTop: 40, startY: 300, y: 400, height: 1000 }), 50);
+  assert.equal(dragTop({ startTop: 40, startY: 300, y: -5000, height: 1000 }), TOP_MIN);
+  assert.equal(dragTop({ startTop: 40, startY: 300, y: 400, height: 0 }), null);
+  assert.equal(dragTop({ startTop: NaN, startY: 300, y: 400, height: 1000 }), null);
+});
+
+test('the bar sits below the page\'s dialogs and hides while one is open', () => {
+  assert.ok(BAR_Z < 1040, 'under the classic UI\'s dialog backdrop (1040) and dialog (1050)');
+  assert.equal(pageHasModal({ bodyClasses: ['modal-open'], dialogs: 0 }), true);
+  assert.equal(pageHasModal({ bodyClasses: [], dialogs: 1 }), true);
+  assert.equal(pageHasModal({ bodyClasses: ['x'], dialogs: 0 }), false);
+  assert.equal(pageHasModal({}), false);
+  assert.equal(pageHasModal(), false);
+});
+
+test('an older copy of the content script (from before an update) is replaced; a working one is left alone', () => {
+  assert.equal(contentTakeover(null), 'install');
+  assert.equal(contentTakeover(undefined), 'install');
+  assert.equal(contentTakeover({ alive: 'yes' }), 'install');
+  assert.equal(contentTakeover({ alive: () => true }), 'skip');
+  assert.equal(contentTakeover({ alive: () => false }), 'replace');
+  assert.equal(contentTakeover({ alive: () => { throw new Error('Extension context invalidated.'); } }), 'replace');
+  assert.equal(runtimeAlive({ id: 'abc' }), true);
+  assert.equal(runtimeAlive({ id: undefined }), false);
+  assert.equal(runtimeAlive(null), false);
+  assert.equal(runtimeAlive({ get id() { throw new Error('Extension context invalidated.'); } }), false);
+  assert.equal(TAKEOVER_EVENT, 'agentbuddy-content-takeover');
+});
+
+test('the content script and the bar wire these in', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const index = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'index.js'), 'utf8');
+  assert.match(index, /contentTakeover\(window\.__abContent\)/);
+  assert.match(index, /if \(!alive\(\)\) retire\(\);/, 'only a copy whose extension is gone steps down on the event');
+  const bar = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'bar.js'), 'utf8');
+  assert.match(bar, /pin\('z-index', String\(BAR_Z\)\)/);
+  assert.ok(!/2147483647/.test(bar), 'no longer the highest layer there is');
+  assert.ok(!/, 'AB'\)/.test(bar), 'an icon and a label instead of the letters AB');
+  assert.match(bar, /state\.modal = Boolean\(result\.record\) && modalShown\(doc, win\)/);
 });

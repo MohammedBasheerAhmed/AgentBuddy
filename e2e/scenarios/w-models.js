@@ -1,10 +1,10 @@
 // w. A company gateway (an OpenAI-style address and a model name such as gpt-5-mini-preprod) and switching models: type the model, load
-//    the server's list, pick another in Settings, switch it from the panel header, and the next request uses what was chosen.
-const { clickButton, waitForText, runFeature, waitForRecord } = require('../ui.js');
+//    the server's list, pick another in Settings, switch it from the panel (AI Assist half), and the next request uses what was chosen.
+const { clickButton, waitForText, runFeature, waitForRecord, openHalf } = require('../ui.js');
 
 module.exports = {
   id: 'w',
-  title: 'Company gateway and models: typed model name, load the list, pick in Settings, switch in the panel header',
+  title: 'Company gateway and models: typed model name, load the list, pick in Settings, switch in the panel',
   async run(t, ctx) {
     const { ai, inst, data } = ctx;
     ai.reset();
@@ -19,7 +19,7 @@ module.exports = {
 
     // ---- Settings: the address and the model name a company gives out are typed as they are -----------------------------------
     const page = await ctx.newPage('options-models');
-    await page.goto(ctx.extUrl('options.html'), { waitUntil: 'load' });
+    await page.goto(ctx.extUrl('options.html#ai'), { waitUntil: 'load' }); // the model is on the AI Assist page
     await page.waitForSelector('#model');
     t.check('the provider is "OpenAI / Azure OpenAI / company gateway" with the company address typed in', (await page.$eval('#provider', (el) => el.value)) === 'openai' && (await page.$eval('#baseurl', (el) => el.value)) === ai.baseUrl);
     await page.focus('#model');
@@ -57,22 +57,23 @@ module.exports = {
     t.check('a server that lists nothing: a plain sentence, and the model in use is untouched', (await modelNow()) === 'gpt-5');
     ai.setModels(['gpt-5-mini-preprod', 'gpt-5-mini', 'gpt-5', 'text-embedding-3-small']);
 
-    // ---- The panel header: switch without opening Settings -------------------------------------------------------------------
+    // ---- The panel: switch without opening Settings (round 3: the switch sits in the Ticket screen's AI Assist half) -----------
     const ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-classic');
     const panel = await ctx.openPanel();
     const p = panel.page;
     await waitForRecord(p);
+    await openHalf(p, 'assist');
     const switchSel = 'select[aria-label="AI model"]';
     await p.waitForSelector(switchSel, { timeout: 8000 });
     const headerOptions = await p.$$eval(`${switchSel} option`, (os) => os.map((o) => o.value));
-    t.check('the panel header offers the model in use and the loaded ones, with the one in use selected', (await p.$eval(switchSel, (el) => el.value)) === 'gpt-5' && ['gpt-5', 'gpt-5-mini', 'gpt-5-mini-preprod'].every((id) => headerOptions.includes(id)), headerOptions.join(', '));
+    t.check('the panel offers the model in use and the loaded ones, with the one in use selected', (await p.$eval(switchSel, (el) => el.value)) === 'gpt-5' && ['gpt-5', 'gpt-5-mini', 'gpt-5-mini-preprod'].every((id) => headerOptions.includes(id)), headerOptions.join(', '));
     await p.select(switchSel, 'gpt-5-mini-preprod');
     await ctx.sleep(600);
-    t.check('switching in the panel header saves the choice', (await modelNow()) === 'gpt-5-mini-preprod', String(await modelNow()));
-    t.check('...and the header follows (and Settings shows it too after a reload)', (await p.$eval(switchSel, (el) => el.value)) === 'gpt-5-mini-preprod');
+    t.check('switching in the panel saves the choice', (await modelNow()) === 'gpt-5-mini-preprod', String(await modelNow()));
+    t.check('...and the switch follows (and Settings shows it too after a reload)', (await p.$eval(switchSel, (el) => el.value)) === 'gpt-5-mini-preprod');
     const before = ai.requests.length;
     const run = await runFeature(p, /^Summarise this ticket/);
-    t.check('the next run uses the model chosen in the header', Boolean(run.result) && ai.requests.length === before + 1 && ai.requests.at(-1).body.model === 'gpt-5-mini-preprod', run.error || ai.requests.at(-1)?.body?.model || '');
+    t.check('the next run uses the model chosen in the panel', Boolean(run.result) && ai.requests.length === before + 1 && ai.requests.at(-1).body.model === 'gpt-5-mini-preprod', run.error || ai.requests.at(-1)?.body?.model || '');
 
     await panel.close();
     await ticket.close();

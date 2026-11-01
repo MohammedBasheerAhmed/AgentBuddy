@@ -1,6 +1,6 @@
 // A fake Workspace record page: Next-Experience-style nested web components with open shadow roots, and NO g_form.
 // The composer holds two textareas labelled only by aria-label ("Work notes", "Additional comments"), as the workspace
-// activity composer does. Each component keeps its own state and counts input/change events, so a test can tell a value
+// activity composer does; the record form above it has a "Resolution notes" box holding the saved close notes. Each component keeps its own state and counts input/change events, so a test can tell a value
 // written the way a person types it (events fired) from a silent property assignment.
 window.__wsEvents = { input: 0, change: 0 };
 
@@ -41,8 +41,13 @@ customElements.define('now-activity-composer', NowActivityComposer);
 class NowRecordForm extends HTMLElement {
   connectedCallback() {
     const root = this.attachShadow({ mode: 'open' });
-    root.innerHTML = '<section><h2 id="heading"></h2><now-activity-composer></now-activity-composer></section>';
+    root.innerHTML = '<section><h2 id="heading"></h2><div id="fields"></div><now-activity-composer></now-activity-composer></section>';
     root.getElementById('heading').textContent = this.getAttribute('heading') || '';
+    // A field of the record itself: "Resolution notes" shows what is saved, as a Workspace form does; typing there is not saved.
+    const notes = document.createElement('now-textarea');
+    notes.setAttribute('label', 'Resolution notes');
+    notes.setAttribute('initial', this.getAttribute('close-notes') || '');
+    root.getElementById('fields').append(notes);
   }
 }
 customElements.define('now-record-form', NowRecordForm);

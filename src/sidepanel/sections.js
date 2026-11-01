@@ -5,7 +5,7 @@
 //   - A section the person has opened ("visited") stays mounted, hidden when another one shows, so what was typed or found in it
 //     survives. It is never removed because the active tab stopped being a ServiceNow page or is reloading.
 //   - While the active tab is not an enabled ServiceNow page the sections keep the last page that did answer (lastGood) and a
-//     one-line banner says so. "This page" shows the setup help for the tab that is open now.
+//     one-line banner says so. the Ticket screen shows the setup help for the tab that is open now.
 //   - With no page at all to work on (the very first look, or the last ServiceNow tab was closed) there is no section bar: only
 //     the setup help shows. Visited sections stay mounted (hidden) on the last page seen, so a new ServiceNow tab picks them up.
 
@@ -17,7 +17,7 @@ export const BANNER_NOT_ON = 'Agent Buddy is not turned on for this tab. It keep
 
 /**
  * @param {{ ids: string[], active: string, visited: Set<string>, page: object, lastGood: object|null, lastSeen: object|null }} input
- *   ids: the section ids ('page' is the one about the open tab). active: the chosen one. visited: the ones opened so far.
+ *   ids: the screen ids ('ticket' is the one about the open tab). active: the chosen one. visited: the ones opened so far.
  * @returns {{
  *   enabled: boolean,            the active tab is an enabled ServiceNow page (a held answer counts)
  *   base: object|null,           the page every section works on while it shows; null when there is none
@@ -26,7 +26,7 @@ export const BANNER_NOT_ON = 'Agent Buddy is not turned on for this tab. It keep
  *   showNav: boolean,
  *   visible: string,             the id of the section on show (the section bar is hidden when there is no page to work on)
  *   recordPage: object|null,     the page the record view works on; null when no record view should exist
- *   showSetup: boolean,          "This page" shows the setup help (not enabled, or an enabled page that is not a record)
+ *   showSetup: boolean,          the Ticket screen shows the setup help (not enabled, or an enabled page that is not a record)
  *   panes: { id: string, selected: boolean, mounted: boolean }[]
  * }}
  */
@@ -35,14 +35,14 @@ export function planPanel({ ids, active, visited, page, lastGood, lastSeen }) {
   const base = enabled ? page : lastGood || null;
   const mountPage = base || lastSeen || null;
   const showNav = Boolean(base);
-  const visible = showNav ? active : 'page';
+  const visible = showNav ? active : 'ticket';
   const panes = ids.map((id) => ({
     id,
     selected: id === visible,
-    // "This page" always has something to say when it shows (the setup help); the others need a page to work on.
-    mounted: id === 'page' ? id === visible || visited.has(id) : Boolean(mountPage) && visited.has(id),
+    // The Ticket screen always has something to say when it shows (the setup help); the others need a page to work on.
+    mounted: id === 'ticket' ? id === visible || visited.has(id) : Boolean(mountPage) && visited.has(id),
   }));
-  const pageMounted = panes.find((p) => p.id === 'page')?.mounted;
+  const pageMounted = panes.find((p) => p.id === 'ticket')?.mounted;
   const record = page?.status === 'record' ? page : !enabled && lastGood?.status === 'record' ? lastGood : null;
   return {
     enabled,

@@ -1,21 +1,92 @@
-// Feature definitions for the record checks area (see docs/contracts.md, "Feature definition"). All three are run from a
-// record tab (Request, Check, Checklist), not from the Actions list, so `kinds` is empty. Each one is a button on its tab;
-// the tab runs it through useRun() like any other feature, so policy, the firewall and the preview apply.
+// Feature definitions for the record checks area (see docs/contracts.md, "Feature definition"). They started as buttons on the old
+// record tabs (Request, Check, Checklist); in round 3 they are actions of the Ticket screen's AI Assist half like the others, so
+// they list their record kinds. Each still runs through useRun(), so policy, the firewall and the preview apply.
+//
+// What the old tabs did in their own `getPack` now happens in `enrich`, so the action reads the right thing however it is started
+// (the action list, the quick bar, the bar on the ServiceNow page):
+//   request-explain       on a catalog task, the requested item it belongs to (that is what the requester asked for)
+//   resolution-improve    the notes typed on the form but not saved yet, in place of the saved ones
+//   fulfilment-checklist  on a catalog task, the answers to the request questions, which live on its requested item
+// Each `enrich` is idempotent: a pack that already has what it adds (a view built it) is returned as it is.
 //
 // Prompts are fixed text. Ticket data only ever arrives as `parts` (untrusted, masked).
 import { requestExplainParts } from '../../checks/requestView.js';
-import { checklistParts } from '../../checks/checklistParts.js';
+import { checklistParts, mergeParentPack } from '../../checks/checklistParts.js';
 import { resolutionImproveParts } from '../../checks/resolutionParts.js';
+import { withCurrentNotes } from '../../checks/resolutionCheck.js';
+import { notClosed, notNew } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
+
+const isTask = (pack) => String(pack?.table || '').toLowerCase() === 'sc_task';
+const access = (pack, entry) => ({ ...pack, access: [...(Array.isArray(pack.access) ? pack.access : []), entry] });
+
+/** The requested item a catalog task belongs to ({ table, sysId }), or null when it is not known or not readable. */
+async function parentItem(pack, read) {
+  try {
+    const target = await read('requestTarget', { table: pack.table, sysId: pack.sysId });
+    return target && target.table === 'sc_req_item' && typeof target.sysId === 'string' ? target : null;
+  } catch {
+    return null;
+  }
+}
+
+// request-explain: the message is about the REQUEST, which the requester reads on the requested item. On a catalog task the item is
+// read instead (with this feature's own spec: state and due date, no answers). When the item cannot be read the task speaks for
+// itself, and the model is told so.
+async function explainTarget(pack, { read, allowSensitive }) {
+  if (!isTask(pack)) return pack;
+  const target = await parentItem(pack, read);
+  if (!target) return access(pack, { source: 'sc_req_item', status: 'denied', note: 'The requested item this task belongs to could not be read, so the message is about the task only.' });
+  try {
+    const item = await read('pack', { table: target.table, sysId: target.sysId, feature: 'request-explain', allowSensitive });
+    return item && typeof item === 'object' && item.table ? item : pack;
+  } catch {
+    return access(pack, { source: 'sc_req_item', status: 'denied', note: 'The requested item this task belongs to could not be read, so the message is about the task only.' });
+  }
+}
+
+// resolution-improve: what is in the box NOW (classic forms, and the notes box of a Workspace page; read again at every run). Without any notes, typed or saved, there is
+// nothing to improve: the person is told to write a few words first (or to use "Write resolution notes"), and nothing is sent.
+export const NO_NOTES_TO_IMPROVE = 'There are no resolution notes on the form yet. Type a few words first, or use "Write resolution notes".';
+
+async function typedNotes(pack, { read }) {
+  let form = null;
+  try {
+    const facts = await read('resolutionFacts', { table: pack.table, sysId: pack.sysId });
+    form = facts && typeof facts === 'object' ? facts.form : null;
+  } catch {
+    form = null;
+  }
+  const out = withCurrentNotes(pack, form);
+  if (!String(out?.fields?.close_notes || '').trim()) throw new Error(NO_NOTES_TO_IMPROVE);
+  return out;
+}
+
+// fulfilment-checklist: a catalog task does not hold the answers to the request questions; its requested item does.
+async function withRequestAnswers(pack, { read, allowSensitive }) {
+  if (!isTask(pack) || (Array.isArray(pack.related?.variables) && pack.related.variables.length)) return pack;
+  const target = await parentItem(pack, read);
+  if (!target) return pack;
+  try {
+    const item = await read('pack', { table: target.table, sysId: target.sysId, feature: 'fulfilment-checklist', allowSensitive });
+    return mergeParentPack(pack, item && typeof item === 'object' ? item : null);
+  } catch {
+    return access(pack, { source: 'sc_req_item', status: 'denied', note: 'You cannot see the requested item, so its answers are not included.' });
+  }
+}
 
 export default [
   {
     id: 'request-explain',
-    title: 'Explain it in plain words for the requester',
+    title: 'Tell the requester where it stands',
     description: 'A short, friendly message that says where the request stands and what it is waiting for.',
     wave: 1,
-    kinds: [],
+    kinds: ['request', 'requested_item', 'catalog_task'],
+    group: 'reply',
+    primary: 'insert',
+    when: notClosed,
     journal: 6,
+    enrich: explainTarget,
     parts: requestExplainParts,
     insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
     system:
@@ -35,11 +106,20 @@ export default [
     title: 'Improve my resolution notes',
     description: 'Rewrites the notes you have started so they say the cause, the fix and how it was checked.',
     wave: 2,
-    kinds: [],
-    // Reads what 'resolution-notes' reads plus the people (spec 'resolution-improve'); the Check tab swaps in the notes typed on the form.
+    // The kinds whose form has close_notes (a problem keeps its fix in fix_notes, which this does not read).
+    kinds: ['incident', 'requested_item', 'catalog_task', 'case', 'task'],
+    group: 'resolve',
+    primary: 'insert',
+    when: notNew,
+    // Reads what 'resolution-notes' reads plus the people (spec 'resolution-improve'); enrich swaps in the notes typed on the form.
     journal: 15,
+    enrich: typedNotes,
     parts: resolutionImproveParts,
-    insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes' },
+    // The answer keeps every fact of the notes it rewrites, so it REPLACES them (Add below would leave the old and the new).
+    insert: [
+      { field: 'close_notes', kinds: ['incident', 'case'], label: 'Insert into resolution notes', fieldLabel: 'Resolution notes', mode: 'replace' },
+      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], label: 'Insert into close notes', fieldLabel: 'Close notes', mode: 'replace' },
+    ],
     system:
       'You help a service desk agent improve the resolution notes they are writing for a ServiceNow ticket.\n' +
       'The ticket data has a part called "Close notes": that is the agent\'s current text. Keep every fact in it and rewrite it into these lines:\n' +
@@ -55,11 +135,17 @@ export default [
   },
   {
     id: 'fulfilment-checklist',
-    title: 'Propose a cleaner checklist',
-    description: 'Turns the written instructions and the answers to the request questions into a short, ordered list of steps.',
+    title: 'Draft a checklist from the instructions',
+    description: 'Turns the written instructions and the request answers into short, ordered steps.',
     wave: 3,
-    kinds: [],
+    // Offered only when the written instructions give no steps by themselves (the AI Assist list checks that first: the no-AI
+    // checklist in Insights is the better answer when there is one).
+    kinds: ['requested_item', 'catalog_task'],
+    group: 'work',
+    primary: 'copy',
+    when: notClosed,
     journal: 0,
+    enrich: withRequestAnswers,
     parts: checklistParts,
     insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
     system:

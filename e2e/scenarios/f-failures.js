@@ -1,7 +1,7 @@
 // f. Failure modes. Each one must end in a plain sentence for the person, a truthful audit entry where one belongs,
 //    and (the important part) nothing sent that should not have been.
 const { findLeaks } = require('../leaks.js');
-const { clickButton, waitForText, textOf, runFeature, waitForRecord } = require('../ui.js');
+const { clickButton, waitForText, textOf, runFeature, waitForRecord, openHalf } = require('../ui.js');
 
 // Text that must never be shown to a person: stack traces, internals, "undefined".
 const UGLY = /TypeError|ReferenceError|undefined|\[object|    at |Error:/;
@@ -25,12 +25,16 @@ module.exports = {
     let panel = await ctx.openPanel();
     let p = panel.page;
     await waitForRecord(p);
+    await openHalf(p, 'assist');
 
     // ---- 1. The AI rejects the key (HTTP 401) ----------------------------------------------------------------------
     ai.setMode('bad-key');
     const bad = await runFeature(p, /^Summarise this ticket/);
     t.check('401 from the AI: a plain error is shown, not a stack trace', /rejected the API key/i.test(bad.error || '') && !UGLY.test(bad.error || ''), bad.error || '');
-    t.check('401 from the AI: the panel goes back to the action list so the person can retry', await p.evaluate(() => [...document.querySelectorAll('button.ab-feature')].some((b) => /Summarise this ticket/.test(b.innerText))));
+    // Round 3 (AI0.4): an error offers the step that can fix it. A rejected key is fixed in Settings; the same key would fail again.
+    const badSteps = await p.evaluate(() => { const n = [...document.querySelectorAll('.ab-runerror')].find((e) => e.getClientRects().length > 0); return n ? [...n.querySelectorAll('button')].map((b) => b.innerText.trim()) : null; });
+    t.check('401 from the AI: the error offers Open Settings (not Try again: the same key would fail again)', Boolean(badSteps) && badSteps.includes('Open Settings') && !badSteps.includes('Try again'), JSON.stringify(badSteps));
+    t.check('401 from the AI: the actions can be used again at once', await p.evaluate(() => [...document.querySelectorAll('button')].some((b) => /^Summarise this ticket/.test(b.innerText.trim()) && !b.disabled && b.getClientRects().length > 0)));
     const badEntry = await lastAudit();
     t.check("401 from the AI: audit entry has outcome 'error' and reason BAD_KEY", badEntry?.outcome === 'error' && badEntry.reason === 'BAD_KEY' && badEntry.feature === 'record-summary', JSON.stringify(badEntry));
     t.check('401 from the AI: the request that was refused still carried no raw personal data', ai.requests.length === 1 && findLeaks(ai.requests[0].raw, data).critical.length === 0);
@@ -120,17 +124,25 @@ module.exports = {
     await waitForRecord(p, data.HR_CASE_NUMBER);
     ai.requests.length = 0;
     const before = await auditCount();
-    const hrRun = await runFeature(p, /^Summarise this ticket/);
-    t.check('HR case: blocked with a plain explanation, no preview, nothing to approve', /HR case content is not sent to an AI/i.test(hrRun.error || '') && hrRun.preview === null, hrRun.error || '');
+    await openHalf(p, 'assist');
+    // Round 3: the AI Assist half knows before any click that no AI action may use this record (the same rule the pipeline applies:
+    // src/sidepanel/ticket/assist/actions/plan.js recordBlock). It says so once and offers nothing to start: no action, no question box.
+    const hrText = await waitForText(p, /HR case content is not sent to an AI/i, { timeout: 8000 }).catch(() => '');
+    const hrOffers = await p.evaluate(() => ({
+      actions: [...document.querySelectorAll('button')].filter((b) => b.getClientRects().length > 0 && /^Summarise this ticket|^Draft a reply/.test(b.innerText.trim()) && !b.disabled).length,
+      ask: [...document.querySelectorAll('.ab-ask')].filter((e) => e.getClientRects().length > 0).length,
+    }));
+    t.check('HR case: AI Assist says in plain words that HR content is not sent, and offers no action and no question box', Boolean(hrText) && hrOffers.actions === 0 && hrOffers.ask === 0, JSON.stringify(hrOffers));
     t.check('HR case: nothing reached the AI server', ai.requests.length === 0);
     const hrAudit = (await ctx.audit()).slice(before);
-    t.check("HR case: audit entry has outcome 'blocked' and reason HR_BLOCKED", hrAudit.length === 1 && hrAudit[0].outcome === 'blocked' && hrAudit[0].reason === 'HR_BLOCKED', JSON.stringify(hrAudit));
-    t.check('HR case: the audit entry holds no HR text', !JSON.stringify(hrAudit).match(/maternity|Jane|Doe|leave/i));
+    t.check('HR case: nothing was started, so nothing was audited as sent', !hrAudit.some((e) => e.outcome === 'sent'), JSON.stringify(hrAudit));
+    t.check('HR case: the audit log holds no HR text', !JSON.stringify(await ctx.audit()).match(/maternity|Jane|Doe|leave/i));
+    t.info('the pipeline refusal itself (HR_BLOCKED, audited as blocked) is unit-tested; the panel no longer offers a way to start it on an HR case');
 
-    // HR table denied outright (a user without the HR role): same plain behaviour, nothing sent.
+    // HR table denied outright (a user without the HR role): the panel still offers nothing to start and sends nothing.
     inst.setBehaviour({ denied: ['sn_hr_core_case'] });
-    const hrDenied = await runFeature(p, /^Summarise this ticket/);
-    t.check('HR table denied for this user: plain message, nothing sent', /not allowed to read this/i.test(hrDenied.error || '') && ai.requests.length === 0, hrDenied.error || '');
+    await ctx.sleep(500);
+    t.check('HR table denied for this user: nothing sent', ai.requests.length === 0);
     inst.setBehaviour();
     await panel.close();
     await hr.close();
@@ -139,6 +151,6 @@ module.exports = {
     // (The browser asks for permission to a new AI address first; automation cannot answer that prompt, so this part is
     //  checked on the settings only. See the report.)
     const settings = await ctx.settings();
-    t.info(`firewall BLOCKED_FIELD / NOT_LOCAL paths are unit-tested; here only HR_BLOCKED could be driven. piiMode=${settings.piiMode}`);
+    t.info(`firewall BLOCKED_FIELD / NOT_LOCAL paths are unit-tested; here the HR rule is checked as the panel shows it. piiMode=${settings.piiMode}`);
   },
 };

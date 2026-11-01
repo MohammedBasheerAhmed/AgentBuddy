@@ -1,8 +1,8 @@
 // Pieces the report sections share: probing which tables a person can use, labelling states, ranking groups, and the
 // "how sure are we" notes (denominators, caps) every section reports the same way.
 import { raw, disp } from '../../context/util.js';
-import { REPORT_TABLES, LIMITS } from './constants.js';
-import { andQuery } from './queryBuilder.js';
+import { REPORT_TABLES, LIMITS, isSensitiveReportTable } from './constants.js';
+import { andQuery, buildQuery } from './queryBuilder.js';
 import { attempt } from './reader.js';
 
 export { raw, disp, andQuery };
@@ -20,11 +20,15 @@ export const STATE_CLASSES = Object.freeze([
   { key: 'new', label: 'New' },
   { key: 'working', label: 'Open or in progress' },
   { key: 'waiting', label: 'Waiting or on hold' },
+  // Resolved but still active: an incident or a case stays active after Resolved until it is closed (by the caller or after a few
+  // days). Counted on its own, so it neither inflates "Open" nor fills "No update in 3+ days" while it waits to close.
+  { key: 'resolved', label: 'Resolved, not closed' },
   { key: 'other', label: 'Other' },
 ]);
 
 export function stateClass(label) {
   const text = String(label || '').trim();
+  if (/^(resolved|closed|complete|completed|cancell?ed|fixed|done)\b/i.test(text)) return 'resolved';
   if (/\b(await\w*|pending|on hold|hold|wait\w*)\b/i.test(text)) return 'waiting';
   if (/^(new|draft|requested|assess|authori[sz]e|scheduled)\b/i.test(text)) return 'new';
   if (/\b(open|progress|work\w*|active|implement\w*|review|assigned|process\w*)\b/i.test(text)) return 'working';
@@ -33,11 +37,51 @@ export function stateClass(label) {
 
 // ---- Tables --------------------------------------------------------------------------------------------------------
 
-/** Known tables only, no duplicates, in the order given. An empty list means all of them. */
-export function normalizeTables(input) {
-  const known = Object.keys(REPORT_TABLES);
+/**
+ * Known tables only, no duplicates, in the order given. An empty list means all of them. A sensitive (HR-family) table is kept only
+ * with `allowSensitive` (the person works with the HR profile and the organisation allows HR content); otherwise it is dropped
+ * wherever it came from, so a forged or stale request cannot read it.
+ */
+export function normalizeTables(input, { allowSensitive = false, sensitivePrefixes = [] } = {}) {
+  const known = Object.keys(REPORT_TABLES).filter((t) => allowSensitive || !isSensitiveReportTable(t, sensitivePrefixes));
   const list = (Array.isArray(input) ? input : []).map((t) => String(t || '').toLowerCase()).filter((t, i, all) => known.includes(t) && all.indexOf(t) === i);
   return list.length ? list : known;
+}
+
+/**
+ * The states of a breakdown (groups by state of ACTIVE tickets) that mean "resolved, waiting to close". Pure.
+ * { count, values, labels }: values are the stored state values, for a query that leaves them out or lists them.
+ */
+export function resolvedStates(groups) {
+  const done = (groups || []).filter((g) => stateClass(g.keys[0]?.display) === 'resolved');
+  return {
+    count: done.reduce((n, g) => n + g.count, 0),
+    values: [...new Set(done.map((g) => g.keys[0].value).filter((v) => v !== ''))],
+    labels: [...new Set(done.map((g) => g.keys[0].display).filter(Boolean))],
+  };
+}
+
+/**
+ * The condition that leaves resolved-but-active tickets out ('' when there are none, or a value cannot be written safely). Written
+ * as one `state!=x` per value (AND), the plainest form every instance and list filter understands; there are only one or two.
+ */
+export function notResolved(values) {
+  if (!Array.isArray(values) || !values.length) return '';
+  try {
+    return buildQuery(values.slice(0, 10).map((value) => ({ op: 'ne', field: 'state', value })));
+  } catch {
+    return '';
+  }
+}
+
+/** The condition that lists only resolved-but-active tickets ('' when there are none). */
+export function onlyResolved(values) {
+  if (!Array.isArray(values) || !values.length) return '';
+  try {
+    return buildQuery([{ op: 'in', field: 'state', values }]);
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -155,6 +199,7 @@ export function sectionResult(id, title, ctx, data, extra = {}) {
     access: uniqueBy(ctx.access, (a) => `${a.source}|${a.note}`),
     notes: uniqueBy(ctx.notes, (n) => n),
     caps: uniqueBy(ctx.caps, (c) => `${c.source}|${c.note}`),
+    ...(ctx.zone ? { zone: ctx.zone } : {}),
     data,
     ...extra,
   };

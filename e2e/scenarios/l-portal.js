@@ -5,7 +5,10 @@
 //    - Insert types into the portal's own comment box (below what the agent typed, so the page's model follows) and into the
 //      internal work-notes box where the portal shows one; it refuses when the box is missing, locked or ambiguous (and the panel
 //      then copies instead); it never presses the page's Send button
-const { clickButton, waitForText, textOf, runFeature, waitForRecord } = require('../ui.js');
+const { clickButton, waitForText, textOf, runFeature, waitForRecord, openScreen, openHalf } = require('../ui.js');
+
+/** Put every answer on screen away (round 3 keeps several answers per ticket). */
+const closeAnswers = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
 const { leftoverPlaceholders } = require('../common.js');
 
 module.exports = {
@@ -18,7 +21,7 @@ module.exports = {
     await ctx.ensureEnabled();
     inst.setBehaviour();
     await ctx.configure(
-      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin] },
+      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin], profilesConfirmed: true },
       { key: { provider: 'custom', value: ai.key } }
     );
 
@@ -63,7 +66,9 @@ module.exports = {
 
     const panel = await ctx.openPanel();
     await waitForRecord(panel.page);
-    t.check('panel shows the portal ticket and its actions', (await panel.text()).includes('Draft a reply to the customer'));
+    await openHalf(panel.page, 'assist');
+    await waitForText(panel.page, 'Draft a reply to the customer', { timeout: 10000 }).catch(() => '');
+    t.check('panel shows the portal ticket and its actions (AI Assist)', (await panel.text()).includes('Draft a reply to the customer'));
     const marker = await sp.evaluate(() => window.__portal.marker);
 
     // the SPA moves to a list: no record, no stale ticket
@@ -76,13 +81,18 @@ module.exports = {
     await waitForText(panel.page, /Open a ticket[\s\S]*on this portal/, { timeout: 10000 });
     const listText = await panel.text();
     t.check('panel on the list page: no ticket actions, and the help mentions the portal', !listText.includes('Summarise this ticket') && /on this portal/.test(listText));
+    // My work is its own screen since round 3
+    await openScreen(panel.page, 'My work');
     await waitForText(panel.page, 'Printer offline in Finance', { timeout: 15000 });
-    t.check('My day works on a portal page: the person was found through NOW, no g_user needed', (await panel.text()).includes('Printer offline in Finance'));
+    t.check('My work works on a portal page: the person was found through NOW, no g_user needed', (await panel.text()).includes('Printer offline in Finance'));
+    await openScreen(panel.page, 'Ticket');
 
     // list -> another ticket (pushState) -> list -> the first ticket by a hash route
     await sp.click(`a[data-nav="ticket-${B.number}"]`);
     const s3 = await ctx.waitUntil('the second ticket', async () => ((await stateOf('sp')).record?.sysId === B.sysId ? stateOf('sp') : null), { timeout: 8000 });
     t.check('SPA navigation to another ticket: the panel record switches (no reload)', s3.record.table === 'incident' && s3.record.sysId === B.sysId && s3.href.includes(B.sysId), JSON.stringify(s3.record));
+    await waitForText(panel.page, B.number, { timeout: 10000 });
+    await openHalf(panel.page, 'assist');
     await waitForText(panel.page, 'Summarise this ticket', { timeout: 10000 });
     await sp.click('a[data-nav="list"]');
     await ctx.waitUntil('back on the list', async () => ((await stateOf('sp')).record === null ? true : null), { timeout: 8000 });
@@ -103,8 +113,8 @@ module.exports = {
     const warned = await boxes(sp);
     t.check('the safe-to-send check also guards a portal comment: nothing is written while it warns', warned.comment === before.comment && inputsOf(warned, 'comment') === 0);
     await clickButton(panel.page, /^Insert anyway/);
-    await waitForText(panel.page, /Inserted into the form/, { timeout: 8000 });
-    t.check('the success note names the box the text went into ("Additional comments")', /It went into the box labelled "Additional comments"/.test((await textOf(panel.page, '.ab-note-ok')) || ''), (await textOf(panel.page, '.ab-note-ok')) || '');
+    await waitForText(panel.page, /Inserted. Review it/, { timeout: 8000 });
+    t.check('the success note names the next step on a portal (its own Send) and the box the text went into', /Then press the page's own Send. It went into the box labelled "Additional comments"/.test((await textOf(panel.page, '.ab-note-ok')) || ''), (await textOf(panel.page, '.ab-note-ok')) || '');
     const after = await boxes(sp);
     t.check('what the agent typed is kept and the AI text is APPENDED below it', after.comment.startsWith('Hi, thanks for waiting.\n\n') && after.comment.includes('Issue:'), after.comment.replace(/\n/g, '\\n').slice(0, 100));
     t.check("the page's own model followed (input and change events were delivered, like typing)", after.model.comment === after.comment && inputsOf(after, 'comment') >= 1 && (after.events.comment?.change || 0) >= 1, JSON.stringify(after.events.comment));
@@ -131,7 +141,7 @@ module.exports = {
     const missing = await boxes(sp);
     t.check('the page has no comment box now', missing.comment === null && missing.comment2 === null);
     // (After a successful insert the button reads "Inserted": a fresh draft is needed to try the insert again.)
-    await clickButton(panel.page, /^Close/);
+    await closeAnswers(panel.page);
     const redraft = await runFeature(panel.page, /^Draft a reply to the customer/);
     t.check('a fresh reply draft for the page that has no comment box any more', Boolean(redraft.result), redraft.error || '');
     await clickButton(panel.page, /^Insert as customer comment/);
@@ -141,7 +151,7 @@ module.exports = {
     const note = (await textOf(panel.page, '.ab-note-ok, .ab-note-danger')) || '';
     t.check('with no box to type into, the panel falls back to Copy and says why', /^Agent Buddy could not reach a form field on this page\. Copied to the clipboard instead\.$|^The browser blocked copying/.test(note), note);
     t.check("still no press of the page's Send button on any of these", (await boxes(sp)).sends.length === 0);
-    await panel.page.evaluate(() => [...document.querySelectorAll('button')].find((b) => /^Close/.test(b.innerText.trim()))?.click());
+    await closeAnswers(panel.page);
     await sp.close();
 
     // ---- 4. /csm: nothing on the page says who is signed in; the work-notes box is internal -----------------------------------------
@@ -158,7 +168,7 @@ module.exports = {
     const sum = await runFeature(panel.page, /^Summarise this ticket/);
     t.check('summary produced on /csm', Boolean(sum.result), sum.error || '');
     await clickButton(panel.page, /^Add to work notes/);
-    await waitForText(panel.page, /Inserted into the form/, { timeout: 8000 });
+    await waitForText(panel.page, /Inserted. Review it/, { timeout: 8000 });
     const csmAfter = await boxes(csm);
     t.check('the INTERNAL work-notes box got the summary, below the agent\'s own text', csmAfter.workNote.startsWith('Checked the logs.\n\n') && csmAfter.workNote.includes('Issue:') && csmAfter.model.workNote === csmAfter.workNote, csmAfter.workNote.replace(/\n/g, '\\n').slice(0, 90));
     t.check('...and the customer comment box was not touched at all', csmAfter.comment === csmBefore.comment && inputsOf(csmAfter, 'comment') === inputsOf(csmBefore, 'comment'));

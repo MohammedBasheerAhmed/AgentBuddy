@@ -90,7 +90,7 @@ test('BAR_ACTIONS answers with the defaults for the table\'s kind', async () => 
 
 test('BAR_ACTIONS uses the person\'s pins', async () => {
   const d = deps({ loadSettings: async () => ({ quickPins: { incident: ['handoff-brief'] } }) });
-  assert.deepEqual((await handleBarMessage(actions, fromPage(), d)).actions, [{ id: 'handoff-brief', label: 'Hand-off brief' }]);
+  assert.deepEqual((await handleBarMessage(actions, fromPage(), d)).actions, [{ id: 'handoff-brief', label: 'Hand-off brief', ai: true }]);
 });
 
 test('BAR_ACTIONS answers with nothing when the person switched the bar off', async () => {

@@ -1,13 +1,18 @@
-// q. The record tabs, through the real panel and content script:
-//    Request     on a requested item and on one of its catalog tasks: what it is waiting for, approvals, tasks, the answers to the
-//                request questions (a masked or secret-named answer is never shown); the AI button sends status, not the answers
-//    Check       "Check before you resolve" reads the values typed on the CLASSIC form but not saved: close notes too short -> a
-//                warning, fixed -> fine, an email address in the notes is reported by kind only; "Check again" reads the form again;
-//                "Improve my resolution notes" starts from what is typed now, masked
-//    Checklist   steps from the written instructions; ticks survive a reload of the panel; only salted hashes are kept, in session
-//                storage, never a step's text or the record id
+// q. The Ticket screen's request and resolve cards (Insights), through the real panel and content script:
+//    Request status        on a requested item and on one of its catalog tasks: who to chase, what it is waiting for, approvals,
+//                          tasks, the answers to the request questions (a masked or secret-named answer is never shown); the AI message
+//                          (AI Assist) sends status, not the answers
+//    Ready to resolve?     reads the values typed on the CLASSIC form but not saved: close notes too short -> a warning, fixed -> fine,
+//                          an email address in the notes is reported by kind only; "Check again" reads the form again; "Improve my
+//                          resolution notes" (AI Assist) starts from what is typed now, masked. On a WORKSPACE page (no g_form) the
+//                          notes typed in its boxes count too, read without an event; the close code stays the saved one
+//    Fulfilment checklist  steps from the written instructions; ticks survive a reload of the panel; only salted hashes are kept, in
+//                          session storage, never a step's text or the record id
+//    The AI parts run when AI Assist offers the action (Actions agent); otherwise they are reported as a warning.
 const { findLeaks } = require('../leaks.js');
-const { prepare, errorMark, errorsSince, describeErrors, clickTab, clickButton, waitForText, textOf, checkAiRun, runAfter, waitPanel, settleOnRecord } = require('../common.js');
+const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun, runAfter, waitPanel, settleOnRecord } = require('../common.js');
+const { openHalf, buttonShown, showAction, deepTextareaValue } = require('../ui.js');
+const { openCard, cardText, showAllIn } = require('../insightsUi.js');
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
 
@@ -25,17 +30,25 @@ function replier({ system, user }) {
   return null;
 }
 
-const checkRows = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('ul[aria-label="Checks"] li')).map((li) => ({ status: li.getAttribute('data-status'), text: li.innerText.replace(/\s+/g, ' ').trim() })));
+const checkRows = async (p) => {
+  await showAllIn(p, 'resolve');
+  return p.evaluate(() => window.__vis(document.querySelectorAll('[data-card="resolve"] .ab-chk-item')).map((li) => ({ status: li.getAttribute('data-status'), text: li.innerText.replace(/\s+/g, ' ').trim() })));
+};
+const summaryIn = (p, id) => p.evaluate((cid) => document.querySelector(`[data-card="${cid}"] .ab-cardx-summary`)?.innerText || '', id);
+// The AI half holds the AI actions. A part that needs one runs only when AI Assist offers it.
+const assistOffers = (p, re) => showAction(p, re);
 const findCheck = (rows, re) => rows.find((r) => re.test(r.text));
 const sessionStore = (ctx) => ctx.ext(async () => JSON.stringify(await chrome.storage.session.get(null)));
 const localStore = (ctx) => ctx.ext(async () => JSON.stringify(await chrome.storage.local.get(null)));
 
 module.exports = {
   id: 'q',
-  title: 'Record tabs: Request (status, approvals, answers hidden), Check (unsaved form values, Check again), Checklist (ticks survive a reload, only hashes stored)',
+  title: 'Ticket screen cards: Request status (who to chase, approvals, answers hidden), Ready to resolve? (unsaved form values, Check again), Fulfilment checklist (ticks survive a reload, only hashes stored)',
   async run(t, ctx) {
     const { ai, data } = ctx;
     await prepare(ctx);
+    // The request and checklist cards are for the request fulfilment profile.
+    await ctx.configure({ profiles: ['it', 'req'], profilesConfirmed: true });
     ai.setReplier(replier);
     const mark = errorMark(ctx);
     const panel = await ctx.openPanel();
@@ -44,45 +57,46 @@ module.exports = {
     // ============================== REQUEST: a requested item =========================================================================
     let ticket = await ctx.openInstancePage(`/sc_req_item.do?sys_id=${data.RITM_ID}`, 'ticket-ritm');
     await waitForText(p, data.RITM_NUMBER, { timeout: 20000 });
-    await clickTab(p, 'Request');
-    await waitForText(p, 'Where is this request?', { timeout: 15000 });
-    await waitPanel(ctx, p, 'the request status', async () => (await p.$('[aria-label="What it is waiting for"]')) !== null, { timeout: 20000 });
-    const status = await p.$eval('[aria-label="What it is waiting for"]', (el) => el.innerText.replace(/\s+/g, ' ').trim());
-    t.check('Request tab: the "what it is waiting for" card names what the item waits for (the approval of IT Procurement)', /approval/i.test(status) && /IT Procurement/.test(status), status.slice(0, 200));
-    t.check('...and says who to ask and when it is due', /Who to ask/.test(status) && /Due/.test(status), status.slice(0, 200));
+    await openCard(p, 'Request status');
+    await waitPanel(ctx, p, 'the request status', async () => (await p.$('[data-card="request"] .ab-ins-chase')) !== null, { timeout: 20000 });
+    const status = (await cardText(p, 'request')).replace(/\s+/g, ' ').trim();
+    t.check('Request status: names what the item waits for (the approval of IT Procurement)', /approval/i.test(status) && /IT Procurement/.test(status), status.slice(0, 200));
+    t.check('...says who to chase in one line at the top, and when it is due', /Chase: .*IT Procurement/.test(status) && /Due/.test(status), status.slice(0, 200));
+    t.check('...and the card summary is the same one line', /^Chase: /.test(await summaryIn(p, 'request')), await summaryIn(p, 'request'));
     const text = () => p.evaluate(() => document.body.innerText);
-    // The sections are collapsible: open every one that is closed, then read them
-    await p.evaluate(() => document.querySelectorAll('details:not([open]) > summary').forEach((s) => s.click()));
+    // The groups fold: open every one that is closed, then read them
+    await p.evaluate(() => document.querySelectorAll('[data-card="request"] .ab-ins-group-toggle[aria-expanded="false"]').forEach((b) => b.click()));
     await ctx.sleep(300);
     const all = await text();
-    t.check('Request tab: approvals are listed with their state (the approved one and the one still requested)', /Approvals/.test(all) && /Approved/.test(all) && /Requested/.test(all), all.replace(/\s+/g, ' ').slice(0, 100));
-    t.check('Request tab: the catalog tasks of the item are listed, with the new one too', /SCTASK0010060/.test(all) && /SCTASK0010061/.test(all) && new RegExp(data.CHECKLIST_TASK_NUMBER).test(all));
-    t.check('Request tab: the answers to the request questions are shown (system, justification)', /Operating system/.test(all) && /Windows 11/.test(all));
-    t.check('Request tab: a password-type answer and an answer named like a secret are NEVER shown', !all.includes('hunter2-Secret!') && !all.includes('4417'), '');
-    t.check('Request tab: nothing was sent to an AI by looking at it', ai.requests.length === 0);
+    t.check('Request status: approvals are listed with their state (the approved one and the one still requested)', /Approvals/.test(all) && /Approved/.test(all) && /Requested/.test(all), all.replace(/\s+/g, ' ').slice(0, 100));
+    t.check('Request status: the catalog tasks of the item are listed, with the new one too', /SCTASK0010060/.test(all) && /SCTASK0010061/.test(all) && new RegExp(data.CHECKLIST_TASK_NUMBER).test(all));
+    t.check('Request status: the answers to the request questions are shown (system, justification)', /Operating system/.test(all) && /Windows 11/.test(all));
+    t.check('Request status: a password-type answer and an answer named like a secret are NEVER shown', !all.includes('hunter2-Secret!') && !all.includes('4417'), '');
+    t.check('Request status: nothing was sent to an AI by looking at it', ai.requests.length === 0);
 
     // The AI button: a message for the requester from the STATUS, not the answers
-    const before = ai.requests.length;
-    const ran = await runAfter(p, () => clickButton(p, /^Explain it in plain words for the requester/));
-    const req = await checkAiRun(t, ctx, p, 'request-explain', ran, { before, system: /tell a requester where their service request stands/, userHas: [/Status worked out from the records/i] });
-    t.check('request-explain: the answers to the request questions (Windows 11, the justification, the secrets) did NOT go to the AI', req ? !/Windows 11|Business justification|hunter2|charlie\.w@example/i.test(req.raw) : false);
-    t.check('request-explain: the requester (Charlie) and the approver (Dave) are masked in what was sent', req ? !/Charlie|Whitherspoon|Dave|Loftus/i.test(req.raw) : false);
-    await clickButton(p, /^Close/);
+    if (await assistOffers(p, /^Tell the requester where it stands/)) {
+      const before = ai.requests.length;
+      const ran = await runAfter(p, () => clickButton(p, /^Tell the requester where it stands/));
+      const req = await checkAiRun(t, ctx, p, 'request-explain', ran, { before, system: /tell a requester where their service request stands/, userHas: [/Status worked out from the records/i] });
+      t.check('request-explain: the answers to the request questions (Windows 11, the justification, the secrets) did NOT go to the AI', req ? !/Windows 11|Business justification|hunter2|charlie\.w@example/i.test(req.raw) : false);
+      t.check('request-explain: the requester (Charlie) and the approver (Dave) are masked in what was sent', req ? !/Charlie|Whitherspoon|Dave|Loftus/i.test(req.raw) : false);
+      await clickButton(p, /^Close/);
+    } else t.warning('request-explain is not offered in AI Assist yet: its checks did not run (Actions agent)');
     await ticket.close();
 
     // ============================== REQUEST: a catalog task points at its item ===============================================================
     ticket = await ctx.openInstancePage(`/sc_task.do?sys_id=${data.CHECKLIST_TASK_ID}`, 'ticket-sctask');
     await waitForText(p, data.CHECKLIST_TASK_NUMBER, { timeout: 20000 });
-    await clickTab(p, 'Request');
-    await waitForText(p, /belongs to RITM0010050; the status below is for that item/, { timeout: 20000 });
-    t.check('Request tab on a catalog task: it follows the task to its requested item (op requestTarget) and says so', true);
+    await openCard(p, 'Request status');
+    await waitForText(p, /belongs to RITM0010050; the status is for that item/, { timeout: 20000 });
+    t.check('Request status on a catalog task: it follows the task to its requested item (op requestTarget) and says so', true);
 
     // ============================== CHECKLIST ==========================================================================================
-    await clickTab(p, 'Checklist');
-    await waitForText(p, 'Fulfilment checklist', { timeout: 15000 });
+    await openCard(p, 'Fulfilment checklist');
     await waitPanel(ctx, p, 'the steps', async () => (await p.$$('ul[aria-label="Steps"] input[type="checkbox"]')).length === 3, { timeout: 20000 });
     const steps = await p.$$eval('ul[aria-label="Steps"] li', (lis) => lis.map((li) => li.innerText.trim()));
-    t.check('Checklist tab: the three written steps of the task, worked out on this computer', JSON.stringify(steps) === JSON.stringify(data.CHECKLIST_STEPS), steps.join(' | '));
+    t.check('Fulfilment checklist: the three written steps of the task, worked out on this computer', JSON.stringify(steps) === JSON.stringify(data.CHECKLIST_STEPS), steps.join(' | '));
     await p.click('ul[aria-label="Steps"] li:nth-child(1) input');
     await p.click('ul[aria-label="Steps"] li:nth-child(3) input');
     await waitForText(p, /2 of 3/, { timeout: 8000 });
@@ -102,26 +116,29 @@ module.exports = {
     await p.waitForSelector('.ab-app', { timeout: 10000 });
     await settleOnRecord(ctx, data.CHECKLIST_TASK_ID);
     await waitForText(p, data.CHECKLIST_TASK_NUMBER, { timeout: 20000 });
-    await clickTab(p, 'Checklist');
+    await openCard(p, 'Fulfilment checklist');
     await waitPanel(ctx, p, 'the ticks after the reload', async () => (await p.$$('ul[aria-label="Steps"] input[type="checkbox"]')).length === 3, { timeout: 20000 });
     t.check('after the panel was reloaded the same two steps are still ticked', JSON.stringify(await ticked()) === '[true,false,true]', JSON.stringify(await ticked()));
     t.check('...and the progress line says so', /2 of 3/.test(await text()));
 
     // The AI proposes a cleaner list; the person chooses to use it
-    const before2 = ai.requests.length;
-    const proposal = await runAfter(p, () => clickButton(p, /^Propose a cleaner checklist/));
-    await checkAiRun(t, ctx, p, 'fulfilment-checklist', proposal, { before: before2, system: /carry out a catalog task or a requested item/, userHas: [/Image the laptop/i] });
-    // (The offer to use the list is shown while the answer is on screen; closing the answer takes it away.)
-    await waitForText(p, /The AI proposed 4 steps/, { timeout: 8000 });
-    await clickButton(p, /^Use this list/);
-    await waitPanel(ctx, p, 'the AI list', async () => (await p.$$('ul[aria-label="Steps"] input[type="checkbox"]')).length === 4, { timeout: 8000 });
-    t.check('"Use this list" replaces the written steps with the four the AI proposed (kept in memory only)', (await p.$$eval('ul[aria-label="Steps"] li', (lis) => lis.map((li) => li.innerText.trim()))).includes('Install the VPN client'));
-    t.check('...a step that is in both lists keeps its tick (the ids come from the step text)', (await ticked()).filter(Boolean).length >= 1);
-    await p.click('ul[aria-label="Steps"] li:nth-child(2) input');
-    await ctx.sleep(500);
-    const sessionAfterAi = await sessionStore(ctx);
-    t.check('ticking an AI-proposed step stores a hash too, but still no step text anywhere', !['Install the VPN client', 'Add it to the asset register', ...data.CHECKLIST_STEPS].some((x) => sessionAfterAi.includes(x) || ''.includes(x)));
-    await clickButton(p, /^Back to the written steps/);
+    if (await assistOffers(p, /^Draft a checklist from the instructions/)) {
+      const before2 = ai.requests.length;
+      const proposal = await runAfter(p, () => clickButton(p, /^Draft a checklist from the instructions/));
+      await checkAiRun(t, ctx, p, 'fulfilment-checklist', proposal, { before: before2, system: /carry out a catalog task or a requested item/, userHas: [/Image the laptop/i] });
+      // (The offer to use the list is shown while the answer is on screen; closing the answer takes it away.)
+      await waitForText(p, /The AI proposed 4 steps/, { timeout: 8000 });
+      await clickButton(p, /^Use this list/);
+      await waitPanel(ctx, p, 'the AI list', async () => (await p.$$('ul[aria-label="Steps"] input[type="checkbox"]')).length === 4, { timeout: 8000 });
+      t.check('"Use this list" replaces the written steps with the four the AI proposed (kept in memory only)', (await p.$$eval('ul[aria-label="Steps"] li', (lis) => lis.map((li) => li.innerText.trim()))).includes('Install the VPN client'));
+      t.check('...a step that is in both lists keeps its tick (the ids come from the step text)', (await ticked()).filter(Boolean).length >= 1);
+      await p.click('ul[aria-label="Steps"] li:nth-child(2) input');
+      await ctx.sleep(500);
+      const sessionAfterAi = await sessionStore(ctx);
+      t.check('ticking an AI-proposed step stores a hash too, but still no step text anywhere', !['Install the VPN client', 'Add it to the asset register', ...data.CHECKLIST_STEPS].some((x) => sessionAfterAi.includes(x) || ''.includes(x)));
+      await clickButton(p, /^Back to the written steps/);
+    } else t.info('the AI checklist is not offered here, by design (AI18): the written instructions already split into steps; its own checks need a task without steps');
+    await openCard(p, 'Fulfilment checklist');
     await clickButton(p, /^Clear ticks/);
     await ctx.waitUntil('the ticks to be cleared', async () => (await ticked()).every((b) => !b), { timeout: 8000 });
     const cleared = JSON.parse(await sessionStore(ctx)).agentbuddy_checklists || {};
@@ -131,13 +148,13 @@ module.exports = {
     // ============================== CHECK: values typed on the classic form ==============================================================
     ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-incident');
     await waitForText(p, data.INCIDENT_NUMBER, { timeout: 20000 });
-    await clickTab(p, 'Check');
-    await waitForText(p, 'Check before you resolve', { timeout: 15000 });
+    await openCard(p, 'Ready to resolve?');
     await waitPanel(ctx, p, 'the checks', async () => (await checkRows(p)).length >= 3, { timeout: 20000 });
-    t.check('Check tab: it says it checked what is on the form right now (a classic form is readable)', /Checked against what is on the form right now/.test(await text()));
+    t.check('Ready to resolve?: it says it checked what is on the form now (a classic form is readable)', /Checked against what is on the form now/.test(await text()));
     let rows = await checkRows(p);
     t.check('no resolution notes yet: a warning, and it notes that the work note typed on the form is not a substitute', findCheck(rows, /No resolution notes yet/)?.status === 'warn' && /work note you have typed is separate/i.test(findCheck(rows, /No resolution notes yet/)?.text || ''), findCheck(rows, /resolution notes/i)?.text);
-    t.check('the header line counts what needs a look', /thing(s)? to look at before you resolve this/.test(await text()));
+    t.check('the card summary counts what needs a look', /\d+ to look at/.test(await summaryIn(p, 'resolve')), await summaryIn(p, 'resolve'));
+    t.check('...and a finding about the customer points to the email card', /Go to: Which email fits/.test(await cardText(p, 'resolve')) || !/customer has not replied/i.test(await cardText(p, 'resolve')));
 
     // Type "Done." into the CLASSIC form's resolution notes (unsaved) and check again
     const typeInForm = async (value) => {
@@ -165,15 +182,56 @@ module.exports = {
     t.check('the hold and close-code checks come from the form too (no hold reason is typed; the close code is empty -> warn)', findCheck(rows, /No close code chosen/)?.status === 'warn');
 
     // "Improve my resolution notes" starts from what is typed now, masked
-    const before3 = ai.requests.length;
-    const improved = await runAfter(p, () => clickButton(p, /^Improve my resolution notes/));
-    const imp = await checkAiRun(t, ctx, p, 'resolution-improve', improved, { before: before3, system: /improve the resolution notes they are writing/, userHas: [/Replaced the expired gateway certificate on EU-2/, /\[EMAIL_\d+\]/] });
-    t.check('resolution-improve: the AI got the notes as typed RIGHT NOW (unsaved), and the typed email address did not travel', imp ? !imp.raw.includes("priya.raman@example.com") : false);
-    await clickButton(p, /^Close/);
+    if (await assistOffers(p, /^Improve my resolution notes/)) {
+      const before3 = ai.requests.length;
+      const improved = await runAfter(p, () => clickButton(p, /^Improve my resolution notes/));
+      const imp = await checkAiRun(t, ctx, p, 'resolution-improve', improved, { before: before3, system: /improve the resolution notes they are writing/, userHas: [/Replaced the expired gateway certificate on EU-2/, /\[EMAIL_\d+\]/] });
+      t.check('resolution-improve: the AI got the notes as typed RIGHT NOW (unsaved), and the typed email address did not travel', imp ? !imp.raw.includes("priya.raman@example.com") : false);
+      await clickButton(p, /^Close/);
+    } else t.warning('"Improve my resolution notes" is not offered in AI Assist yet: its checks did not run (Actions agent)');
     t.check('nothing was written to the form by any of this', (await ticket.evaluate(() => window.__gformCalls.length)) === 0);
 
+    // ============================== CHECK: notes typed on a WORKSPACE page (no g_form: the boxes) ================================================
+    await ticket.close();
+    ticket = await ctx.openInstancePage(`/now/sow/record/incident/${data.INCIDENT_ID}`, 'ticket-workspace');
+    await settleOnRecord(ctx, data.INCIDENT_ID);
+    await openCard(p, 'Ready to resolve?');
+    await waitPanel(ctx, p, 'the Workspace checks', async () => /Checked the notes typed on this page, plus the saved ticket/.test(await cardText(p, 'resolve')) && (await checkRows(p)).length >= 3, { timeout: 20000 });
+    t.check('Workspace: "Ready to resolve?" says it checked the notes typed on this page (not "the saved ticket only")', !/Checked the saved ticket only/.test(await cardText(p, 'resolve')));
+    rows = await checkRows(p);
+    const wsEmpty = findCheck(rows, /No resolution notes yet/);
+    t.check('Workspace: the empty Resolution notes box -> a warning that also names the work note typed in the composer', wsEmpty?.status === 'warn' && /work note you have typed is separate/i.test(wsEmpty.text) && !/no form Agent Buddy can read/.test(wsEmpty.text), wsEmpty?.text);
+    const wsCode = findCheck(rows, /close code/i);
+    t.check('Workspace: the close code is the saved one, and the card says a code picked on this page is not counted', wsCode?.status === 'warn' && /only the notes are read/.test(wsCode.text), wsCode?.text);
+    // Type into the Workspace's own Resolution notes box (inside shadow roots), without saving, and check again
+    const wsBox = (await ticket.evaluateHandle(() => {
+      const walk = (root) => {
+        for (const el of root.querySelectorAll('*')) {
+          if (el.tagName === 'TEXTAREA' && el.getAttribute('aria-label') === 'Resolution notes') return el;
+          const found = el.shadowRoot && walk(el.shadowRoot);
+          if (found) return found;
+        }
+        return null;
+      };
+      return walk(document);
+    })).asElement();
+    t.check('Workspace: the fake Workspace page has a Resolution notes box', Boolean(wsBox));
+    if (wsBox) {
+      const wsNotes = 'Replaced the expired gateway certificate on EU-2 and restarted the gateway service. Confirmed with priya.raman@example.com that the VPN stays up.';
+      await wsBox.type(wsNotes, { delay: 0 });
+      const eventsBefore = await ticket.evaluate(() => ({ ...window.__wsEvents }));
+      await clickButton(p, /^Check again/);
+      await waitPanel(ctx, p, 'the typed Workspace notes to count', async () => findCheck(await checkRows(p), /Resolution notes are filled in/)?.status === 'ok', { timeout: 15000 });
+      rows = await checkRows(p);
+      t.check('Workspace: notes typed (not saved) in the Resolution notes box count: "Resolution notes are filled in" is Fine', findCheck(rows, /Resolution notes are filled in/)?.status === 'ok');
+      const wsPii = findCheck(rows, /personal data or secrets/i);
+      t.check('Workspace: the email address typed in the box is reported by KIND only, and the address is not shown', wsPii?.status === 'warn' && /1 email address in the resolution notes/.test(wsPii.text) && !(await text()).includes('priya.raman@example.com'), wsPii?.text);
+      const eventsAfter = await ticket.evaluate(() => ({ ...window.__wsEvents }));
+      t.check('Workspace: reading the boxes fired no event on them and changed nothing', JSON.stringify(eventsAfter) === JSON.stringify(eventsBefore) && (await ticket.evaluate(deepTextareaValue, 'Resolution notes')) === wsNotes, `${JSON.stringify(eventsBefore)} -> ${JSON.stringify(eventsAfter)}`);
+    }
+
     const bad = errorsSince(ctx, mark);
-    t.check('no console error, page error or CSP violation on the record tabs', bad.length === 0, describeErrors(bad));
+    t.check('no console error, page error or CSP violation on these cards', bad.length === 0, describeErrors(bad));
     await panel.close();
     await ticket.close();
     ai.reset();

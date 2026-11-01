@@ -9,9 +9,13 @@
 button { font-size: inherit; color: inherit; cursor: pointer; margin: 0; }
 button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 
-/* the folded bar: a small tab on the edge of the page */
-.handle { display: flex; align-items: center; justify-content: center; width: 30px; height: 60px; padding: 0; border: 1px solid var(--ab-accent); background: var(--ab-accent); color: var(--ab-accent-fg); font-weight: 700; font-size: var(--ab-text-sm); letter-spacing: 0.02em; box-shadow: var(--ab-shadow); }
+/* the folded bar: a small tab on the edge of the page, an icon over a short label written down the tab. It can be dragged up or down
+   (touch-action: none lets a finger drag it without scrolling the page). */
+.handle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 30px; height: 76px; padding: 6px 0; border: 1px solid var(--ab-accent); background: var(--ab-accent); color: var(--ab-accent-fg); font-weight: 650; font-size: var(--ab-text-xs); letter-spacing: 0.03em; box-shadow: var(--ab-shadow); cursor: grab; touch-action: none; user-select: none; }
 .handle:hover { background: var(--ab-accent-hover); }
+.handle:active { cursor: grabbing; }
+.glyph { flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.label { writing-mode: vertical-rl; transform: rotate(180deg); line-height: 1; white-space: nowrap; }
 .bar[data-side='right'] .handle { border-radius: var(--ab-radius) 0 0 var(--ab-radius); border-right: 0; }
 .bar[data-side='left'] .handle { border-radius: 0 var(--ab-radius) var(--ab-radius) 0; border-left: 0; }
 
@@ -31,6 +35,9 @@ button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 /* No opacity here: the browser's visibility check (bar.js) counts a see-through button as not in plain view. */
 .act:disabled, .act-first:disabled { cursor: not-allowed; background: var(--ab-bg-sunken); border-color: var(--ab-border); color: var(--ab-fg-muted); }
 .act-first { background: var(--ab-accent); border-color: var(--ab-accent); color: var(--ab-accent-fg); }
+/* The AI mark on an AI action (TRACKER.md 2.3): drawn here, so the button's text is its label alone. */
+.act[data-ai='true'] { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.act[data-ai='true']::after { content: 'AI'; flex: none; padding: 0 5px; border: 1px solid currentColor; border-radius: var(--ab-radius-sm); font-size: var(--ab-text-xs); font-weight: 650; line-height: 1.4; }
 .act-first:hover:not(:disabled) { background: var(--ab-accent-hover); }
 
 .notice { margin: 0; padding: 6px 8px; border: 1px solid var(--ab-warn-line); border-radius: var(--ab-radius-sm); background: var(--ab-warn-soft); color: var(--ab-warn); font-size: var(--ab-text-sm); }

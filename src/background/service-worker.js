@@ -4,10 +4,11 @@
 // (4) answer the bar on the ServiceNow page: which actions it may show, and "open the panel and run this one" (bar.js).
 import { MSG, toWireError } from '../lib/messages.js';
 import { checkExtensionSender } from '../lib/senderCheck.js';
-import { loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
+import { keyStore, loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
 import { instancePattern, isInstanceAllowed, normalizeInstance } from '../policy/policy.js';
-import { BAR_TYPES, handleBarMessage, restrictStorageAccess, retireOpenTabs } from './bar.js';
+import { BAR_TYPES, barAiOn, handleBarMessage, restrictStorageAccess, retireOpenTabs } from './bar.js';
 import { LAUNCH_KEY } from '../lib/launch.js';
+import { describeInstances, reinjectAfterInstalled, wantedInstances } from './instances.js';
 
 // First thing on every start of the worker: content scripts may not read or change chrome.storage.local / .session (where the
 // browser supports closing them). Nothing in a content script needs them; see restrictStorageAccess in bar.js.
@@ -16,10 +17,11 @@ restrictStorageAccess(chrome.storage).catch(() => {});
 const CONTENT_ID = 'ab-content';
 const BRIDGE_ID = 'ab-bridge';
 
-// Which instances are active = enabled by the person (or baked in by policy) AND still granted by the browser.
+// Which instances are active = turned on by the person, or listed exactly in the organisation's allowedInstances (managed policy or
+// an enterprise build), AND still granted by the browser (src/background/instances.js).
 async function activeInstances() {
   const [settings, policy] = await Promise.all([loadSettings(), loadPolicy()]);
-  const wanted = (settings.instances || []).map(normalizeInstance).filter((o) => o && isInstanceAllowed(o, policy));
+  const wanted = wantedInstances(settings, policy);
   const granted = [];
   for (const origin of wanted) {
     // eslint-disable-next-line no-await-in-loop -- a handful of origins at most.
@@ -29,7 +31,16 @@ async function activeInstances() {
 }
 
 /** Make the registered content scripts match exactly the active instances. */
-export async function syncContentScripts() {
+// One sync at a time: two at once (a permission granted while "Turn on" saves the site) would both unregister and then both register
+// the same script ids, and the second registration fails.
+let syncing = Promise.resolve();
+export function syncContentScripts() {
+  const run = syncing.then(syncNow, syncNow);
+  syncing = run.catch(() => {});
+  return run;
+}
+
+async function syncNow() {
   const origins = await activeInstances();
   try {
     await chrome.scripting.unregisterContentScripts({ ids: [CONTENT_ID, BRIDGE_ID] });
@@ -109,6 +120,9 @@ const barDeps = {
   loadSettings,
   loadPolicy,
   now: () => Date.now(),
+  // Can the AI actions run for this person (the organisation allows AI, the person did not skip it, a key is saved or none is
+  // needed)? Only whether a key is saved is looked at, never the key itself.
+  aiOn: (settings, policy) => barAiOn(settings, policy, { keyMode: (provider) => keyStore().mode(provider) }),
   openPanel: (tabId) => chrome.sidePanel.open({ tabId }),
   // storage.session: the panel can read it, a content script cannot
   saveLaunch: (launch) => chrome.storage.session.set({ [LAUNCH_KEY]: launch }),
@@ -126,8 +140,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return enableInstance(message.origin);
       case MSG.DISABLE_INSTANCE:
         return disableInstance(message.origin);
-      case MSG.LIST_INSTANCES:
-        return { instances: await activeInstances() };
+      case MSG.LIST_INSTANCES: {
+        const [instances, settings, policy] = await Promise.all([activeInstances(), loadSettings(), loadPolicy()]);
+        // `listed` says which came from the organisation (Settings shows those without a Turn off button).
+        return { instances, listed: describeInstances(instances, settings, policy) };
+      }
       default:
         throw new Error('Unknown request.');
     }
@@ -139,12 +156,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 const setup = () => {
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(() => {});
-  syncContentScripts().catch(() => {});
+  return syncContentScripts().catch(() => []);
 };
-chrome.runtime.onInstalled.addListener(setup);
+chrome.runtime.onInstalled.addListener(async ({ reason } = {}) => {
+  const origins = await setup();
+  // After an update the content scripts in the open ServiceNow tabs belong to the old version and can no longer reach the extension;
+  // without a fresh copy the bar and the panel would stop working there until each tab is reloaded. The fresh copy replaces the old
+  // one (src/content/index.js), whose bar removes itself. At install, an organisation's instances work in the tabs already open.
+  if (!reinjectAfterInstalled(reason)) return;
+  for (const origin of origins || []) {
+    // eslint-disable-next-line no-await-in-loop -- a handful of sites at most
+    await injectIntoOpenTabs(origin).catch(() => {});
+  }
+});
 chrome.runtime.onStartup.addListener(setup);
 // A permission taken away in the browser's own UI, or a policy change, must be reflected straight away.
 chrome.permissions.onRemoved.addListener(() => syncContentScripts().catch(() => {}));
+// A site granted in the browser's own site-access menu may be one the organisation lists: it is turned on at once.
+chrome.permissions.onAdded?.addListener(async () => {
+  const before = new Set((await chrome.scripting.getRegisteredContentScripts({ ids: [CONTENT_ID] }).catch(() => []))[0]?.matches || []);
+  const origins = await syncContentScripts().catch(() => []);
+  for (const origin of origins) {
+    // eslint-disable-next-line no-await-in-loop
+    if (!before.has(instancePattern(origin))) await injectIntoOpenTabs(origin).catch(() => {});
+  }
+});
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'managed') syncContentScripts().catch(() => {});
 });

@@ -32,7 +32,12 @@ module.exports = {
     await ctx.sleep(700);
     const seen = (list) => list.filter((x) => `${x.text || ''} ${x.url || ''}`.includes(marker));
     t.check('harness self-test: a console error, a page error and a network request are all noticed', seen(ctx.errors).some((e) => e.kind === 'console') && seen(ctx.errors).some((e) => e.kind === 'pageerror') && seen(ctx.net).length === 1, `errors=${seen(ctx.errors).length} net=${seen(ctx.net).length}`);
+    // The failed request's own console line ("net::ERR_NAME_NOT_RESOLVED") comes when the name lookup gives up, which on a busy
+    // machine can be after the wait above: wait for it, so it is cleared with the rest and is not an "unexpected error" at the end.
+    const selfTestLine = (e) => /Failed to load resource/.test(e.text) && `${e.text} ${e.url}`.includes('selftest.invalid');
+    await ctx.waitUntil('the self-test request to fail', () => ctx.errors.some(selfTestLine), { timeout: 10000 }).catch(() => {});
     for (const list of [ctx.errors, ctx.net]) for (const x of seen(list)) list.splice(list.indexOf(x), 1);
+    for (const x of ctx.errors.filter(selfTestLine)) ctx.errors.splice(ctx.errors.indexOf(x), 1);
 
     // The settings page is already open (the control page). Give it a moment, then look for errors.
     await ctx.sleep(500);
@@ -45,7 +50,7 @@ module.exports = {
     const panel = await ctx.openPanel();
     await ctx.sleep(1500);
     const text = await panel.text();
-    t.check('sidepanel.html: loads and shows the setup state', /Agent Buddy/.test(text) && /Not turned on|Open a ticket|Add an AI key/.test(text), text.replace(/\s+/g, ' ').slice(0, 120));
+    t.check('sidepanel.html: loads and shows the setup state', /Agent Buddy/.test(text) && /Getting started|Not turned on|Open a ticket/.test(text), text.replace(/\s+/g, ' ').slice(0, 120));
     t.check('sidepanel.html: no page errors, console errors or CSP violations', pageErrors().length === 0, pageErrors().map((e) => `${e.kind}: ${e.text}`).join(' | '));
     t.check('sidepanel.html: no CSP violation events', (await panel.page.evaluate(() => window.__cspViolations || [])).length === 0);
     await panel.close();

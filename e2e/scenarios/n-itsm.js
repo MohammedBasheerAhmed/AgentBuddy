@@ -7,31 +7,58 @@
 //    - kb-article-draft: Insert is refused on an incident (its inserts belong to a kb_knowledge form), "Open a new article form"
 //      opens a blank article form in the same tab, and the draft that was carried there fills the title and the body; the real
 //      names are never put back into a text that gets published
+//    Round 3 (TRACKER.md AI1-AI22): the actions live in the AI Assist half (the ones that fit the ticket's state first, the rest under
+//    "More actions"); the mood is copy only (AI3); the major incident updates show only on a major incident (AI15: priority 1 here,
+//    the fake instance has no major incident state); every action carries the AI mark.
 const { findLeaks } = require('../leaks.js');
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, checkAiRun, loadingElements } = require('../common.js');
-const { runFeature } = require('../ui.js');
+const { runFeature, openHalf } = require('../ui.js');
 
 const T = {
-  sentiment: 'Sentiment and escalation risk',
-  nba: 'Next best actions',
-  thread: 'Summarise the discussion',
-  routing: 'Where should this go?',
-  kb: 'Turn this into a knowledge article',
-  major: 'Major incident updates',
+  sentiment: 'Check mood and escalation risk',
+  nba: 'Suggest next steps',
+  thread: 'Catch up on the discussion',
+  routing: 'Suggest where it should go',
+  kb: 'Draft a knowledge article',
+  major: 'Draft major incident updates',
 };
 const ITSM_TITLES = Object.values(T);
 
-// What each kind of record is expected to offer from THIS area's six features.
+// What each kind of record is expected to offer from THIS area's six features (the person has every profile; the major incident
+// updates are not on any of these: INC0010001 is priority 2, and problems and changes no longer get them).
 const EXPECT = {
-  incident: ITSM_TITLES,
-  problem: [T.thread, T.kb, T.major],
-  change: [T.thread, T.major],
+  incident: ITSM_TITLES.filter((x) => x !== T.major),
+  problem: [T.thread, T.kb],
+  change: [T.thread],
   case: [T.sentiment, T.nba, T.thread, T.routing, T.kb],
   hr_case: [],
   requested_item: [T.sentiment, T.nba, T.thread, T.kb],
 };
 
-const actionTitles = (page) => page.evaluate(() => window.__vis(document.querySelectorAll('.ab-features .ab-feature-title')).map((e) => e.innerText.trim()));
+const P1_INCIDENT = 'aa100000000000000000000000000101'; // INC0010101, priority 1 - Critical, In Progress
+
+async function openMoreActions(page) {
+  await openHalf(page, 'assist');
+  await page.evaluate(() => {
+    const more = window.__vis(document.querySelectorAll('.ab-act-moretoggle')).find((b) => b.getAttribute('aria-expanded') === 'false');
+    if (more) more.click();
+  });
+}
+/** Every action AI Assist offers for the record on show, with "More actions" unfolded. */
+async function actionTitles(page) {
+  await openMoreActions(page);
+  return page.evaluate(() => window.__vis(document.querySelectorAll('.ab-acts .ab-act-title')).map((e) => e.innerText.trim()));
+}
+/** Put every answer on screen away (round 3 keeps several answers per ticket). */
+const closeAnswers = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
+/** The buttons in the row of the newest answer (Copy, its first box, Refine, More). */
+const answerButtons = (p) => p.evaluate(() => [...(window.__vis(document.querySelectorAll('.ab-answer'))[0]?.querySelectorAll('.ab-answer-actions button') || [])].map((b) => b.innerText.trim()));
+/** Open the newest answer's "More" menu and list what it offers. */
+async function answerMenu(p) {
+  await p.evaluate(() => [...(window.__vis(document.querySelectorAll('.ab-answer'))[0]?.querySelectorAll('.ab-answer-actions button') || [])].find((b) => b.innerText.trim() === 'More')?.click());
+  await p.waitForSelector('.ab-menu-item', { timeout: 5000 }).catch(() => null);
+  return p.evaluate(() => window.__vis(document.querySelectorAll('.ab-menu-item')).map((b) => b.innerText.trim()));
+}
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
 
 // What the stub AI answers, by what the system message is about. It reuses placeholders it was sent, as a model would.
@@ -66,6 +93,7 @@ module.exports = {
   async run(t, ctx) {
     const { ai, inst, data } = ctx;
     await prepare(ctx);
+    await ctx.configure({ profiles: ['it', 'req', 'csm', 'mpc', 'km'], profilesConfirmed: true });
     ai.setReplier(replier);
     const mark = errorMark(ctx);
 
@@ -82,14 +110,17 @@ module.exports = {
     const panel = await ctx.openPanel();
     const p = panel.page;
     await waitForText(p, data.INCIDENT_NUMBER, { timeout: 20000 });
+    await openHalf(p, 'assist');
     await waitForText(p, 'Summarise this ticket', { timeout: 15000 });
+    const marks = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-acts .ab-act')).map((b) => Boolean(b.querySelector('.ab-ai-badge'))));
+    t.check('every action in AI Assist carries the AI mark', marks.length > 0 && marks.every(Boolean), JSON.stringify(marks));
     for (const [kind, path, number] of tickets) {
       if (kind !== 'incident') {
         await ticket.close();
         ticket = await ctx.openInstancePage(path, `ticket-${kind}`);
         await waitForText(p, number, { timeout: 20000 });
-        await p.waitForSelector('.ab-features', { timeout: 15000 });
-        await ctx.sleep(300);
+        await p.waitForSelector('.ab-acts', { timeout: 15000 });
+        await ctx.sleep(500);
       }
       const titles = await actionTitles(p);
       const want = EXPECT[kind];
@@ -102,17 +133,22 @@ module.exports = {
     // ---- 2. Runs on the incident --------------------------------------------------------------------------------------------
     ticket = await ctx.openInstancePage(tickets[0][1], 'ticket-incident');
     await waitForText(p, data.INCIDENT_NUMBER, { timeout: 20000 });
-    await p.waitForSelector('.ab-features', { timeout: 15000 });
-    await ctx.sleep(300);
+    await p.waitForSelector('.ab-acts', { timeout: 15000 });
+    await ctx.sleep(500);
+    await openMoreActions(p);
     const gform = (fn) => ticket.evaluate(fn);
-    const close = () => clickButton(p, /^Close/);
+    const close = async () => {
+      await closeAnswers(p);
+      await openMoreActions(p);
+    };
     let before = ai.requests.length;
 
     // sentiment-risk: counted signals + the newest notes; the answer names the customer (rehydrated) and offers work notes only
     let ran = await runFeature(p, new RegExp(`^${T.sentiment}`));
     let req = await checkAiRun(t, ctx, p, 'sentiment-risk', ran, { before, system: /see early whether a customer is getting upset/, userHas: [/Signals counted by simple rules/i] });
     t.check('sentiment-risk: the answer shows the real caller name (put back locally) and the four lines', Boolean(ran.result) && ran.result.includes(data.SEED.callerName) && /Mood: frustrated/.test(ran.result) && /Escalation risk: High/.test(ran.result), (ran.result || '').replace(/\s+/g, ' ').slice(0, 120));
-    t.check('sentiment-risk: offers "Add to work notes" (internal) and Copy, nothing to the customer', (await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card button')).map((b) => b.innerText.trim()))).includes('Add to work notes') && !(await panelText(p)).includes('Insert as customer comment'));
+    const moodButtons = await answerButtons(p);
+    t.check('sentiment-risk: Copy only (AI3: the mood is never inserted as "Mood:" into the work notes)', moodButtons.includes('Copy') && !moodButtons.some((b) => /^(Add|Insert)/.test(b)), moodButtons.join(' | '));
     await close();
 
     // next-best-action: it reads solved look-alikes and articles first (reads through the content script), then the AI is asked
@@ -133,7 +169,7 @@ module.exports = {
     t.check('thread-summary: nothing contacted evil.example', !ctx.net.slice(netBefore).some((n) => /evil\.example/.test(n.url)));
     // Insert into work notes: appended below what the agent typed, one setValue, never saved
     await clickButton(p, /^Add to work notes/);
-    await waitForText(p, /Inserted into the form/, { timeout: 8000 });
+    await waitForText(p, /Inserted\. Review it/, { timeout: 8000 });
     const calls = await gform(() => window.__gformCalls);
     t.check('thread-summary: "Add to work notes" made exactly one setValue on work_notes, below the typed text, and never saved', calls.length === 1 && calls[0].name === 'work_notes' && calls[0].value.startsWith('Checking the gateway certificate now.') && calls[0].value.includes('Decisions:') && (await gform(() => window.__gformSaves.length)) === 0, JSON.stringify(calls).slice(0, 160));
     await close();
@@ -142,29 +178,44 @@ module.exports = {
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.routing}`));
     req = await checkAiRun(t, ctx, p, 'routing-hint', ran, { before, system: /send a ticket to the right place/, userHas: [/Network Support/, /INC0009\d{3}/] });
-    const routingButtons = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
+    const routingButtons = await answerButtons(p);
     t.check('routing-hint: Copy only: no Insert button of any kind', routingButtons.includes('Copy') && !routingButtons.some((b) => /^(Add|Insert)/.test(b)), routingButtons.join(' | '));
     await close();
 
-    // major-incident-comms: SLAs and tasks go in; copy only
+    // major-incident-comms: only on a major incident (AI15). INC0010001 is priority 2: not offered. INC0010101 is priority 1: offered.
+    t.check('major-incident-comms: not offered on an ordinary (priority 2) incident', !(await actionTitles(p)).includes(T.major));
+    const p1 = await ctx.openInstancePage(`/incident.do?sys_id=${P1_INCIDENT}`, 'ticket-p1');
+    await waitForText(p, 'INC0010101', { timeout: 20000 });
+    await p.waitForSelector('.ab-acts', { timeout: 15000 });
+    await ctx.sleep(500);
+    const firstThree = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-acts > .ab-act-list .ab-act-title')).map((e) => e.innerText.trim()));
+    t.check('major-incident-comms: offered on a priority 1 incident, among the first suggestions while it is worked', firstThree.includes(T.major), firstThree.join(' | '));
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.major}`));
-    req = await checkAiRun(t, ctx, p, 'major-incident-comms', ran, { before, system: /write stakeholder updates during a major incident/, userHas: [/SLAs?/, /TASK0010005/] });
-    t.check('major-incident-comms: the "[time]" the manager fills in is shown as written, and the answer has Copy only', /Next update: \[time\]/.test(ran.result || '') && !(await panelText(p)).includes('Add to work notes'));
-    await close();
+    req = await checkAiRun(t, ctx, p, 'major-incident-comms', ran, { before, system: /write stakeholder updates during a major incident/, userHas: [/Email outage for Sales/] });
+    const majorButtons = await answerButtons(p);
+    t.check('major-incident-comms: the "[time]" the manager fills in is shown as written, and the answer has Copy only', /Next update: \[time\]/.test(ran.result || '') && !majorButtons.some((b) => /^(Add|Insert)/.test(b)), majorButtons.join(' | '));
+    await closeAnswers(p);
+    await p1.close();
+    await ticket.bringToFront();
+    await waitForText(p, data.INCIDENT_NUMBER, { timeout: 20000 });
+    await p.waitForSelector('.ab-acts', { timeout: 15000 });
+    await ctx.sleep(500);
+    await openMoreActions(p);
 
     // ---- 3. kb-article-draft: Insert refused here; the draft is carried to a blank article form -------------------------------------
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.kb}`));
     req = await checkAiRun(t, ctx, p, 'kb-article-draft', ran, { placeholders: 'kept', before, system: /turn a solved ticket into a knowledge article/, userHas: [/REFERENCE MATERIAL/i], userLacks: [data.INCIDENT_NUMBER] });
     t.check('kb-article-draft: the draft keeps hidden details hidden: placeholders stay, the caller name and email are NOT put back', /\[PERSON_\d+\]/.test(ran.result || '') && !(ran.result || '').includes(data.SEED.callerName) && !(ran.result || '').includes(data.SEED.callerEmail), (ran.result || '').replace(/\s+/g, ' ').slice(0, 140));
-    const buttons = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
+    const buttons = [...(await answerButtons(p)), ...(await answerMenu(p))];
     t.check('kb-article-draft: offers title and body inserts, "Open a new article form" and Copy', ['Insert title into the article form', 'Insert body into the article form', 'Open a new article form', 'Copy'].every((b) => buttons.includes(b)), buttons.join(' | '));
     const callsBefore = await gform(() => window.__gformCalls.length);
     await clickButton(p, /^Insert title into the article form/);
     await waitForText(p, /This goes into a knowledge article form\. Open that form first/, { timeout: 8000 });
     t.check('kb-article-draft: Insert is REFUSED on an incident (short_description of the incident is not touched)', (await gform(() => window.__gformCalls.length)) === callsBefore, await textOf(p, '.ab-note-warn'));
 
+    if (!(await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-menu-item')).some((b) => /^Open a new article form/.test(b.innerText.trim()))))) await answerMenu(p);
     await clickButton(p, /^Open a new article form/);
     await ctx.waitUntil('the tab to open a blank kb_knowledge form', async () => ticket.url().includes('nav_to.do') && ticket.url().includes(encodeURIComponent('kb_knowledge.do')), { timeout: 10000 });
     t.check('"Open a new article form" navigated the SAME tab to a blank article form on the same instance', ticket.url().startsWith(inst.origin) && decodeURIComponent(ticket.url()).includes('kb_knowledge.do?sys_id=-1'), ticket.url());
@@ -177,7 +228,7 @@ module.exports = {
     t.check('the blank article form is a new record with an empty title and body', await kbFrame.evaluate(() => window.g_form.isNewRecord() === true && window.g_form.getValue('short_description') === '' && window.g_form.getValue('text') === ''));
 
     await clickButton(p, /^Insert title into the article form/);
-    await waitForText(p, /Inserted into the form/, { timeout: 10000 });
+    await waitForText(p, /Inserted\. Review it|Inserted into the form\./, { timeout: 10000 });
     await clickButton(p, /^Insert body into the article form/);
     // The body still holds the placeholders (this text is published) and the model's own markup: the review stops it and says so
     await p.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });

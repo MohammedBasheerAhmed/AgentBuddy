@@ -1,0 +1,43 @@
+/* assist-actions: the AI actions of the Ticket screen (src/sidepanel/ticket/assist/actions). Owner: the Actions agent (docs/round3.md).
+   Only --ab-* tokens; AI elements use the --ab-ai* ones. One primary (filled) button: the first suggestion. Three suggestions,
+   the rest folded under "More actions" by group (TRACKER.md 2.4). */
+
+.ab-acts { display: flex; flex-direction: column; gap: 8px; }
+.ab-act-head { margin: 0; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-ai); letter-spacing: 0.02em; text-transform: uppercase; }
+.ab-act-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ab-act-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.ab-act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-width: 0; text-align: left; padding: 8px 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); color: var(--ab-fg); cursor: pointer; }
+.ab-act:hover:not(:disabled) { border-color: var(--ab-ai-line); background: var(--ab-ai-soft); }
+.ab-act:focus-visible { outline: 2px solid var(--ab-ai); outline-offset: 2px; }
+.ab-act:disabled { cursor: not-allowed; opacity: 0.6; }
+.ab-act-line { display: flex; align-items: center; gap: 6px; max-width: 100%; }
+.ab-act-title { font-weight: 600; overflow-wrap: anywhere; }
+.ab-act-desc { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ab-act-reason { white-space: normal; color: var(--ab-fg-soft); }
+
+/* The one main action: filled, in the AI colour (the shared ab-btn-ai of shell.css; the description follows its text colour). */
+.ab-act-primary .ab-act-desc { color: var(--ab-ai-fg); }
+
+.ab-act-caution { margin: 0 0 0 10px; font-size: var(--ab-text-xs); color: var(--ab-warn); }
+.ab-act-empty { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+
+/* More actions, by group */
+.ab-act-more { display: flex; flex-direction: column; gap: 8px; }
+.ab-act-moretoggle { align-self: flex-start; }
+.ab-act-chevron { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform 120ms ease-out; }
+.ab-act-chevron.is-open { transform: rotate(45deg); }
+.ab-act-groups { display: flex; flex-direction: column; gap: 10px; }
+.ab-act-groups[hidden] { display: none; }
+.ab-act-group { display: flex; flex-direction: column; gap: 6px; }
+.ab-act-grouphead { margin: 0; font-size: var(--ab-text-sm); font-weight: 650; color: var(--ab-fg-soft); }
+
+/* An AI email draft waiting on the email form of its ticket (src/sidepanel/PendingDraft.jsx, AI9): AI-framed like an answer. */
+.ab-pending-email { border-color: var(--ab-ai-line); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ab-pending-email-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ab-pending-email-title { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.ab-pending-email .ab-output { overflow-wrap: anywhere; }
+.ab-pending-email .ab-hint, .ab-pending-email .ab-note { margin: 0; }
+.ab-pending-email-actions { gap: 6px; }
+
+@media (prefers-reduced-motion: reduce) { .ab-act-chevron { transition: none; } }

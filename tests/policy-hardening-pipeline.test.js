@@ -3,7 +3,7 @@
 // is shown every time when the request carries text about other people's tickets).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RunBlocked, assertRunnable, assertWithinPolicyBudget, auditBlocked, executeRun, isSensitivePack, prepareRun, previewRequired } from '../src/lib/pipeline.js';
+import { RunBlocked, assertRunnable, assertWithinPolicyBudget, auditBlocked, executeRun, isSensitivePack, prepareRun, previewRequired, requiredMode } from '../src/lib/pipeline.js';
 import { featureById } from '../src/features/registry.js';
 import { createFirewall, FirewallError } from '../src/pii/index.js';
 import { effectiveSettings, normalizePolicy } from '../src/policy/policy.js';
@@ -87,7 +87,8 @@ test('SEC-02: prepareRun passes the page table through and the firewall treats t
 const HR = { ...PACK, table: 'sn_hr_core_case', kind: 'hr_case' };
 
 test('SEC-04: allowHrContent alone is not enough: the endpoint must be pinned by the policy or run on this computer', () => {
-  const base = { feature, pack: HR, values: values() };
+  // (Strict mode: every function on an HR record needs it, see the AI0.2 test below; this test is about the endpoint.)
+  const base = { feature, pack: HR, values: values({ piiMode: 'strict' }) };
   const blocked = (pol, cfg) => codeOf(() => assertRunnable({ ...base, policy: policy(pol), config: cfg }));
   assert.equal(blocked({}, config()), 'HR_BLOCKED');
   assert.equal(blocked({ allowHrContent: true }, config()), 'HR_BLOCKED');
@@ -115,7 +116,7 @@ test('SEC-04: allowHrContent alone is not enough: the endpoint must be pinned by
 
 test('SEC-04: sensitiveTablePrefixes make a custom table an HR table for the gate; the default behaviour is unchanged', () => {
   const custom = { ...PACK, table: 'x_acme_hr_case', kind: 'other' };
-  const run = (pol) => codeOf(() => assertRunnable({ feature, pack: custom, values: values(), policy: policy(pol), config: config() }));
+  const run = (pol) => codeOf(() => assertRunnable({ feature, pack: custom, values: values({ piiMode: 'strict' }), policy: policy(pol), config: config() }));
   assert.equal(run({}), null, 'without the prefix the table is ordinary');
   assert.equal(run({ sensitiveTablePrefixes: ['x_acme_hr_'] }), 'HR_BLOCKED');
   assert.equal(run({ sensitiveTablePrefixes: ['x_acme_hr_'], allowHrContent: true }), 'HR_BLOCKED');
@@ -127,11 +128,55 @@ test('SEC-04: sensitiveTablePrefixes make a custom table an HR table for the gat
 
 test('SEC-04: a pack that says its real class is unknown (`sensitive`) is gated like an HR case', () => {
   const unknown = { ...PACK, table: 'task', kind: 'task', sensitive: true };
-  const run = (pol) => codeOf(() => assertRunnable({ feature, pack: unknown, values: values(), policy: policy(pol), config: config() }));
+  const run = (pol) => codeOf(() => assertRunnable({ feature, pack: unknown, values: values({ piiMode: 'strict' }), policy: policy(pol), config: config() }));
   assert.equal(run({}), 'HR_BLOCKED');
   assert.equal(run({ allowHrContent: true }), 'HR_BLOCKED');
   assert.equal(run({ allowHrContent: true, aiProvider: 'anthropic' }), null);
   assert.equal(isSensitivePack({ ...unknown, sensitive: false }, policy()), false);
+});
+
+// ---- AI0.2: every function on an HR record needs Strict (or Local-only) privacy mode -------------------------------------------
+//
+// Not only the HR case brief (its requires.minMode): any feature, on any table the policy treats as sensitive (sn_hr_ and the
+// policy's prefixes, an HR child table whatever kind it is mapped to, a record whose real class is unknown), and on the table of the
+// form the person is on (Rewrite and Notes carry it as pageTable).
+test('AI0.2: every function on an HR record is refused below Strict mode, with a message that says what to change', () => {
+  const allowed = policy({ allowHrContent: true, aiProvider: 'anthropic' });
+  const run = (pack, piiMode, extra = {}) => codeOf(() => assertRunnable({ feature, pack, values: values({ piiMode }), policy: allowed, config: config(), ...extra }));
+  for (const pack of [HR, { ...PACK, table: 'sn_hr_core_case_payroll', kind: 'other' }, { ...PACK, table: 'sn_hr_le_case', kind: 'hr_case' }, { ...PACK, table: 'task', kind: 'task', sensitive: true }]) {
+    assert.equal(run(pack, 'standard'), 'MODE_TOO_LOW', pack.table);
+    assert.equal(run(pack, 'strict'), null, pack.table);
+  }
+  // keyed on the table, not the kind: a custom prefix the policy names
+  const custom = { ...PACK, table: 'x_acme_er_case', kind: 'other' };
+  assert.equal(codeOf(() => assertRunnable({ feature, pack: custom, values: values(), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', sensitiveTablePrefixes: ['x_acme_er_'] }), config: config() })), 'MODE_TOO_LOW');
+  assert.equal(codeOf(() => assertRunnable({ feature, pack: custom, values: values(), policy: allowed, config: config() })), null, 'an ordinary table keeps Standard mode');
+  // Local-only ranks above Strict (a model on this computer, no pinned endpoint needed)
+  assert.equal(codeOf(() => assertRunnable({ feature, pack: HR, values: values({ piiMode: 'local-only' }), policy: policy({ allowHrContent: true }), config: resolveProviderConfig({ provider: 'ollama' }, '') })), null);
+  // the page the person is on counts too (Rewrite on an HR form)
+  assert.equal(run({ ...PACK, table: 'compose' }, 'standard', { pageTable: 'sn_hr_core_case' }), 'MODE_TOO_LOW');
+  // the organisation's own refusal comes first: there is no point asking the person to change the mode
+  assert.equal(codeOf(() => assertRunnable({ feature, pack: HR, values: values(), policy: policy(), config: config() })), 'HR_BLOCKED');
+  try {
+    assertRunnable({ feature, pack: HR, values: values(), policy: allowed, config: config() });
+    assert.fail('Standard mode must be refused');
+  } catch (e) {
+    assert.ok(e instanceof RunBlocked);
+    assert.equal(e.message, 'HR records need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.');
+  }
+  // and nothing is built: prepareRun refuses before the firewall sees a byte
+  let built = 0;
+  assert.throws(
+    () => prepareRun({ feature, pack: HR, values: values(), policy: allowed, config: config(), createFirewall: () => ({ buildRequest: () => (built++, {}) }) }),
+    (e) => e.code === 'MODE_TOO_LOW'
+  );
+  assert.equal(built, 0);
+  // what a view shows before the click
+  assert.equal(requiredMode(feature, HR, allowed), 'strict');
+  assert.equal(requiredMode(feature, PACK, allowed), '');
+  assert.equal(requiredMode(feature, { ...PACK, table: 'compose' }, allowed, 'sn_hr_core_case'), 'strict');
+  assert.equal(requiredMode({ ...feature, requires: { minMode: 'local-only' } }, HR, allowed), 'local-only');
+  assert.equal(requiredMode({ ...feature, requires: { minMode: 'strict' } }, PACK, allowed), 'strict');
 });
 
 test('SEC-04: the firewall applies Strict mode\'s HR free-text rule to the policy\'s extra prefixes and to a sensitive record', () => {

@@ -80,7 +80,7 @@ test('the card shows on the right page with the same Insert / Copy buttons, and 
   const card = (page) => renderToStaticMarkup(React.createElement(PendingDraft, { page }));
   setPending(draft());
   const shown = card(blankArticle());
-  assert.match(shown, /Turn this into a knowledge article/);
+  assert.match(shown, /Draft a knowledge article/);
   assert.match(shown, /Insert title into the article form/);
   assert.match(shown, /Insert body into the article form/);
   assert.match(shown, />Copy</);

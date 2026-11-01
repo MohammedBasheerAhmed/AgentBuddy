@@ -16,7 +16,7 @@ export const STATUS = Object.freeze({
   EMPTY_OR_HIDDEN: 'empty-or-hidden', // zero rows and the user sees no rows of the table at all: cannot tell which
   DENIED: 'denied',
   ERROR: 'error',
-  SKIPPED: 'skipped', // not read on purpose (policy or not needed)
+  SKIPPED: 'skipped', // not read on purpose (policy or not needed), or the table is not on this instance (left out quietly)
   BLOCKED: 'blocked', // the organisation's policy does not allow Agent Buddy to read this table (error code BLOCKED_TABLE)
 });
 
@@ -36,10 +36,22 @@ export function classifyReadError(err, table) {
   if (err?.code === 'ACCESS_DENIED' || /\b403\b|not allowed|forbidden|not authorized|security|denied|\bacl\b/i.test(text)) {
     return { status: STATUS.DENIED, note: `Your user cannot read ${table}.` };
   }
-  if (/invalid table|\b404\b|does not exist|no such table|unknown table/i.test(text)) {
-    return { status: STATUS.ERROR, note: `${table} is not on this instance.` };
-  }
+  // A table that is not on this instance (a plugin that is not installed: CSM, HR, chat, knowledge use) is not a problem to show:
+  // the part that needed it is left out quietly ('skipped' is never listed as "could not be read"). The note stays for the pack's
+  // own record.
+  if (isMissingTable(err)) return { status: STATUS.SKIPPED, note: `${table} is not on this instance.` };
+  // A read that ran out of time (src/content/tableApi.js READ_TIMEOUT_MS) says so in plain words, without the table's name.
+  if (err?.code === 'SN_TIMEOUT') return { status: STATUS.ERROR, note: 'ServiceNow did not answer in time. Try again in a moment.' };
   return { status: STATUS.ERROR, note: `Could not read ${table}: ${oneLine(text, 140)}` };
+}
+
+/**
+ * Is this the instance saying the table does not exist? The Table API answers HTTP 400 "Invalid table <name>"; other wordings are
+ * kept for older releases and the Aggregate API. A 404 counts only with its number in the text (tableApi.js puts it there).
+ */
+export function isMissingTable(err) {
+  const text = (err && err.message) || String(err || '');
+  return /invalid table|\b404\b|does not exist|no such table|unknown table/i.test(text);
 }
 
 /**

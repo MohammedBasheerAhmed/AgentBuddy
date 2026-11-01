@@ -1,10 +1,17 @@
-/* The quick-actions bar at the top of a record in the side panel (src/sidepanel/QuickBar.jsx). */
+/* The quick-actions bar in the ticket at a glance (src/sidepanel/QuickBar.jsx). Items from both halves: AI ones carry the AI mark and
+   the AI colour on hover; Insights ones stay in the green accent. No filled button here: the screen's one primary is in AI Assist. */
 
-.ab-quick { border: 1px solid var(--ab-accent-line); background: var(--ab-accent-soft); border-radius: var(--ab-radius); padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.ab-quick { border: 1px solid var(--ab-border); background: var(--ab-bg-subtle); border-radius: var(--ab-radius); padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
 .ab-quick-head { display: flex; align-items: center; gap: 6px; }
 .ab-quick-toggle { flex: 1; display: flex; align-items: center; gap: 8px; padding: 2px 0; border: 0; background: transparent; cursor: pointer; font-weight: 650; text-align: left; color: var(--ab-fg); }
 .ab-quick-chevron { width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 120ms ease; }
 .ab-quick-chevron-open { transform: rotate(45deg); }
 .ab-quick-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ab-quick-ai .ab-ai-badge { margin-left: -2px; }
+.ab-quick-insight { border-color: var(--ab-accent-line); }
+.ab-quick-insight:hover:not(:disabled) { background: var(--ab-accent-soft); }
 .ab-quick-choose { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .ab-quick-choose legend { padding: 0; margin-bottom: 4px; }
+.ab-quick-choose .ab-check { align-items: center; }
+
+@media (prefers-reduced-motion: reduce) { .ab-quick-chevron { transition: none; } }

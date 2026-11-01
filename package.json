@@ -14,7 +14,8 @@
     "repro": "node scripts/repro-check.js",
     "hashes": "node scripts/hashes.js",
     "policy:check": "node scripts/check-policy.js",
-    "traceability": "node scripts/traceability.js"
+    "traceability": "node scripts/traceability.js",
+    "package": "node scripts/package.js"
   },
   "dependencies": {
     "react": "18.3.1",

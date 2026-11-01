@@ -8,12 +8,15 @@ import { FORM_FIELDS, MAX_FORM_TEXT, formFieldByName } from '../../compose/formF
 import { LANGUAGES, REWRITE_PRESETS, buildComposePack, formReadRefusal, mergePeople, pageTable, peopleFromNames, withLanguage } from '../../compose/rewrite.js';
 import { currentFromPage, expectFromPage, matchesExpect, wrongRecordText } from '../../lib/fillable.js';
 import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, readRecordPeople, useFill } from './shared.js';
+import { AiBadge } from '../ui/primitives.jsx';
 
 const isRewriteFeature = (feature) => Boolean(feature?.id) && REWRITE_PRESETS.some((p) => p.featureId === feature.id);
 const SIMPLE = REWRITE_PRESETS.filter((p) => !p.needsLanguage);
 const WITH_LANGUAGE = REWRITE_PRESETS.filter((p) => p.needsLanguage);
 
-export default function RewritePanel({ page, eff }) {
+// AI23 Rewrite (7 modes), on the Write screen's AI Assist half. The text the agent pasted or typed in the form is the only data sent;
+// the result goes back into the field it came from (Add below or Replace), on the ticket it was made for.
+export default function RewritePanel({ page, eff, showKeyNote = true }) {
   const run = useRun({ page, eff, record: page.record });
   const fill = useFill({ page, eff, run });
   const [text, setText] = useState('');
@@ -105,9 +108,9 @@ export default function RewritePanel({ page, eff }) {
 
   return (
     <div className="ab-compose-stack">
-      <AiKeyNote eff={eff} what="this" />
+      {showKeyNote && <AiKeyNote eff={eff} what="this" />}
 
-      <section className="ab-card" aria-label="Text to rewrite">
+      <section className="ab-compose-input" aria-label="Text to rewrite">
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-rewrite-text">Text to rewrite</label>
           <textarea
@@ -149,7 +152,9 @@ export default function RewritePanel({ page, eff }) {
           </span>
         </div>
 
-        <div className="ab-label">Rewrite it</div>
+        <div className="ab-label ab-write-ailabel">
+          Rewrite it <AiBadge title={'Sends the masked text to the AI you chose, after a preview.'} />
+        </div>
         <div className="ab-row ab-compose-presets" role="group" aria-label="Rewrite presets">
           {SIMPLE.map((p) => button(p))}
         </div>
@@ -172,7 +177,7 @@ export default function RewritePanel({ page, eff }) {
           fill={fill}
           made={made}
           wrongRecord={wrongRecord}
-          hints={hintsFor(target, plain, { people: run.people, scan: run.scan, internalTexts: run.lastPack?.internalTexts })}
+          hints={hintsFor(target, plain, { people: run.people, scan: run.scan, internalTexts: run.lastPack?.internalTexts, internalPhrases: eff.policy?.internalPhrases })}
           onPut={put}
           onUseAsText={() => {
             setText(plain.slice(0, MAX_FORM_TEXT));
@@ -196,7 +201,10 @@ export function RewriteResultActions({ field, fill, made, wrongRecord, hints, on
   return (
     <section className="ab-card ab-compose-actions" aria-label="Use the rewrite">
       <h3 className="ab-h">Use it in the form</h3>
-      <p className="ab-hint">Goes into: {field.label}. Change the field above if you need another one.</p>
+      <p className="ab-hint">
+        Goes into: {field.label}
+        {made?.number ? ` of ${made.number}` : ''}. Change the field above if you need another one.
+      </p>
       <ReviewHints hints={hints} />
       {wrongRecord && <p className="ab-note ab-note-warn" role="status">{wrongRecordText(made)}</p>}
       <div className="ab-row">

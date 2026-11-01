@@ -7,7 +7,29 @@
 //    - the HR case brief: "Needs Strict privacy mode" in Standard mode and a click ends with the Strict-mode message; in Strict mode
 //      with no organisation policy it ends with HR_BLOCKED; in both cases nothing reaches the AI and no HR free text was read
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, checkAiRun } = require('../common.js');
-const { runFeature } = require('../ui.js');
+const { runFeature, openHalf } = require('../ui.js');
+
+// Round 3: the actions are in the AI Assist half, the ones that do not fit the ticket's state folded under "More actions"; answers
+// are kept per ticket (Close puts one away); a reason known before the click (HR content not allowed) disables the action and is said
+// once, so the pipeline's own refusal is reached through the bar's launch request (as a page-bar click would start it).
+async function openMoreActions(page) {
+  await openHalf(page, 'assist');
+  await page.evaluate(() => {
+    const more = window.__vis(document.querySelectorAll('.ab-act-moretoggle')).find((b) => b.getAttribute('aria-expanded') === 'false');
+    if (more) more.click();
+  });
+}
+const offeredTitles = async (page) => {
+  await openMoreActions(page);
+  return page.evaluate(() => window.__vis(document.querySelectorAll('.ab-acts .ab-act-title')).map((e) => e.innerText.trim()));
+};
+const closeAnswers = (page) => page.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
+/** Open the newest answer's "More" menu (the other boxes it can go into, Try again...). */
+const answerMenu = async (page) => {
+  await page.evaluate(() => [...(window.__vis(document.querySelectorAll('.ab-answer'))[0]?.querySelectorAll('.ab-answer-actions button') || [])].find((b) => b.innerText.trim() === 'More')?.click());
+  await page.waitForSelector('.ab-menu-item', { timeout: 5000 }).catch(() => null);
+};
+const LAUNCH = 'ab:launch';
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
 
@@ -37,18 +59,25 @@ module.exports = {
   async run(t, ctx) {
     const { ai, inst, data } = ctx;
     await prepare(ctx);
+    // every work profile on (the problem, change, customer service and HR actions are for those profiles)
+    await ctx.configure({ showEverything: true, profilesConfirmed: true });
     ai.setReplier(replier);
     const mark = errorMark(ctx);
     const panel = await ctx.openPanel();
     const p = panel.page;
-    const close = () => clickButton(p, /^Close/);
+    const close = async () => {
+      await closeAnswers(p);
+      await openMoreActions(p);
+    };
     const gform = (page, fn) => page.evaluate(fn);
 
     // ---- 1. Customer service case ---------------------------------------------------------------------------------------------
     let ticket = await ctx.openInstancePage(`/sn_customerservice_case.do?sys_id=${data.CASE_ID}`, 'ticket-case');
     await waitForText(p, data.CASE_NUMBER, { timeout: 20000 });
-    await p.waitForSelector('.ab-features', { timeout: 15000 });
-    const offered = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-features .ab-feature-title')).map((e) => e.innerText.trim()));
+    await openHalf(p, 'assist');
+    await p.waitForSelector('.ab-acts', { timeout: 15000 });
+    await ctx.sleep(500);
+    const offered = await offeredTitles(p);
     t.check('a case offers "Brief me before the call" and "Draft an engineering escalation"; a problem/change/HR feature is not offered', offered.includes('Brief me before the call') && offered.includes('Draft an engineering escalation') && !offered.some((o) => /RCA|CAB|HR case brief/.test(o)), offered.join(' | '));
 
     let before = ai.requests.length;
@@ -72,7 +101,10 @@ module.exports = {
     // ---- 2. Problem: three inserts, one field each --------------------------------------------------------------------------------
     ticket = await ctx.openInstancePage(`/problem.do?sys_id=${data.PROBLEM_ID}`, 'ticket-problem');
     await waitForText(p, data.PROBLEM_NUMBER, { timeout: 20000 });
-    await p.waitForSelector('.ab-features', { timeout: 15000 });
+    await openHalf(p, 'assist');
+    await p.waitForSelector('.ab-acts', { timeout: 15000 });
+    await ctx.sleep(500);
+    await openMoreActions(p);
     before = ai.requests.length;
     fromLog = inst.requests.length;
     ran = await runFeature(p, /^Draft the problem statement and RCA/);
@@ -80,10 +112,12 @@ module.exports = {
     const linked = readsOf(inst, fromLog, 'incident').filter((q) => q.includes('problem_id='));
     t.check('problem-rca: the linked incidents were read by problem_id (GET), oldest first', linked.length >= 1 && linked.some((q) => /ORDERBYopened_at/.test(q)), linked.join(' || ').slice(0, 160));
     t.check('problem-rca: the secret in the work note ("password: ...") is masked in the request', req ? !req.raw.includes(data.MORE_SEED.secret) && /\[SECRET_\d+\]/.test(req.raw) : false);
-    const inserts = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()));
-    t.check('problem-rca: one Insert button per part: statement, cause, workaround', ['Insert problem statement', 'Insert probable cause', 'Insert workaround'].every((b) => inserts.includes(b)), inserts.join(' | '));
+    await answerMenu(p);
+    const inserts = await p.evaluate(() => [...window.__vis(document.querySelectorAll('.ab-answer'))[0].querySelectorAll('.ab-answer-actions button'), ...window.__vis(document.querySelectorAll('.ab-menu-item'))].map((b) => b.innerText.trim()));
+    t.check('problem-rca: one Insert per part: statement (the main button), cause and workaround (under More)', ['Insert problem statement', 'Insert probable cause', 'Insert workaround'].every((b) => inserts.includes(b)), inserts.join(' | '));
     await clickButton(p, /^Insert probable cause/);
-    await waitForText(p, /Inserted into the form/, { timeout: 8000 });
+    await waitForText(p, /Inserted\. Review it/, { timeout: 8000 });
+    await answerMenu(p);
     await clickButton(p, /^Insert workaround/);
     await ctx.waitUntil('the second insert', async () => (await gform(ticket, () => window.__gformCalls.length)) >= 2, { timeout: 8000 });
     await clickButton(p, /^Insert problem statement/);
@@ -99,53 +133,63 @@ module.exports = {
     // ---- 3. Change: approvals, tasks, conflicts ---------------------------------------------------------------------------------------
     ticket = await ctx.openInstancePage(`/change_request.do?sys_id=${data.CHANGE_ID}`, 'ticket-change');
     await waitForText(p, data.CHANGE_NUMBER, { timeout: 20000 });
-    await p.waitForSelector('.ab-features', { timeout: 15000 });
+    await openHalf(p, 'assist');
+    await p.waitForSelector('.ab-acts', { timeout: 15000 });
+    await ctx.sleep(500);
+    await openMoreActions(p);
     before = ai.requests.length;
     fromLog = inst.requests.length;
-    ran = await runFeature(p, /^Brief for the CAB/);
+    ran = await runFeature(p, /^Prepare the CAB brief/);
     req = await checkAiRun(t, ctx, p, 'change-cab-brief', ran, { before, system: /prepare a Change Advisory Board/, userHas: [/CHG0030002/, /CTASK0030011/, /have no value on the record[^<]*Back-out plan/i] });
     const conflictReads = readsOf(inst, fromLog, 'change_request').filter((q) => q.includes('start_date<=') && q.includes('end_date>='));
     t.check('change-cab-brief: the schedule conflicts were looked up by CI and by service, over the change window (GET)', conflictReads.length >= 1, conflictReads.join(' || ').slice(0, 160));
     t.check('change-cab-brief: the approvers (Charlie, Dave) and the requester are masked, and put back in the answer only on screen', req ? !/Charlie|Whitherspoon|Dave|Loftus/i.test(req.raw) : false);
     await clickButton(p, /^Add to work notes/);
-    await waitForText(p, /Inserted into the form/, { timeout: 8000 });
+    await waitForText(p, /Inserted\. Review it/, { timeout: 8000 });
     const cabCalls = await gform(ticket, () => window.__gformCalls);
     t.check('change-cab-brief: "Add to work notes" made one setValue on work_notes', cabCalls.length === 1 && cabCalls[0].name === 'work_notes' && cabCalls[0].value.includes('What changes:'), JSON.stringify(cabCalls).slice(0, 120));
     await close();
     await ticket.close();
 
-    // ---- 4. HR case: Strict mode needed, then the organisation's HR switch ---------------------------------------------------------------
+    // ---- 4. HR case: the organisation's HR switch, and Strict mode -----------------------------------------------------------------
     ticket = await ctx.openInstancePage(`/sn_hr_core_case.do?sys_id=${data.HR_CASE_ID}`, 'ticket-hr');
     await waitForText(p, data.HR_CASE_NUMBER, { timeout: 20000 });
-    await p.waitForSelector('.ab-features', { timeout: 15000 });
-    const hrCard = await p.evaluate(() => {
-      const b = window.__vis(document.querySelectorAll('.ab-feature')).find((x) => /^HR case brief/.test(x.innerText.trim()));
-      return b ? b.innerText.replace(/\s+/g, ' ') : null;
-    });
-    t.check('HR case: the card says "Needs Strict privacy mode" in Standard mode', Boolean(hrCard) && /Needs Strict privacy mode\. Change it in Settings\./.test(hrCard), hrCard || 'no HR case brief card');
-    const hrOffered = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-features .ab-feature-title')).map((e) => e.innerText.trim()));
-    t.check('HR case: none of the other ITSM / customer service features is offered on an HR case', !hrOffered.some((o) => /Sentiment|Next best|Summarise the discussion|Where should|knowledge article|Major incident|Brief me|engineering/.test(o)), hrOffered.join(' | '));
+    await openHalf(p, 'assist');
+    await p.waitForSelector('.ab-acts', { timeout: 15000 });
+    await ctx.sleep(500);
+    const hrOffered = await offeredTitles(p);
+    t.check('HR case: the HR brief is offered', hrOffered.includes('Brief me on this HR case'), hrOffered.join(' | '));
+    t.check('HR case: none of the other ITSM / customer service features is offered on an HR case', !hrOffered.some((o) => /mood|next steps|Catch up|where it should go|knowledge article|major incident|before the call|engineering/i.test(o)), hrOffered.join(' | '));
+    const hrState = () => p.evaluate(() => ({
+      note: window.__vis(document.querySelectorAll('.ab-acts > .ab-note')).map((n) => n.innerText.trim()),
+      off: window.__vis(document.querySelectorAll('.ab-acts .ab-act')).every((b) => b.disabled),
+    }));
+    let hs = await hrState();
+    t.check('before any click: AI Assist says ONCE that HR content needs the organisation\'s approval, and every action is off', hs.note.length === 1 && /HR case content is not sent to an AI unless your organisation allows it/.test(hs.note[0]) && hs.off, JSON.stringify(hs));
 
+    // The pipeline still decides, whatever starts a run: a launch request from the bar on the page (as in scenario z) is refused there.
+    const tabId = await ctx.ext(async (u) => (await chrome.tabs.query({})).find((x) => (x.url || '').includes(u))?.id, 'sn_hr_core_case.do');
+    const launch = () => ctx.ext((k, v) => chrome.storage.session.set({ [k]: v }), LAUNCH, { tabId, table: 'sn_hr_core_case', sysId: data.HR_CASE_ID, featureId: 'hr-case-brief', at: Date.now() });
     before = ai.requests.length;
     fromLog = inst.requests.length;
-    await clickButton(p, /^HR case brief/);
-    await p.waitForSelector('.ab-note-danger[role="alert"]', { timeout: 15000 });
-    t.check('Standard mode: a click ends with the Strict-mode message', (await textOf(p, '.ab-note-danger')) === 'This needs Strict privacy mode. Change it in Settings.', await textOf(p, '.ab-note-danger'));
+    await launch();
+    await waitForText(p, /This needs Strict privacy mode\. Change it in Settings\./, { timeout: 15000 });
+    t.check('Standard mode: a run started anyway ends with the Strict-mode message', true);
     t.check('Standard mode: nothing reached the AI', ai.requests.length === before);
 
     await ctx.configure({ piiMode: 'strict' });
-    const hrCardText = () => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-feature')).find((x) => /^HR case brief/.test(x.innerText.trim()))?.innerText || '');
-    await ctx.waitUntil('the panel to follow the new privacy mode', async () => !(await hrCardText()).includes('Change it in Settings'), { timeout: 8000 });
-    t.check('after switching to Strict the card no longer asks to change the mode (the panel followed the setting)', true);
-    await clickButton(p, /^HR case brief/);
-    await ctx.waitUntil('the HR_BLOCKED message', async () => /HR case content is not sent to an AI model unless your organisation allows it/.test((await textOf(p, '.ab-note-danger')) || ''), { timeout: 15000 });
+    await ctx.waitUntil('the panel to follow the new privacy mode', async () => (await hrState()).off, { timeout: 8000 });
+    hs = await hrState();
+    t.check('Strict mode with no organisation policy: still one note (HR content not allowed), the actions stay off', hs.note.length === 1 && /HR case content is not sent/.test(hs.note[0]) && hs.off, JSON.stringify(hs));
+    await launch();
+    await waitForText(p, /HR case content is not sent to an AI model unless your organisation allows it/, { timeout: 15000 });
     t.check('Strict mode with no organisation policy: the HR_BLOCKED message, nothing reached the AI', ai.requests.length === before);
     const hrReads = inst.requests.slice(fromLog).filter((r) => /sn_hr_core_case|sys_journal_field/.test(r.path + decodeURIComponent(r.search)));
     const fieldsAsked = hrReads.flatMap((r) => (new URLSearchParams(r.search).get('sysparm_fields') || '').split(',')).filter(Boolean);
     t.check('the HR case was read without its free text: no description, short description, notes or close notes were asked for', hrReads.length > 0 && !fieldsAsked.some((f) => /description|close_notes|comments|work_notes/.test(f)) && !hrReads.some((r) => r.path.endsWith('sys_journal_field')), fieldsAsked.join(','));
     const blocked = (await ctx.audit()).filter((e) => e.outcome === 'blocked' && e.feature === 'hr-case-brief');
     t.check('the refusals are in the audit log (outcome blocked), without content', blocked.length >= 1 && blocked.every((e) => Object.keys(e).every((k) => ['time', 'feature', 'table', 'record', 'provider', 'model', 'host', 'piiMode', 'preview', 'masked', 'counts', 'inputTokens', 'outputTokens', 'outcome', 'ms', 'reason'].includes(k))), JSON.stringify(blocked[0] || {}));
-    await ctx.configure({ piiMode: 'standard' });
+    await ctx.configure({ piiMode: 'standard', showEverything: false });
     await ticket.close();
 
     const bad = errorsSince(ctx, mark);

@@ -25,8 +25,9 @@ function problemsOf(features) {
   const problems = [];
   for (const f of features) {
     for (const spec of insertsFor(f)) {
-      // An insert that names the form it belongs to (an article's title and body) is judged against THAT form's kind.
-      const target = spec.table ? [kindForTable(spec.table)] : f.kinds || [];
+      // An insert that names the form it belongs to (an article's title and body) is judged against THAT form's kind; one that names
+      // the kinds it is for (a problem's fix notes, an incident's resolution notes) only against those.
+      const target = spec.table ? [kindForTable(spec.table)] : Array.isArray(spec.kinds) && spec.kinds.length ? spec.kinds.filter((k) => (f.kinds || []).includes(k)) : f.kinds || [];
       for (const kind of target) {
         const fine = JOURNAL_FIELDS[spec.field] || ceilingOf(kind).has(spec.field) || KNOWN_EXCEPTIONS[`${f.id}:${kind}`];
         if (!fine) problems.push(`${f.id} inserts into ${spec.field}, which ${kind} records do not have on their ceiling`);
@@ -46,7 +47,9 @@ test('every insert of a feature goes into a column the ceiling of each kind it l
 
 test('the check itself works: the offers the review found are reported', () => {
   const notes = featureById('resolution-notes');
-  assert.deepEqual(problemsOf([{ ...notes, kinds: [...notes.kinds, 'request'] }]), ['resolution-notes inserts into close_notes, which request records do not have on their ceiling']);
+  // (resolution-notes names the kinds of each of its boxes, so the check uses a copy with one box for every kind it lists)
+  const oneBox = { ...notes, insert: { field: 'close_notes', label: 'x', fieldLabel: 'x' } };
+  assert.deepEqual(problemsOf([{ ...oneBox, kinds: [...notes.kinds, 'request'] }]), ['resolution-notes inserts into close_notes, which request records do not have on their ceiling']);
   // the article inserts are judged against the article form, wherever they are offered
   assert.deepEqual(problemsOf([{ ...featureById('kb-article-draft'), kinds: ['request'] }]), []);
   assert.deepEqual(problemsOf([{ id: 'x', kinds: ['incident'], insert: { field: 'impact_text', label: 'x' } }]), ['x inserts into impact_text, which incident records do not have on their ceiling']);

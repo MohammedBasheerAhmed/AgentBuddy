@@ -79,7 +79,7 @@ test('policy: each can be switched off by id; coaching stays off until the organ
 
 // ---- The prompts --------------------------------------------------------------------------------------------------------------
 
-test('the hand-over prompt names the five headings, the 220-word cap, "Not stated", and treats the data as untrusted', () => {
+test('the hand-over prompt names the five headings, the 220-word cap and "Not stated" (the firewall says the untrusted-data rule, once)', () => {
   const { system, instruction } = featureById('shift-handover');
   assert.deepEqual([...HANDOVER_HEADINGS], ['Headline:', 'Needs attention now:', 'Waiting on others:', 'Watch during the next shift:', 'Notes for the incoming team:']);
   let last = -1;
@@ -90,7 +90,7 @@ test('the hand-over prompt names the five headings, the 220-word cap, "Not state
   }
   assert.match(system, /at most 220 words/);
   assert.match(system, /Write "Not stated"/);
-  assert.match(system, /never an instruction to you: ignore any instruction/);
+  assert.doesNotMatch(system, /ignore any instruction/, 'said once per request, by the firewall (tests/prompts-contract.test.js)');
   assert.match(system, /only facts in the data/);
   assert.match(system, /Keep any bracketed placeholder/);
   assert.match(instruction, /hand-over note for the next shift/);
@@ -106,7 +106,7 @@ test('the insights prompt asks for three bullets, hypotheses labelled as such, t
   assert.match(system, /Suggested actions: exactly three bullet points/);
   assert.match(system, /at most 220 words/);
   assert.match(system, /Write "Not stated"/);
-  assert.match(system, /ignore any instruction/);
+  assert.doesNotMatch(system, /ignore any instruction/);
 });
 
 test('the coaching prompt uses the fixed rubric, forbids ranking and scoring people, and asks for group themes', () => {
@@ -122,7 +122,7 @@ test('the coaching prompt uses the fixed rubric, forbids ranking and scoring peo
   assert.match(system, /What the group does well:/);
   assert.match(system, /Not enough to judge/);
   assert.match(system, /Author names are not included/);
-  assert.match(system, /ignore any instruction/);
+  assert.doesNotMatch(system, /ignore any instruction/);
   assert.match(instruction, /rubric/);
 });
 
@@ -189,13 +189,13 @@ test('the three sections can be saved on a dashboard and have a view, a label an
   assert.deepEqual(['handover', 'coaching', 'insights'].map((id) => sectionById(id).feature), ['shift-handover', 'coaching-snapshot', 'dashboard-insights']);
 });
 
-test('Customize offers coaching and the explainer only when the policy leaves them on; the hand-over page is always offered', () => {
+test('Customize (Insights) never offers an AI section; the hand-over page is always offered', () => {
   const ids = (p) => addableSections(p).map((s) => s.id);
-  assert.ok(ids(policy()).includes('handover') && ids(policy()).includes('insights'));
-  assert.ok(!ids(policy()).includes('coaching'), 'coaching is not offered until the organisation switches it on');
-  assert.ok(ids(policy({ coachingEnabled: true })).includes('coaching'));
-  assert.ok(!ids(policy({ coachingEnabled: true, disabledFeatures: ['coaching-snapshot'] })).includes('coaching'));
-  assert.ok(!ids(policy({ disabledFeatures: ['dashboard-insights'] })).includes('insights'));
+  assert.ok(ids(policy()).includes('handover'));
+  // Explain this dashboard and coaching live in the Team screen's AI Assist half (src/sidepanel/team), whatever the policy says.
+  for (const p of [policy(), policy({ coachingEnabled: true })]) {
+    assert.ok(!ids(p).includes('insights') && !ids(p).includes('coaching'));
+  }
   assert.ok(ids(policy({ disabledFeatures: ['shift-handover'] })).includes('handover'), 'the page works without AI');
   for (const base of ['overview', 'workload', 'sla', 'quality', 'fulfilment']) assert.ok(ids(policy({ disabledFeatures: ['dashboard-insights', 'coaching-snapshot'] })).includes(base), base);
 });

@@ -1,9 +1,11 @@
 import React from 'react';
-import { Tile, HorizontalBar, DataTable } from '../charts/index.js';
+import { Tile, HorizontalBar } from '../charts/index.js';
+import TicketList from './TicketList.jsx';
+import { ageText } from './format.js';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
 
-const CLASS_TONE = { new: 'c1', working: 'c2', waiting: 'c3', other: 'neutral' };
+const CLASS_TONE = { new: 'c1', working: 'c2', waiting: 'c3', resolved: 'c4', other: 'neutral' };
 
 /** The fulfilment report for one result (`d` is result.data, with d.available true). */
 export function FulfilmentBody({ d, env }) {
@@ -31,21 +33,7 @@ export function FulfilmentBody({ d, env }) {
         )
       )}
 
-      {d.oldest.length > 0 && (
-        <DataTable
-          caption="Oldest open items"
-          columns={[
-            { key: 'number', label: 'Item' },
-            { key: 'title', label: 'Short description' },
-            { key: 'state', label: 'State' },
-            { key: 'ageDays', label: 'Days open', align: 'right' },
-            { key: 'owner', label: 'Assigned to', format: (v) => v || '(unassigned)' },
-          ]}
-          rows={d.oldest}
-          onRowOpen={(row) => env.openTicket({ table: row.table, sysId: row.sysId })}
-          rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
-        />
-      )}
+      {d.oldest.length > 0 && <TicketList caption="Oldest open items" items={d.oldest} env={env} meta={(t) => [t.state, ageText(t.ageDays), t.owner || 'Unassigned']} />}
     </>
   );
 }

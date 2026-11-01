@@ -8,6 +8,7 @@
 //  - Anyone the text names goes into `pack.people`, so the firewall masks the name exactly wherever it appears.
 //  - Nothing here reads anything. The builders take JSON the engine already produced.
 import { SYS_ID_RE, oneLine } from '../../context/util.js';
+import { isSensitiveReportTable } from '../engine/constants.js';
 
 export { oneLine };
 
@@ -15,6 +16,15 @@ export { oneLine };
 export const REPORT_TABLE = 'report';
 
 const lower = (v) => String(v ?? '').trim().toLowerCase();
+
+/**
+ * Did any of these engine results read an HR-family table? Then the pack built from them is marked `sensitive`, and the pipeline
+ * applies the HR rules to it (the organisation must allow HR content and pin the AI endpoint, or the model runs on this computer),
+ * exactly as for an HR case: report text about HR cases is HR content.
+ */
+export function carriesSensitive(results, prefixes = []) {
+  return (Array.isArray(results) ? results : [results]).some((r) => (r?.tables || []).some((t) => t?.status === 'ok' && isSensitiveReportTable(t.table, prefixes)));
+}
 
 /** A set of the policy's blocked field names, lower case. */
 export const blockedSet = (names) => new Set((Array.isArray(names) ? names : []).map(lower).filter(Boolean));

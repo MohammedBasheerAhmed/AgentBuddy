@@ -52,11 +52,14 @@ export default {
     // names those columns, so the allowlist test can prove the bulk read stays inside the display ceiling. close_notes is
     // read only to learn whether a fix is written down; its text is dropped on the spot and only its length is kept. The person
     // columns (caller_id, contact, consumer) are read so the privacy filter knows those people and their names stay out of the topic.
+    // assignment_group is read only to check that a 'my groups' scope was applied to every row (src/context/knowledge.js scopeCondition).
+    // The knowledge search (N23, src/context/knowledge.js KB_SEARCH_FIELDS) reads kb_knowledge columns inside KNOWLEDGE_CEILING, with
+    // no AI: tests/knowledge-search-ops.test.js proves it stays inside.
     'kb-gap-outline': {
       common: ['number'],
       by: {
-        incident: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'caller_id'],
-        case: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'contact', 'consumer'],
+        incident: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'caller_id', 'assignment_group'],
+        case: ['short_description', 'category', 'cmdb_ci', 'close_notes', 'resolved_at', 'contact', 'consumer', 'assignment_group'],
       },
     },
     'chat-summary': { common: ['number'], by: { chat: CHAT_CEILING } },

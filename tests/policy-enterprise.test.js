@@ -123,6 +123,14 @@ test('every policy key but providedApiKey can be compiled in, exactly as written
     auditExport: false,
     coachingEnabled: true,
     disablePageBar: true,
+    aiEnabled: false,
+    disabledSections: ['team'],
+    allowedProfiles: ['it', 'req'],
+    lockedProfiles: ['it'],
+    orgSnippets: [{ title: 'Password reset steps', body: 'Open the self-service portal and choose Reset password.', shortcut: 'pw' }],
+    internalPhrases: ['Project Falcon'],
+    defaultDashboard: { kind: 'agentbuddy-dashboard-layout', version: 1, dashboard: { name: 'Service desk today', scope: { kind: 'groups', groupIds: [], groupNames: {} }, tables: null, widgets: [{ type: 'section', section: 'overview' }, { type: 'section', section: 'sla' }] } },
+    priorityAccounts: ['Boxeo', 'Acme Corporation EMEA'],
   };
   assert.deepEqual(sorted(Object.keys(full)), sorted(POLICY_KEYS.filter((k) => k !== 'providedApiKey')), 'the sample covers every key');
   const r = validateEnterpriseConfig(full);

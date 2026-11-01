@@ -398,7 +398,13 @@ test('My day: a table refused by the organisation\'s policy is "blocked", not "d
 });
 
 test('reports and My day read the same SLA columns', async () => {
-  const inst = fakeInstance({ rules: [{ when: (c) => c.kind === 'aggregate' && c.table === 'task_sla', then: count(3) }] });
+  const inst = fakeInstance({
+    rules: [
+      { when: (c) => c.kind === 'aggregate' && c.table === 'task_sla', then: count(3) },
+      // The chosen group exists on this instance (the engine checks that first).
+      { when: (c) => c.kind === 'query' && c.table === 'sys_user_group' && c.query !== '', then: [{ sys_id: GROUP_A, name: 'Service Desk', active: 'true' }] },
+    ],
+  });
   await run({ section: 'sla', scope: { kind: 'chosen', groupIds: [GROUP_A] }, tables: ['incident'] }, inst);
   const deps = myDayDeps({ rows: { incident: [ticket(1)] }, slas: [sla(id(1), { pct: 10, bpct: 10 })] });
   await readMyDay({ userId: USER }, deps, { tables: ['incident'], now: NOW });

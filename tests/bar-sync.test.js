@@ -38,7 +38,7 @@ const siteOff = () => ({ error: { message: 'This site is not turned on.', code: 
 test('with the bar on: the worker is asked first, then the page, then the actions for the record', async () => {
   const { sync, calls } = setup({ worker: on });
   const result = await sync.tick();
-  assert.deepEqual(result, { status: 'shown', record: INC, actions: ACTIONS });
+  assert.deepEqual(result, { status: 'shown', record: INC, actions: ACTIONS.map((a) => ({ ...a, ai: true })) });
   assert.deepEqual(calls.sent, [{ type: MSG.BAR_ACTIONS }, { type: MSG.BAR_ACTIONS, table: 'incident' }]);
   assert.equal(calls.looked, 1);
 });
@@ -167,5 +167,5 @@ test('an error answer for a table (not SITE_OFF) shows nothing for that record a
 
 test('actions from the worker are checked before they reach the page', async () => {
   const { sync } = setup({ worker: (m) => (m.table ? { bar: true, actions: [{ id: 'Bad Id', label: 'x' }, { id: 'ok-id', label: 'y'.repeat(61) }, { id: 'reply-draft', label: 'Draft a reply' }, 1, null] } : on(m)) });
-  assert.deepEqual((await sync.tick()).actions, [{ id: 'reply-draft', label: 'Draft a reply' }]);
+  assert.deepEqual((await sync.tick()).actions, [{ id: 'reply-draft', label: 'Draft a reply', ai: true }]);
 });

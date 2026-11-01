@@ -75,8 +75,15 @@ export function scoreHit({ item, shared, total, words }, pack) {
   return { score: Math.min(100, score), why };
 }
 
-function toHit(row, table) {
+// Asked only with { routing: true }: where a look-alike went and how urgent it was (the "where similar tickets went" vote).
+const ROUTING_FIELDS = ['assignment_group', 'subcategory', 'priority'];
+
+function toHit(row, table, routing = false) {
+  const extra = routing
+    ? { assignment_group: oneLine(disp(row.assignment_group), 100), subcategory: oneLine(disp(row.subcategory), 100), priority: oneLine(disp(row.priority), 40) }
+    : {};
   return {
+    ...extra,
     table,
     sysId: raw(row.sys_id).toLowerCase(),
     number: oneLine(disp(row.number), 40),
@@ -97,13 +104,14 @@ function toHit(row, table) {
  * Earlier tickets on the same table that read like this one, best first.
  * @param {object} pack a ContextPack (uses table, sysId and the short description, CI and category in fields)
  * @param {{ queryTable: Function }} deps
- * @param {{ resolvedOnly?: boolean, limit?: number, allowSensitive?: boolean }} [options]
- *   resolvedOnly: only tickets that have close notes (a documented fix).
+ * @param {{ resolvedOnly?: boolean, limit?: number, allowSensitive?: boolean, routing?: boolean }} [options]
+ *   resolvedOnly: only tickets that have close notes (a documented fix). routing: also read each hit's assignment group,
+ *   subcategory and priority (in the same read), for the Insights routing vote.
  * @returns {Promise<{ hits: object[], keywords: string[], access: object[] }>}
  *   hit: { table, sysId, number, short_description, state, close_notes, close_code, resolved_at, category, cmdb_ci,
  *   score, why: string[] }
  */
-export async function findSimilarTickets(pack, deps, { resolvedOnly = false, limit = 8, allowSensitive = false } = {}) {
+export async function findSimilarTickets(pack, deps, { resolvedOnly = false, limit = 8, allowSensitive = false, routing = false } = {}) {
   const table = pack.table;
   if (isSensitiveTable(table, deps.sensitivePrefixes) && !allowSensitive) return { hits: [], keywords: [], access: [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)] };
   const keywords = searchKeywords(pack);
@@ -114,7 +122,8 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
     const [conditions, order] = query.split('^ORDERBY');
     query = `${conditions}^close_notesISNOTEMPTY^ORDERBY${order}`;
   }
-  const { rows, failure } = await softRead(deps, table, query, TICKET_FIELDS, { limit: 30, displayValue: true });
+  const fields = routing ? [...TICKET_FIELDS, ...ROUTING_FIELDS] : TICKET_FIELDS;
+  const { rows, failure } = await softRead(deps, table, query, fields, { limit: 30, displayValue: true });
   if (failure) return { hits: [], keywords, access: [accessEntry(table, failure.status, failure.note)] };
 
   const flat = rows.filter((row) => raw(row.sys_id).toLowerCase() !== String(pack.sysId).toLowerCase());
@@ -122,7 +131,7 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
   const byId = new Map(flat.map((row) => [raw(row.sys_id), row]));
   const hits = ranked
     .map(({ row, shared, total }) => {
-      const item = toHit(byId.get(raw(row.sys_id)) || row, table);
+      const item = toHit(byId.get(raw(row.sys_id)) || row, table, routing);
       const text = item.short_description.toLowerCase();
       const { score, why } = scoreHit({ item, shared, total, words: keywords.filter((w) => text.includes(w)) }, pack);
       return { ...item, score, why };

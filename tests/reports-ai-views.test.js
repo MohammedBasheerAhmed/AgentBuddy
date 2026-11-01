@@ -63,7 +63,8 @@ test('the hand-over page: figures, what needs attention, what waits, what happen
   }
   assert.match(markup, /Awaiting Caller/);
   assert.ok(markup.includes('&lt;img src=x onerror=alert(1)&gt; printer'), 'the hostile title is shown as text');
-  assert.match(markup, /<button type="button" class="ab-chart-link">INC1<\/button>/, 'a ticket number opens the ticket');
+  assert.match(markup, /<button type="button" class="ab-chart-link ab-tlist-number">INC1<\/button>/, 'a ticket number opens the ticket');
+  assert.doesNotMatch(markup, /ab-ai-badge|Write the hand-over note/, 'the hand-over tables carry no AI element (the note is under AI Assist)');
 });
 
 test('the hand-over page tells the truth when SLAs cannot be read: tiles say so, no zero, no empty claims', async () => {
@@ -114,20 +115,21 @@ test('the note block says plainly what is sent, that a name only in a title is n
   assertClean(markup, 'note block');
   assert.match(markup, /Write the hand-over note/);
   assert.match(markup, /up to 15 notable tickets/);
-  assert.match(markup, /A person named only inside a ticket title is not masked/);
+  assert.match(markup, /a person named only inside a ticket title is not/);
   assert.match(markup, /it shows exactly what will be sent/);
-  assert.match(markup, /<button[^>]*class="ab-btn ab-btn-sm ab-btn-primary"[^>]*>Write the hand-over note<\/button>/);
-  assert.doesNotMatch(markup, /class="ab-btn ab-btn-sm ab-btn-primary"[^>]*disabled/);
+  // An AI button: the AI mark, the AI colour, and where the text goes on hover.
+  assert.match(markup, /<button[^>]*class="ab-btn ab-btn-sm ab-btn-ai"[^>]*title="Sends masked text to [^"]+"[^>]*><span class="ab-ai-badge"[\s\S]*?<\/span>Write the hand-over note<\/button>/);
+  assert.doesNotMatch(markup, /class="ab-btn ab-btn-sm ab-btn-ai"[^>]*disabled/);
 });
 
 test('the note button is disabled without an AI key, and replaced by a calm line when the organisation switched it off', async () => {
   const result = await section('handover', handoverWorld());
   const noKey = html(h(HandoverAi, { result, page, eff: eff({ apiKey: '' }), hours: 12 }));
   assert.match(noKey, /Add an AI key in Settings to use this\./);
-  assert.match(noKey, /class="ab-btn ab-btn-sm ab-btn-primary"[^>]*disabled=""[^>]*>Write the hand-over note/);
+  assert.match(noKey, /class="ab-btn ab-btn-sm ab-btn-ai"[^>]*disabled=""[^>]*>[\s\S]*?Write the hand-over note/);
   const off = html(h(HandoverAi, { result, page, eff: eff({}, { disabledFeatures: ['shift-handover'] }), hours: 12 }));
   assert.match(off, /switched off by your organisation/);
-  assert.match(off, /The page above still works/);
+  assert.match(off, /The hand-over tables under Insights still work/);
   assert.doesNotMatch(off, /<button[^>]*>Write the hand-over note<\/button>/);
 });
 
@@ -204,7 +206,7 @@ test('when it is on: the reminder, what it reads, one group, the days, the size,
     assert.ok(markup.includes(`for="${id}"`), `${id} has a label`);
   }
   assert.match(markup, /class="ab-btn ab-btn-sm"[^>]*disabled=""[^>]*>\s*Pick the sample/);
-  assert.match(markup, /class="ab-btn ab-btn-sm ab-btn-primary"[^>]*disabled=""[^>]*>\s*Write the coaching snapshot/);
+  assert.match(markup, /class="ab-btn ab-btn-sm ab-btn-ai-quiet"[^>]*disabled=""[^>]*>[\s\S]*?Write the coaching snapshot/);
   assert.match(markup, /<option value="8" selected="">8<\/option>/);
   assert.doesNotMatch(markup, /<option value="11"|<option value="20"/);
   assert.match(markup, /type="date"/);
@@ -273,8 +275,8 @@ test('the explainer with nothing loaded says what to add, and its button is off'
   const markup = html(h(InsightsView, { widget: { id: 'i' }, env: env({ loaded: createLoadedStore() }), eff: eff() }));
   assertClean(markup, 'insights');
   assert.match(markup, /There are no numbers to explain yet\./);
-  assert.match(markup, /class="ab-btn ab-btn-sm ab-btn-primary"[^>]*disabled=""[^>]*>\s*Explain these numbers/);
-  assert.match(markup, /No ticket titles, descriptions or notes are sent/);
+  assert.match(markup, /class="ab-btn ab-btn-sm ab-btn-ai-quiet"[^>]*disabled=""[^>]*>[\s\S]*?Explain these numbers/);
+  assert.match(markup, /no titles, descriptions or notes/);
   assert.match(markup, /The preview shows exactly what will be sent\./);
 });
 

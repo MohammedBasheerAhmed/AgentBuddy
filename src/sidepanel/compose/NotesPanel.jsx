@@ -10,11 +10,29 @@ import { buildComposePack, pageTable, peopleFromNames } from '../../compose/rewr
 import { reviewForCustomer } from '../../safeSend/review.js';
 import { expectFromPage } from '../../lib/fillable.js';
 import { ReviewHints, featureState, fillField, fillReason, isAiReady, useFill } from './shared.js';
+import { openNewRecord } from '../openRecord.js';
+import { AiBadge } from '../ui/primitives.jsx';
+import { shownFor } from '../../profiles/profiles.js';
+import NotesHints from './NotesHints.jsx';
 
 const FEATURE_ID = 'notes-to-ticket';
 const FIELD_NAMES = { short_description: 'Short description', description: 'Description', impact: 'Impact', urgency: 'Urgency', contact_type: 'Contact type' };
+const CASE_TABLE = 'sn_customerservice_case';
 
-export default function NotesPanel({ page, eff }) {
+/** The blank forms this person may want to open: an incident (IT), a case (customer service). Both when neither profile is on. */
+export function blankFormsFor(eff) {
+  const incident = shownFor(['it'], eff);
+  const csCase = shownFor(['csm'], eff);
+  const out = [];
+  if (incident || !csCase) out.push({ table: 'incident', label: 'Open a blank incident' });
+  if (csCase) out.push({ table: CASE_TABLE, label: 'Open a blank case' });
+  return out;
+}
+
+// AI24 Notes to ticket, on the Write screen's AI Assist half: rough notes become a proposal for a NEW ticket's fields, reviewed by the
+// person and filled into a blank incident or case form they opened (a button opens one in this tab). Caller, category and group are
+// suggested without AI (NotesHints) and never filled: the person picks them on the form.
+export default function NotesPanel({ page, eff, showKeyNote = true }) {
   const run = useRun({ page, eff, record: page.record });
   const fill = useFill({ page, eff, run });
   const [notes, setNotes] = useState('');
@@ -27,6 +45,7 @@ export default function NotesPanel({ page, eff }) {
   const [filled, setFilled] = useState(false); // the form was filled: the button says so until the values change or a new answer comes
   const fillingNow = useRef(false); // set at once, so a second click before the next render cannot start a second fill
   const parsed = useRef(null); // the answer already turned into editable values
+  const [proposalNo, setProposalNo] = useState(0); // a new proposal reads its suggestions again
   const aiReady = isAiReady(eff);
   const { feature, available } = featureState(FEATURE_ID, eff.policy);
 
@@ -36,6 +55,7 @@ export default function NotesPanel({ page, eff }) {
     parsed.current = run.result;
     const p = parseTicketProposal(toPlainText(parseSafeText(run.result || '')));
     setProposal(p);
+    setProposalNo((n) => n + 1);
     setValues({ shortDescription: p.shortDescription, description: p.description, impact: p.impact, urgency: p.urgency, contactType: p.contactType });
     setWarnings(null);
     setOutcome(null);
@@ -133,9 +153,9 @@ export default function NotesPanel({ page, eff }) {
 
   return (
     <div className="ab-compose-stack">
-      <AiKeyNote eff={eff} what="this" />
+      {showKeyNote && <AiKeyNote eff={eff} what="this" />}
 
-      <section className="ab-card" aria-label="Rough notes">
+      <section className="ab-compose-input" aria-label="Rough notes">
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-notes-text">Rough notes from the call, chat or visit</label>
           <textarea
@@ -152,9 +172,13 @@ export default function NotesPanel({ page, eff }) {
           <input id="ab-notes-names" className="ab-input" value={names} onChange={(e) => setNames(e.target.value)} placeholder="Abel Tuter, Priya Raman" autoComplete="off" />
           <span className="ab-hint">Emails, phone numbers and card numbers are hidden automatically. A name written only in the notes cannot be found by pattern, so list it here. Check the preview before sending.</span>
         </div>
-        <button type="button" className="ab-btn ab-btn-primary" disabled={!aiReady || !available || !notes.trim() || run.busy} onClick={write} title={available ? '' : 'Switched off by your organisation.'}>
-          Write the ticket
-        </button>
+        <div className="ab-row">
+          {/* filled only while it is the next step (notes typed, no proposal yet): one filled button on the screen at a time */}
+          <button type="button" className={notes.trim() && !values ? 'ab-btn ab-wk-aibtn' : 'ab-btn ab-wk-aibtn-quiet'} disabled={!aiReady || !available || !notes.trim() || run.busy} onClick={write} title={available ? 'Sends the masked notes to the AI you chose, after a preview.' : 'Switched off by your organisation.'}>
+            <AiBadge label="" title="" /> Write the ticket
+          </button>
+        </div>
+        <BlankForms page={page} eff={eff} />
       </section>
 
       <RunPanel run={run} eff={eff} page={page} readingText="Getting ready…" />
@@ -212,6 +236,7 @@ export default function NotesPanel({ page, eff }) {
               Category hint: <strong>{proposal.categoryHint}</strong> (shown only; pick the category on the form yourself)
             </p>
           )}
+          <NotesHints key={proposalNo} page={page} text={values.shortDescription} names={names} />
           {proposal.questions.length > 0 && (
             <>
               <h4 className="ab-compose-sub">Questions still to ask</h4>
@@ -223,7 +248,12 @@ export default function NotesPanel({ page, eff }) {
             </>
           )}
 
-          {plan && !plan.canFill && <p className="ab-note" role="status">{plan.reason}</p>}
+          {plan && !plan.canFill && (
+            <div className="ab-note" role="status">
+              <p className="ab-write-reason">{plan.reason}</p>
+              {!page.newRecord && <BlankForms page={page} eff={eff} quiet={false} />}
+            </div>
+          )}
           <ReviewHints hints={reviewForCustomer(`${values.shortDescription}
 ${values.description}`.trim(), { people: run.people, scan: run.scan }).hints} />
 
@@ -260,5 +290,32 @@ ${values.description}`.trim(), { people: run.people, scan: run.scan }).hints} />
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * "Open a blank incident" (and/or case): the form opens in this tab, on the classic UI, and the proposal stays here to fill it. Shown
+ * while no blank form is open. Nothing is created: the form is empty until the person fills and saves it.
+ */
+function BlankForms({ page, eff, quiet = true }) {
+  const [note, setNote] = useState('');
+  if (page.newRecord) return null;
+  const forms = blankFormsFor(eff);
+  return (
+    <>
+      <div className="ab-row ab-write-blank">
+        {forms.map((f) => (
+          <button
+            key={f.table}
+            type="button"
+            className={quiet ? 'ab-btn ab-btn-sm ab-btn-quiet' : 'ab-btn ab-btn-sm'}
+            onClick={() => setNote(openNewRecord(page, f.table) ? 'The blank form opens in this tab. Your notes and the proposal stay here.' : 'The blank form could not be opened from here. Open it in ServiceNow yourself.')}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      {note && <p className="ab-hint" role="status">{note}</p>}
+    </>
   );
 }

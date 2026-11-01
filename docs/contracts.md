@@ -144,8 +144,11 @@ A column outside the ceiling (`FIELDS_BY_KIND`) can never be read; `spec` is int
 ### READ operations (`src/content/ops/<area>.js`)
 
 ```js
-export default { opName: async (args, { deps, checkRecord, checkPack }) => plainJson };
+export default { opName: async (args, { deps, checkRecord, checkPack, allowSensitive, currentRecord }) => plainJson };
 ```
+
+`currentRecord()` (from the content script, never from the panel) resolves the record the page shows now, from its form or address;
+an operation that reads the page itself (resolutionFacts on a Workspace) must check it is the record it was asked about.
 
 GET-only through the context engine or src/content/tableApi.js; validate every argument (identifiers with `isIdentifier`, sys_ids with
 `SYS_ID_RE`); never return more than the person's own session could read. The panel calls it with `read(tabId, 'opName', args)`
@@ -258,3 +261,38 @@ may assume `g_form` or `g_user` exists.
 **Content script**
 - `src/content/barSync.js`: the bar asks the worker every 30 seconds whether it is on; a content script whose site was turned off
   retires (no bar, no answers to the panel).
+
+## Additions from round 3 (2026-10-30)
+
+The panel's structure and every plug-in point are in `docs/round3.md` (screens, Insights / AI Assist halves, work profiles, who owns
+what). The contracts that cross areas:
+
+- **Work profiles** (`src/profiles/profiles.js`): `shownFor(itemProfiles, eff)` decides what is shown (never what is allowed);
+  `profilesOfFeature(feature)` (a feature may carry `profiles`), `screensFor(eff)`, `missingProfileFor(kind, eff)`, `aiAvailable(eff)`,
+  `aiOffByPolicy(eff)`. Settings: `profiles`, `profilesConfirmed`, `showEverything`, `aiSkipped`, `halves`, `followUpDays`. Policy:
+  `aiEnabled`, `disabledSections`, `allowedProfiles`, `lockedProfiles`, `orgSnippets`, `internalPhrases`, `defaultDashboard` (a saved
+  layout file; `orgDashboard`, `offerOrgDashboard`, `addOrgDashboard` in `src/reports/dashboards.js`), `priorityAccounts` (account
+  names; `isPriorityAccount` in `src/insights/priorityAccount.js`).
+- **Feature fields** (read by the AI Assist action list and answer area): `group` ('understand' | 'reply' | 'work' | 'resolve'),
+  `primary` ('copy' | 'insert'), `profiles`, `when(record, header)`.
+- **Parts**: a part may carry `inline: true` (a short, one-line record column); the firewall then writes it as a `Label: value` line in
+  one `<ticket_data field="fields">` block (`FIELDS_BLOCK`) placed where the first such part was. A part with a line break, or over 200
+  characters, keeps its own block. Each inline part is masked and escaped on its own, and blocked fields and Strict are checked per part.
+- **Rules**: the untrusted-data rule (`UNTRUSTED`, `src/prompts/rules.js`) is said once, in the firewall's `RULES_PREAMBLE`;
+  `rulesFor(audience)` no longer includes it. `tests/prompts-contract.test.js` checks every request carries it exactly once, in the
+  system message.
+- **Text clean-up**: `cleanEmailText(text)` (`src/context/journal.js`) leaves out quoted email history, signatures, legal notices and
+  mobile footers when parts are built; the pack and the views keep the whole text.
+- **Pipeline** (`src/lib/pipeline.js`): `prepareRun` fits the request to the model (`fitToModel`: oldest notes first, the newest kept,
+  the rules never cut; `config.contextTokens` overrides the model's assumed context) and returns `madeWithout` (`{ what, why, status }`,
+  status denied | error | blocked | empty-or-hidden | skipped | cut; `madeWithoutText(list)` in `src/features/parts.js`) and `size`
+  (`{ tokens, window, budget, source, notesLeftOut }`). New refusals: `TOO_LONG`; `MODE_TOO_LOW` for an HR record below Strict
+  (every function). `requiredMode(feature, pack, policy, pageTable)` lets a view say "Needs Strict" before the click. Access entries may
+  carry `more: true` (the journal was cut) and `reference: true` (a read made for reference material).
+- **Answers** (`src/sidepanel/ticket/assist/answers/`): `useAnswers({ page, eff, record })` keeps answers per ticket in memory
+  (`forgetAnswers()` clears them); every run still goes through `useRun`'s controller (`createRunController`).
+- **Insert** (`src/sidepanel/insertFlow.js`): `insertTargets`, `insertText({ page, target, text, mode, source, pinned, review, force,
+  send })` with `mode` 'replace' | 'append', `readFieldStates` / `applyFieldStates` (which fields the open form has), `primaryOf`,
+  `choicesOf`, `insertsForKind`. Review options may carry `internalPhrases`.
+- **Launches from the bar on the page** may name an Insights card: `card:<id>` (`QUICK_CARDS`, `src/features/quick.js`); the panel only
+  brings that card forward.

@@ -7,6 +7,7 @@
 import { articleParts, gapParts, mergeParts } from '../../knowledge/parts.js';
 import { chatParts } from '../../chat/parts.js';
 import { sectionOrAll } from '../../knowledge/sections.js';
+import { numberedChoices } from '../picks.js';
 import { rulesFor } from '../../prompts/rules.js';
 
 // The headings of the chat summary: the ticket notes Insert takes the last one (tests/prompts-contract.test.js).
@@ -66,6 +67,8 @@ export default [
     description: 'Title, keywords, structure, clarity, missing prerequisites and steps that look out of date.',
     wave: 3,
     kinds: ['knowledge'],
+    group: 'work',
+    primary: 'copy',
     parts: articleParts,
     // Copy only: the author edits the article in its own form.
     system:
@@ -127,6 +130,8 @@ export default [
     description: 'Summary, outcome and follow-ups, with notes ready to paste into the ticket.',
     wave: 2,
     kinds: ['chat'],
+    group: 'resolve',
+    primary: 'insert',
     journal: 60,
     parts: (pack) => chatParts(pack, { journal: 60 }),
     // The ticket notes go into the work notes of the form that is open; when the form does not allow it, the person gets Copy.
@@ -153,6 +158,11 @@ export default [
     description: 'Three short replies to the customer\'s last message, using the chat and the knowledge base.',
     wave: 2,
     kinds: ['chat'],
+    group: 'reply',
+    // Copy only, one reply at a time: the answer card shows the three replies each with its own Copy (`choices`, from
+    // src/features/picks.js); the chosen one goes into the chat window, which Agent Buddy never writes to.
+    primary: 'copy',
+    choices: (plain) => numberedChoices(plain, 3),
     journal: 14,
     parts: (pack) => chatParts(pack, { journal: 14, lastMessage: true }),
     enrich: addKnowledge,

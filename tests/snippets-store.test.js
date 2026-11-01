@@ -53,11 +53,11 @@ test('normalizeSnippet rejects bad shapes and over-long values, never cutting th
   assert.match(bad({ title: 5, body: 'b' }), /title must be text/i);
   assert.match(bad({ title: 't', body: { x: 1 } }), /text must be text/i);
   assert.match(bad({ title: 'x'.repeat(81), body: 'b' }), /title is longer than 80/i);
-  assert.match(bad({ title: 't', shortcut: 'x'.repeat(31), body: 'b' }), /shortcut is longer than 30/i);
+  assert.match(bad({ title: 't', shortcut: 'x'.repeat(31), body: 'b' }), /search word is longer than 30/i);
   assert.match(bad({ title: 't', body: 'x'.repeat(8001) }), /longer than 8000/i);
   assert.equal(normalizeSnippet({ title: 'x'.repeat(80), shortcut: 'y'.repeat(30), body: 'z'.repeat(8000) }, opts()).errors.length, 0);
   for (const shortcut of ["has space", "UPPER ok?", "a.b", "a@b", "caf" + cp(0xe9), "caf" + cp(0x65, 0x301), "<x>", "a,b", "a'b"]) {
-    assert.match(bad({ title: 't', shortcut, body: 'b' }), /shortcut can only use/i, shortcut);
+    assert.match(bad({ title: 't', shortcut, body: 'b' }), /search word can only use/i, shortcut);
   }
   for (const shortcut of ['a', 'a-b_c/d', '/x', '0', 'UPPER']) {
     assert.equal(normalizeSnippet({ title: 't', shortcut, body: 'b' }, opts()).errors.length, 0, shortcut);

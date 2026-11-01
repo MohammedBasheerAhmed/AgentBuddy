@@ -7,7 +7,19 @@
 //    - the knowledge article body is HTML: markup in the text arrives escaped
 //    - a feature that sends other tickets' text as reference material always shows its preview, even in "first time per action" mode
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, frameByPath } = require('../common.js');
-const { runFeature, waitForVisible } = require('../ui.js');
+const { runFeature, waitForVisible, openHalf } = require('../ui.js');
+
+/** Unfold "More actions" in AI Assist (round 3: what does not fit the ticket's state waits there). */
+/** Put every answer on screen away (round 3 keeps several answers; a run's own result is then the only one). */
+const closeAnswers = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
+
+async function openMoreActions(p) {
+  await openHalf(p, 'assist');
+  await p.evaluate(() => {
+    const more = window.__vis(document.querySelectorAll('.ab-act-moretoggle')).find((b) => b.getAttribute('aria-expanded') === 'false');
+    if (more) more.click();
+  });
+}
 
 function replier({ system }) {
   if (/work through a ticket step by step/.test(system)) return '- [ ] Check the certificate (general practice)';
@@ -76,6 +88,20 @@ module.exports = {
     t.check('with no expectation at all (an older caller) the fill still works', (await fill(here, { field: 'work_notes', value: 'no expectation', mode: 'append' })).ok === true);
     await ticket.evaluate(() => { window.__gformCalls.length = 0; });
 
+    // ---- "Try again" then Insert again (F5): the earlier text is swapped, never doubled; only as a whole block; never with replace ---------
+    const workNotes = () => ticket.evaluate(() => window.g_form.getValue('work_notes'));
+    const before = await workNotes();
+    await fill(here, { field: 'work_notes', value: 'Answer one', mode: 'append', expect: here_ });
+    const swap = await fill(here, { field: 'work_notes', value: 'Answer two', mode: 'append', expect: here_, replacing: 'Answer one' });
+    t.check('append with the earlier text: that one copy is swapped for the new one, what was there before stays', swap.ok === true && (await workNotes()) === `${before}\n\nAnswer two`, JSON.stringify(await workNotes()).slice(0, 200));
+    await fill(here, { field: 'work_notes', value: 'Answer three', mode: 'append', expect: here_, replacing: 'Answer' });
+    t.check('a part of a line is not a block: "Answer" inside "Answer two" is not swapped, the new text goes below', (await workNotes()) === `${before}\n\nAnswer two\n\nAnswer three`, JSON.stringify(await workNotes()).slice(0, 200));
+    const odd = await fill(here, { field: 'work_notes', value: 'Answer four', mode: 'append', expect: here_, replacing: { not: 'text' } });
+    t.check('an earlier text that is not text is ignored (plain append)', odd.ok === true && (await workNotes()).endsWith('Answer three\n\nAnswer four'));
+    const wrongSwap = await fill(here, { field: 'work_notes', value: 'x', mode: 'append', expect: { table: 'incident', sysId: OTHER }, replacing: 'Answer four' });
+    t.check('the earlier text never gets past the record check', wrongSwap.ok === false && wrongSwap.reason === 'wrong-record' && (await workNotes()).endsWith('Answer four'));
+    await ticket.evaluate(() => { window.__gformCalls.length = 0; });
+
     // The email body belongs to the email client: anywhere else there is no such field
     const emailForm = await fill(here, { field: 'work_notes', value: 'x', mode: 'append', expect: { email: true, table: 'incident', sysId: data.INCIDENT_ID } });
     t.check('a text written for the EMAIL form of this ticket is not put into the ticket form itself (there is no such field here)', emailForm.ok === false && emailForm.reason === 'no-such-field', JSON.stringify(emailForm));
@@ -114,38 +140,41 @@ module.exports = {
     const p = panel.page;
     const t2 = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-classic');
     await waitForText(p, data.INCIDENT_NUMBER, { timeout: 20000 });
-    await waitForText(p, 'Summarise the discussion', { timeout: 15000 });
+    await openMoreActions(p);
+    await waitForText(p, 'Catch up on the discussion', { timeout: 15000 });
     // "Stop waiting" (the progress button of a run; the preview dialog has its own Cancel): the run is dropped, an answer that arrives
     // later is not shown, and the request itself was NOT recalled (it had left)
     await ctx.configure({ previewMode: 'never' });
     await ctx.sleep(400);
     ai.setMode('slow');
     const sentBefore = ai.requests.length;
-    await clickButton(p, /^Summarise the discussion/);
+    await clickButton(p, /^Catch up on the discussion/);
     await waitForText(p, 'Waiting for the AI', { timeout: 10000 });
     await clickButton(p, /^Stop waiting/);
     await ctx.sleep(2300); // the slow answer comes back now
-    const afterStop = await p.evaluate(() => ({ output: window.__vis(document.querySelectorAll('.ab-output')).length, actions: window.__vis(document.querySelectorAll('.ab-features .ab-feature')).length }));
+    const afterStop = await p.evaluate(() => ({ output: window.__vis(document.querySelectorAll('.ab-output')).length, actions: window.__vis(document.querySelectorAll('.ab-acts .ab-act:not([disabled])')).length }));
     t.check('"Stop waiting": the answer that arrives afterwards is not shown, the actions are back, and the request had already gone out', afterStop.output === 0 && afterStop.actions > 3 && ai.requests.length === sentBefore + 1, JSON.stringify(afterStop));
     ai.setMode('echo');
+    await closeAnswers(p);
     await ctx.configure({ previewMode: 'first', previewSeen: [] });
     await ctx.sleep(400);
     // "First time per action": a feature without reference material is previewed once...
-    const first = await runFeature(p, /^Summarise the discussion/);
-    await clickButton(p, /^Close/);
-    const second = await runFeature(p, /^Summarise the discussion/);
-    t.check('previews "first time per action": Summarise the discussion is previewed the first time and goes straight out the second', first.preview !== null && second.preview === null && Boolean(second.result), `${first.preview !== null} / ${second.preview !== null}`);
-    await clickButton(p, /^Close/);
+    const first = await runFeature(p, /^Catch up on the discussion/);
+    await closeAnswers(p);
+    const second = await runFeature(p, /^Catch up on the discussion/);
+    t.check('previews "first time per action": Catch up on the discussion is previewed the first time and goes straight out the second', first.preview !== null && second.preview === null && Boolean(second.result), `${first.preview !== null} / ${second.preview !== null}`);
+    await closeAnswers(p);
     // ...but one that sends other tickets as reference material is previewed EVERY time
-    const one = await runFeature(p, /^Next best actions/, { approve: false });
+    const one = await runFeature(p, /^Suggest next steps/, { approve: false });
     const foot = (await textOf(p, '.ab-dialog-foot')) || '';
-    t.check('Next best actions (other tickets as reference): the preview is shown and says why it is always asked', one.preview !== null && /This one includes other tickets, so you are always asked\./.test(foot) && !/will not be asked again/.test(foot), foot.replace(/\s+/g, ' '));
+    t.check('Suggest next steps (other tickets as reference): the preview is shown and says why it is always asked', one.preview !== null && /This one includes other tickets, so you are always asked\./.test(foot) && !/will not be asked again/.test(foot), foot.replace(/\s+/g, ' '));
     await clickButton(p, /^Send to AI/);
     await waitForVisible(p, '.ab-output');
-    await clickButton(p, /^Close/);
-    const two = await runFeature(p, /^Next best actions/);
-    t.check('...and again the second time (having seen it once does not cover it: the reference changes from run to run)', two.preview !== null && Boolean(two.result), String(two.preview !== null));
-    await clickButton(p, /^Close/);
+    await closeAnswers(p);
+    const two = await runFeature(p, /^Suggest next steps/);
+    // (round 3: a repeat run may ask with the short check, "Uses N ... from other records", instead of the full text: still asked)
+    t.check('...and again the second time (having seen it once does not cover it: the reference changes from run to run)', (two.preview !== null || /Uses .* from other records/.test(two.confirm || '')) && Boolean(two.result), `${two.preview !== null} / ${two.confirm || ''}`);
+    await closeAnswers(p);
     await ctx.configure({ previewMode: 'always', previewSeen: [] });
 
     const bad = errorsSince(ctx, mark);

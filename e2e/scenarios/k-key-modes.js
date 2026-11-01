@@ -2,7 +2,7 @@
 //    panel, and the encrypted one must never keep the key in clear on disk and must lock again after a "browser restart"
 //    (chrome.storage.session is emptied then).
 const { findLeaks } = require('../leaks.js');
-const { clickButton, waitForText, runFeature, waitForRecord } = require('../ui.js');
+const { clickButton, waitForText, runFeature, waitForRecord, openHalf } = require('../ui.js');
 
 const PASS = 'correct horse battery staple';
 
@@ -36,7 +36,7 @@ module.exports = {
 
     // ---- 2. Encrypted: save through the real settings page ---------------------------------------------------------------
     const page = await ctx.newPage('options-keys');
-    await page.goto(ctx.extUrl('options.html'), { waitUntil: 'load' });
+    await page.goto(ctx.extUrl('options.html#ai'), { waitUntil: 'load' }); // the key settings are on the AI Assist page
     await page.waitForSelector('#keystorage');
     await page.select('#keystorage', 'encrypted');
     await page.waitForSelector('#pass');
@@ -54,13 +54,15 @@ module.exports = {
     await ticket.bringToFront(); // the panel reads the active tab: the ticket, not the settings page
     panel = await ctx.openPanel();
     await waitForRecord(panel.page);
+    await openHalf(panel.page, 'assist'); // the key note belongs to the AI Assist half
+    await waitForText(panel.page, /Your AI key is locked/, { timeout: 8000 }).catch(() => {});
     const lockedText = await panel.text();
     t.check('locked: the panel says the key is locked and offers no AI action', /Your AI key is locked/.test(lockedText) && (await panel.page.$$eval('button.ab-feature', (bs) => bs.every((b) => b.disabled))));
     ai.requests.length = 0;
 
     // Wrong passphrase first, then the right one, in the settings page.
     await page.bringToFront();
-    await page.reload({ waitUntil: 'load' });
+    await page.goto(ctx.extUrl('options.html#ai'), { waitUntil: 'load' });
     await page.waitForSelector('#unlock');
     await page.type('#unlock', 'not the passphrase', { delay: 5 });
     await clickButton(page, /^Unlock$/);
@@ -81,6 +83,26 @@ module.exports = {
     const run2 = await runFeature(panel.page, /^Summarise this ticket/);
     t.check('after unlocking, the panel works again and the request carries the decrypted key', Boolean(run2.result) && ai.requests.length === 1 && ai.requests[0].auth === `Bearer ${ai.key}`, run2.error || '');
     t.check('the request is masked in every key mode', ai.requests.every((r) => findLeaks(r.raw, data).critical.length === 0));
+
+    // ---- 4. Unlock in the panel itself (TRACKER.md AI0.1): locked again, the passphrase goes into the panel's own box ----------
+    await ctx.ext(async (s) => { await chrome.storage.session.remove([s]); }, slot);
+    const boxShown = await panel.page.waitForSelector('.ab-unlock input[type="password"]', { visible: true, timeout: 8000 }).then(() => true, () => false);
+    t.check('locked again: AI Assist offers its own passphrase box, no trip to Settings', boxShown && /Enter your passphrase to unlock it/.test(await panel.text()));
+    if (boxShown) {
+      await panel.page.type('.ab-unlock input[type="password"]', 'not the passphrase', { delay: 5 });
+      await clickButton(panel.page, /^Unlock$/);
+      const said = await waitForText(panel.page, /Wrong passphrase/, { timeout: 15000 }).then(() => true, () => false);
+      t.check('panel: a wrong passphrase says so, the box is emptied, still locked', said && (await panel.page.$eval('.ab-unlock input[type="password"]', (i) => i.value)) === '' && (await keys()).session[slot] === undefined);
+      await panel.page.type('.ab-unlock input[type="password"]', PASS, { delay: 5 });
+      await panel.page.keyboard.press('Enter');
+      const gone = await panel.page.waitForFunction(() => !document.querySelector('.ab-unlock'), { timeout: 15000 }).then(() => true, () => false);
+      t.check('panel: the right passphrase unlocks for this browser session and the note goes', gone && (await keys()).session[slot] === ai.key);
+      ai.requests.length = 0;
+      const run3 = await runFeature(panel.page, /^Summarise this ticket/);
+      t.check('after unlocking in the panel, the request carries the decrypted key', Boolean(run3.result) && ai.requests.length === 1 && ai.requests[0].auth === `Bearer ${ai.key}`, run3.error || '');
+      const after = await keys();
+      t.check('the passphrase is kept nowhere and the clear key is on disk nowhere', !JSON.stringify(after).includes(PASS) && !after.vault[slot] && !after.local[slot]);
+    }
     await panel.close();
     await page.close();
 

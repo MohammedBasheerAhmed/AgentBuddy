@@ -62,7 +62,7 @@ test('record tabs keep what was done in them: an AI checklist the person chose s
   const ui = await mount(<RecordView page={pageOf(TASK)} eff={effOf()} />);
   await click(ui.tab('Checklist'));
   assert.deepEqual(steps(ui), ['Image the laptop', 'Ship it to the user']);
-  await click(ui.button('Propose a cleaner checklist'));
+  await click(ui.button('Draft a checklist from the instructions'));
   await settle(6);
   await click(ui.button('Use this list'));
   assert.deepEqual(steps(ui), ['Install the VPN client', 'Add it to the asset register', 'Ship it to the user']);

@@ -1,7 +1,10 @@
 import React from 'react';
-import { Tile, StackedBar, DataTable } from '../charts/index.js';
+import { Tile, StackedBar } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
+import TicketList from './TicketList.jsx';
 import { useSection } from './useSection.js';
+import { useMinuteClock } from './hooks.js';
+import { dueText } from './format.js';
 
 const SERIES = [
   { key: 'breached', label: 'Breached', tone: 'bad' },
@@ -10,8 +13,20 @@ const SERIES = [
 // Only owners and groups that hold something breached or at risk (a ticket that is merely due soon has no bar).
 const rows = (list) => list.filter((r) => r.breached + r.atRisk > 0).map((r) => ({ key: r.id || r.name, label: r.name, parts: [{ key: 'breached', value: r.breached }, { key: 'atRisk', value: r.atRisk }] }));
 
-/** The radar for one SLA result (`d` is result.data, with d.available true). */
-export function SlaBody({ d, env }) {
+/** The facts on a ticket's second line: when its SLA ends (relative), how much is used, who holds it, its priority. */
+export const slaFacts = (t, now) => [
+  dueText({ endMs: t.endMs, breached: t.breached, paused: t.sla?.paused, plannedEnd: t.sla?.plannedEnd }, now),
+  t.breached ? '' : `${t.sla?.percentage ?? 0}% used`,
+  t.owner || 'Unassigned',
+  t.priority,
+];
+
+/** The radar for one SLA result (`d` is result.data, with d.available true). `now` is for tests; the panel uses a minute clock. */
+export function SlaBody({ d, env, now }) {
+  const clock = useMinuteClock();
+  const at = Number.isFinite(now) ? now : clock;
+  const owners = env.scopeKind !== 'mine' ? rows(d.byOwner) : [];
+  const groups = env.scopeKind !== 'mine' ? rows(d.byGroup) : [];
   return (
     <>
       <div className="ab-tiles">
@@ -20,26 +35,21 @@ export function SlaBody({ d, env }) {
         <Tile label="Due soon" value={d.counts.dueSoon} tone={d.counts.dueSoon > 0 ? 'warn' : 'neutral'} hint={`Ends within ${d.dueSoonHours} hours`} />
       </div>
 
-      {d.top.length > 0 ? (
-        <DataTable
-          caption="Closest to breaking"
-          columns={[
-            { key: 'number', label: 'Ticket' },
-            { key: 'title', label: 'Short description' },
-            { key: 'risk', label: 'SLA', format: (_, r) => (r.breached ? 'Breached' : `At risk ${r.sla.percentage}%`) },
-            { key: 'due', label: 'Due', format: (_, r) => r.sla.plannedEnd || '' },
-            { key: 'owner', label: 'Owner', format: (v) => v || '(unassigned)' },
-          ]}
-          rows={d.top}
-          onRowOpen={(row) => row.table && env.openTicket({ table: row.table, sysId: row.sysId })}
-          rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
-        />
-      ) : (
-        <p className="ab-note ab-note-ok">{d.ticketsAtIssue ? 'The tickets at issue are listed by number only when ticket details can be read.' : 'No SLA is at risk right now.'}</p>
-      )}
+      <TicketList
+        caption="Closest to breaking"
+        items={d.top}
+        env={env}
+        meta={(t) => slaFacts(t, at)}
+        empty={d.ticketsAtIssue ? 'The tickets at issue are listed by number only when ticket details can be read.' : 'No SLA is at risk right now.'}
+      />
 
-      {env.scopeKind !== 'mine' && rows(d.byOwner).length > 0 && <StackedBar title="SLA risk by owner" rows={rows(d.byOwner)} series={SERIES} labelHeader="Owner" />}
-      {env.scopeKind !== 'mine' && rows(d.byGroup).length > 1 && <StackedBar title="SLA risk by group" rows={rows(d.byGroup)} series={SERIES} labelHeader="Group" />}
+      {(owners.length > 0 || groups.length > 1) && (
+        <details className="ab-details">
+          <summary>Who holds the risk</summary>
+          {owners.length > 0 && <StackedBar title="SLA risk by owner" rows={owners} series={SERIES} labelHeader="Owner" />}
+          {groups.length > 1 && <StackedBar title="SLA risk by group" rows={groups} series={SERIES} labelHeader="Group" />}
+        </details>
+      )}
     </>
   );
 }
@@ -52,7 +62,7 @@ export default function SlaView({ widget, env }) {
   return (
     <SectionShell
       title="SLA risk radar"
-      help="Tickets whose SLA is breached, nearly used up, or due soon."
+      help="SLAs that are breached, nearly used up, or due soon."
       state={state}
       env={env}
       widgetId={widget?.id}

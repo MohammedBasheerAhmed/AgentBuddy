@@ -19,7 +19,7 @@ test('two quick ticks in "Choose" are both saved (the second does not undo the f
   globalThis.chrome = fake.chrome;
   const ui = await mount(<QuickBar kind="incident" features={featuresFor('incident', normalizePolicy({}))} eff={eff()} disabled={false} onRun={() => {}} />);
   await click(ui.button('Choose'));
-  const box = (label) => ui.$$('label.ab-check').find((l) => l.textContent.trim() === label).querySelector('input');
+  const box = (label) => ui.$$('label.ab-check').find((l) => l.querySelector('.ab-quick-choice').textContent.trim() === label).querySelector('input');
   // The defaults for an incident are Summarise, Draft a reply, Resolution notes. Add one, then take one away: before the panel's
   // settings come back (the eff prop above never changes in this test, as when storage is slow to answer).
   await click(box('Hand-off brief'));
@@ -51,7 +51,7 @@ test('a choice that cannot be saved says so instead of pretending', async () => 
   };
   const ui = await mount(<QuickBar kind="incident" features={featuresFor('incident', normalizePolicy({}))} eff={eff()} disabled={false} onRun={() => {}} />);
   await click(ui.button('Choose'));
-  const box = ui.$$('label.ab-check').find((l) => l.textContent.trim() === 'Hand-off brief').querySelector('input');
+  const box = ui.$$('label.ab-check').find((l) => l.querySelector('.ab-quick-choice').textContent.trim() === 'Hand-off brief').querySelector('input');
   await click(box);
   assert.match(ui.text(), /could not save that choice/);
   assert.equal(box.checked, false, 'the bar shows what is really saved');

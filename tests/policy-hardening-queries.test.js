@@ -110,7 +110,9 @@ test('SEC-14: every table that src/context and src/content/ops read by name is i
     /\b(?:const|let)\s+[A-Za-z_]*TABLE\w*\s*=\s*'([a-z][a-z0-9_]*)'/g,
     /\bconst\s+source\s*=\s*'([a-z][a-z0-9_]*)'/g,
   ];
-  for (const file of [...files('src/context'), ...files('src/content/ops')]) {
+  // Round 3: My work and the Ticket screen's Insights cards read through their own modules.
+  const more = ['src/mywork', 'src/insights'].filter((dir) => fs.existsSync(path.join(root, dir)));
+  for (const file of [...files('src/context'), ...files('src/content/ops'), ...more.flatMap(files)]) {
     const code = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     for (const re of patterns) for (const m of code.matchAll(re)) found.add(m[1]);
   }

@@ -100,7 +100,7 @@ export async function resolveRecordRef(ref, deps) {
  *   unresolved: { table, unresolved }   the class could not be looked up: the record is treated as SENSITIVE (minimised, HR-gated)
  * A lost session, a cancelled read and a class the organisation blocks are thrown, not turned into "unresolved".
  */
-async function resolveRealClass({ table, sysId }, deps) {
+export async function resolveRealClass({ table, sysId }, deps) {
   if (table !== 'task') return { table, unresolved: false };
   try {
     const rows = await deps.queryTable('task', `sys_id=${sysId}`, ['sys_id', 'sys_class_name'], { limit: 1, displayValue: false });

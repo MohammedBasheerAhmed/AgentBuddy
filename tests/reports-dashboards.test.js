@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 import {
-  DASHBOARDS_KEY, DASHBOARDS_VERSION, CAPS, PRESETS, defaultState, sanitizeState, sanitizeDashboard, sanitizeWidget, addDashboard, addPresetDashboard, removeDashboard,
+  DASHBOARDS_KEY, DASHBOARDS_VERSION, STORE_VERSION, CAPS, PRESETS, defaultState, sanitizeState, sanitizeDashboard, sanitizeWidget, addDashboard, addPresetDashboard, removeDashboard,
   renameDashboard, setActive, setDashboardSetup, addWidget, removeWidget, updateWidget, moveWidget, createDashboardStore,
 } from '../src/reports/dashboards.js';
 import { GROUP_A, GROUP_B } from './reports-fixtures.js';
@@ -17,13 +17,13 @@ test('a first run gets the ready-made dashboards, hand-over and the explainer in
   const { state, status } = sanitizeState(undefined, makeId);
   assert.equal(status, 'empty');
   assert.equal(state.version, DASHBOARDS_VERSION);
-  assert.deepEqual(state.dashboards.map((d) => d.name), ['My day at a glance', 'Team overview', 'Shift handover']);
+  assert.deepEqual(state.dashboards.map((d) => d.name), ['My numbers', 'Team overview', 'Shift handover']);
   assert.equal(state.activeId, state.dashboards[0].id);
   assert.deepEqual(state.dashboards[0].scope.kind, 'mine');
   assert.deepEqual(state.dashboards[1].scope.kind, 'groups');
-  assert.deepEqual(state.dashboards[1].widgets.map((w) => w.section), ['overview', 'workload', 'sla', 'quality', 'fulfilment', 'insights']);
+  assert.deepEqual(state.dashboards[1].widgets.map((w) => w.section), ['overview', 'workload', 'sla', 'quality', 'fulfilment']);
   assert.deepEqual(state.dashboards[2].scope.kind, 'groups');
-  assert.deepEqual(state.dashboards[2].widgets.map((w) => w.section), ['handover', 'insights']);
+  assert.deepEqual(state.dashboards[2].widgets.map((w) => w.section), ['handover']);
 });
 
 test('what is stored is configuration only: no key outside the allowed list', () => {
@@ -100,8 +100,8 @@ test('stored data that is corrupt or in the wrong shape falls back to the defaul
 });
 
 test('data written by a newer version is not understood and is never overwritten', async () => {
-  const newer = { version: DASHBOARDS_VERSION + 1, dashboards: [{ id: 'd-future', name: 'Future', widgets: [] }] };
-  assert.equal(sanitizeState(newer, makeId).status, 'newer');
+  assert.equal(sanitizeState({ version: DASHBOARDS_VERSION + 1, dashboards: [] }, makeId).status, 'newer');
+  const newer = { version: STORE_VERSION + 1, instances: { '': { id: 'd-future', name: 'Future', widgets: [] } } };
   const storage = memory(newer);
   const store = createDashboardStore({ storage, makeId });
   const { state, status } = await store.load();

@@ -3,7 +3,7 @@
 //    The point: no raw personal data reaches the AI server, the preview shows exactly what is sent, and the answer is
 //    rehydrated locally and rendered as plain text (no image, no link that loads anything).
 const { findLeaks } = require('../leaks.js');
-const { clickButton, waitForText, textOf, runFeature, waitForRecord } = require('../ui.js');
+const { clickButton, waitForText, textOf, waitForRecord, openHalf } = require('../ui.js');
 const { leftoverPlaceholders } = require('../common.js');
 
 const AUDIT_KEYS = ['time', 'feature', 'table', 'record', 'provider', 'model', 'host', 'piiMode', 'preview', 'masked', 'counts', 'inputTokens', 'outputTokens', 'outcome', 'ms', 'reason'];
@@ -30,11 +30,19 @@ module.exports = {
     const shown = await panel.text();
     t.check('panel shows the open record (number and title)', shown.includes('INC0010001') && shown.includes('VPN keeps disconnecting'));
     t.check('panel is ready to use AI (key found by the key store)', !/Add an AI key|Your AI key is locked/.test(shown));
-    t.check('panel offers the incident actions', ['Summarise this ticket', 'Draft a reply to the customer', 'Write resolution notes', 'Hand-off brief'].every((s) => shown.includes(s)));
+    // Round 3: the AI actions, the answers and the question box are in the AI Assist half of the Ticket screen.
+    await openHalf(p, 'assist');
+    const assistText = await panel.text();
+    t.check('AI Assist offers the incident actions and the question box', ['Summarise this ticket', 'Draft a reply'].every((s) => assistText.includes(s)) && assistText.includes('Ask about this ticket'), assistText.replace(/\s+/g, ' ').slice(0, 200));
 
     // ---- 1. Summarise: preview first -----------------------------------------------------------------------------
     await clickButton(p, /^Summarise this ticket/);
     await p.waitForSelector('.ab-dialog', { timeout: 15000 });
+    // The check shows the ticket data first and folds the fixed rules (AI0.2); the exact text is one click away.
+    const dataView = await textOf(p, '.ab-preview');
+    const rulesFolded = await p.evaluate(() => { const d = document.querySelector('details.ab-preview-rules'); return Boolean(d) && !d.open && /Rules sent with it/.test(d.querySelector('summary')?.innerText || ''); });
+    t.check('the check shows the ticket data first, with the fixed rules folded under "Rules sent with it"', /^<ticket_data/.test((dataView || '').trim()) && !/Rules set by the application/.test(dataView || '') && rulesFolded, (dataView || '').slice(0, 80));
+    await clickButton(p, /^Show the exact text/);
     const preview = await textOf(p, '.ab-preview');
     const subtitle = await textOf(p, '.ab-dialog-head');
     t.check('preview dialog is shown BEFORE anything is sent', ai.requests.length === 0, `${ai.requests.length} requests so far`);
@@ -55,7 +63,13 @@ module.exports = {
     t.check('result shows the REAL caller name (rehydrated locally)', Boolean(result) && result.includes(data.SEED.callerName), (result || '').replace(/\s+/g, ' ').slice(0, 120));
     t.check('result has no leftover placeholders except the card and password markers, which are never put back', Boolean(result) && leftoverPlaceholders(result).length === 0 && /\[CARD_\d+\]/.test(result) && /\[SECRET_\d+\]/.test(result) && !result.includes(data.SEED.card) && !result.includes(data.SEED.password), (result || '').replace(/\s+/g, ' ').slice(0, 160));
     t.check('the panel says why the card and password stay hidden in the answer', /stay hidden in answers/.test((await textOf(p, '.ab-note-warn[role="status"]')) || ''));
-    t.check('rendered result has no <img>, <a>, <iframe> or other loading element', (await p.evaluate(() => document.querySelectorAll('img, picture, a[href], iframe, object, embed, video, audio, link[rel=stylesheet][href^="http"]').length)) === 0);
+    // (Round 3: the Ticket screen's Insights cards show tickets as real links to the instance, data-ab-link="record", built from the
+    // page's own origin. Those are allowed outside the answers; nothing that loads is allowed anywhere else, and nothing at all in the answers.)
+    const loading = () => p.evaluate((origin) => [...document.querySelectorAll('img, picture, svg image, a[href], iframe, object, embed, video, audio, link[rel=stylesheet][href^="http"]')].filter((e) => !(e.matches('a[data-ab-link="record"]') && e.href.startsWith(origin + '/') && !e.closest('.ab-answers'))).map((e) => `${e.tagName} ${e.getAttribute('href') || e.getAttribute('src') || ''}`), inst.origin);
+    const loadingNow = await loading();
+    t.check('rendered result has no <img>, <a>, <iframe> or other loading element (record links to the instance aside, never in an answer)', loadingNow.length === 0, loadingNow.slice(0, 3).join(' | '));
+    const card = await p.evaluate(() => { const c = [...document.querySelectorAll('section.ab-answer')].find((e) => e.getClientRects().length > 0 && !e.classList.contains('is-folded')); return c ? { badge: Boolean(c.querySelector('.ab-ai-badge')), main: c.querySelector('.ab-btn-ai')?.innerText.trim() || '', buttons: c.querySelectorAll('.ab-answer-actions > button').length, top: c === document.querySelector('.ab-answers section.ab-answer') } : null; });
+    t.check('the answer is at the top of AI Assist, carries the AI mark, and leads with Copy (a summary is a note to self); at most 4 buttons', Boolean(card) && card.badge && card.main === 'Copy' && card.buttons <= 4 && card.top, JSON.stringify(card));
 
     // ---- 3. What the AI server actually received ------------------------------------------------------------------
     t.check('the AI server received exactly one request', ai.requests.length === 1, String(ai.requests.length));
@@ -88,6 +102,8 @@ module.exports = {
     // ---- 5. A model that obeys the injection: the image must not be rendered or fetched ----------------------------------
     ai.setMode('markdown-image');
     const netBefore = ctx.net.length;
+    // Try again sits under More on the answer (at most four buttons in a row, TRACKER.md 2.4)
+    await clickButton(p, /^More/);
     await clickButton(p, /^Try again/);
     await p.waitForSelector('.ab-dialog', { timeout: 15000 });
     await clickButton(p, /^Send to AI/);
@@ -95,12 +111,29 @@ module.exports = {
     await waitForText(p, 'Summary for', { timeout: 8000 });
     const hostile = await textOf(p, '.ab-output');
     t.check('hostile answer is shown as text (the model output was the markdown image)', hostile.includes('Summary for') && hostile.includes(data.SEED.callerName), hostile.replace(/\s+/g, ' ').slice(0, 140));
-    t.check('hostile answer: no <img> and no loading element in the panel DOM', (await p.evaluate(() => document.querySelectorAll('img, picture, svg image, a[href], iframe, object, embed, video, audio').length)) === 0);
+    const loadingHostile = await loading();
+    t.check('hostile answer: no <img> and no loading element in the panel DOM (record links to the instance aside, never in an answer)', loadingHostile.length === 0, loadingHostile.slice(0, 3).join(' | '));
     await ctx.sleep(600);
     t.check('hostile answer: nothing contacted evil.example', !ctx.net.some((n) => /evil\.example/.test(n.url)), ctx.net.filter((n) => /evil\.example/.test(n.url)).map((n) => n.url).join(' '));
     t.check('hostile answer: the AI got a second request, again without raw personal data', ai.requests.length === 2 && findLeaks(ai.requests[1].raw, data).critical.length === 0);
     t.info(`${ctx.net.length - netBefore} network requests were made while the hostile answer was displayed`);
     ai.setMode('echo');
+    t.check('the earlier answer is kept, folded to one line ("Earlier: ...")', /Earlier: Summarise this ticket/.test(await panel.text()));
+
+    // ---- 6. Ask about this ticket: the question is data like the ticket, masked, never in the system message -----------------
+    const question = `Has ${data.SEED.callerName} tried the new client yet?`;
+    await p.click('.ab-ask-input');
+    await p.type('.ab-ask-input', question);
+    await p.keyboard.press('Enter');
+    await p.waitForSelector('.ab-dialog', { timeout: 15000 });
+    await clickButton(p, /^Send to AI/);
+    await waitForText(p, 'You asked:', { timeout: 15000 });
+    const asked = ai.requests[2];
+    const msgs = asked?.body?.messages || [];
+    t.check('Ask: the question reached the AI only as data (a <ticket_data> block labelled as the question), never in the system message', msgs.length === 2 && !msgs[0].content.includes('tried the new client') && /<ticket_data field="text" label="Question from the agent">[^<]*tried the new client yet\?/.test(msgs[1].content), (msgs[1]?.content || '').slice(-200));
+    t.check('Ask: the name in the question was masked like the ticket\'s', Boolean(asked) && !asked.raw.includes(data.SEED.callerName) && findLeaks(asked.raw, data).critical.length === 0);
+    const askedCard = await p.evaluate(() => { const c = [...document.querySelectorAll('section.ab-answer')].find((e) => e.getClientRects().length > 0 && !e.classList.contains('is-folded')); return c ? { text: c.innerText, main: c.querySelector('.ab-btn-ai')?.innerText.trim() || '' } : null; });
+    t.check('Ask: the answer is titled as one, shows the question with the real name (put back locally) and leads with Copy', Boolean(askedCard) && /Answer to your question/.test(askedCard.text) && askedCard.text.includes(`You asked: ${question}`) && askedCard.main === 'Copy', JSON.stringify(askedCard).slice(0, 200));
 
     await panel.close();
     await ticket.close();

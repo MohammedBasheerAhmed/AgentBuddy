@@ -1,15 +1,21 @@
-// p. The Write tab, through the real panel and content script: Email, Rewrite, Notes to ticket, Snippets.
-//   Email     chips that fit the record's state; draft one kind; the result renders; "Open the email form" navigates the SAME tab to
-//             the instance's email form (same origin only); "Insert into the email body" falls back to Copy when the form has no
-//             body field, and fills the body once the email form is open
+// p. The Write screen (round 3), through the real panel and content script. Insights (no AI): "Check my comment" and Snippets.
+//   AI Assist: Rewrite and Notes to ticket. The email suggestions and drafts moved to the Ticket screen (scenarios of the Insights and
+//   Actions agents); here only their absence is checked.
+//   Write     every tool names the ticket it works on; no email tools here any more
+//   Check     "Check my comment" reads what the agent TYPED in the customer comment (unsaved) and flags a password and internal wording
+//             without writing anything
 //   Rewrite   text from the form or pasted (with a name, email, phone, card and password): nothing personal reaches the AI;
 //             "Replace what is in the form" replaces, "Add below" appends; a customer-visible field is guarded by the safe-to-send check
-//   Notes     on a blank new-incident form the proposed fields fill ONLY the five whitelisted fields with mapped choice values; a value
-//             the AI invented is not filled; on a saved record there is only Copy; the draft can be carried to a blank incident form
-//   Snippets  create, preview against the open record, insert as work note, insert as customer comment (a password is stopped),
-//             export through the clipboard and import it again
+//   Notes     on a saved record the proposal can only be copied; "Open a blank incident" opens the blank form in the same tab, the
+//             proposal survives and fills ONLY the five whitelisted fields with mapped choice values; a value the AI invented is not
+//             filled; caller, category and group are only suggested (no AI)
+//   Snippets  create, preview against the open record, insert into a field of choice (work note), into the customer comment (a password
+//             is stopped), copy as text, delete, paste back, and add the same set from a FILE (skipped: nothing is overwritten)
 const { findLeaks } = require('../leaks.js');
-const { prepare, errorMark, errorsSince, describeErrors, clickTab, clickButton, waitForText, textOf, checkAiRun, runAfter, captureClipboard, clipboardLog, loadingElements, settleOnRecord, waitPanel } = require('../common.js');
+const fs = require('fs');
+const path = require('path');
+const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, checkAiRun, runAfter, captureClipboard, clipboardLog, loadingElements, settleOnRecord, waitPanel } = require('../common.js');
+const { openScreen, openHalf, clearBox } = require('../ui.js');
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
 const partOf = (user, label) => (new RegExp(`label="${label}">\\n([\\s\\S]*?)\\n</ticket_data>`).exec(user) || [])[1] || '';
@@ -35,14 +41,9 @@ function replier({ system, user }) {
   return null;
 }
 
-const CHIP_SELECTOR = '[aria-label="Suggested emails"] .ab-compose-row';
-const chips = (p) =>
-  p.evaluate((sel) => window.__vis(document.querySelectorAll(sel)).map((li) => ({ title: li.querySelector('.ab-compose-row-title').innerText.trim(), why: (li.querySelector('.ab-sub')?.innerText || '').trim(), primary: li.querySelector('button').className.includes('ab-btn-primary') })), CHIP_SELECTOR);
-const facts = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('[aria-label="What the suggestions are based on"] .ab-tag')).map((x) => x.innerText.trim()));
-
 module.exports = {
   id: 'p',
-  title: 'Write tab: email suggestions and draft, rewrite with masking and replace/append, notes to a blank ticket form, snippets with export and import',
+  title: 'Write screen: check my comment, rewrite with masking and replace/append, notes to a blank ticket form, snippets into any field with export and import',
   async run(t, ctx) {
     const { ai, inst, data } = ctx;
     await prepare(ctx);
@@ -51,78 +52,38 @@ module.exports = {
     const panel = await ctx.openPanel();
     const p = panel.page;
     const note = () => p.evaluate(() => document.querySelector('.ab-compose-actions .ab-note, [role="status"].ab-note')?.innerText || '');
-    const subTab = (name) => clickTab(p, name);
-
-    // ============================== EMAIL ==============================================================================================
-    let ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.EMAIL_RESOLVED_ID}`, 'ticket-resolved');
-    await waitForText(p, 'INC0020001', { timeout: 20000 });
-    await clickTab(p, 'Write');
-    await waitForText(p, 'Which email fits?', { timeout: 20000 });
-    await p.waitForSelector(CHIP_SELECTOR, { timeout: 15000 });
-
-    // Which email fits each record's state (the chips come from rules on the record, no AI)
-    const expectTop = async (label, ticketPath, number, title, whyRe, factRe) => {
-      if (label !== 'resolved') {
-        await ticket.close();
-        ticket = await ctx.openInstancePage(ticketPath, `ticket-${label}`);
-        await ctx.waitUntil(`the email suggestions for ${number}`, async () => (await chips(p))[0]?.title === title, { timeout: 25000 });
-      }
-      const rows = await chips(p);
-      const fs = await facts(p);
-      t.check(`Email chips for ${label} (${number}): the first suggestion is "${title}", marked as the main one`, rows[0]?.title === title && rows[0].primary, JSON.stringify(rows.map((r) => r.title)));
-      t.check(`...with a reason in plain words (${whyRe})`, whyRe.test(rows[0]?.why || ''), rows[0]?.why);
-      if (factRe) t.check(`...and the facts it is based on (${factRe})`, fs.some((f) => factRe.test(f)), fs.join(' | '));
-      return rows;
+    const write = async (half) => {
+      await openScreen(p, 'Write');
+      await openHalf(p, half);
     };
-    await expectTop('resolved', '', 'INC0020001', 'Resolution', /marked resolved and the person has not been told yet/, /^Resolved/);
-    await expectTop('on-hold', `/incident.do?sys_id=${data.EMAIL_HOLD_ID}`, 'INC0020002', 'Ask for information', /waiting for the person's reply.*friendly reminder|reminder/i, /Awaiting Caller|You wrote/);
-    await expectTop('sla-missed', `/incident.do?sys_id=${data.EMAIL_SLA_ID}`, 'INC0020003', 'Apology for the wait', /service level target was missed/i, /Service level missed/);
-    await expectTop('approval', `/sc_req_item.do?sys_id=${data.RITM_ID}`, 'RITM0010050', 'Approval reminder', /approval.*still waiting/i, /approval.* waiting/i);
-    t.check('the suggestions made no AI request', ai.requests.length === 0);
+
+    // ============================== THE WRITE SCREEN AND "CHECK MY COMMENT" ===========================================================
+    let ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-incident');
+    await settleOnRecord(ctx, data.INCIDENT_ID);
+    await write('insights');
+    await waitForText(p, /For INC0010001/, { timeout: 20000 });
+    const shown = await p.evaluate(() => document.body.innerText);
+    t.check('the Write screen names the ticket its tools work on ("For INC0010001 ...")', /For INC0010001/.test(shown), shown.replace(/\s+/g, ' ').slice(0, 120));
+    t.check('the Write screen has no email tools any more (they moved to the Ticket screen)', !/Which email fits|Suggested emails/.test(shown));
+    t.check('Insights carries no AI mark', await p.evaluate(() => !window.__vis(document.querySelectorAll('[id$="-half-panel-insights"] .ab-ai-badge')).length));
+    // The agent types a customer comment (not saved) with a password and internal wording in it
+    const typedComment = `Hi Abel, this was escalated to the network team. Your temporary password: ${data.MORE_SEED.rewritePassword}`;
+    await ticket.click('[id="incident.comments"]');
+    await ticket.type('[id="incident.comments"]', typedComment, { delay: 0 });
+    const checkCalls = await ticket.evaluate(() => window.__gformCalls.length);
+    const aiBeforeCheck = ai.requests.length;
+    await clickButton(p, /^Check my comment/);
+    await waitForText(p, /Your customer comment: check before sending\./, { timeout: 15000 });
+    const checked = await p.evaluate(() => document.querySelector('.ab-write-check')?.innerText || '');
+    t.check('"Check my comment" checks what was TYPED in the form: the password is flagged, shown masked only', /password, key or token/.test(checked) && !checked.includes(data.MORE_SEED.rewritePassword), checked.replace(/\s+/g, ' ').slice(0, 200));
+    t.check('...internal wording ("escalated to") is pointed out', /escalated to/i.test(checked), checked.replace(/\s+/g, ' ').slice(0, 200));
+    t.check('...and the check wrote nothing to the form and asked no AI', (await ticket.evaluate(() => window.__gformCalls.length)) === checkCalls && ai.requests.length === aiBeforeCheck);
     await ticket.close();
-
-    // Draft one kind on the resolved incident
-    ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.EMAIL_RESOLVED_ID}`, 'ticket-resolved');
-    await ctx.waitUntil('the chips', async () => (await chips(p)).length > 0 && (await chips(p))[0].title === 'Resolution', { timeout: 20000 });
-    await captureClipboard(p);
-    let before = ai.requests.length;
-    let ran = await runAfter(p, () => p.click('button[aria-label="Draft: Resolution"]'));
-    await checkAiRun(t, ctx, p, 'email-resolution', ran, { before, system: /write an email to the person who raised a ServiceNow ticket/, userHas: [/Status worked out by Agent Buddy/i, /marked resolved/i] });
-    t.check('the draft shows the customer by name again (put back locally)', /Hello Abel Tuter/.test(ran.result || ''), (ran.result || '').replace(/\s+/g, ' ').slice(0, 100));
-    await waitForText(p, 'Use the draft', { timeout: 8000 });
-    t.check('the draft offers Copy subject, Copy body, Open the email form and Insert into the email body', await p.evaluate(() => ['Copy subject', 'Copy body', 'Open the email form', 'Insert into the email body'].every((b) => window.__vis(document.querySelectorAll('button')).some((x) => x.innerText.trim() === b))));
-    await clickButton(p, /^Copy subject/);
-    await ctx.waitUntil('copy subject', async () => (await clipboardLog(p)).length >= 1, { timeout: 5000 });
-    t.check('Copy subject copies just the subject line', (await clipboardLog(p)).slice(-1)[0] === 'An update on your request', (await clipboardLog(p)).slice(-1)[0]);
-
-    // Insert into the email body on an INCIDENT form: the form has no body field -> Copy, said plainly, nothing written
-    const callsBefore = await ticket.evaluate(() => window.__gformCalls.length);
-    await clickButton(p, /^Insert into the email body/);
-    await waitForText(p, /That field is not on this form\. Copied to the clipboard instead\.|The browser blocked copying/, { timeout: 8000 });
-    t.check('"Insert into the email body" on the incident form (no body field): falls back to Copy with a plain sentence, writes nothing', (await ticket.evaluate(() => window.__gformCalls.length)) === callsBefore && (await clipboardLog(p)).slice(-1)[0]?.startsWith('Hello Abel Tuter'), (await clipboardLog(p)).slice(-1)[0]);
-
-    // Open the email form: the same tab, the same instance, the record in the address
-    await clickButton(p, /^Open the email form/);
-    await ctx.waitUntil('the tab to open the email form', async () => new URL(ticket.url()).pathname === '/email_client.do', { timeout: 10000 });
-    const target = new URL(ticket.url());
-    t.check('"Open the email form" navigated the SAME tab to /email_client.do on the same instance, for this record', target.origin === inst.origin && target.searchParams.get('sysparm_table') === 'incident' && target.searchParams.get('sysparm_sys_id') === data.EMAIL_RESOLVED_ID, ticket.url());
-    await ticket.waitForFunction(() => window.__gformReady === true, { timeout: 10000 });
-    t.check('the email form is a blank sys_email form with an empty body', await ticket.evaluate(() => window.g_form.getTableName() === 'sys_email' && window.g_form.isNewRecord() && window.g_form.getValue('body') === ''));
-    // The draft is still on screen (the Email panel stays mounted) and Insert works now
-    await ctx.waitUntil('the draft to stay on screen on the email form', async () => (await p.evaluate(() => document.body.innerText)).includes('Use the draft'), { timeout: 15000 });
-    await clickButton(p, /^Insert into the email body/);
-    await waitForText(p, /Inserted into the form\. Review it, then save the record yourself\./, { timeout: 10000 });
-    const emailCalls = await ticket.evaluate(() => window.__gformCalls);
-    t.check('on the email form "Insert into the email body" made one setValue on body (the greeting and text), and nothing was saved or sent', emailCalls.length === 1 && emailCalls[0].name === 'body' && /^Hello Abel Tuter,/.test(emailCalls[0].value) && !/\[[A-Z_]+_\d+\]/.test(emailCalls[0].value) && (await ticket.evaluate(() => window.__gformSaves.length)) === 0, JSON.stringify(emailCalls).slice(0, 140));
-    t.check('the subject and recipients were not touched', await ticket.evaluate(() => window.g_form.getValue('subject') === '' && window.g_form.getValue('recipients') === ''));
-    await ticket.close();
-    await clickButton(p, /^Close/).catch(() => {});
 
     // ============================== REWRITE ============================================================================================
     ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-incident');
     await settleOnRecord(ctx, data.INCIDENT_ID);
-    await clickTab(p, 'Write');
-    await subTab('Rewrite');
+    await write('assist');
     await p.waitForSelector('#ab-rewrite-text', { visible: true, timeout: 10000 });
     // 1. "Use what I typed in the form": the work notes the agent typed but did not save
     await p.select('#ab-rewrite-field', 'work_notes');
@@ -131,13 +92,13 @@ module.exports = {
     t.check('"Use what I typed in the form" reads the UNSAVED work note through the page', (await p.$eval('#ab-rewrite-text', (el) => el.value)) === 'Checking the gateway certificate now.');
     // 2. Pasted text with a name, email, phone, card and password; one more person listed under "Names to hide"
     const pasted = `Hi ${data.SEED.callerName}, ${data.MORE_SEED.rewriteName} will call you on ${data.MORE_SEED.rewritePhone} or write to ${data.MORE_SEED.rewriteEmail}. The card ${data.MORE_SEED.rewriteCard} was refused. Your password: ${data.MORE_SEED.rewritePassword} is temporary.`;
-    await p.$eval('#ab-rewrite-text', (el) => { el.value = ''; });
+    await clearBox(p, '#ab-rewrite-text');
     await p.click('#ab-rewrite-text');
     await p.type('#ab-rewrite-text', pasted, { delay: 0 });
     await p.type('#ab-rewrite-names', data.MORE_SEED.rewriteName);
     await captureClipboard(p);
-    before = ai.requests.length;
-    ran = await runAfter(p, () => clickButton(p, /^Friendlier/));
+    let before = ai.requests.length;
+    let ran = await runAfter(p, () => clickButton(p, /^Friendlier/));
     const req = await checkAiRun(t, ctx, p, 'rewrite-friendly', ran, { before, system: /improve a piece of text they wrote/, userHas: [/\[PERSON_\d+\]/, /\[EMAIL_\d+\]/, /\[PHONE_\d+\]/, /\[CARD_\d+\]/, /\[SECRET_\d+\]/] });
     t.check('rewrite: the Priya Raman typed under "Names to hide" was masked too (she is not on the ticket)', req ? !/Priya|Raman/.test(req.raw) : false);
     t.check('rewrite: the answer has the real names and email back, locally only; the card and password stay hidden as markers', [data.SEED.callerName, data.MORE_SEED.rewriteEmail, data.MORE_SEED.rewriteName].every((v) => (ran.result || '').includes(v)) && ![data.MORE_SEED.rewriteCard, data.MORE_SEED.rewritePassword].some((v) => (ran.result || '').includes(v)) && /\[CARD_\d+\]/.test(ran.result || '') && /\[SECRET_\d+\]/.test(ran.result || ''), (ran.result || '').replace(/\s+/g, ' ').slice(0, 140));
@@ -171,15 +132,15 @@ module.exports = {
     t.check('"Edit first (copy instead)": the warning closes, nothing is written, the text is copied', (await p.$('.ab-note-warn[role="alert"]')) === null && (await ticket.evaluate(() => window.__gformCalls.length)) === callsBefore3 && (await clipboardLog(p)).slice(-1)[0] === plain);
     await clickButton(p, /^Use as my text/);
     t.check('"Use as my text" puts the rewrite back in the box so it can be rewritten again', (await p.$eval('#ab-rewrite-text', (el) => el.value)).startsWith('Rewritten: Hi Abel Tuter'));
-    t.check('nothing in the Write tab loads or runs (no image, link, frame or inline script)', (await loadingElements(p)) === 0);
-    await p.$eval('#ab-rewrite-text', (el) => { el.value = ''; });
+    t.check('nothing on the Write screen loads or runs (no image, link, frame or inline script)', (await loadingElements(p)) === 0);
+    await clearBox(p, '#ab-rewrite-text');
     await ticket.close();
 
     // ============================== NOTES TO TICKET ====================================================================================
     // A saved record first: the proposal is shown, but there is nothing to fill
     ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-incident');
     await settleOnRecord(ctx, data.INCIDENT_ID);
-    await subTab('Notes to ticket');
+    await write('assist');
     await p.click('#ab-notes-text');
     await p.type('#ab-notes-text', `vpn down since this morning, error 809, tried restart, urgent for sales team. caller ${data.MORE_SEED.rewriteName} on ${data.MORE_SEED.rewritePhone}`, { delay: 0 });
     await p.type('#ab-notes-names', data.MORE_SEED.rewriteName);
@@ -196,11 +157,15 @@ module.exports = {
     t.check('Copy short description copies the (editable) short description', (await clipboardLog(p)).slice(-1)[0] === 'VPN is down for the sales team since this morning');
     t.check('no field of the saved incident was touched', (await ticket.evaluate(() => window.__gformCalls.length)) === 0);
 
-    // The agent opens a blank incident form (in the classic frame) in the same tab: the notes and the proposal must SURVIVE the
-    // page change (the panel used to throw its sections away whenever the tab was loading), and Fill becomes possible.
-    t.check('no "Open a new incident form" button is offered any more: the panel fills the blank form itself', !(await p.evaluate(() => document.body.innerText)).includes('Open a new incident form'));
+    // Caller, category and group are only suggested, read without AI
+    await waitForText(p, 'Suggestions to pick on the form', { timeout: 8000 });
+    await waitPanel(ctx, p, 'the suggestions to be read', async () => !/Looking at similar resolved/.test(await p.evaluate(() => document.body.innerText)), { timeout: 15000 });
+    t.check('the suggestions for caller, category and group made no AI request and filled nothing', ai.requests.length === before + 1 && (await ticket.evaluate(() => window.__gformCalls.length)) === 0);
+    // The agent presses "Open a blank incident": the blank form opens in the SAME tab (classic frame); the notes and the proposal must
+    // SURVIVE the page change, and Fill becomes possible.
     const notesBefore = await p.$eval('#ab-notes-text', (el) => el.value);
-    await ticket.goto(`${inst.origin}/nav_to.do?uri=${encodeURIComponent('incident.do?sys_id=-1')}`, { waitUntil: 'load' });
+    await clickButton(p, /^Open a blank incident/);
+    await ctx.waitUntil('the tab to open a blank incident form', async () => decodeURIComponent(ticket.url()).includes('incident.do?sys_id=-1'), { timeout: 10000 });
     await ctx.sleep(300);
     t.check('the tab moved to a blank incident form on the same instance', ticket.url().startsWith(inst.origin) && decodeURIComponent(ticket.url()).includes('incident.do?sys_id=-1'), ticket.url());
     const frame = await ctx.waitUntil('the incident form frame', async () => ticket.frames().find((f) => f.url().startsWith(inst.origin) && new URL(f.url()).pathname === '/incident.do') || null, { timeout: 10000 });
@@ -218,12 +183,11 @@ module.exports = {
     t.check('the description kept its words and no hidden detail came back as a placeholder or a number from the notes\' phone', !/\[[A-Z_]+_\d+\]/.test(`${by.short_description} ${by.description}`) && by.description.includes('Error 809'));
 
     // The same on a blank form again, with a made-up impact, urgency and channel from the AI: those must NOT be filled
-    await subTab('Notes to ticket');
     await ticket.close();
     ticket = await ctx.openInstancePage('/incident.do?sys_id=-1', 'ticket-new-incident');
     await ctx.waitUntil('the panel to see the blank incident form', async () => (await p.evaluate(() => document.body.innerText)).includes('Rough notes'), { timeout: 20000 });
     notesMode = 'invented';
-    await p.$eval('#ab-notes-text', (el) => { el.value = ''; });
+    await clearBox(p, '#ab-notes-text');
     await p.click('#ab-notes-text');
     await p.type('#ab-notes-text', 'sales cannot sign in to the portal since this morning, error 809', { delay: 0 });
     ran = await runAfter(p, () => clickButton(p, /^Write the ticket/));
@@ -245,14 +209,14 @@ module.exports = {
     await settleOnRecord(ctx, data.INCIDENT_ID);
     const aiBeforeSnippets = ai.requests.length;
     await ctx.ext((key) => chrome.storage.local.remove(key), 'agentbuddy_snippets');
-    await subTab('Snippets');
+    await write('insights');
     await waitForText(p, 'No snippets yet', { timeout: 8000 });
-    await clickButton(p, /^New snippet/);
+    await clickButton(p, /^Write my own/);
     await p.type('#ab-snip-title', 'Certificate follow-up');
     await p.type('#ab-snip-shortcut', 'cert');
     const secret = 'Passw0rd!Snip#6';
     await p.type('#ab-snip-body', `Hi {{caller.first_name | there}}, an update on {{number}}. Your temporary password: ${secret} (change it at first sign-in).`, { delay: 0 });
-    await waitForText(p, /Filled from the open ticket\./, { timeout: 15000 });
+    await waitForText(p, /Filled from INC0010001\./, { timeout: 15000 });
     const livePreview = await p.$eval('[aria-label="Preview of the snippet"]', (el) => el.innerText);
     t.check('snippet editor: the preview is filled from the OPEN ticket (real first name and number), not from examples', /^Hi Abel, an update on INC0010001\./.test(livePreview), livePreview);
     await clickButton(p, /^Save/);
@@ -263,26 +227,29 @@ module.exports = {
     t.info('snippet reached storage after ' + (Date.now() - t0) + ' ms');
     t.check('the snippet is stored as a TEMPLATE (variables as written), not with the ticket\'s values', stored.length === 1 && stored[0].body.includes('{{caller.first_name | there}}') && !stored[0].body.includes('Abel'), JSON.stringify(stored).slice(0, 160));
     await captureClipboard(p);
-    // Insert as a work note: appended below what was typed, no customer check
+    // Into a field of choice, the work note: appended below what was typed, no customer check
     await ctx.waitUntil('the snippet detail', async () => (await p.$('[aria-label="Snippet: Certificate follow-up"]')) !== null, { timeout: 8000 });
     const snipBefore = await ticket.evaluate(() => window.__gformCalls.length);
-    await clickButton(p, /^Insert as work note/);
+    await p.select('#ab-snip-target', 'work_notes');
+    await clickButton(p, /^Insert$/);
     await waitForText(p, /Inserted into the form/, { timeout: 8000 });
     let scalls = (await ticket.evaluate(() => window.__gformCalls)).slice(snipBefore);
-    t.check('"Insert as work note": one setValue on work_notes, below the typed text, with the real first name and number', scalls.length === 1 && scalls[0].name === 'work_notes' && scalls[0].value.startsWith('Checking the gateway certificate now.\n\nHi Abel, an update on INC0010001.'), JSON.stringify(scalls).slice(0, 160));
-    // Insert as a customer comment: the password in the snippet is stopped
+    t.check('Insert into "Work note": one setValue on work_notes, below the typed text, with the real first name and number', scalls.length === 1 && scalls[0].name === 'work_notes' && scalls[0].value.startsWith('Checking the gateway certificate now.\n\nHi Abel, an update on INC0010001.'), JSON.stringify(scalls).slice(0, 160));
+    // Into the customer comment: the password in the snippet is stopped
     const before2 = await ticket.evaluate(() => window.__gformCalls.length);
-    await clickButton(p, /^Insert as customer comment/);
+    await p.select('#ab-snip-target', 'comments');
+    await clickButton(p, /^Insert$/);
     await p.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
     const warn2 = (await textOf(p, '.ab-note-warn[role="alert"]')) || '';
-    t.check('"Insert as customer comment": the password in the snippet is stopped by the safe-to-send check (masked excerpt only)', /Check before sending to the customer/.test(warn2) && !warn2.includes(secret), warn2.replace(/\s+/g, ' ').slice(0, 160));
+    t.check('Insert into "Customer comment": the password in the snippet is stopped by the safe-to-send check (masked excerpt only)', /Check before sending to the customer/.test(warn2) && !warn2.includes(secret), warn2.replace(/\s+/g, ' ').slice(0, 160));
     t.check('...and nothing was written to the comments field', (await ticket.evaluate(() => window.__gformCalls.length)) === before2 && (await ticket.evaluate(() => window.g_form.getValue('comments'))) === '');
     await clickButton(p, /^Edit first/);
     await waitForText(p, /Not inserted\. Copied to the clipboard instead\.|The browser blocked copying/, { timeout: 8000 });
 
-    // Export through the clipboard, delete, import it back
-    await clickButton(p, /^Copy all as JSON/);
-    await waitForText(p, /Copied 1 snippet as JSON|The browser blocked copying/, { timeout: 8000 });
+    // Copy as text, delete, paste it back, then add the same set from a FILE
+    await clickButton(p, /^Back up or share/);
+    await clickButton(p, /^Copy as text/);
+    await waitForText(p, /Copied 1 snippet as text|The browser blocked copying/, { timeout: 8000 });
     const exported = (await clipboardLog(p)).slice(-1)[0] || '';
     let parsed = null;
     try {
@@ -290,12 +257,12 @@ module.exports = {
     } catch {
       /* checked below */
     }
-    t.check('"Copy all as JSON" copies a snippets file (format, version, the one snippet with its template)', parsed?.format === 'agent-buddy-snippets' && JSON.stringify(parsed).includes('Certificate follow-up') && JSON.stringify(parsed).includes('{{caller.first_name | there}}'), exported.slice(0, 120));
+    t.check('"Copy as text" copies a snippets file (format, version, the one snippet with its template)', parsed?.format === 'agent-buddy-snippets' && JSON.stringify(parsed).includes('Certificate follow-up') && JSON.stringify(parsed).includes('{{caller.first_name | there}}'), exported.slice(0, 120));
     await clickButton(p, /^Delete/);
     await clickButton(p, /^Yes, delete/);
     await waitForText(p, 'Deleted.', { timeout: 8000 });
     t.check('after Delete the library is empty again', (await ctx.ext(async (key) => ((await chrome.storage.local.get(key))[key] || []).length, 'agentbuddy_snippets')) === 0);
-    await clickButton(p, /^Import from JSON/);
+    await clickButton(p, /^Paste instead/);
     await p.evaluate((text) => {
       const el = document.getElementById('ab-snip-import');
       const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
@@ -304,25 +271,26 @@ module.exports = {
     }, exported);
     await clickButton(p, /^Add these snippets/);
     await waitForText(p, /Added 1, skipped 0\./, { timeout: 8000 });
-    t.check('Import from JSON brings the snippet back (Added 1, skipped 0)', (await ctx.ext(async (key) => ((await chrome.storage.local.get(key))[key] || []).map((s) => s.title), 'agentbuddy_snippets')).join() === 'Certificate follow-up');
-    // Importing the same file again skips it (nothing is overwritten)
-    await clickButton(p, /^Import from JSON/);
-    await p.evaluate((text) => {
-      const el = document.getElementById('ab-snip-import');
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-      setter.call(el, text);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    }, exported);
-    await clickButton(p, /^Add these snippets/);
+    t.check('Paste instead brings the snippet back (Added 1, skipped 0)', (await ctx.ext(async (key) => ((await chrome.storage.local.get(key))[key] || []).map((s) => s.title), 'agentbuddy_snippets')).join() === 'Certificate follow-up');
+    // Adding the same set from a FILE skips it (nothing is overwritten); a file that is not JSON is refused before it is read
+    const file = path.join(ctx.TMP, 'agent-buddy-snippets-e2e.json');
+    fs.writeFileSync(file, `${String.fromCharCode(0xfeff)}${exported}`);
+    const input = await p.$('#ab-snip-file');
+    await input.uploadFile(file);
     await waitForText(p, /Added 0, skipped 1\./, { timeout: 8000 });
-    t.check('importing the same file again adds nothing (skipped 1)', (await ctx.ext(async (key) => ((await chrome.storage.local.get(key))[key] || []).length, 'agentbuddy_snippets')) === 1);
+    t.check('"Add from a file": the same snippets again add nothing (skipped 1: the search word is taken)', (await ctx.ext(async (key) => ((await chrome.storage.local.get(key))[key] || []).length, 'agentbuddy_snippets')) === 1 && /search word "cert" is already used/.test(await p.evaluate(() => document.body.innerText)));
+    const notJson = path.join(ctx.TMP, 'snippets-e2e.txt');
+    fs.writeFileSync(notJson, exported);
+    await input.uploadFile(notJson);
+    await waitForText(p, /Choose a \.json file saved by Agent Buddy/, { timeout: 8000 });
+    t.check('a file that is not .json is refused with a plain sentence', true);
 
     // A page that is not a record: the preview says it shows examples, and no AI was involved in any of this
     t.check('no snippet action made an AI request', ai.requests.length === aiBeforeSnippets);
     await ctx.ext((key) => chrome.storage.local.remove(key), 'agentbuddy_snippets');
 
     const bad = errorsSince(ctx, mark);
-    t.check('no console error, page error or CSP violation during the Write tab runs', bad.length === 0, describeErrors(bad));
+    t.check('no console error, page error or CSP violation on the Write screen', bad.length === 0, describeErrors(bad));
     await panel.close();
     await ticket.close();
     ai.reset();

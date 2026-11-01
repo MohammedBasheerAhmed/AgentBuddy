@@ -36,6 +36,11 @@
   --ab-ok: #14743a;
   --ab-ok-soft: #e9f6ee;
   --ab-ok-line: #b3dfc4;
+  --ab-ai: #5a3fb5;
+  --ab-ai-hover: #4a2f9f;
+  --ab-ai-fg: #ffffff;
+  --ab-ai-soft: #f2eefc;
+  --ab-ai-line: #d3c8f3;
   --ab-shadow: 0 1px 2px rgba(16, 21, 28, 0.08), 0 6px 16px rgba(16, 21, 28, 0.1);
   --ab-ring: 0 0 0 2px rgba(27, 107, 79, 0.92), 0 0 0 5px rgba(27, 107, 79, 0.16);
   --ab-backdrop: rgba(10, 14, 12, 0.56);
@@ -75,6 +80,11 @@
     --ab-ok: #7ddaa2;
     --ab-ok-soft: #16291e;
     --ab-ok-line: #2c4f39;
+    --ab-ai: #b8a6ff;
+    --ab-ai-hover: #cbbdff;
+    --ab-ai-fg: #160f2e;
+    --ab-ai-soft: #221c3a;
+    --ab-ai-line: #3d3366;
     --ab-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.4);
     --ab-ring: 0 0 0 2px rgba(79, 192, 141, 0.95), 0 0 0 5px rgba(79, 192, 141, 0.2);
     --ab-backdrop: rgba(0, 0, 0, 0.66);
@@ -108,6 +118,11 @@
   --ab-ok: #7ddaa2;
   --ab-ok-soft: #16291e;
   --ab-ok-line: #2c4f39;
+  --ab-ai: #b8a6ff;
+  --ab-ai-hover: #cbbdff;
+  --ab-ai-fg: #160f2e;
+  --ab-ai-soft: #221c3a;
+  --ab-ai-line: #3d3366;
   --ab-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.4);
   --ab-ring: 0 0 0 2px rgba(79, 192, 141, 0.95), 0 0 0 5px rgba(79, 192, 141, 0.2);
   --ab-backdrop: rgba(0, 0, 0, 0.66);

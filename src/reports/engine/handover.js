@@ -12,7 +12,7 @@
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS, TICKET_FIELDS } from './constants.js';
 import { attempt } from './reader.js';
-import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn, verifiedCount } from './common.js';
+import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn, verifiedCount, resolvedStates, notResolved } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { HOUR, daysBetween, timeOf } from './time.js';
 import { overviewSection, waitingStates } from './overview.js';
@@ -122,11 +122,13 @@ async function readTable(ctx, t, since) {
   const [reassignedF, reassignedO] = canReassign
     ? list(['active=true', buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }, { op: 'since', field: 'sys_updated_on', ms: since }])], { orderBy: 'reassignment_count', descending: true })
     : ['', ''];
-  const [oldestF, oldestO] = list(['active=true'], { orderBy: 'opened_at' });
 
-  // The state breakdown has the same query as the Overview's, so it is a cache hit when Overview ran first.
+  // The state breakdown has the same query as the Overview's, so it is a cache hit when Overview ran first. It also says which
+  // states mean 'resolved, waiting to close': those tickets are not 'oldest open'.
   const states = await attempt(() => reader.groups(t.table, open, ['state']), t.table);
   const waiting = states.ok ? waitingStates(states.value) : null;
+  const live = states.ok ? notResolved(resolvedStates(states.value).values) : '';
+  const [oldestF, oldestO] = list(['active=true', live], { orderBy: 'opened_at' });
 
   const [openedUrgent, resolvedUrgent, reassigned, waitingRows, oldest] = await Promise.all([
     readList(reader, t.table, openedF, openedO, fields, HANDOVER_LIMITS.list),
@@ -233,8 +235,8 @@ export async function handoverSection(ctx) {
       })
       .filter(Boolean);
 
-  const slaItems = withDetails(slaTop, (e) => ({ risk: e.breached ? 'Breached' : e.atRisk ? 'At risk' : 'Due soon', percent: e.sla.percentage, plannedEnd: e.sla.plannedEnd }));
-  const breachItems = withDetails(breachTop, (e) => ({ risk: 'Breached', percent: e.sla.percentage, plannedEnd: e.sla.plannedEnd }));
+  const slaItems = withDetails(slaTop, (e) => ({ risk: e.breached ? 'Breached' : e.atRisk ? 'At risk' : 'Due soon', percent: e.sla.percentage, plannedEnd: e.sla.plannedEnd, endMs: e.endMs ?? null, paused: Boolean(e.sla.paused) }));
+  const breachItems = withDetails(breachTop, (e) => ({ risk: 'Breached', percent: e.sla.percentage, plannedEnd: e.sla.plannedEnd, endMs: e.endMs ?? null, paused: false }));
 
   // Waiting: by state label, by what it waits for, and the oldest that wait.
   const byLabel = new Map();

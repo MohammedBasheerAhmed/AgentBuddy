@@ -20,8 +20,10 @@ module.exports = {
     await ctx.vault('remove', [KEYS.keyFor('custom')]);
 
     const page = await ctx.newPage('options-ui');
-    await page.goto(ctx.extUrl('options.html'), { waitUntil: 'load' });
+    // Settings has two pages (F2): the provider, key and model are on AI Assist, which has its own address.
+    await page.goto(ctx.extUrl('options.html#ai'), { waitUntil: 'load' });
     await page.waitForSelector('#provider');
+    t.check('Settings opens on the AI Assist page for options.html#ai, with Basics one click away', (await page.$eval('#ab-settings-tab-ai', (el) => el.getAttribute('aria-selected'))) === 'true' && Boolean(await page.$('#ab-settings-tab-basics')));
     await page.select('#provider', 'custom');
     await page.waitForSelector('#baseurl');
 
@@ -62,7 +64,10 @@ module.exports = {
     t.check('the connection test also went through the firewall (sealed system+user messages, no tools)', JSON.stringify((req?.body?.messages || []).map((m) => m.role)) === '["system","user"]' && !req.body.tools && /Rules set by the application/.test(req.raw));
     t.check('the connection test carries no personal data', findLeaks(req?.raw || '', data).critical.length === 0);
 
-    // The "Check what is sent" and privacy selectors write to storage too.
+    // The "Check what is sent" and privacy selectors (on Basics, in plain words) write to storage too.
+    await clickButton(page, /^Basics$/);
+    await page.waitForFunction(() => document.querySelector('#ab-settings-panel-basics') && !document.querySelector('#ab-settings-panel-basics').hidden);
+    t.check('Basics shows the sites, what you work on, privacy, the activity log and Copy diagnostics; the AI fields are not on screen', await page.evaluate(() => ['h-instances', 'h-profiles', 'h-privacy', 'h-audit', 'h-diagnostics'].every((id) => document.getElementById(id)?.getClientRects().length > 0) && document.getElementById('provider').getClientRects().length === 0));
     await page.select('#preview', 'always');
     await page.select('#pii', 'strict');
     await ctx.sleep(300);
@@ -71,8 +76,8 @@ module.exports = {
     await page.select('#pii', 'standard');
     await ctx.sleep(300);
 
-    // The activity log on the same page: the entries of the whole run, with no content.
-    await page.reload({ waitUntil: 'load' });
+    // The activity log on the same page (Basics): the entries of the whole run, with no content.
+    await page.goto(ctx.extUrl('options.html'), { waitUntil: 'load' });
     await page.waitForSelector('.ab-table, .ab-note');
     const logText = await page.evaluate(() => document.querySelector('.ab-table')?.innerText || '');
     t.check('the activity log table lists actions and outcomes only', /record-summary|reply-draft/.test(logText) && !/Abel|Tuter|555-|4111|Winter2026/.test(logText), logText.replace(/\s+/g, ' ').slice(0, 160));

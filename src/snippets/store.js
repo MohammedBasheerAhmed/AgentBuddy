@@ -3,7 +3,8 @@
 //
 // Snippet = { id, title, shortcut, body, createdAt, updatedAt }
 //   title    one line, at most 80 characters
-//   shortcut optional, at most 30 characters of a-z 0-9 - _ / (lower case), unique in the library
+//   shortcut optional SEARCH WORD (the panel calls it that): at most 30 characters of a-z 0-9 - _ / (lower case), unique in the
+//            library. It only makes the snippet quick to find in the search box; nothing types it into a ServiceNow page.
 //   body     the template text (see render.js), at most 8000 characters
 //
 // Every function returns new arrays and never throws on bad input; problems come back as messages.
@@ -62,13 +63,13 @@ export function normalizeSnippet(input, options) {
     return v;
   };
   const title = oneLine(stripUnsafeChars(field('title', 'The title')));
-  const shortcut = stripUnsafeChars(field('shortcut', 'The shortcut')).trim().toLowerCase();
+  const shortcut = stripUnsafeChars(field('shortcut', 'The search word')).trim().toLowerCase();
   const body = stripUnsafeChars(field('body', 'The text'));
 
   if (!title) errors.push('A title is needed.');
   else if (title.length > LIMITS.title) errors.push(`The title is longer than ${LIMITS.title} characters.`);
-  if (shortcut.length > LIMITS.shortcut) errors.push(`The shortcut is longer than ${LIMITS.shortcut} characters.`);
-  else if (shortcut && !SHORTCUT_OK.test(shortcut)) errors.push('The shortcut can only use a-z, 0-9, dash, underscore and slash.');
+  if (shortcut.length > LIMITS.shortcut) errors.push(`The search word is longer than ${LIMITS.shortcut} characters.`);
+  else if (shortcut && !SHORTCUT_OK.test(shortcut)) errors.push('The search word can only use a-z, 0-9, dash, underscore and slash (no spaces).');
   if (!body.trim()) errors.push('The text is empty.');
   else if (body.length > LIMITS.body) errors.push(`The text is longer than ${LIMITS.body} characters.`);
   if (errors.length) return { snippet: null, errors };
@@ -97,7 +98,7 @@ export function addSnippet(list, input, options) {
   const { snippet, errors } = normalizeSnippet(input, options);
   if (!snippet) return { list: current, snippet: null, error: errors[0] };
   const taken = owner(current, snippet.shortcut, '');
-  if (taken) return { list: current, snippet: null, error: `The shortcut "${snippet.shortcut}" is already used by "${taken.title}".` };
+  if (taken) return { list: current, snippet: null, error: `The search word "${snippet.shortcut}" is already used by "${taken.title}".` };
   const now = nowOf(options);
   const added = { ...snippet, id: freshId(new Set(current.map((s) => s.id)), options), createdAt: now, updatedAt: now };
   return { list: [...current, added], snippet: added, error: '' };
@@ -119,7 +120,7 @@ export function updateSnippet(list, id, patch, options) {
   const { snippet, errors } = normalizeSnippet(merged, options);
   if (!snippet) return { list: current, snippet: null, error: errors[0] };
   const taken = owner(current, snippet.shortcut, old.id);
-  if (taken) return { list: current, snippet: null, error: `The shortcut "${snippet.shortcut}" is already used by "${taken.title}".` };
+  if (taken) return { list: current, snippet: null, error: `The search word "${snippet.shortcut}" is already used by "${taken.title}".` };
   const next = { ...snippet, id: old.id, createdAt: old.createdAt, updatedAt: nowOf(options) };
   return { list: current.map((s, i) => (i === at ? next : s)), snippet: next, error: '' };
 }
@@ -250,7 +251,7 @@ export function importSnippets(jsonText, existing, options) {
     }
     if (snippet.shortcut && shortcuts.has(snippet.shortcut)) {
       result.skipped++;
-      messages.push(`${label} ("${snippet.title}"): the shortcut "${snippet.shortcut}" is already used.`);
+      messages.push(`${label} ("${snippet.title}"): the search word "${snippet.shortcut}" is already used.`);
       continue;
     }
     const key = `${snippet.title}\u0000${snippet.body}`;

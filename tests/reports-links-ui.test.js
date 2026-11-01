@@ -167,15 +167,14 @@ test('dashboard: the env no longer lists page.href as something that restarts th
   assert.match(deps, /\[stablePage, layout/);
 });
 
-test('dashboard: an AI section the organisation turned off is left out with one line, but stays in Customize to be removed', () => {
+test('dashboard (Insights): an AI section saved on a dashboard is never drawn, one line says where it went, Customize can remove it', () => {
   const widgets = [{ id: 'w-1', type: 'section', section: 'overview' }, { id: 'w-2', type: 'section', section: 'insights' }, { id: 'w-3', type: 'section', section: 'coaching' }];
-  const off = normalizePolicy({ disabledFeatures: ['dashboard-insights'] });
-  const shown = visibleWidgets(widgets, { policy: off });
-  assert.deepEqual(shown.shown.map((w) => w.id), ['w-1']);
-  assert.deepEqual(shown.hidden, ['Explain this dashboard', 'Coaching snapshot (opt-in)']);
-  assert.equal(visibleWidgets(widgets, { policy: off, customize: true }).shown.length, 3);
-  const on = normalizePolicy({ coachingEnabled: true });
-  assert.deepEqual(visibleWidgets(widgets, { policy: on }).shown.map((w) => w.id), ['w-1', 'w-2', 'w-3']);
+  for (const policy of [normalizePolicy({ disabledFeatures: ['dashboard-insights'] }), normalizePolicy({ coachingEnabled: true })]) {
+    const shown = visibleWidgets(widgets, { policy });
+    assert.deepEqual(shown.shown.map((w) => w.id), ['w-1'], 'no AI element on Insights, whatever the policy');
+    assert.deepEqual(shown.hidden, ['Explain this dashboard', 'Coaching snapshot (opt-in)']);
+    assert.equal(visibleWidgets(widgets, { policy, customize: true }).shown.length, 3);
+  }
 });
 
 test('dashboard: every widget of one load sends the same "as of" instant with its own params', () => {

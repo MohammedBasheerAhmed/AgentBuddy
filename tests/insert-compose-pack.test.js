@@ -68,7 +68,9 @@ test('Rewrite and Notes on an HR case are refused unless the organisation allows
     assert.throws(() => run(id, pack, { piiMode: 'strict' }), (e) => e.code === 'HR_BLOCKED', `${id} strict`);
   }
   const allowed = buildComposePack({ text: SICK, table: 'sn_hr_core_case', field: 'description' });
-  assert.doesNotThrow(() => run('rewrite-short', allowed, { policy: HR_OK }));
+  // Round 3 (TRACKER.md AI0.2): every function on an HR record needs Strict privacy mode, a rewrite too.
+  assert.throws(() => run('rewrite-short', allowed, { policy: HR_OK }), (e) => e instanceof RunBlocked && e.code === 'MODE_TOO_LOW');
+  assert.doesNotThrow(() => run('rewrite-short', allowed, { policy: HR_OK, piiMode: 'strict' }));
 });
 
 test('a blocked field blocks the text that came from it, and only that', () => {

@@ -28,9 +28,18 @@ const KIND_BY_TABLE = {
   chat_queue_entry: 'chat',
 };
 
+// HR case tables come in families: sn_hr_core_case has children per area (sn_hr_core_case_payroll, sn_hr_core_case_benefits,
+// sn_hr_core_case_relations, ...) and lifecycle events and employee relations have their own (sn_hr_le_case, sn_hr_er_case). Every
+// one of them is an HR case. Before, they fell to 'other', whose field ceiling has no subject_person or opened_for, so the employee
+// the case is about was not read as a person and not masked by name. A table of the family that ends in _task stays a task.
+const HR_CASE_RE = /^sn_hr_(?:[a-z0-9]+_)*case(?:_[a-z0-9]+)*$/;
+
 /** The pack kind for a table name; a table we know nothing about is 'other'. */
 export function kindForTable(table) {
-  return KIND_BY_TABLE[String(table || '').trim().toLowerCase()] || 'other';
+  const name = String(table || '').trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(KIND_BY_TABLE, name)) return KIND_BY_TABLE[name];
+  if (HR_CASE_RE.test(name) && !name.endsWith('_task')) return 'hr_case';
+  return 'other';
 }
 
 // HR data (cases about a person's leave, pay, conduct) is the most sensitive thing a fulfiller reads. Its tables are
@@ -115,9 +124,11 @@ function sysIdFromQuery(query) {
   return '';
 }
 
-// The reference a table plus search params describe: sys_id first (exact), then a number. "-1" is a new record.
+// The reference a table plus search params describe: sys_id first (exact), then a number. "-1" is a new record: it is described as
+// { table, newRecord: true } here and left out by parseRecordRef (only parseNewRecordRef returns it).
 function refFrom(table, params) {
   if (!TABLE_RE.test(table)) return null;
+  if (String(params.get('sys_id') || '').trim() === '-1') return { table, newRecord: true };
   const sysId = sysIdOf(params.get('sys_id')) || sysIdFromQuery(params.get('sysparm_query'));
   if (sysId) return { table, sysId };
   const number = numberFromQuery(params.get('sysparm_query'));
@@ -233,8 +244,10 @@ function parseRelative(input, depth) {
   // Workspaces: .../record/<table>/<sys_id>[/...] (SOW, Agent Workspace, CSM, HR, configurable workspaces).
   const workspace = /\/record\/([a-z][a-z0-9_]*)\/([0-9a-f]{32}|-1)(?:[/#?]|$)/i.exec(path + url.hash);
   if (workspace) {
+    const table = workspace[1].toLowerCase();
+    if (workspace[2] === '-1') return { table, newRecord: true };
     const id = sysIdOf(workspace[2]);
-    return id ? { table: workspace[1].toLowerCase(), sysId: id } : null;
+    return id ? { table, sysId: id } : null;
   }
 
   // Classic forms: /incident.do?sys_id=... or ?sysparm_query=number=INC... . A list (incident_list.do) is not a record.
@@ -254,5 +267,18 @@ function parseRelative(input, depth) {
  */
 export function parseRecordRef(url) {
   if (typeof url !== 'string' || !url.trim()) return null;
-  return parseRelative(url, 0);
+  const ref = parseRelative(url, 0);
+  return ref && !ref.newRecord ? ref : null;
+}
+
+/**
+ * The table of a BLANK form an address points at (sys_id=-1): { table } or null. The classic form says so itself through g_form, but
+ * on Next Experience the form sits in an iframe inside the page's shadow DOM, which the page bridge may not reach (or not yet, while
+ * the frame loads); the address (/now/nav/ui/classic/params/target/incident.do%3Fsys_id%3D-1, a Workspace /record/incident/-1) still
+ * tells which table the new record is for.
+ */
+export function parseNewRecordRef(url) {
+  if (typeof url !== 'string' || !url.trim()) return null;
+  const ref = parseRelative(url, 0);
+  return ref?.newRecord && TABLE_RE.test(ref.table) && !ref.table.endsWith('_list') ? { table: ref.table } : null;
 }

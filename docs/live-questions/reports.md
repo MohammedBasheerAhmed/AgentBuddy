@@ -93,3 +93,48 @@ to the policy author (`docs/deployment.md`).
     a section's own setting or Refresh change. A read that was on its way when the page changed waits and asks again (1.5 s, then
     4 s). On the full page, the dashboard stays (with a line saying the tab is not answering) while the tab loads. Check: open the
     Team tab, click around in ServiceNow, and watch the network log: no new report reads.
+
+## Added in round 3 (the Team screen: Insights and AI Assist; N15-N17, AI28-AI30)
+
+How to check each one as a non-admin user: open the Team screen on the instance, then the browser's network log of the ServiceNow
+tab (every read is a GET to `/api/now/table/...` or `/api/now/stats/...`).
+
+30. **The person's time zone is `sys_user.time_zone`** of their own record, read as `GET /api/now/table/sys_user?sysparm_query=
+    sys_id=<me>&sysparm_fields=sys_id,time_zone&sysparm_display_value=false`. Assumed: a normal user can read their own record and
+    this column; the raw value is a zone name (`Europe/Berlin`, `US/Pacific`, `GMT`) that the browser's `Intl` knows; an empty value
+    means "System (default)". Check: change your time zone in your ServiceNow profile, refresh the Team screen, and look at the
+    "Opened today" list (the drill-down query shows the midnight it used, in UTC). If the column is not readable, or the value is a
+    label rather than a name, the reports fall back to the browser's zone and say so once ("1 note about these numbers"); change
+    `readUserZone` in `src/content/ops/reports.js` if the value has another form. The system default zone (`glide.sys.default.tz`) is
+    NOT read: it is an admin-only property. A person whose profile says "System" gets the browser's zone with a note.
+31. **"My groups" filters memberships with `group.active=true`** (a dot-walk in the query of `sys_user_grmember`). Check: a retired
+    group you are still a member of no longer appears in "Covers:". If the dot-walk is refused (an ACL on `sys_user_group.active`),
+    the membership read fails and the engine falls back to the groups of your tickets, with a note.
+32. **Ranking 25 of many groups by open work** uses one grouped count per ticket table (`/api/now/stats/<table>?sysparm_query=
+    active=true^assignment_groupIN<up to 100 ids>&sysparm_group_by=assignment_group`). Check with a user in more than 25 groups: the
+    scope chip says "My groups (25 of 41)" and the note names the rule. A very long IN list could hit a URL length limit on some
+    proxies (100 ids are about 3,300 characters); if so, lower the chunk size in `openWorkByGroup` (`src/reports/engine/scope.js`).
+33. **Chosen groups are checked on this instance** with `GET sys_user_group?sysparm_query=sys_idIN<ids>&sysparm_fields=sys_id,name,
+    active`. Assumed: a fulfiller can read `sys_user_group` (the group search already needs it). A group not found is left out with a
+    note; when none is found AND the person can see some group rows, the dashboard says "None of the chosen groups exists on this
+    instance" instead of showing zeros. When groups cannot be read at all, nothing is dropped (and nothing is said).
+34. **Resolved but still active.** States whose label starts with Resolved, Closed, Complete(d), Cancel(l)ed, Fixed or Done, among
+    ACTIVE tickets, are counted as "Resolved, not closed": not Open, not stale, not in ageing or the oldest-open list, shown as their
+    own tile and bar colour. Check on incidents (state 6 Resolved stays active until auto-close) and on cases. A customised state
+    whose label does not start with those words (for example "Solution proposed") still counts as open; add its word to `stateClass`
+    in `src/reports/engine/common.js` if that is wrong for your process.
+35. **Change tasks (`change_task`)** are a report table for everyone. Assumed columns: the task columns plus `closed_at` and
+    `reassignment_count`. Check that the probe finds them (the table list under the scope chip says "Change tasks").
+36. **HR cases (`sn_hr_core_case`)** are offered only to a person with the HR profile whose organisation allows HR content
+    (`allowHrContent`, checked in the panel and again in the content script). Assumed: the HR case table counts its child classes
+    (`sn_hr_core_case_*`) in the Aggregate API, uses `closed_at` as the end date, and HR SLAs are `task_sla` rows whose task class is
+    `sn_hr_core_case` (the SLA tiles filter by exact class, see 26: child-class SLAs would be missed). Check with an HR lead on an
+    instance with HR Service Delivery. Any AI text built from HR rows is marked sensitive, so the HR rules of the pipeline apply.
+37. **SLA "due in 1 h 20 min".** The relative time is computed from the stored (UTC) `planned_end_time` of the worst SLA, against the
+    panel's clock (updated every minute). A breached SLA says "Breached 2 h ago" from the same column. Check that a breached SLA's
+    `planned_end_time` is the moment it breached on your instance (it is in the base system).
+38. **Saved dashboards are per instance** (the storage key holds one set per instance origin). A dashboard saved by an earlier
+    version is taken over by the first instance the panel opens on. Check with two instances: a dashboard made on one is not offered
+    on the other. A layout file (Customize > More > Save layout as a file) loads on any instance; its chosen groups are checked there.
+39. **The file input for "Load a layout file"** opens the browser's file chooser from the side panel. Check in Chrome and Edge: the
+    side panel may not be allowed to open a file chooser in some versions; then load the file from the full page (same menu).

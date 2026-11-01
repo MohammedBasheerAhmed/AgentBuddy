@@ -1,5 +1,5 @@
 // Context specs added after the first eight features. Each area has its own file so several people can work at once:
-//   itsm.js, domain.js, knowledge.js, compose.js, reports.js, checks.js
+//   itsm.js, domain.js, knowledge.js, compose.js, reports.js, checks.js, insights.js, mywork.js
 // A file exports { spec, journal, related, fieldsByKind, extendFields, limits }; see docs/contracts.md, 'Context specs'.
 import itsm from './itsm.js';
 import domain from './domain.js';
@@ -7,8 +7,10 @@ import knowledge from './knowledge.js';
 import compose from './compose.js';
 import reports from './reports.js';
 import checks from './checks.js';
+import insights from './insights.js';
+import mywork from './mywork.js';
 
-const parts = [itsm, domain, knowledge, compose, reports, checks];
+const parts = [itsm, domain, knowledge, compose, reports, checks, insights, mywork];
 const merge = (key) => Object.assign({}, ...parts.map((p) => p[key] || {}));
 
 // extendFields adds columns to the display ceiling of a kind that already exists (never removes or replaces any):

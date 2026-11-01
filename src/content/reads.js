@@ -23,8 +23,10 @@ export function checkPackFeature(feature) {
   return feature;
 }
 
-export async function handleRead(op, args, { guard = policyGuard, makeDeps = createLiveDeps, policy = null } = {}) {
+export async function handleRead(op, args, { guard = policyGuard, makeDeps = createLiveDeps, policy = null, currentRecord = null } = {}) {
   // `policy`: the panel's normalised policy, sent with the message; merged with the managed policy the guard reads itself.
+  // `currentRecord`: the record the content script finds on the page now (src/content/index.js resolveRecord). An operation that
+  // reads the page itself (resolutionFacts on a Workspace) checks it is the record it was asked about; it never comes from the panel.
   const deps = await guard.deps(makeDeps(), policy);
   const allowSensitive = await guard.allowSensitive(args?.allowSensitive === true, policy);
   switch (op) {
@@ -50,7 +52,7 @@ export async function handleRead(op, args, { guard = policyGuard, makeDeps = cre
       return searchKnowledge(checkPack(args.pack), deps, { limit: 5 });
     default: {
       // Operations added by area modules (src/content/ops). Own-property check: no prototype lookups.
-      if (Object.prototype.hasOwnProperty.call(OPS, op)) return OPS[op](args || {}, { deps, checkRecord, checkPack, allowSensitive });
+      if (Object.prototype.hasOwnProperty.call(OPS, op)) return OPS[op](args || {}, { deps, checkRecord, checkPack, allowSensitive, currentRecord });
       throw new Error('Unknown request.');
     }
   }

@@ -46,7 +46,10 @@ export function groupSlaByTicket(slaRows, { now, dueMs = LIMITS.dueSoonHours * H
     });
     const dueSoon = !worst.breached && Number.isFinite(soonest) && soonest <= now + dueMs;
     const atRisk = !worst.breached && worst.percentage >= atRiskPercent;
-    tickets.push({ sysId, sla: worst, risk, breached: worst.breached, atRisk, dueSoon, dueAt: Number.isFinite(soonest) ? soonest : null });
+    // The stored (UTC) end of the worst SLA, so the panel can say 'due in 1 h 20 min' or 'breached 2 h ago' instead of a timestamp.
+    const worstRow = rows.find((r) => disp(r.planned_end_time) === worst.plannedEnd && disp(r.sla) === worst.name);
+    const endMs = worstRow ? timeOf(raw(worstRow.planned_end_time)) : NaN;
+    tickets.push({ sysId, sla: worst, risk, breached: worst.breached, atRisk, dueSoon, dueAt: Number.isFinite(soonest) ? soonest : null, endMs: Number.isFinite(endMs) ? endMs : null });
   }
   return tickets;
 }

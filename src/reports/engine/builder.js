@@ -1,7 +1,7 @@
 // The small report builder: a table, a few filter presets, one grouping and one measure. The configuration is a closed
 // vocabulary (names from fixed lists), so a saved widget or a message from the panel can never carry a query of its own.
 import { SYS_ID_RE } from '../../context/util.js';
-import { LIMITS, REPORT_TABLES, REPORT_TABLE_IDS } from './constants.js';
+import { LIMITS, REPORT_TABLES, REPORT_TABLE_IDS, isSensitiveReportTable } from './constants.js';
 import { attempt } from './reader.js';
 import { andQuery, capNote, probeTables, raw, disp, resolvedColumn, tableAccess } from './common.js';
 import { FILTER_PRESETS, buildQuery, normalizePresets, presetConditions, windowDaysOf, QueryError } from './queryBuilder.js';
@@ -79,6 +79,10 @@ export async function runBuilder(ctx, rawConfig) {
   const config = normalizeBuilderConfig(rawConfig);
   const { reader, now } = ctx;
   const meta = REPORT_TABLES[config.table];
+  // An HR-family table is read only for someone with the HR profile whose organisation allows HR content (see constants.js).
+  if (isSensitiveReportTable(config.table, ctx.sensitivePrefixes) && !ctx.allowSensitive) {
+    return { id: 'builder', title: meta.label, generatedAt: ctx.generatedAt, readAt: ctx.generatedAt, scope: { kind: 'builder', label: describeFilter(config.presets), groups: [], inferred: false, note: '' }, tables: [], access: [], notes: [], caps: [], data: { available: false, reason: `${meta.label} are shown only with the HR profile, when your organisation allows HR content.`, status: 'blocked', config } };
+  }
   const [t] = await probeTables(reader, [config.table]);
   ctx.tables = [t];
   const base = {

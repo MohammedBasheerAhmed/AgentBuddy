@@ -10,11 +10,20 @@ const TOKEN_TTL_MS = 5 * 60 * 1000;
 const TOKEN_RE = /\bg_ck['"]?\s*[=:]\s*['"]([0-9A-Za-z]{20,})['"]/;
 let cached = { token: null, at: 0 };
 
+// The page itself and the classic form's frame. On Next Experience the frame sits inside the page's shadow DOM, where
+// document.getElementById('gsft_main') does not find it; the window's named frames do (seen on dev364920), so that comes first.
 function pageDocuments() {
   const docs = [document];
+  const add = (frameDoc) => {
+    if (frameDoc && !docs.includes(frameDoc)) docs.push(frameDoc);
+  };
   try {
-    const frameDoc = document.getElementById('gsft_main')?.contentDocument;
-    if (frameDoc) docs.push(frameDoc);
+    add(window.frames.gsft_main?.document);
+  } catch {
+    // Cross-origin frame; ignore.
+  }
+  try {
+    add(document.getElementById('gsft_main')?.contentDocument);
   } catch {
     // Cross-origin frame; ignore.
   }
@@ -48,11 +57,21 @@ export async function getSessionToken() {
   return token;
 }
 
+/**
+ * Drop the kept token. Called when the instance says the session ended (a 401, a login page): the token belonged to that session,
+ * and keeping it would send a refused token with every read for up to five minutes after the person signed in again.
+ */
+export function forgetSessionToken() {
+  cached = { token: null, at: 0 };
+}
+
 /** Headers for a JSON request to the current instance. Throws rather than risk a login popup. */
 export async function sessionHeaders(extra = {}) {
   const token = await getSessionToken();
   if (!token) {
-    throw new Error('Could not read the ServiceNow session token. Reload the page and try again.');
+    const err = new Error('Could not read your ServiceNow session. Reload the ServiceNow page (sign in again if it asks), then try again.');
+    err.code = 'NO_SESSION_TOKEN';
+    throw err;
   }
   return { Accept: 'application/json', 'X-UserToken': token, ...extra };
 }

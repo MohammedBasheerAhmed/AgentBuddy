@@ -84,19 +84,11 @@ test('when the policy switches off everything, the bar is empty', () => {
   assert.deepEqual(quickActions({ kind: 'incident', policy }), []);
 });
 
-// ---- where the panel shows its bar ---------------------------------------------------------------------------------
+// ---- where the old panel showed its bar (RecordView, before round 3) -------------------------------------------------
 
-test('the side panel shows its bar where the Actions list is long, and not where a bar would only repeat a short list', () => {
-  const policy = normalizePolicy({});
-  const shows = (kind) => panelShowsBar(featuresFor(kind, policy).length);
-  for (const kind of ['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task']) assert.equal(shows(kind), true, kind);
-  // A chat has its own tab with its own buttons (switched off when there is nothing to read); a bar must not offer them a second time.
-  for (const kind of ['chat', 'knowledge', 'other']) assert.equal(shows(kind), false, kind);
+test('panelShowsBar: from QUICK_MIN_LIST actions up (the bar of the Ticket screen shows whenever it has an item: tests/assist-actions-quick.test.js)', () => {
   assert.equal(panelShowsBar(QUICK_MIN_LIST - 1), false);
   assert.equal(panelShowsBar(QUICK_MIN_LIST), true);
-});
-
-test('a policy that switches off most of a long list leaves the panel without a bar too', () => {
-  const policy = normalizePolicy({ disabledFeatures: ['handoff-brief', 'missing-info', 'sentiment-risk', 'next-best-action', 'thread-summary', 'routing-hint', 'kb-article-draft', 'major-incident-comms'] });
-  assert.equal(panelShowsBar(featuresFor('incident', policy).length), false);
+  const policy = normalizePolicy({});
+  for (const kind of ['chat', 'knowledge', 'other']) assert.equal(panelShowsBar(featuresFor(kind, policy).length), false, kind);
 });

@@ -1,5 +1,5 @@
 // The list of report sections the Team dashboard can show. One entry per section:
-//   { id, label, description, View, feature?, hideWhenOff? }
+//   { id, label, description, View, feature?, hideWhenOff?, ai? }
 // `id` is the engine's section id (src/reports/engine/index.js, SECTIONS) for the ready-made ones, and is what a saved
 // dashboard stores. `View` is a React component with props { widget, env, eff }: it reads its own data (useSection) and draws
 // it. `env` is built by the dashboard: { page, scope, scopeKind, tables, blocked, refreshKey, mask, setMask, openList(table, query),
@@ -24,15 +24,22 @@ export const REPORT_SECTIONS = [
   { id: 'sla', label: 'SLA risk radar', description: 'Breached and at-risk SLAs by owner and group, the ten closest to breaking.', View: SlaView },
   { id: 'quality', label: 'Quality and trend', description: 'Opened against resolved, time to resolve, reopen rate, top categories, repeat callers.', View: QualityView },
   { id: 'fulfilment', label: 'Request fulfilment', description: 'Requested items and catalog tasks by state, approvals, oldest open items.', View: FulfilmentView },
-  // The AI sections. 'handover' works without AI (the note is an extra button); 'insights' and 'coaching' are AI only, so they
-  // are not offered in Customize when the organisation's policy leaves their feature off (hideWhenOff). A saved one still shows
-  // a calm line instead of failing. They take (widget, env, eff): the AI needs the settings and policy.
-  { id: 'handover', label: 'Shift handover', description: 'Open, at risk, waiting on others and recent events for the next shift, with an optional AI-written note.', View: HandoverView, feature: 'shift-handover' },
-  { id: 'insights', label: 'Explain this dashboard', description: 'AI: what stands out in the numbers on this dashboard, likely reasons as hypotheses, and three actions.', View: InsightsView, feature: 'dashboard-insights', hideWhenOff: true },
-  { id: 'coaching', label: 'Coaching snapshot (opt-in)', description: 'AI, for one group: a rubric review of a sample of resolved tickets. Off unless your organisation switches coaching on.', View: CoachingView, feature: 'coaching-snapshot', hideWhenOff: true },
+  // 'handover' is Insights (the tables, N16); its AI note lives in the Team screen's AI Assist half (src/sidepanel/team, AI28).
+  // 'insights' and 'coaching' are AI only (`ai: true`): the Insights half never draws them and Customize never offers them (no AI
+  // element on Insights, TRACKER.md 2.3); they are under AI Assist. A dashboard saved earlier that holds one gets a one-line pointer.
+  { id: 'handover', label: 'Shift handover', description: 'Open, at risk, waiting on others and recent events for the next shift.', View: HandoverView, feature: 'shift-handover' },
+  { id: 'insights', label: 'Explain this dashboard', description: 'AI: what stands out in the numbers on this dashboard, likely reasons as hypotheses, and three actions.', View: InsightsView, feature: 'dashboard-insights', hideWhenOff: true, ai: true },
+  { id: 'coaching', label: 'Coaching snapshot (opt-in)', description: 'AI, for one group: a rubric review of a sample of resolved tickets. Off unless your organisation switches coaching on.', View: CoachingView, feature: 'coaching-snapshot', hideWhenOff: true, ai: true },
 ];
 
 export const sectionById = (id) => REPORT_SECTIONS.find((s) => s.id === id) || null;
 
-/** The sections Customize offers under this policy: an AI-only section whose feature the organisation leaves off is not listed. */
-export const addableSections = (policy) => REPORT_SECTIONS.filter((s) => !s.hideWhenOff || isFeatureAvailable(featureById(s.feature), policy));
+/** The sections Customize offers: the Insights ones only (the AI ones are under AI Assist). `policy` is kept for callers. */
+// eslint-disable-next-line no-unused-vars
+export const addableSections = (policy) => REPORT_SECTIONS.filter((s) => !s.ai);
+
+/** Is this AI section allowed by the organisation's policy? (For the AI Assist half.) */
+export const aiSectionAllowed = (id, policy) => {
+  const s = sectionById(id);
+  return Boolean(s?.feature) && isFeatureAvailable(featureById(s.feature), policy);
+};

@@ -6,8 +6,11 @@
 //   page -> content : 'ab-page-response' detail { id, ok, result, error }
 //
 // SECURITY: this bridge is deliberately tiny.
-//  - It READS: the session token (needed for same-origin REST reads), who the user is, which record the form shows and
-//    the values of fields the caller names.
+//  - It READS: the session token (needed for same-origin REST reads), who the user is, which record the form shows (and when
+//    the form was loaded, so a Save is noticed),
+//    the values of fields the caller names, whether named fields are on the form and editable (getFieldStates), and on a
+//    Workspace page (no g_form) the text in the boxes of named fields (getBoxValues: found the way an insert finds them,
+//    read without focusing, typing or firing anything).
 //  - It exposes exactly ONE write: fillField(), which sets one existing field's value on the open form, the same as typing
 //    into it. It never saves the form (there is no save action here), never calls REST, never evaluates caller-supplied code.
 //    The agent presses the form's own Save, so ACLs, business rules, client scripts and the audit trail all apply.
@@ -169,6 +172,21 @@
   function appendBelow(existing, text) {
     var current = existing == null ? '' : String(existing);
     return current.trim() ? current.replace(/\s+$/, '') + '\n\n' + text : text;
+  }
+
+  // Append, unless the field still holds `previous` (the text Agent Buddy put there earlier, sent back by the panel): then that one
+  // copy is swapped for the new text and everything else the person typed stays where it was. So "Try again" and Insert again do
+  // not leave two answers in one box. Only an exact match counts; a text the person has edited is left alone and the new one goes
+  // below it.
+  function appendOrSwap(existing, text, previous) {
+    var current = existing == null ? '' : String(existing);
+    var earlier = typeof previous === 'string' ? previous : '';
+    var at = earlier ? current.lastIndexOf(earlier) : -1;
+    // A whole block only: from the start of a line to the end of a line. "Brief two, and I checked" is the person's own text now.
+    var end = at + earlier.length;
+    var whole = at !== -1 && (at === 0 || current.charAt(at - 1) === '\n') && (end === current.length || /^[ \t]*(\n|$)/.test(current.slice(end)));
+    if (whole) return current.slice(0, at) + text + current.slice(end);
+    return appendBelow(current, text);
   }
 
   // ---- Workspaces, where g_form is not a page global --------------------------------------------------------------
@@ -485,7 +503,7 @@
 
   // Put the text into the chosen box the way typing would, then read it back: a box that put its own value back is a failure,
   // never a success.
-  function writeInto(c, text, append) {
+  function writeInto(c, text, append, previous) {
     var el = c.el;
     var label = controlLabel(c);
     function done() {
@@ -493,7 +511,7 @@
     }
     try {
       if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-        var next = append === true ? appendBelow(el.value, text) : text;
+        var next = append === true ? appendOrSwap(el.value, text, previous) : text;
         if (next.length > MAX_FIELD_CHARS || (el.maxLength > 0 && next.length > el.maxLength)) return { ok: false, reason: 'too-long' };
         setControlValue(el, next);
         fireEvent(el, 'input', true);
@@ -514,10 +532,10 @@
     }
   }
 
-  function fillPortalField(name, text, label, append) {
+  function fillPortalField(name, text, label, append, previous) {
     var chosen = chooseControl(name, label);
     if (!chosen.c) return { ok: false, reason: chosen.reason };
-    return writeInto(chosen.c, text, append);
+    return writeInto(chosen.c, text, append, previous);
   }
 
   // ---- Workspace: the box of a field, by its exact name or label --------------------------------------------------
@@ -580,10 +598,32 @@
     return { c: scored[0].c };
   }
 
-  function fillWorkspaceField(name, text, label, append) {
+  function fillWorkspaceField(name, text, label, append, previous) {
     var chosen = chooseWorkspaceControl(name, label);
     if (!chosen.c) return { ok: false, reason: chosen.reason };
-    return writeInto(chosen.c, text, append);
+    return writeInto(chosen.c, text, append, previous);
+  }
+
+  // What getFieldStates says about a field on a page without g_form: the box an insert would choose, found WITHOUT writing.
+  function boxState(name, label, portal) {
+    var chosen = portal ? chooseControl(name, label) : chooseWorkspaceControl(name, label);
+    if (chosen.c) return { state: 'editable', label: controlLabel(chosen.c) };
+    return { state: chosen.reason === 'read-only' ? 'read-only' : 'unknown', label: '' };
+  }
+
+  // What getBoxValues says about a field on a Workspace page: the text now in the box an insert would choose (the same chooser),
+  // or null when there is no such box, two boxes look the same, or the box is locked. Only the text is read: the box is not
+  // focused and no event is fired, so the page cannot tell it was looked at.
+  function boxText(name, label) {
+    var chosen = chooseWorkspaceControl(name, label);
+    if (!chosen.c) return null;
+    var el = chosen.c.el;
+    try {
+      var value = el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' ? el.value : el.innerText != null ? el.innerText : el.textContent;
+      return typeof value === 'string' ? value.slice(0, MAX_FIELD_CHARS) : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   var actions = {
@@ -638,11 +678,20 @@
       } catch (e) {
         /* no number field */
       }
+      // When the form's document was loaded: Save reloads it (the whole page, or the form's frame on Next Experience), so a new
+      // value says "saved", and the panel reads the ticket's header again. A number only.
+      var loadedAt = null;
+      try {
+        loadedAt = w.performance && typeof w.performance.timeOrigin === 'number' ? Math.round(w.performance.timeOrigin) : null;
+      } catch (e) {
+        loadedAt = null;
+      }
       return {
         table: typeof f.getTableName === 'function' ? f.getTableName() : null,
         sysId: typeof f.getUniqueValue === 'function' ? f.getUniqueValue() : null,
         isNewRecord: typeof f.isNewRecord === 'function' ? !!f.isNewRecord() : null,
         number: number,
+        loadedAt: loadedAt,
       };
     },
 
@@ -673,12 +722,15 @@
     // article body). A form with g_form gets that, so the characters of a model answer are shown as text and never parsed as
     // markup; a field the form says holds HTML, with no such text supplied, is refused rather than filled with raw text.
     // Returns { ok, method: 'gform' | 'dom', label?, reason }. `label` is the box that was used (Workspace and portal pages).
-    fillField: function (name, value, label, append, html) {
+    // `previous` (append only, never with HTML): the text Agent Buddy put into this box before; when the box still holds it exactly,
+    // that copy is replaced by the new text instead of a second copy being added below (see appendOrSwap).
+    fillField: function (name, value, label, append, html, previous) {
       if (typeof name !== 'string' || !FIELD_RE.test(name) || SECRET_NAME_RE.test(name)) return { ok: false, reason: 'bad-field' };
       var text = String(value == null ? '' : value);
       if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
       var htmlText = typeof html === 'string' ? html : '';
       if (htmlText.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
+      var earlier = append === true && !htmlText && typeof previous === 'string' && previous.length <= MAX_FIELD_CHARS ? previous : '';
 
       var w = resolveFormWindow();
       if (w) {
@@ -701,7 +753,7 @@
           if (isHtmlType && !htmlText) return { ok: false, reason: 'bad-field' };
           // Use the HTML text when the form says the field holds HTML, or when it does not say what the field holds at all.
           if (htmlText && (isHtmlType || !type)) text = htmlText;
-          if (append === true) text = appendBelow(f.getValue(name), text);
+          if (append === true) text = appendOrSwap(f.getValue(name), text, earlier);
           if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
           f.setValue(name, text);
           return { ok: true, method: 'gform' };
@@ -712,8 +764,82 @@
 
       // No g_form: a portal page (an Angular page of boxes found by their names) or a Workspace (components found by aria-label).
       // Both type plain text into the page's own editor, which does its own escaping.
-      if (onPortalPage()) return fillPortalField(name, text, String(label || '').slice(0, 100), append);
-      return fillWorkspaceField(name, text, String(label || '').slice(0, 100), append);
+      if (onPortalPage()) return fillPortalField(name, text, String(label || '').slice(0, 100), append, earlier);
+      return fillWorkspaceField(name, text, String(label || '').slice(0, 100), append, earlier);
+    },
+
+    // READ ONLY: before the person clicks Insert, can these fields be filled on the open form? Nothing is written or focused.
+    // A form with g_form answers from the form itself (on the form or not; editable or read-only, by getEditableFields). A page
+    // without g_form is searched for the box each field would go into, the same way fillField searches; the box's label is
+    // returned so the panel can say where the text will land. Returns
+    //   { form: 'gform', table, sysId, fields: { name: 'editable' | 'read-only' | 'missing' } }
+    //   { form: 'workspace' | 'portal', fields: { name: 'editable' | 'read-only' | 'unknown' }, boxes: { name: label } }
+    getFieldStates: function (names, labels) {
+      if (!Array.isArray(names)) return null;
+      var list = [];
+      var asked = [];
+      for (var i = 0; i < names.length && i < 8; i++) {
+        var n = names[i];
+        if (typeof n !== 'string' || !FIELD_RE.test(n) || SECRET_NAME_RE.test(n)) continue;
+        list.push(n);
+        asked.push(Array.isArray(labels) && typeof labels[i] === 'string' ? labels[i].slice(0, 100) : '');
+      }
+      var fields = {};
+      var w = resolveFormWindow();
+      if (w) {
+        var f = w.g_form;
+        var editable = null;
+        try {
+          editable = typeof f.getEditableFields === 'function' ? f.getEditableFields() : null;
+        } catch (e) {
+          editable = null;
+        }
+        list.forEach(function (name) {
+          var exists = false;
+          try {
+            exists = typeof f.hasField === 'function' ? !!f.hasField(name) : f.getValue(name) !== undefined;
+          } catch (e) {
+            exists = false;
+          }
+          if (!exists) fields[name] = 'missing';
+          else if (editable && editable.length && editable.indexOf(name) === -1) fields[name] = 'read-only';
+          else fields[name] = 'editable';
+        });
+        var table = null;
+        var sysId = null;
+        try {
+          table = typeof f.getTableName === 'function' ? f.getTableName() : null;
+          sysId = typeof f.getUniqueValue === 'function' ? f.getUniqueValue() : null;
+        } catch (e) {
+          /* not known */
+        }
+        return { form: 'gform', table: table, sysId: sysId, fields: fields };
+      }
+      var portal = onPortalPage();
+      var boxes = {};
+      list.forEach(function (name, j) {
+        var found = boxState(name, asked[j], portal);
+        fields[name] = found.state;
+        if (found.label) boxes[name] = found.label;
+      });
+      return { form: portal ? 'portal' : 'workspace', fields: fields, boxes: boxes };
+    },
+
+    // READ ONLY: on a Workspace page (no g_form, not a portal) the text now in the box of each NAMED field, so a check can count
+    // notes that are typed and not saved yet. Each box is found exactly as fillField and getFieldStates find it (by its column
+    // name or exact label, visible, editable, never one of two look-alikes); only its text is read. Nothing is focused, typed or
+    // fired. A box that is not found is left out. A page with g_form answers through getFormValues instead, and a portal page has
+    // no notes of a ticket the agent works, so both answer null. Returns { name: text } (each cut to MAX_FIELD_CHARS) or null.
+    getBoxValues: function (names, labels) {
+      if (!Array.isArray(names) || resolveFormWindow() || onPortalPage()) return null;
+      var values = {};
+      for (var i = 0; i < names.length && i < 8; i++) {
+        var name = names[i];
+        if (typeof name !== 'string' || !FIELD_RE.test(name) || SECRET_NAME_RE.test(name)) continue;
+        var text = boxText(name, Array.isArray(labels) && typeof labels[i] === 'string' ? labels[i].slice(0, 100) : '');
+        if (text !== null) values[name] = text;
+      }
+      return values;
     },
   };
 

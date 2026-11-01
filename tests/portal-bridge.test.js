@@ -634,3 +634,117 @@ test('a field the form says is plain text gets the plain text; a form that does 
   assert.equal(makeDom({ window: comments.window }).call('fillField', ['comments', 'hello', '', false]).ok, true);
   assert.deepEqual(comments.calls, [['comments', 'hello']]);
 });
+
+// ---- Round 3 (F5): no second copy after "Try again", and the check before the click ----------------------------------
+
+test('portal and workspace: the earlier insert is swapped for the new one when the box still holds it as a whole block', () => {
+  const dom = makeDom();
+  const box = dom.add('textarea', COMMENT, { value: 'Typed by me' });
+  assert.equal(dom.call('fillField', ['comments', 'Reply one', 'Additional comments', true]).ok, true);
+  assert.equal(box.value, 'Typed by me\n\nReply one');
+  assert.equal(dom.call('fillField', ['comments', 'Reply two', 'Additional comments', true, '', 'Reply one']).ok, true);
+  assert.equal(box.value, 'Typed by me\n\nReply two');
+  // edited by the person: theirs now, the new text goes below
+  box._value = 'Typed by me\n\nReply two, and more';
+  assert.equal(dom.call('fillField', ['comments', 'Reply three', 'Additional comments', true, '', 'Reply two']).ok, true);
+  assert.equal(box.value, 'Typed by me\n\nReply two, and more\n\nReply three');
+  const ws = makeDom({ url: WORKSPACE });
+  const notes = ws.add('textarea', { 'aria-label': 'Work notes' }, { value: 'Note A' });
+  assert.equal(ws.call('fillField', ['work_notes', 'Note B', 'Work notes', true, '', 'Note A']).ok, true);
+  assert.equal(notes.value, 'Note B');
+});
+
+test('a g_form field swaps the earlier insert too; with HTML or without append the earlier text is ignored', () => {
+  const calls = [];
+  const g_form = { hasField: () => true, getValue: () => 'Mine\n\nOld answer', getEditableFields: () => ['work_notes', 'text'], isReadOnly: () => true, setValue: (n, v) => calls.push([n, v]) };
+  const dom = makeDom({ window: { g_form } });
+  assert.equal(dom.call('fillField', ['work_notes', 'New answer', '', true, '', 'Old answer']).ok, true);
+  assert.equal(dom.call('fillField', ['work_notes', 'Replaced', '', false, '', 'Old answer']).ok, true);
+  assert.deepEqual(calls, [['work_notes', 'Mine\n\nNew answer'], ['work_notes', 'Replaced']]);
+});
+
+test('getFieldStates reads and never writes: a portal names the box an insert would use; a hidden or missing one is unknown', () => {
+  const dom = makeDom();
+  const box = dom.add('textarea', COMMENT, { value: 'typed' });
+  dom.add('textarea', { name: 'work_notes', 'aria-label': 'Work notes' }, { value: '', readOnly: true });
+  const out = dom.call('getFieldStates', [['comments', 'work_notes', 'close_notes'], ['Additional comments', 'Work notes', 'Resolution notes']]);
+  assert.deepEqual(out, { form: 'portal', fields: { comments: 'editable', work_notes: 'read-only', close_notes: 'unknown' }, boxes: { comments: 'Additional comments' } });
+  assert.equal(box.value, 'typed');
+  assert.deepEqual(box.events, []);
+  assert.equal(box.focused, false);
+  const ws = makeDom({ url: WORKSPACE });
+  ws.add('textarea', { 'aria-label': 'Resolution notes' }, { value: '' });
+  assert.deepEqual(ws.call('getFieldStates', [['close_notes'], ['Resolution notes']]), { form: 'workspace', fields: { close_notes: 'editable' }, boxes: { close_notes: 'Resolution notes' } });
+  assert.equal(ws.call('getFieldStates', ['comments']), null, 'names must be a list');
+});
+
+// ---- N4: the notes typed in a Workspace page's boxes (getBoxValues, READ ONLY) ----------------------------------------------
+
+const NOTE_NAMES = ['close_notes', 'work_notes', 'comments'];
+const NOTE_LABELS = ['Resolution notes', 'Work notes', 'Additional comments'];
+
+test('getBoxValues: on a Workspace page each named box is found as an insert finds it, and only its text is read', () => {
+  const dom = makeDom({ url: WORKSPACE });
+  const host = dom.shadow(dom.add('now-record-form'));
+  const notes = dom.inShadow(host, dom.add('textarea', { 'aria-label': 'Resolution notes' }, { value: 'Restarted the gateway' }));
+  const work = dom.add('textarea', { name: 'incident.work_notes' }, { value: 'internal' });
+  const editor = dom.add('div', { contenteditable: 'true', 'aria-label': 'Additional comments' }, { text: 'Hello' });
+  assert.deepEqual(dom.call('getBoxValues', [NOTE_NAMES, NOTE_LABELS]), { close_notes: 'Restarted the gateway', work_notes: 'internal', comments: 'Hello' });
+  // nothing was focused, typed or fired, and nothing changed
+  for (const el of [notes, work, editor]) {
+    assert.deepEqual(el.events, []);
+    assert.equal(el.focused, false);
+  }
+  assert.deepEqual([notes.value, work.value, editor.innerText], ['Restarted the gateway', 'internal', 'Hello']);
+  // an empty box is read as empty (the notes were cleared), not left out
+  const blank = makeDom({ url: WORKSPACE });
+  blank.add('textarea', { 'aria-label': 'Close notes' }, { value: '' });
+  assert.deepEqual(blank.call('getBoxValues', [['close_notes'], ['Close notes']]), { close_notes: '' });
+});
+
+test('getBoxValues: a box that is missing, hidden, locked or one of two look-alikes is left out, never guessed', () => {
+  const dom = makeDom({ url: WORKSPACE });
+  const one = dom.add('textarea', { 'aria-label': 'Work notes' }, { value: 'one' });
+  const two = dom.add('textarea', { 'aria-label': 'Work notes' }, { value: 'two' });
+  dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: 'hidden text', display: 'none' });
+  dom.add('textarea', { 'aria-label': 'Resolution notes' }, { value: 'locked', disabled: true });
+  dom.add('input', { type: 'text', 'aria-label': 'Short description' }, { value: 'title' });
+  assert.deepEqual(dom.call('getBoxValues', [[...NOTE_NAMES, 'description'], [...NOTE_LABELS, 'Description']]), {});
+  assert.deepEqual([one.events, two.events], [[], []]);
+  // "Resolution notes" is not "Resolution notes summary"; a label with a marker is still the box
+  const near = makeDom({ url: WORKSPACE });
+  near.add('textarea', { 'aria-label': 'Resolution notes summary' }, { value: 'other field' });
+  assert.deepEqual(near.call('getBoxValues', [['close_notes'], ['Resolution notes']]), {});
+  near.add('textarea', { 'aria-label': 'Resolution notes (visible to the customer)' }, { value: 'the notes' });
+  assert.deepEqual(near.call('getBoxValues', [['close_notes'], ['Resolution notes']]), { close_notes: 'the notes' });
+});
+
+test('getBoxValues: plain non-secret names only, at most eight; long text is cut; g_form pages and portal pages answer null', () => {
+  const dom = makeDom({ url: WORKSPACE });
+  dom.add('textarea', { name: 'close_notes' }, { value: 'x'.repeat(25000) });
+  dom.add('textarea', { name: 'u_api_key', 'aria-label': 'Key' }, { value: 'sk-secret' });
+  dom.add('input', { type: 'password', name: 'u_pass' }, { value: 'hunter2' });
+  const out = dom.call('getBoxValues', [['close_notes', 'u_api_key', 'u_pass', 'Close Notes', '__proto__', 42], ['', 'Key', '', '', '', '']]);
+  assert.deepEqual(Object.keys(out), ['close_notes']);
+  assert.equal(out.close_notes.length, 20000);
+  assert.equal(dom.call('getBoxValues', ['close_notes']), null, 'names must be a list');
+  const many = makeDom({ url: WORKSPACE });
+  many.add('textarea', { name: 'close_notes' }, { value: 'ninth' });
+  assert.deepEqual(many.call('getBoxValues', [['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'close_notes'], []]), {}, 'the ninth name is not looked at');
+  // a form with g_form answers through getFormValues; a portal page has no resolution notes of a ticket the agent works
+  const classic = makeDom({ url: WORKSPACE, window: { g_form: { getValue: () => 'x' } } });
+  classic.add('textarea', { name: 'close_notes' }, { value: 'typed' });
+  assert.equal(classic.call('getBoxValues', [['close_notes'], ['Resolution notes']]), null);
+  const portal = makeDom();
+  portal.add('textarea', COMMENT, { value: 'typed' });
+  assert.equal(portal.call('getBoxValues', [['comments'], ['Additional comments']]), null);
+});
+
+test('getBoxValues and the reader it uses never focus, type, set or fire anything (read only by construction)', () => {
+  const reader = BRIDGE.slice(BRIDGE.indexOf('function boxText('), BRIDGE.indexOf('var actions = {'));
+  const action = BRIDGE.slice(BRIDGE.indexOf('getBoxValues: function'), BRIDGE.indexOf('getBoxValues: function') + 1500).split('\n    },')[0];
+  assert.ok(reader.length > 100 && action.length > 100);
+  for (const code of [reader, action]) {
+    assert.ok(!/focus\(|fireEvent|dispatchEvent|setControlValue|writeInto|writeEditable|execCommand|\.value\s*=[^=]|appendChild|removeChild/.test(code), code.slice(0, 80));
+  }
+});

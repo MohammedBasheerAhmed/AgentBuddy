@@ -30,3 +30,25 @@
 .ab-kb-facts dd { margin: 0; overflow-wrap: anywhere; }
 .ab-kb-quote { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--ab-border-strong); background: var(--ab-bg-subtle); color: var(--ab-fg); overflow-wrap: anywhere; white-space: pre-wrap; }
 .ab-kb-quote-head { display: block; margin-bottom: 2px; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-fg-muted); }
+
+/* ---- The Knowledge screen (round 3) ---- */
+.ab-kbx { display: flex; flex-direction: column; gap: 8px; }
+.ab-kbx-tool { display: flex; flex-direction: column; gap: 6px; }
+.ab-kbx-tool .ab-field { margin-bottom: 0; }
+.ab-kbx-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: 8px; }
+.ab-kbx-results, .ab-kbx-compare { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--ab-border); }
+.ab-kbx-topics { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; }
+
+/* knowledge search */
+.ab-kbx-search { display: flex; flex-direction: column; gap: 6px; }
+.ab-kbx-searchrow { align-items: center; flex-wrap: nowrap; }
+.ab-kbx-searchrow .ab-input { flex: 1 1 auto; min-width: 0; }
+.ab-offscreen-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.ab-kbx-hits { gap: 8px; }
+.ab-kbx-hit { display: flex; flex-direction: column; gap: 3px; padding: 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg); min-width: 0; }
+.ab-kbx-hit-title { font-weight: 600; color: var(--ab-fg); text-decoration: none; overflow-wrap: anywhere; }
+.ab-kbx-hit-title:hover { text-decoration: underline; }
+.ab-kbx-hit-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
+.ab-kbx-excerpt { margin: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); overflow-wrap: anywhere; }
+.ab-kbx-fresh-stale, .ab-kbx-fresh-expiring { background: var(--ab-warn-soft); border-color: var(--ab-warn-line); color: var(--ab-fg); }
+.ab-kbx-fresh-fresh { background: var(--ab-ok-soft); border-color: var(--ab-ok-line); color: var(--ab-fg); }

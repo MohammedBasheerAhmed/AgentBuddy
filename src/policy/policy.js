@@ -16,6 +16,8 @@
 // An enterprise build compiles a policy into the extension (src/policy/baked.js). It is a floor under whatever the browser's managed
 // policy says: the two are combined with mergePolicies(), which keeps the stricter side of every setting.
 import { BAKED_POLICY } from './baked.js';
+import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
+import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from '../reports/layoutFile.js';
 
 export const PII_MODES = ['standard', 'strict', 'local-only'];
 export const PREVIEW_MODES = ['always', 'first', 'never'];
@@ -44,6 +46,14 @@ export const POLICY_KEYS = Object.freeze([
   'auditExport',
   'coachingEnabled',
   'disablePageBar',
+  'aiEnabled',
+  'disabledSections',
+  'allowedProfiles',
+  'lockedProfiles',
+  'orgSnippets',
+  'internalPhrases',
+  'defaultDashboard',
+  'priorityAccounts',
 ]);
 
 // Stricter is later in the list. A user choice below the policy floor is raised to it.
@@ -162,6 +172,78 @@ function budgetOf(value) {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
+// Organisation snippets: canned replies a team lead or the service owner publishes for everyone. Plain text only (they are inserted
+// as text, never as markup); anything that is not an object with a title and a body is dropped, and the sizes are capped so a policy
+// cannot fill the panel's memory.
+export const ORG_SNIPPET_LIMITS = Object.freeze({ count: 200, title: 80, body: 4000, shortcut: 40 });
+function readOrgSnippets(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of value) {
+    if (out.length >= ORG_SNIPPET_LIMITS.count) break;
+    if (!isPlainObject(item) || typeof item.title !== 'string' || typeof item.body !== 'string') continue;
+    const title = item.title.trim().slice(0, ORG_SNIPPET_LIMITS.title);
+    const body = item.body.slice(0, ORG_SNIPPET_LIMITS.body);
+    if (!title || !body.trim() || seen.has(title.toLowerCase())) continue;
+    seen.add(title.toLowerCase());
+    const shortcut = typeof item.shortcut === 'string' ? item.shortcut.trim().slice(0, ORG_SNIPPET_LIMITS.shortcut) : '';
+    out.push({ title, body, shortcut });
+  }
+  return out;
+}
+
+// The organisation's dashboard (N17): one dashboard layout exactly as the Team screen's "Save layout as a file" writes it,
+// { kind, version, dashboard: { name, scope, tables, widgets } }. Only its envelope and size are checked here (src/reports/layoutFile.js);
+// src/reports/dashboards.js cleans the dashboard inside exactly like a file a person loads, and drops one with no section it knows.
+// The value may also be the file's text (a Windows registry string holds JSON). What is kept is a plain-data copy of the four parts.
+// @returns {{ layout: object|null, problem: '' | 'not-layout' | 'newer' | 'too-big' }}
+function parseOrgDashboard(value) {
+  let parsed = value;
+  if (typeof value === 'string') {
+    if (value.length > LAYOUT_MAX_CHARS) return { layout: null, problem: 'too-big' };
+    try {
+      parsed = JSON.parse(value.replace(/^﻿/, ''));
+    } catch {
+      return { layout: null, problem: 'not-layout' };
+    }
+  }
+  const problem = layoutEnvelopeProblem(parsed);
+  if (problem) return { layout: null, problem };
+  let text;
+  try {
+    const d = parsed.dashboard;
+    text = JSON.stringify({ kind: LAYOUT_KIND, version: LAYOUT_VERSION, dashboard: { name: d.name, scope: d.scope, tables: d.tables, widgets: d.widgets } });
+  } catch {
+    return { layout: null, problem: 'not-layout' };
+  }
+  if (typeof text !== 'string' || text.length > LAYOUT_MAX_CHARS) return { layout: null, problem: 'too-big' };
+  return { layout: JSON.parse(text), problem: '' };
+}
+
+// Priority accounts (N28): the customer accounts the organisation names as priority, written as ServiceNow shows the account's name.
+// ServiceNow has no standard column for it. Text only; a name longer than the limit is dropped rather than cut (a cut name could match
+// another account); repeats (whatever their case) are kept once; the list is capped so a policy cannot fill the panel's memory.
+// Matching ignores case and spaces (src/insights/priorityAccount.js).
+export const PRIORITY_ACCOUNT_LIMITS = Object.freeze({ count: 500, length: 100 });
+function readPriorityAccounts(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of value) {
+    if (out.length >= PRIORITY_ACCOUNT_LIMITS.count) break;
+    if (typeof item !== 'string') continue;
+    const name = item.trim();
+    if (!name || name.length > PRIORITY_ACCOUNT_LIMITS.length || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    out.push(name);
+  }
+  return out;
+}
+
+// Words of a fixed list (screens, profiles), lower case; anything else is dropped.
+const knownWords = (value, known) => unique(lowerList(value).filter((w) => known.includes(w)));
+
 // One policy object, cleaned. Idempotent: reading its own output gives the same object, which matters because the panel passes an
 // already-read policy to effectiveSettings(). `aiBlocked` is worked out from the values every time, never taken from the input.
 function readPolicy(raw) {
@@ -192,6 +274,20 @@ function readPolicy(raw) {
     coachingEnabled: p.coachingEnabled === true,
     // The one thing Agent Buddy draws on a ServiceNow page is the small bar of main actions; an organisation can switch it off for everyone.
     disablePageBar: p.disablePageBar === true,
+    // false hides every AI Assist half for everyone: Agent Buddy then works without AI (the Insights halves stay). Unset is on.
+    aiEnabled: p.aiEnabled !== false,
+    // Screens an organisation does not want (the Ticket screen cannot be hidden).
+    disabledSections: knownWords(p.disabledSections, HIDEABLE_SCREENS),
+    // Work profiles people may choose (null: all of them); locked ones are set for everyone and cannot be changed.
+    allowedProfiles: Array.isArray(p.allowedProfiles) ? knownWords(p.allowedProfiles, PROFILE_IDS) : null,
+    lockedProfiles: Array.isArray(p.lockedProfiles) ? knownWords(p.lockedProfiles, PROFILE_IDS) : null,
+    orgSnippets: readOrgSnippets(p.orgSnippets),
+    // More phrases the safe-to-send check treats as internal-only (team names, system names), on top of the built-in list.
+    internalPhrases: unique(list(p.internalPhrases).map((s) => s.slice(0, 120))).slice(0, 200),
+    // The Team screen's first dashboard for someone with none yet, and offered once to anyone else; never locked (N17).
+    defaultDashboard: parseOrgDashboard(p.defaultDashboard).layout,
+    // Customer accounts the Account card and the Glance mark as "Priority account" (N28).
+    priorityAccounts: readPriorityAccounts(p.priorityAccounts),
     // Not a policy key: '' or the reason no AI call may be made under this policy.
     aiBlocked: endpoint && !endpoint.ok ? BLOCKED_ENDPOINT : '',
   };
@@ -231,7 +327,8 @@ const PII_RANK = Object.fromEntries(PII_MODES.map((mode, i) => [mode, i]));
 /**
  * The stricter of two policies, setting by setting: allow-lists are intersected, block-lists joined, modes take the stricter one,
  * a switch that loosens (HR content, coaching, audit export) needs both, a switch that tightens (no page bar) needs either, and the
- * smaller daily budget wins. When the two pin different AI providers or addresses, or allow no model in common, `aiBlocked` says so
+ * smaller daily budget wins; content an organisation publishes is joined (snippets, phrases, priority accounts), except its one
+ * dashboard, where the managed side's wins. When the two pin different AI providers or addresses, or allow no model in common, `aiBlocked` says so
  * and no AI call is made; the managed side's value is kept so reading the result again finds the same disagreement.
  * @param {object} floorInput the compiled-in policy (enterprise build)
  * @param {object} managedInput the browser's managed policy
@@ -278,6 +375,17 @@ export function mergePolicies(floorInput, managedInput) {
     auditExport: a.auditExport && b.auditExport,
     coachingEnabled: a.coachingEnabled && b.coachingEnabled,
     disablePageBar: a.disablePageBar || b.disablePageBar,
+    aiEnabled: a.aiEnabled && b.aiEnabled,
+    disabledSections: unique([...a.disabledSections, ...b.disabledSections]),
+    allowedProfiles: intersectList(a.allowedProfiles, b.allowedProfiles),
+    // A profile set is not "stricter" than another: the managed side, when it locks profiles, decides.
+    lockedProfiles: b.lockedProfiles ? [...b.lockedProfiles] : a.lockedProfiles ? [...a.lockedProfiles] : null,
+    orgSnippets: readOrgSnippets([...a.orgSnippets, ...b.orgSnippets]),
+    internalPhrases: unique([...a.internalPhrases, ...b.internalPhrases]),
+    // A dashboard is not stricter or looser than another: the managed policy's, when it sets one, wins over the compiled-in one.
+    defaultDashboard: parseOrgDashboard(b.defaultDashboard || a.defaultDashboard).layout,
+    // Both lists name priority accounts; together they name all of them.
+    priorityAccounts: readPriorityAccounts([...a.priorityAccounts, ...b.priorityAccounts]),
     aiBlocked: reasons[0] || '',
   };
 }
@@ -323,6 +431,14 @@ const KEY_TYPES = {
   auditExport: 'boolean',
   coachingEnabled: 'boolean',
   disablePageBar: 'boolean',
+  aiEnabled: 'boolean',
+  disabledSections: 'list',
+  allowedProfiles: 'list',
+  lockedProfiles: 'list',
+  orgSnippets: 'objects',
+  internalPhrases: 'list',
+  defaultDashboard: 'layout',
+  priorityAccounts: 'list',
 };
 const NAME_RE = /^[a-z][a-z0-9_]{0,79}$/;
 const FEATURE_RE = /^[a-z][a-z0-9-]{0,79}$/;
@@ -342,9 +458,11 @@ const shown = (value) => {
  * @param {{ providers?: string[] }} [options] providers: the provider ids this version knows (Object.keys(PROVIDERS) of
  *   src/providers/config.js). Passed in rather than imported, so the content script, which reads the policy too, does not carry the
  *   provider layer. Without it, provider names are not checked.
+ *   checkDashboard: orgDashboardProblems of src/reports/dashboards.js, which checks the dashboard inside `defaultDashboard` (its
+ *   sections, its name) with the reports code; passed in for the same reason. Without it, only the layout's envelope is checked.
  * @returns {{ key: string, level: 'error' | 'note', message: string }[]}
  */
-export function policyProblems(raw, { providers } = {}) {
+export function policyProblems(raw, { providers, checkDashboard } = {}) {
   const knownProviders = Array.isArray(providers) && providers.length ? providers.map((id) => String(id).toLowerCase()) : null;
   const out = [];
   const error = (key, message) => out.push({ key, level: 'error', message });
@@ -365,7 +483,35 @@ export function policyProblems(raw, { providers } = {}) {
       continue;
     }
     if (type === 'boolean' && typeof value !== 'boolean') {
-      error(key, `${key} must be true or false; ${shown(value)} is read as ${key === 'auditExport' ? 'true' : 'false'}.`);
+      error(key, `${key} must be true or false; ${shown(value)} is read as ${key === 'auditExport' || key === 'aiEnabled' ? 'true' : 'false'}.`);
+      continue;
+    }
+    if (type === 'objects') {
+      if (!Array.isArray(value)) {
+        error(key, `${key} must be a list of { "title", "body" } objects; ${shown(value)} is ignored.`);
+        continue;
+      }
+      value.forEach((item, i) => {
+        if (!isPlainObject(item) || typeof item.title !== 'string' || !item.title.trim() || typeof item.body !== 'string' || !item.body.trim()) {
+          error(key, `${key}[${i}] needs a text "title" and a text "body"; it is ignored.`);
+        } else if (item.body.length > ORG_SNIPPET_LIMITS.body) note(key, `${key}[${i}]: the body is cut to ${ORG_SNIPPET_LIMITS.body} characters.`);
+      });
+      if (value.length > ORG_SNIPPET_LIMITS.count) note(key, `${key}: only the first ${ORG_SNIPPET_LIMITS.count} are used.`);
+      continue;
+    }
+    if (type === 'layout') {
+      const { layout, problem } = parseOrgDashboard(value);
+      const shape = `{ "kind": "${LAYOUT_KIND}", "version": ${LAYOUT_VERSION}, "dashboard": { "name", "scope", "tables", "widgets" } }`;
+      if (problem === 'newer') error(key, `${key} was saved by a newer version of Agent Buddy (this one reads version ${LAYOUT_VERSION}); it is ignored.`);
+      else if (problem === 'too-big') error(key, `${key} is longer than ${LAYOUT_MAX_CHARS} characters; it is ignored.`);
+      else if (problem) error(key, `${key} must be one dashboard layout as the Team screen's "Save layout as a file" writes it, ${shape}; ${shown(value).slice(0, 80)} is ignored.`);
+      if (!layout) continue;
+      if (typeof value === 'string') note(key, `${key} is text; it is read as the layout file's JSON.`);
+      // Chrome's policy schema has no "null": a saved file says "tables": null for "every table", and the browser may refuse the key.
+      else if (value.dashboard.tables === null) note(key, `${key}: "tables": null (every table) may be refused by the browser's policy check; leave "tables" out instead, which means the same.`);
+      if (typeof checkDashboard === 'function') {
+        for (const p of checkDashboard(layout) || []) (p.level === 'note' ? note : error)(key, `${key}: ${p.message}`);
+      }
       continue;
     }
     if (type === 'integer' && !(typeof value === 'number' && Number.isInteger(value) && value >= 0)) {
@@ -424,11 +570,24 @@ export function policyProblems(raw, { providers } = {}) {
         else if (read !== item) note(key, `${key}[${i}]: ${shown(item)} is read as "${read}".`);
       });
     }
+    if (key === 'disabledSections' || key === 'allowedProfiles' || key === 'lockedProfiles') {
+      const known = key === 'disabledSections' ? HIDEABLE_SCREENS : PROFILE_IDS;
+      value.forEach((item, i) => {
+        if (typeof item !== 'string' || !item.trim()) return;
+        if (!known.includes(item.trim().toLowerCase())) error(key, `${key}[${i}]: ${shown(item)} is not one of ${known.join(', ')} and is ignored.`);
+      });
+    }
     if (key === 'sensitiveTablePrefixes') {
       value.forEach((item, i) => {
         if (typeof item !== 'string' || !item.trim()) return;
         if (!PREFIX_RE.test(item.trim().toLowerCase())) error(key, `sensitiveTablePrefixes[${i}]: ${shown(item)} is not a table-name prefix (letters, digits and _; at least 2 characters) and is ignored.`);
       });
+    }
+    if (key === 'priorityAccounts') {
+      value.forEach((item, i) => {
+        if (typeof item === 'string' && item.trim().length > PRIORITY_ACCOUNT_LIMITS.length) error(key, `priorityAccounts[${i}] is longer than ${PRIORITY_ACCOUNT_LIMITS.length} characters and is ignored.`);
+      });
+      if (value.length > PRIORITY_ACCOUNT_LIMITS.count) note(key, `priorityAccounts: only the first ${PRIORITY_ACCOUNT_LIMITS.count} names are used.`);
     }
     if (key === 'providedApiKey' && value.trim()) note(key, 'providedApiKey: anyone who can read this computer\'s policy store can read this key. Prefer a gateway that authenticates people another way.');
   }
@@ -526,10 +685,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   previewMode: 'first',
   previewSeen: [],
   instances: [],
-  autoSignature: false,
   quickBarOpen: true, // the quick-actions bar in the side panel is open (false = folded to one strip)
   quickPins: {}, // per kind of record: the feature ids the person pinned to the bar (src/features/quick.js); {} = the defaults
   pageBar: true, // the small bar on the ServiceNow page itself (src/content/bar.js)
+  // Work profiles (src/profiles): what the person works on decides which cards and actions show. [] until they confirm the suggestion.
+  profiles: [],
+  profilesConfirmed: false,
+  showEverything: false, // every card and action, whatever the profiles say
+  aiSkipped: false, // "Skip AI for now": AI Assist halves say how to set AI up instead of offering actions
+  halves: {}, // per screen: 'insights' | 'assist', the half last chosen
+  followUpDays: 3, // My work: a customer not updated (or not answering) for this many days is a follow-up due
 });
 
 /**
@@ -592,6 +757,18 @@ export function effectiveSettings(user, policyInput) {
     values.pageBar = false;
     lock('pageBar', 'Switched off by your organisation.');
   }
+  // Work profiles: only known ids; the HR profile only where the organisation has approved HR work in Agent Buddy (it names the
+  // profile in allowedProfiles, or allows HR content); a policy's locked set replaces the person's choice.
+  const hrApproved = Boolean(policy.allowedProfiles?.includes('hr') || policy.allowHrContent);
+  let profiles = (Array.isArray(values.profiles) ? values.profiles : []).filter((id) => PROFILE_IDS.includes(id));
+  if (policy.lockedProfiles) {
+    profiles = [...policy.lockedProfiles];
+    lock('profiles', 'Set by your organisation.');
+  }
+  if (policy.allowedProfiles) profiles = profiles.filter((id) => policy.allowedProfiles.includes(id));
+  if (!hrApproved) profiles = profiles.filter((id) => id !== 'hr');
+  values.profiles = unique(profiles);
+  if (!policy.aiEnabled) lock('ai', 'Switched off by your organisation.');
   // A key supplied by the organisation wins, so people never have to handle one. It is used only when the same policy pins where it
   // goes (aiProvider or aiBaseUrl): an organisation key must never be sent to whatever provider the person picks.
   const keyUsable = Boolean(policy.providedApiKey && (policy.aiProvider || policy.aiBaseUrl));

@@ -22,7 +22,7 @@ test('my operation names carry a kb/chat prefix, so they cannot shadow the built
     assert.match(name, /^(kb|chat)[A-Z]/, name);
     assert.ok(!BUILT_IN.includes(name), name);
   }
-  assert.deepEqual(Object.keys(knowledgeOps).sort(), ['kbArticleTexts', 'kbDuplicates', 'kbGaps', 'kbScopes']);
+  assert.deepEqual(Object.keys(knowledgeOps).sort(), ['kbArticleTexts', 'kbDuplicates', 'kbGapScopes', 'kbGaps', 'kbScopes', 'kbSearch']);
   assert.deepEqual(Object.keys(chatOps), ['chatOverview']);
 });
 

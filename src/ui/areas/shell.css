@@ -1,0 +1,72 @@
+/* The panel frame and the shared building blocks (src/sidepanel/ui/primitives.jsx, App.jsx). Owned by the lead (docs/round3.md).
+   Only --ab-* tokens. Inviting, not cluttered: one primary button per screen, quiet chrome, short lines (TRACKER.md 2.4). */
+
+/* ---- header: name, instance, settings ---- */
+.ab-header { gap: 8px; padding: 8px 12px; }
+.ab-instance { font-size: var(--ab-text-xs); color: var(--ab-fg-muted); border: 1px solid var(--ab-border); border-radius: 999px; padding: 1px 8px; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--ab-bg); }
+.ab-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--ab-radius-sm); border: 1px solid transparent; background: transparent; color: var(--ab-fg-soft); cursor: pointer; }
+.ab-iconbtn:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
+.ab-shield { display: inline-flex; color: var(--ab-ok); }
+
+/* ---- screens: one row of plain tabs with an underline, not a row of boxed buttons ---- */
+.ab-screens { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--ab-border); background: var(--ab-bg-subtle); overflow-x: auto; scrollbar-width: none; }
+.ab-screens::-webkit-scrollbar { display: none; }
+.ab-screen-tab { flex: 0 0 auto; border: 0; background: transparent; padding: 8px 10px 7px; font-weight: 550; color: var(--ab-fg-muted); border-bottom: 2px solid transparent; cursor: pointer; border-radius: 0; }
+.ab-screen-tab:hover { color: var(--ab-fg); }
+.ab-screen-tab[aria-selected='true'] { color: var(--ab-fg); border-bottom-color: var(--ab-accent); }
+
+/* ---- the Insights / AI Assist switch ---- */
+.ab-halfswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 3px; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); border: 1px solid var(--ab-border); }
+.ab-halfswitch-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; background: transparent; padding: 5px 8px; border-radius: var(--ab-radius-sm); font-weight: 600; color: var(--ab-fg-soft); cursor: pointer; min-width: 0; }
+.ab-halfswitch-tab.is-on { background: var(--ab-bg-raised); color: var(--ab-fg); border-color: var(--ab-border); box-shadow: 0 1px 1px var(--ab-border); }
+.ab-halfswitch-insights.is-on { color: var(--ab-accent); }
+.ab-halfswitch-assist.is-on { color: var(--ab-ai); border-color: var(--ab-ai-line); }
+.ab-halfswitch-note { font-weight: 500; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
+.ab-halfrule { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
+
+/* ---- the AI mark ---- */
+.ab-ai-badge { display: inline-flex; align-items: center; gap: 3px; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-ai); letter-spacing: 0.02em; }
+.ab-ai-spark { flex: none; }
+
+/* ---- cards that fold ---- */
+.ab-cardx { border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); }
+.ab-cardx-warn { border-color: var(--ab-warn-line); }
+.ab-cardx-danger { border-color: var(--ab-danger-line); }
+.ab-cardx-head { display: flex; align-items: center; gap: 6px; padding: 2px 6px 2px 2px; }
+.ab-cardx-toggle { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; text-align: left; border: 0; background: transparent; padding: 8px 6px 8px 8px; cursor: pointer; border-radius: var(--ab-radius-sm); }
+.ab-cardx-chevron { flex: none; width: 7px; height: 7px; border-right: 1.5px solid var(--ab-fg-muted); border-bottom: 1.5px solid var(--ab-fg-muted); transform: rotate(-45deg); margin-right: 2px; align-self: center; transition: transform 120ms ease-out; }
+.ab-cardx-toggle[aria-expanded='true'] .ab-cardx-chevron { transform: rotate(45deg); }
+.ab-cardx-title { font-weight: 650; }
+.ab-cardx-summary { flex: 1; min-width: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-cardx-warn .ab-cardx-summary { color: var(--ab-warn); }
+.ab-cardx-danger .ab-cardx-summary { color: var(--ab-danger); }
+.ab-cardx-actions { display: inline-flex; gap: 4px; flex: none; }
+.ab-cardx-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ab-cardx-body[hidden] { display: none; }
+
+/* ---- lists, show more, empty states ---- */
+.ab-list { display: flex; flex-direction: column; gap: 6px; }
+.ab-showmore { align-self: flex-start; }
+.ab-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 4px 0; }
+.ab-empty-text { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+
+/* ---- the hint on a ticket outside the person's profiles ---- */
+.ab-profilehint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--ab-text-sm); padding: 6px 10px; border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); border: 1px dashed var(--ab-border-strong); }
+.ab-profilehint p { margin: 0; flex: 1 1 14em; min-width: 0; }
+
+@media (prefers-reduced-motion: reduce) { .ab-cardx-chevron { transition: none; } }
+
+/* ---- the Ticket screen ---- */
+.ab-ticket { gap: 10px; }
+.ab-halfrule-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: -4px; }
+.ab-halfrule-row .ab-halfrule { margin: 0; }
+.ab-model { max-width: 12rem; }
+.ab-cards { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---- AI buttons, one definition for every area: ab-btn-ai is the filled main AI button (one per screen at most), ab-btn-ai-quiet
+   an outlined one. Insights never uses either (TRACKER.md 2.3). ---- */
+.ab-btn-ai { background: var(--ab-ai); border-color: var(--ab-ai); color: var(--ab-ai-fg); }
+.ab-btn-ai:hover:not(:disabled) { background: var(--ab-ai-hover); border-color: var(--ab-ai-hover); }
+.ab-btn-ai .ab-ai-badge { color: var(--ab-ai-fg); }
+.ab-btn-ai-quiet { border-color: var(--ab-ai-line); color: var(--ab-ai); background: var(--ab-bg-raised); }
+.ab-btn-ai-quiet:hover:not(:disabled) { background: var(--ab-ai-soft); }

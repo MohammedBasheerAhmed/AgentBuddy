@@ -1,0 +1,67 @@
+# Continuous integration (TRACKER.md R1). Runs on every push and pull request. No secrets are used and nothing is published:
+# the jobs install the locked dependencies, test, check, build and audit.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Unit tests, compile check, build, traceability, audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install (exact versions from the lockfile)
+        run: npm ci
+      - name: Unit tests
+        run: node tests/run.js
+      - name: Compile check (every entry, nothing written)
+        run: node scripts/check-compile.js
+      - name: Build
+        run: node build.js
+      - name: Traceability (every control names a test file that exists)
+        run: npm run traceability -- --check
+      - name: Audit of the shipped dependencies
+        run: npm audit --omit=dev
+
+  e2e:
+    name: End-to-end (real Chrome, fake ServiceNow, fake AI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: checks
+    # Allowed to fail at first: headless Chrome with an extension and a side panel on a hosted runner has not been proven yet (the
+    # run is proven on Windows with Chrome). Remove this line once the job has passed a few times.
+    continue-on-error: true
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
+      AB_E2E_TMP: ${{ runner.temp }}/agentbuddy-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Install puppeteer-core (not a dependency of the repo)
+        run: npm i --no-save puppeteer-core
+      - name: Chrome version
+        run: $CHROME_PATH --version
+      - name: Build and run every scenario
+        run: npm run e2e
+      - name: Keep the screenshots of failed steps
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/agentbuddy-e2e/**/*.png
+          if-no-files-found: ignore

@@ -1,6 +1,7 @@
 // z. Pressing an action on the bar of the ServiceNow page: the service worker leaves a short request, the side panel picks it up,
 //    shows the record's own preview first, and only then sends. A request that is old, for another ticket, or for an action the
-//    record does not have starts nothing.
+//    record does not have starts nothing. Round 3: answers are kept per ticket, so a request that arrives while an answer is on
+//    screen starts the action too (the earlier answer is folded, never replaced).
 const { barDriver } = require('../barDriver.js');
 const { clickButton, textOf, waitForRecord } = require('../ui.js');
 
@@ -9,6 +10,8 @@ const LAUNCH = 'ab:launch';
 const readLaunch = (ctx) => ctx.ext(async (k) => (await chrome.storage.session.get(k))[k] ?? null, LAUNCH);
 const writeLaunch = (ctx, value) => ctx.ext((k, v) => chrome.storage.session.set({ [k]: v }), LAUNCH, value);
 const dialogShown = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-dialog')).length > 0);
+/** Put every answer on screen away (round 3 keeps several answers per ticket). */
+const closeAnswers = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
 
 module.exports = {
   id: 'z',
@@ -19,7 +22,7 @@ module.exports = {
     inst.setBehaviour();
     await ctx.ensureEnabled();
     await ctx.configure(
-      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin], quickBarOpen: true, quickPins: {}, pageBar: true },
+      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin], quickBarOpen: true, quickPins: {}, pageBar: true, profilesConfirmed: true },
       { key: { provider: 'custom', value: ai.key } }
     );
     await ctx.ext((k) => chrome.storage.session.remove(k), LAUNCH);
@@ -74,7 +77,7 @@ module.exports = {
     t.check('after approval one request went out and the answer is shown', ai.requests.length === 1 && (await textOf(p, '.ab-output')) !== null, String(ai.requests.length));
     const audit = await ctx.audit();
     t.check('the run is in the activity log like any other', audit.some((e) => e.feature === 'record-summary' && e.outcome === 'sent'));
-    await clickButton(p, /^Close$/);
+    await closeAnswers(p);
 
     // 3. Requests that must start nothing.
     const base = { tabId, table: 'incident', sysId: data.INCIDENT_ID, featureId: 'record-summary' };
@@ -99,15 +102,19 @@ module.exports = {
     t.check('an action this kind of record does not have is refused in plain words, nothing runs', !(await dialogShown(p)) && ai.requests.length === before);
     t.check('and the request is used up', (await readLaunch(ctx)) === null);
 
-    // 5. A good request while an answer is on screen does not replace the answer.
+    // 5. A good request while an answer is on screen starts the action; the answer is kept (folded), never replaced.
     await clickButton(p, /^Draft a reply to the customer/);
     await p.waitForSelector('.ab-dialog', { timeout: 15000 });
     await clickButton(p, /^Send to AI/);
     await p.waitForSelector('.ab-output', { timeout: 15000 });
-    const answer = await textOf(p, '.ab-output');
+    const sentBefore = ai.requests.length;
     await writeLaunch(ctx, { ...base, at: Date.now() });
-    await p.waitForFunction(() => /Close the answer on screen first/.test(document.body.innerText), { timeout: 8000 });
-    t.check('a request that arrives while an answer is on screen asks the person to close it first, and the answer stays', (await textOf(p, '.ab-output')) === answer && !(await dialogShown(p)));
+    await p.waitForSelector('.ab-dialog', { timeout: 8000 });
+    const head5 = (await textOf(p, '.ab-dialog-head')) || '';
+    t.check('a request that arrives while an answer is on screen starts the action behind its preview (nothing sent yet)', /Summarise this ticket/.test(head5) && ai.requests.length === sentBefore, head5.replace(/\s+/g, ' '));
+    t.check('...and the earlier answer is kept, folded', /Earlier: Draft a reply/.test(await p.evaluate(() => document.body.innerText)));
+    t.check('...and the request is used up', (await readLaunch(ctx)) === null);
+    await clickButton(p, /^Cancel/).catch(() => {});
 
     await bar.close();
     await panel.close();

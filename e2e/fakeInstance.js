@@ -67,6 +67,7 @@ const TABLE_FIELDS = {
     { name: 'state', label: 'State', readonly: true },
     { name: 'cause_notes', label: 'Cause notes', area: true },
     { name: 'workaround', label: 'Workaround', area: true },
+    { name: 'fix_notes', label: 'Fix notes', area: true },
     { name: 'work_notes', label: 'Work notes', area: true },
     { name: 'comments', label: 'Additional comments (Customer visible)', area: true },
     { name: 'close_notes', label: 'Resolution notes', area: true },
@@ -301,7 +302,7 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
     const workspace = /^\/now\/[a-z-]+\/record\/([a-z][a-z0-9_]*)\/([0-9a-f]{32})/i.exec(p);
     if (workspace) {
       const row = record(workspace[1], workspace[2].toLowerCase()) || {};
-      return html(page(`${dispOf(row.number) || workspace[1]} | Workspace (fake)`, `<div class="banner">Fake ServiceNow - workspace record (no g_form)</div><now-record-form heading="${escapeHtml(dispOf(row.number) || workspace[1])}"></now-record-form><script src="/scripts/session.js"></script><script src="/scripts/workspace.js"></script>`));
+      return html(page(`${dispOf(row.number) || workspace[1]} | Workspace (fake)`, `<div class="banner">Fake ServiceNow - workspace record (no g_form)</div><now-record-form heading="${escapeHtml(dispOf(row.number) || workspace[1])}" close-notes="${escapeHtml(dispOf(row.close_notes))}"></now-record-form><script src="/scripts/session.js"></script><script src="/scripts/workspace.js"></script>`));
     }
 
     const portalSuffix = /^\/(sp|esc|csm)$/.exec(p);

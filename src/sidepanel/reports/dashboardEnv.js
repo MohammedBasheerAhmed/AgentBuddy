@@ -1,6 +1,6 @@
 // Pure decisions the Team dashboard makes (src/sidepanel/reports/ReportsDashboard.jsx), kept here so they are tested without a browser
 // (tests/reports-dashboard-env.test.js).
-import { addableSections, sectionById } from './sections.js';
+import { sectionById } from './sections.js';
 
 /**
  * What about the ServiceNow page the widgets depend on: the tab, the instance, and the kind of page links are built for. NOT the
@@ -20,17 +20,18 @@ export function pageIdentity(page) {
 }
 
 /**
- * The widgets to draw. An AI-only section the organisation's policy has turned off (Explain this dashboard, the coaching snapshot)
- * is left out of the dashboard, with one line naming it, instead of a card that only says "turned off"; in Customize it stays, so it
- * can be removed. Returns { shown: widget[], hidden: string[] (labels) }.
+ * The widgets the Insights dashboard draws. An AI section (Explain this dashboard, the coaching snapshot) is never drawn here: no AI
+ * element on Insights (TRACKER.md 2.3); they are under AI Assist. A dashboard saved earlier may hold one: it is left out, with one line
+ * naming it; in Customize it stays, so it can be removed. Returns { shown: widget[], hidden: string[] (labels) }. `policy` is kept for
+ * callers.
  */
+// eslint-disable-next-line no-unused-vars
 export function visibleWidgets(widgets, { policy, customize = false } = {}) {
-  const allowed = new Set(addableSections(policy).map((s) => s.id));
   const shown = [];
   const hidden = [];
   for (const w of Array.isArray(widgets) ? widgets : []) {
     const section = w?.type === 'section' ? sectionById(w.section) : null;
-    if (!customize && section?.hideWhenOff && !allowed.has(section.id)) hidden.push(section.label);
+    if (section?.ai && !customize) hidden.push(section.label);
     else shown.push(w);
   }
   return { shown, hidden: [...new Set(hidden)] };

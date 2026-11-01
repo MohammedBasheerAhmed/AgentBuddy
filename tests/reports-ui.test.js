@@ -9,8 +9,8 @@ import { SlaBody } from '../src/sidepanel/reports/SlaView.jsx';
 import { QualityBody } from '../src/sidepanel/reports/QualityView.jsx';
 import { FulfilmentBody } from '../src/sidepanel/reports/FulfilmentView.jsx';
 import { BuilderChart } from '../src/sidepanel/reports/BuilderView.jsx';
-import SectionShell from '../src/sidepanel/reports/SectionShell.jsx';
-import ExportBar from '../src/sidepanel/reports/ExportBar.jsx';
+import SectionShell, { dashboardNotes } from '../src/sidepanel/reports/SectionShell.jsx';
+import ExportPanel from '../src/sidepanel/reports/ExportPanel.jsx';
 import ScopeBar from '../src/sidepanel/reports/ScopeBar.jsx';
 import { REPORT_SECTIONS, sectionById } from '../src/sidepanel/reports/sections.js';
 import { SECTION_IDS } from '../src/reports/engine/constants.js';
@@ -113,10 +113,15 @@ test('SLA radar: tiles, the table of the closest tickets with an Open button, an
   const markup = html(h(SlaBody, { d: r.data, env }));
   assertClean(markup, 'sla');
   assert.match(markup, /Breached/);
-  assert.match(markup, /At risk 88%/);
+  // A short list, not a table: when it ends is said in words against the moment of the read (planned end 28 Oct 09:00 UTC).
   assert.match(markup, /Closest to breaking/);
-  assert.match(markup, /<button type="button" class="ab-chart-link">INC1<\/button>/);
+  assert.match(markup, /88% used/);
+  const at = html(h(SlaBody, { d: r.data, env, now: Date.UTC(2026, 9, 28, 7, 40) }));
+  assert.match(at, /Due in 1 h 20 min/);
+  assert.match(at, /Breached/);
+  assert.match(markup, /<button type="button" class="ab-chart-link ab-tlist-number">INC1<\/button>/);
   assert.match(markup, /SLA risk by owner/);
+  assert.match(markup, /<summary>Who holds the risk<\/summary>/, 'the bars are folded away');
 });
 
 test('Quality: trend charts, tiles and tables render without NaN even when parts are missing', async () => {
@@ -157,24 +162,28 @@ test('Builder: bar, donut, table, line and a single number all render', async ()
   assertClean(markup, 'builder single');
 });
 
-test('the widget frame: loading, error, a plain explanation for a table you cannot read, read time and denominators', async () => {
+test('the widget frame: loading, error, denominators; what could not be read is said ONCE, by the dashboard', async () => {
   const loading = html(h(SectionShell, { title: 'Overview', state: { phase: 'loading', result: null, error: '', busy: true }, env, widgetId: 'w1' }));
   assert.match(loading, /Reading the numbers/);
   assert.match(loading, /role="status"/);
 
-  const failed = html(h(SectionShell, { title: 'Overview', state: { phase: 'error', result: null, error: 'Your ServiceNow session has expired.', busy: false }, env, widgetId: 'w1' }));
+  const failed = html(h(SectionShell, { title: 'Overview', state: { phase: 'error', result: null, error: 'The instance did not answer.', busy: false }, env, widgetId: 'w1' }));
   assert.match(failed, /role="alert"/);
-  assert.match(failed, /session has expired/);
+  assert.match(failed, /did not answer/);
+  // An ended session is one banner for the whole dashboard, not a red box in every widget.
+  const expired = html(h(SectionShell, { title: 'Overview', state: { phase: 'error', result: null, error: 'Your ServiceNow session has expired.', code: 'SESSION_EXPIRED', busy: false }, env, widgetId: 'w1' }));
+  assert.doesNotMatch(expired, /role="alert"|session has expired/);
+  assert.match(expired, /data-state="session"/);
 
   const r = await section('overview', { kind: 'groups' }, world({ denied: ['problem'], hidden: ['sc_task'] }));
   const r2 = await run({ section: 'overview', scope: { kind: 'groups' }, tables: ['incident', 'problem', 'sc_task'], params: {} }, world({ denied: ['problem'], hidden: ['sc_task'] }));
   const markup = html(h(SectionShell, { title: 'Overview', state: { phase: 'ready', result: r2, error: '', busy: false }, env, widgetId: 'w1', facts: ['SLA counts cover 40 active SLAs'] }, h('p', null, 'BODY')));
-  assert.match(markup, /Problems: not available to you/);
-  assert.match(markup, /Catalog tasks: you can see no rows in this table/);
-  assert.match(markup, /Read at /);
-  assert.match(markup, /My groups \(1\)/);
-  assert.match(markup, /Incidents/);
+  assert.doesNotMatch(markup, /Problems: not available to you|Read at /, 'the widget repeats nothing the dashboard says once');
   assert.match(markup, /SLA counts cover 40 active SLAs/);
+  const notes = dashboardNotes([{ id: 'w1', section: 'overview', result: r2 }, { id: 'w2', section: 'sla', result: r2 }], ['w1', 'w2']);
+  assert.ok(notes.includes('Problems: not available to you.'));
+  assert.ok(notes.some((n) => /Catalog tasks: you can see no rows in this table/.test(n)));
+  assert.equal(notes.length, new Set(notes).size, 'each note once, however many widgets carry it');
   assert.match(markup, /BODY/);
   assert.ok(r.data.tiles.length > 0);
 });
@@ -182,23 +191,28 @@ test('the widget frame: loading, error, a plain explanation for a table you cann
 test('the widget frame shows a cap in words and hides the body of an unavailable section', async () => {
   const result = { id: 'sla', title: 'SLA', readAt: NOW, generatedAt: NOW, scope: { label: 'Mine' }, tables: [], access: [], notes: [], caps: [{ source: 'task_sla', note: 'Only the first 1000 of 1500 were read.' }], data: { available: false, reason: 'SLA information is not available to you.' } };
   const markup = html(h(SectionShell, { title: 'SLA risk radar', state: { phase: 'ready', result, error: '', busy: false }, env, widgetId: 'w2' }, h('p', null, 'SHOULD NOT SHOW')));
-  assert.match(markup, /Only the first 1000 of 1500 were read/);
+  assert.deepEqual(dashboardNotes([{ id: 'w2', section: 'sla', result }]), ['Only the first 1000 of 1500 were read.']);
   assert.match(markup, /SLA information is not available to you/);
   assert.ok(!markup.includes('SHOULD NOT SHOW'));
 });
 
-test('export bar: appears when there are rows, offers CSV, copy and masking, and says what masking cannot do', async () => {
+test('one export panel per dashboard: everything, one section, copy and masking, and what masking cannot do', async () => {
   const r = await section('sla');
-  const on = html(h(ExportBar, { title: 'SLA risk radar', result: r, env: { ...env, mask: true } }));
-  assert.match(on, /Download CSV/);
-  assert.match(on, /Copy as table/);
+  const o = await section('overview');
+  const entries = [{ id: 'w1', section: 'overview', result: o }, { id: 'w2', section: 'sla', result: r }];
+  const on = html(h(ExportPanel, { name: 'Team overview', entries, order: ['w1', 'w2'], mask: true, setMask() {}, maskMode: 'standard', onClose() {} }));
+  assertClean(on, 'export panel');
+  assert.match(on, /Download all as CSV/);
+  assert.match(on, /Copy all as a table/);
   assert.match(on, /Mask names and emails/);
   assert.match(on, /checked=""/);
   assert.match(on, /Check the file before you share it/, 'it says the person should still look: a name with nothing around it can pass');
-  const off = html(h(ExportBar, { title: 'SLA risk radar', result: r, env }));
+  assert.match(on, /<summary>One section<\/summary>/);
+  assert.match(on, /aria-label="Download SLA risk radar as CSV"/, 'one section stays reachable from the one menu');
+  const off = html(h(ExportPanel, { name: 'x', entries, order: ['w1', 'w2'], mask: false, setMask() {}, onClose() {} }));
   assert.ok(!/checked=""/.test(off));
-  const empty = html(h(ExportBar, { title: 'x', result: { id: 'sla', data: { available: false } }, env }));
-  assert.equal(empty, '');
+  const empty = html(h(ExportPanel, { name: 'x', entries: [], order: [], mask: false, setMask() {}, onClose() {} }));
+  assert.match(empty, /Nothing to export yet/);
 });
 
 test('scope bar: the three scopes, chosen groups with a safe remove, and tables that cannot be used say why', () => {

@@ -1,6 +1,7 @@
 // The contract between every prompt and the code that uses its answer.
 //
-//  - Every prompt says the data is untrusted, says which language to write in, caps the length, and holds no ticket data.
+//  - Every request says the data is untrusted (once, in the firewall's rules after the task); every prompt says which language to
+//    write in, caps the length, and holds no ticket data.
 //  - Every text a customer or requester reads carries the customer rules (no internal notes, no gaps to fill in, their language).
 //  - Wherever the panel reads an answer back (an Insert that takes one part of it, the email subject, the lines of a ticket
 //    proposal), the labels the prompt asks for are exactly the labels the parser looks for, and an answer written the way the
@@ -17,6 +18,7 @@ import { CHAT_SUMMARY_HEADINGS } from '../src/features/packs/knowledge.js';
 import { PROPOSAL_LABELS, parseTicketProposal } from '../src/compose/notesToTicket.js';
 import { EMAIL_TYPES, parseEmailDraft } from '../src/compose/emailRecommend.js';
 import { pickRequesterQuestions, pickResolutionNotes } from '../src/features/picks.js';
+import { RULES_PREAMBLE, createFirewall } from '../src/pii/firewall.js';
 
 const system = (id) => featureById(id).system;
 const plainOf = (answer) => toPlainText(parseSafeText(answer));
@@ -44,9 +46,36 @@ const REPORTS = ['shift-handover', 'coaching-snapshot', 'dashboard-insights'];
 
 // ---- Rules every prompt carries ---------------------------------------------------------------------------------------
 
-test('every prompt says that the data cannot give orders', () => {
-  for (const f of FEATURES) assert.match(f.system, UNTRUSTED_MARK, `${f.id}: the untrusted-data rule`);
+// The untrusted-data rule is said ONCE per request, by the firewall: it is part of the rules it appends to every system message,
+// right after the feature's task (RULES_PREAMBLE, src/pii/firewall.js). It used to be written into every prompt as well (rulesFor),
+// so every request said it twice. The test therefore looks at what the model really gets: each feature's request, built by the real
+// firewall, must carry the rule in its SYSTEM message (with the task, where the model gives it the most weight), and exactly once.
+// Prompts that still write the sentence themselves (their packs are owned by other areas and keep it until they drop it) are allowed
+// to say it twice; none may say it zero times. (The report prompts dropped it in round 3.)
+const STILL_SAID_IN_PROMPT = new Set([]);
+const countRule = (text) => (text.match(new RegExp(UNTRUSTED_MARK.source, 'gi')) || []).length;
+
+test('every request says that the data cannot give orders: in the system message, once', () => {
   assert.match(UNTRUSTED, UNTRUSTED_MARK);
+  assert.ok(RULES_PREAMBLE.includes(UNTRUSTED), 'the firewall says it, in the shared wording');
+  for (const f of FEATURES) {
+    const sealed = createFirewall().buildRequest({
+      feature: f.id,
+      table: 'incident',
+      system: f.system,
+      userInstruction: f.instruction,
+      parts: [{ label: 'Short description', field: 'short_description', text: 'Printer on floor 3 is jamming', inline: true }],
+    });
+    const [system, user] = sealed.messages;
+    assert.equal(countRule(user.content), 0, `${f.id}: the rule is not in the user message`);
+    const times = countRule(system.content);
+    assert.ok(times >= 1, `${f.id}: the system message carries the untrusted-data rule`);
+    if (!STILL_SAID_IN_PROMPT.has(f.id)) assert.equal(times, 1, `${f.id}: said once (the prompt need not repeat it)`);
+  }
+});
+
+test('the shared rule sentences do not repeat the untrusted-data rule (the firewall says it)', () => {
+  for (const audience of ['agent', 'customer', 'published']) assert.doesNotMatch(rulesFor(audience), UNTRUSTED_MARK, audience);
 });
 
 test('every prompt is fixed text: no template hole, no ticket data', () => {
@@ -62,9 +91,10 @@ test('every prompt is fixed text: no template hole, no ticket data', () => {
 
 test('every text a customer, requester or approver reads carries the customer rules', () => {
   for (const id of CUSTOMER_FEATURES) {
-    for (const rule of [CUSTOMER_SAFE, LANGUAGE_CUSTOMER, ONLY_OUTPUT, UNTRUSTED]) assert.ok(system(id).includes(rule), `${id}: ${rule.slice(0, 40)}`);
+    for (const rule of [CUSTOMER_SAFE, LANGUAGE_CUSTOMER, ONLY_OUTPUT]) assert.ok(system(id).includes(rule), `${id}: ${rule.slice(0, 40)}`);
   }
-  assert.equal(rulesFor('customer'), [CUSTOMER_SAFE, LANGUAGE_CUSTOMER, ONLY_OUTPUT, UNTRUSTED].join(' '));
+  // (The untrusted-data rule is the firewall's: see the test above.)
+  assert.equal(rulesFor('customer'), [CUSTOMER_SAFE, LANGUAGE_CUSTOMER, ONLY_OUTPUT].join(' '));
 });
 
 test('every prompt says which language to write in, and that the labels stay as written', () => {

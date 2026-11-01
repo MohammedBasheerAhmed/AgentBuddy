@@ -128,6 +128,10 @@ a.ab-btn { text-decoration: none; }
 /* ---- a note with its next step: the text and the button wrap at 320px ---- */
 .ab-keynote, .ab-errnote { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .ab-keynote-text, .ab-errnote-text { margin: 0; flex: 1 1 14em; min-width: 0; overflow-wrap: anywhere; }
+/* A locked key unlocked where it is needed (AiKeyNote.jsx KeyUnlock): the passphrase box takes the row, the button stays beside it. */
+.ab-unlock-row { display: flex; gap: 6px; flex: 1 1 100%; min-width: 0; }
+.ab-unlock-row .ab-input { flex: 1 1 auto; min-width: 0; }
+.ab-unlock-error { margin: 0; flex: 1 1 100%; font-weight: 600; }
 
 /* ---- a group of check boxes with a label (a fieldset that looks like a field) ---- */
 .ab-fieldset { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }

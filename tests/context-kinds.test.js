@@ -269,3 +269,30 @@ test('portalParams reads names in any case, the query string before the hash', (
   assert.equal(read(`${HOST}/sp?id=q#/?id=h`).get('id'), 'q');
   assert.equal(read(`${HOST}/sp#/just/a/route`).size, 0);
 });
+
+// ---- F3: HR child tables, blank forms -----------------------------------------------------------------------------------------
+import { parseNewRecordRef } from '../src/context/kinds.js';
+
+test('HR case tables of every family are HR cases (the employee is then read as a person and masked); their tasks stay tasks', () => {
+  for (const t of ['sn_hr_core_case', 'sn_hr_core_case_payroll', 'sn_hr_core_case_benefits', 'sn_hr_core_case_relations', 'sn_hr_le_case', 'sn_hr_er_case', 'SN_HR_LE_CASE']) {
+    assert.equal(kindForTable(t), 'hr_case', t);
+  }
+  for (const [t, kind] of [['sn_hr_core_task', 'task'], ['sn_hr_core_case_task', 'other'], ['sn_hr_core_profile', 'other'], ['sn_hr_casey', 'other'], ['u_case', 'other'], ['toString', 'other'], ['__proto__', 'other']]) {
+    assert.equal(kindForTable(t), kind, t);
+  }
+});
+
+test('a blank form (sys_id=-1) is a new record of its table on every UI; it is never "a record"', () => {
+  const cases = [
+    [`${HOST}/incident.do?sys_id=-1`, 'incident'],
+    [`${HOST}/now/nav/ui/classic/params/target/incident.do%3Fsys_id%3D-1%26sysparm_stack%3Dincident_list.do`, 'incident'],
+    [`${HOST}/nav_to.do?uri=%2Fkb_knowledge.do%3Fsys_id%3D-1`, 'kb_knowledge'],
+    [`${HOST}/now/sow/record/incident/-1`, 'incident'],
+    [`${HOST}/now/cwf/agent/record/sn_customerservice_case/-1/params/x`, 'sn_customerservice_case'],
+  ];
+  for (const [url, table] of cases) {
+    assert.deepEqual(parseNewRecordRef(url), { table }, url);
+    assert.equal(parseRecordRef(url), null, url);
+  }
+  for (const url of [`${HOST}/incident.do?sys_id=${ID}`, `${HOST}/incident_list.do?sys_id=-1`, `${HOST}/home`, '', null]) assert.equal(parseNewRecordRef(url), null, String(url));
+});

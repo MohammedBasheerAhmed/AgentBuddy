@@ -204,7 +204,7 @@ test('"mine" needs a real user id', async () => {
 // ---- small pure pieces -----------------------------------------------------------------------------------------------
 
 test('states are classed by what their label says', () => {
-  const cases = { New: 'new', 'In Progress': 'working', 'Work in Progress': 'working', Open: 'working', 'On Hold': 'waiting', 'Awaiting Caller': 'waiting', 'Awaiting Info': 'waiting', Pending: 'waiting', Resolved: 'other', Closed: 'other', Assess: 'new', Implement: 'working', '': 'other' };
+  const cases = { New: 'new', 'In Progress': 'working', 'Work in Progress': 'working', Open: 'working', 'On Hold': 'waiting', 'Awaiting Caller': 'waiting', 'Awaiting Info': 'waiting', Pending: 'waiting', Resolved: 'resolved', Closed: 'resolved', 'Closed Complete': 'resolved', Cancelled: 'resolved', Assess: 'new', Implement: 'working', '': 'other' };
   Object.entries(cases).forEach(([label, cls]) => assert.equal(stateClass(label), cls, label));
 });
 
@@ -230,7 +230,7 @@ test('workload rows fold several tables into one row per person', () => {
   assert.equal(ann.count, 8);
   assert.deepEqual(rows.map((r) => r.name), ['Ann Lee', '(unassigned)', 'Bo Ray'], 'busiest first, the unowned work is its own row');
   assert.equal(rows[1].count, 7);
-  assert.deepEqual(ann.classes, { new: 0, working: 7, waiting: 1, other: 0 });
+  assert.deepEqual(ann.classes, { new: 0, working: 7, waiting: 1, resolved: 0, other: 0 });
   assert.deepEqual(ann.byTable, { incident: 5, sc_task: 3 });
 });
 
@@ -268,8 +268,13 @@ test('SLA tallies count each ticket once per owner', () => {
 
 test('table lists are cleaned', () => {
   assert.equal(normalizeTables(['incident', 'incident', 'bogus', 'problem']).length, 2);
-  assert.equal(normalizeTables([]).length, 6);
-  assert.equal(normalizeTables(undefined).length, 6);
+  // Every table but the HR one (sensitive): that one only for the HR profile with the organisation's approval (allowSensitive).
+  assert.equal(normalizeTables([]).length, 7);
+  assert.equal(normalizeTables(undefined).includes('sn_hr_core_case'), false);
+  assert.deepEqual(normalizeTables(['sn_hr_core_case']), normalizeTables([]), 'asked for without approval: dropped');
+  assert.deepEqual(normalizeTables(['sn_hr_core_case'], { allowSensitive: true }), ['sn_hr_core_case']);
+  assert.equal(normalizeTables([], { allowSensitive: true }).length, 8);
+  assert.ok(normalizeTables([]).includes('change_task'));
 });
 
 // ---- Overview ------------------------------------------------------------------------------------------------------
@@ -450,7 +455,7 @@ test('workload: people, groups, ageing, stale, unassigned and reassignment ping-
   assert.deepEqual(d.ageing.buckets.map((b) => b.count), [3, 2, 1, 3, 2]);
   assert.equal(d.ageing.buckets.reduce((n, b) => n + b.count, 0), 11);
   assert.equal(d.byAssignee[0].name, 'Ann Lee');
-  assert.deepEqual(d.byAssignee[0].classes, { new: 0, working: 5, waiting: 1, other: 0 });
+  assert.deepEqual(d.byAssignee[0].classes, { new: 0, working: 5, waiting: 1, resolved: 0, other: 0 });
   assert.equal(d.byGroup[0].name, 'Service Desk');
   assert.equal(d.pingPong.available, true);
   assert.equal(d.pingPong.count, 2);

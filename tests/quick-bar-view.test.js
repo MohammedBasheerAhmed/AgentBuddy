@@ -16,12 +16,42 @@ const html = (props = {}) => {
   return renderToStaticMarkup(React.createElement(QuickBar, { kind, features: featuresFor(kind, normalizePolicy(props.policy || {})), eff: eff(props.values, props.policy), disabled: false, onRun: () => {}, ...props.over }));
 };
 
-test('open: the three main actions of an incident, the first one highlighted, a toggle that says it is open', () => {
+// Round 3: the bar holds no filled button (the screen's one primary is the first AI Assist suggestion), and every AI item is marked.
+const labels = (markup) => [...markup.matchAll(/<button[^>]*data-quick="[^"]+"[^>]*>([^<]*)/g)].map((m) => m[1]);
+
+test('open: the three main actions of an incident, each with the AI mark, none filled, a toggle that says it is open', () => {
   const markup = html();
-  for (const label of ['Summarise', 'Draft a reply', 'Resolution notes']) assert.ok(markup.includes(`>${label}</button>`), label);
+  assert.deepEqual(labels(markup), ['Summarise', 'Draft a reply', 'Resolution notes']);
   assert.match(markup, /aria-expanded="true"/);
-  assert.equal((markup.match(/ab-btn-primary/g) || []).length, 1);
+  assert.equal((markup.match(/ab-btn-primary/g) || []).length, 0);
+  assert.equal((markup.match(/class="ab-ai-badge"/g) || []).length, 3);
+  assert.match(markup, /aria-label="Summarise \(AI\)"/);
   assert.match(markup, />Choose</);
+});
+
+test('state-aware: a resolved incident offers "Ready to resolve?" (Insights, no AI mark) first, then the resolution notes', () => {
+  const markup = html({ over: { stage: 'resolve', cards: ['ready', 'related'], onShowCard: () => {} } });
+  assert.deepEqual(labels(markup), ['Ready to resolve?', 'Resolution notes', 'Knowledge article', 'Draft a reply']);
+  assert.match(markup, /data-quick="card:ready" class="ab-btn ab-btn-sm ab-quick-insight"/);
+  assert.equal((markup.match(/class="ab-ai-badge"/g) || []).length, 3, 'only the AI items carry the mark');
+});
+
+test('a new incident: understand it and route it; a card the screen does not have is not offered', () => {
+  const markup = html({ over: { stage: 'new', cards: ['related'], onShowCard: () => {} } });
+  assert.deepEqual(labels(markup), ['Summarise', 'What is missing?', 'Where should this go?', 'Related tickets']);
+  assert.ok(!markup.includes('Ready to resolve?'));
+});
+
+test('AI not usable now: only the Insights items stay, and they stay usable while an answer is on its way', () => {
+  const markup = html({ over: { stage: 'resolve', cards: ['ready', 'related'], onShowCard: () => {}, aiReady: false, disabled: true } });
+  assert.deepEqual(labels(markup), ['Ready to resolve?', 'Related tickets']);
+  assert.ok(!/ab-ai-badge/.test(markup));
+  assert.ok(!/disabled=""/.test(markup));
+});
+
+test('Insights items need the shell to open a card: without onShowCard there are none', () => {
+  const markup = html({ over: { stage: 'resolve', cards: ['ready'] } });
+  assert.ok(!markup.includes('Ready to resolve?'));
 });
 
 test('folded: only the strip, no action buttons', () => {

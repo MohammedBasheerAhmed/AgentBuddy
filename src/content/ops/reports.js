@@ -1,7 +1,7 @@
 // READ operations for the reports area (see src/content/ops/index.js). All of them are GET-only Table/Aggregate reads with
 // the person's own session; ACLs decide what comes back. Nothing they return is stored, and no report text is sent anywhere.
 //
-//   reportContext  which report tables the person can read, who they are, which groups they belong to
+//   reportContext  which report tables the person can read, who they are, which groups they belong to, their time zone
 //   reportGroups   search groups by name (for "chosen groups")
 //   reportRun      run one section or one builder report
 //   reportClear    forget the short-lived cache (the Refresh button)
@@ -17,9 +17,10 @@ import { blockedError } from '../policyGuard.js';
 import { createRuntime, runReport } from '../../reports/engine/index.js';
 import { createReader, attempt } from '../../reports/engine/reader.js';
 import { normalizeTables, probeTables, tableAccess } from '../../reports/engine/common.js';
-import { readMyGroups } from '../../reports/engine/scope.js';
+import { readMyTeam } from '../../reports/engine/scope.js';
+import { chooseZone } from '../../reports/engine/time.js';
 import { buildQuery } from '../../reports/engine/queryBuilder.js';
-import { SECTION_IDS, REPORT_TABLE_IDS } from '../../reports/engine/constants.js';
+import { SECTION_IDS, USER_ZONE_FIELDS } from '../../reports/engine/constants.js';
 import { TREND_CHOICES } from '../../reports/engine/quality.js';
 import { normalizeHours } from '../../reports/engine/handover.js';
 import { readCoachingSample } from '../../reports/engine/coaching.js';
@@ -81,6 +82,28 @@ export function cleanBlocked(input) {
  * @param {{ deps?: object, getSession?: () => Promise<{userId?: string, firstName?: string, lastName?: string}|null>, runtime?: object }} [injected]
  *   Replaced by fakes in tests/reports-ops.test.js.
  */
+/**
+ * The signed-in person's ServiceNow time zone (sys_user.time_zone, a name such as 'Europe/Berlin'): '' when the profile uses the
+ * system zone, null when it cannot be read. A GET of one column of their own user record; failures are soft.
+ */
+export async function readUserZone(reader, userId) {
+  const got = await attempt(() => reader.rows('sys_user', buildQuery([{ op: 'eq', field: 'sys_id', value: userId }]), [...USER_ZONE_FIELDS], { limit: 1, displayValue: false }), 'sys_user');
+  if (!got.ok || !got.value.length) return null;
+  const row = got.value[0];
+  if (!Object.prototype.hasOwnProperty.call(row, 'time_zone')) return null; // the column is not readable for this person
+  const value = row.time_zone && typeof row.time_zone === 'object' ? row.time_zone.value : row.time_zone;
+  return oneLine(value == null ? '' : String(value), 60);
+}
+
+/** The zone as plain JSON for the panel (the offset function stays in the content script). */
+const zoneJson = (zone) => ({ id: zone.id, source: zone.source, note: zone.note });
+
+/**
+ * May this read include HR-family tables? Only when the panel asked (the HR profile is on and the organisation allows HR content)
+ * AND the content script let that stand (src/content/reads.js lowers allowSensitive unless the managed policy allows HR content).
+ */
+const sensitiveFor = (ctx) => ({ allowSensitive: ctx?.allowSensitive === true, sensitivePrefixes: Array.isArray(ctx?.deps?.sensitivePrefixes) ? ctx.deps.sensitivePrefixes : [] });
+
 export function createReportOps({ deps = { queryTable, aggregate }, getSession = () => tryCallPage('getSessionInfo'), runtime = createRuntime() } = {}) {
   async function whoAmI() {
     const session = await getSession();
@@ -98,12 +121,18 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
     async reportContext(args = {}, ctx) {
       const { userId, name } = await whoAmI();
       const reader = readerFor(userId, args.blocked, ctx);
-      const [tables, groups] = await Promise.all([probeTables(reader, REPORT_TABLE_IDS), attempt(() => readMyGroups(reader, userId), 'sys_user_grmember')]);
+      const sensitive = sensitiveFor(ctx);
+      const [tables, snZone] = await Promise.all([probeTables(reader, normalizeTables([], sensitive)), readUserZone(reader, userId)]);
+      // The groups are ranked by open work in the tables this person can read, when there are more than a scope holds.
+      const usable = tables.filter((t) => t.usable).map((t) => t.table);
+      const team = await attempt(() => readMyTeam(reader, userId, { tables: usable }), 'sys_user_grmember');
       return {
         user: { name },
-        tables: tableAccess(tables).map((t, i) => ({ ...t, usable: tables[i].usable })),
-        groups: groups.ok ? groups.value : null,
-        groupsNote: groups.ok ? (groups.value.length ? '' : 'You are not a member of any group that you can see.') : 'Your group memberships are not available to you.',
+        tables: tableAccess(tables).map((t, i) => ({ ...t, usable: tables[i].usable, sensitive: Boolean(tables[i].meta.sensitive) })),
+        groups: team.ok ? team.value.groups : null,
+        groupsTotal: team.ok ? team.value.total : null,
+        groupsNote: team.ok ? (team.value.groups.length ? team.value.note : 'You are not a member of any active group that you can see.') : 'Your group memberships are not available to you.',
+        zone: zoneJson(chooseZone(snZone)),
         readAt: reader.readAt || Date.now(),
       };
     },
@@ -127,12 +156,14 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
         kind,
         section: args.section,
         scope: args.scope,
-        tables: Array.isArray(args.tables) ? normalizeTables(args.tables) : undefined,
+        tables: Array.isArray(args.tables) ? normalizeTables(args.tables, sensitiveFor(ctx)) : undefined,
         params: cleanParams(args.params),
         config: args.config,
       };
       const reads = readsFor(deps, ctx);
-      return runReport(request, { deps: reads.deps, isBlocked: reads.isBlocked, userId, runtime, blocked: cleanBlocked(args.blocked) });
+      // 'Today' and 'this week' in the person's ServiceNow time zone (one cached read of their own user record).
+      const zone = chooseZone(await readUserZone(readerFor(userId, args.blocked, ctx), userId));
+      return runReport(request, { deps: reads.deps, isBlocked: reads.isBlocked, userId, runtime, blocked: cleanBlocked(args.blocked), zone, ...sensitiveFor(ctx) });
     },
 
     async reportClear() {

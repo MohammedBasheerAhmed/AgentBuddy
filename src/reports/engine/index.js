@@ -56,8 +56,11 @@ export function asOfFor(params, realNow) {
  * @param {{ kind?: 'section'|'builder', section?: string, scope?: object, tables?: string[], params?: object, config?: object }} request
  * @param {{ deps: {queryTable: Function, aggregate: Function}, userId: string, runtime: ReturnType<typeof createRuntime>,
  *   now?: number, offsetMin?: number | ((ms: number) => number), blocked?: string[], isBlocked?: (table: string) => boolean,
- *   timeoutMs?: number }} env
+ *   timeoutMs?: number, zone?: { id: string, source: string, tz: Function, note: string }, allowSensitive?: boolean,
+ *   sensitivePrefixes?: string[] }} env
  *   offsetMin: the time zone (minutes west of UTC, or a function of the instant; default the browser's zone, summer time included)
+ *   zone: the person's ServiceNow time zone as chosen by chooseZone (./time.js); used when offsetMin is not given
+ *   allowSensitive: HR-family tables may be read (the HR profile is on and the organisation allows HR content)
  */
 export async function runReport(request, env) {
   const realNow = env.now ?? Date.now();
@@ -76,7 +79,10 @@ export async function runReport(request, env) {
     userId: env.userId || '',
     now: quantize(asOfFor(request.params, realNow)),
     generatedAt: realNow,
-    offsetMin: env.offsetMin ?? localOffset,
+    offsetMin: env.offsetMin ?? (typeof env.zone?.tz === 'function' ? env.zone.tz : localOffset),
+    zone: env.zone ? { id: String(env.zone.id || ''), source: env.zone.source === 'servicenow' ? 'servicenow' : 'browser', note: String(env.zone.note || '') } : null,
+    allowSensitive: env.allowSensitive === true,
+    sensitivePrefixes: Array.isArray(env.sensitivePrefixes) ? env.sensitivePrefixes : [],
     params: request.params && typeof request.params === 'object' ? request.params : {},
     tables: [],
     scope: null,
@@ -89,7 +95,7 @@ export async function runReport(request, env) {
     if (request.kind === 'builder') return runBuilder(ctx, request.config);
     const id = request.section;
     if (!Object.prototype.hasOwnProperty.call(SECTIONS, id) || !SECTION_IDS.includes(id)) throw new Error('That report does not exist.');
-    ctx.tables = await probeTables(reader, normalizeTables(request.tables));
+    ctx.tables = await probeTables(reader, normalizeTables(request.tables, { allowSensitive: ctx.allowSensitive, sensitivePrefixes: ctx.sensitivePrefixes }));
     ctx.scope = await resolveScope(request.scope, { reader, userId: ctx.userId, tables: ctx.tables.filter((t) => t.usable).map((t) => t.table) });
     // An empty scope would match every ticket in the table: never run with it.
     if (ctx.scope.empty) return sectionResult(id, SECTIONS[id].title, ctx, { available: false, emptyScope: true, reason: ctx.scope.note });

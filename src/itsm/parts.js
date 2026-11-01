@@ -6,7 +6,7 @@
 //    'work_notes'; text from another ticket's close notes is 'close_notes'; the rest get their own plain names.
 //  - Labels never carry names. A person is named inside the text, where the firewall masks it.
 
-import { labelFor } from '../features/parts.js';
+import { columnText, labelFor, noteText } from '../features/parts.js';
 import { relatedPlan } from '../context/related.js';
 import { roleOfEntry, identities, computeSignals, signalsText } from './sentiment.js';
 import { statusSentence, strongArticle } from './reference.js';
@@ -23,10 +23,13 @@ export const PEOPLE_COLUMNS = Object.freeze(['caller_id', 'requested_for', 'cont
 // The people the work is for or who opened it, as opposed to the people who own it.
 export const REQUESTER_COLUMNS = Object.freeze(['caller_id', 'requested_for', 'contact', 'consumer', 'opened_by']);
 
-/** The columns of the record as parts, one per column (no notes). `skip` lists columns to leave out. */
+/**
+ * The columns of the record as parts, one per column (no notes). `skip` lists columns to leave out. Columns are `inline`: the firewall
+ * writes the short ones as lines of one shared block (src/features/parts.js); a description loses what a mail program added.
+ */
 export function fieldParts(pack, skip = []) {
   return Object.entries(pack?.fields || {})
-    .map(([field, value]) => ({ label: labelFor(field), field, text: String(value ?? '').trim() }))
+    .map(([field, value]) => ({ label: labelFor(field), field, text: columnText(field, value), inline: true }))
     .filter((p) => p.text && !skip.includes(p.field));
 }
 
@@ -48,7 +51,8 @@ export function journalParts(pack, { depth = 12, types, roles = false, authors =
   const ids = roles ? identities(pack) : null;
   const parts = [];
   for (const e of entries) {
-    const body = String(e?.text ?? '').trim();
+    // Without the quoted thread, signature and legal notice of an emailed comment (cleanEmailText, src/context/journal.js).
+    const body = noteText(e);
     if (!body) continue;
     const isNote = e.type === 'work_note';
     const role = roles && !isNote ? ROLE_PREFIX[roleOfEntry(e, ids)] : '';

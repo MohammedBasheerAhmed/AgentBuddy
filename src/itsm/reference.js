@@ -152,8 +152,10 @@ export async function addReference(pack, { read, allowSensitive = false } = {}, 
     const raw = Array.isArray(result.answer?.hits) ? result.answer.hits : [];
     const hits = raw.map(clean).filter(Boolean).slice(0, limit);
     reference[key] = { status: result.error ? statusFromError(result.error) : statusOf(result.answer, hits), hits };
-    if (Array.isArray(result.answer?.access)) access.push(...result.answer.access.filter((a) => a && typeof a === 'object'));
-    if (result.error) access.push({ source: key === 'similar' ? 'similar tickets' : 'knowledge', status: reference[key].status, note: reference[key].status === 'denied' ? 'Your user cannot read this.' : reference[key].status === 'blocked' ? 'Your organisation does not allow Agent Buddy to read this.' : 'Could not be read.' });
+    // `reference: true`: the "Reference material status" part already tells the model what this read found, so the shared
+    // "Not available" part (src/features/parts.js) does not say it again (a similar-ticket search on incident is not "Linked incidents").
+    if (Array.isArray(result.answer?.access)) access.push(...result.answer.access.filter((a) => a && typeof a === 'object').map((a) => ({ ...a, reference: true })));
+    if (result.error) access.push({ source: key === 'similar' ? 'similar tickets' : 'knowledge', status: reference[key].status, note: reference[key].status === 'denied' ? 'Your user cannot read this.' : reference[key].status === 'blocked' ? 'Your organisation does not allow Agent Buddy to read this.' : 'Could not be read.', reference: true });
   };
   settle('similar', t, (hit) => cleanTicketHit(hit, { closeNotes }), SIMILAR_LIMIT);
   settle('knowledge', k, cleanArticleHit, KNOWLEDGE_LIMIT);

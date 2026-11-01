@@ -32,15 +32,16 @@ export function messageLine(m) {
 export function chatParts(pack, { journal = 40, lastMessage = false } = {}) {
   const parts = [];
   const f = pack?.fields || {};
-  const push = (label, field, text, max = 300) => {
+  // `inline`: a short one-line value becomes a "Label: value" line of the firewall's shared fields block (src/features/parts.js).
+  const push = (label, field, text, max = 300, inline = false) => {
     const value = clip(text, max);
-    if (value) parts.push({ label, field, text: value });
+    if (value) parts.push({ label, field, text: value, ...(inline ? { inline: true } : {}) });
   };
-  push('Topic', 'short_description', f.short_description);
-  push('Channel', 'type', f.type, 40);
-  push('Chat state', 'state', f.state, 40);
-  push('Started', 'opened_at', f.opened_at, 40);
-  push('Ended', 'closed_at', f.closed_at, 40);
+  push('Topic', 'short_description', f.short_description, 300, true);
+  push('Channel', 'type', f.type, 40, true);
+  push('Chat state', 'state', f.state, 40, true);
+  push('Started', 'opened_at', f.opened_at, 40, true);
+  push('Ended', 'closed_at', f.closed_at, 40, true);
 
   const messages = (Array.isArray(pack?.journal) ? pack.journal : []).filter((m) => m && m.text).slice(-Math.max(0, journal));
   for (const m of messages) parts.push({ label: SIDE_LABEL[m.side || ''] || SIDE_LABEL[''], field: 'comments', text: messageLine(m) });

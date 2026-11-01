@@ -11,7 +11,8 @@ export function useSection(sectionId, widget, env) {
   // The params are the widget's own plus the dashboard's "as of" instant for this load (env.widgetParams), so all widgets of one
   // load ask identical questions and the second one is answered from the cache.
   const params = env.widgetParams ? env.widgetParams(widget) : widget?.params || {};
-  const request = env.tables.length ? { kind: 'section', section: sectionId, scope: env.scope, tables: env.tables, params, blocked: env.blocked } : null;
+  // allowSensitive: HR tables may be among env.tables (the HR profile, and the organisation allows HR content; the page checks too).
+  const request = env.tables.length ? { kind: 'section', section: sectionId, scope: env.scope, tables: env.tables, params, blocked: env.blocked, ...(env.allowSensitive ? { allowSensitive: true } : {}) } : null;
   const state = useReport({ tabId: env.page.tabId, request, refreshKey: env.refreshKey, limiter: env.limiter });
 
   const loaded = env.loaded;

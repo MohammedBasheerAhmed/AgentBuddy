@@ -1,7 +1,7 @@
 import React, { useSyncExternalStore } from 'react';
 import { useRun } from '../useRun.js';
 import { buildInsightsPack, checkInsightsNote, describeInputs, INSIGHT_MAX_WORDS } from '../../reports/ai/insights.js';
-import { AiBlocked, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
+import { AiBlocked, AiButton, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { andList, readLabel } from './format.js';
 
 const FEATURE_ID = 'dashboard-insights';
@@ -22,7 +22,7 @@ export function insightChecks(text) {
 export function InsightsInputs({ entries }) {
   const inputs = describeInputs(entries);
   if (!inputs.used.length) {
-    return <p className="ab-note">There are no numbers to explain yet. Add the Overview, Workload, SLA, Quality or Request fulfilment sections to this dashboard (Customize), and wait for them to load.</p>;
+    return <p className="ab-note">There are no numbers to explain yet. They come from the dashboard under Insights: wait for it to load, or add Overview, Workload, SLA, Quality or Request fulfilment to it (Customize).</p>;
   }
   return (
     <>
@@ -35,14 +35,17 @@ export function InsightsInputs({ entries }) {
   );
 }
 
-// "Explain this dashboard": the numbers the lead is looking at, explained. It reads nothing from ServiceNow itself: it takes the
-// results the other sections of this dashboard have already loaded (env.loaded), so what is explained is what is on screen.
-export default function InsightsView({ env, eff }) {
-  const entries = useSyncExternalStore(env.loaded ? env.loaded.subscribe : noopSubscribe, env.loaded ? env.loaded.snapshot : getNone, getNone);
-  const run = useRun({ page: env.page, eff, record: null });
+/**
+ * AI29, "Explain this dashboard": the numbers the lead is looking at, explained. It reads nothing from ServiceNow itself: it takes
+ * the results the dashboard's sections have already loaded (`entries`, memory only), so what is explained is what is on screen.
+ * Drawn in the Team screen's AI Assist half (TeamAssist). `primary` makes its button the screen's one filled button.
+ */
+export function ExplainBody({ entries, page, eff, primary = false }) {
+  const run = useRun({ page, eff, record: null });
   const { feature, available } = featureState(FEATURE_ID, eff.policy);
   const aiReady = isAiReady(eff);
   const blockedFields = eff.policy?.blockedFields || [];
+  const sensitivePrefixes = eff.policy?.sensitiveTablePrefixes || [];
   const hasInputs = describeInputs(entries).used.length > 0;
   const shown = run.phase === 'done' && run.active?.id === FEATURE_ID;
 
@@ -50,7 +53,7 @@ export default function InsightsView({ env, eff }) {
     if (!feature || !available) return;
     run.run(feature, {
       getPack: async () => {
-        const pack = buildInsightsPack(entries, { blockedFields });
+        const pack = buildInsightsPack(entries, { blockedFields, sensitivePrefixes });
         if (!pack) throw new Error('There are no numbers on this dashboard to explain yet.');
         return pack;
       },
@@ -58,25 +61,34 @@ export default function InsightsView({ env, eff }) {
   }
 
   return (
-    <AiShell title="Explain this dashboard" help="What stands out in the numbers above, likely reasons (as hypotheses) and three suggested actions.">
+    <>
       {!available ? (
         <AiBlocked>Your organisation has turned this off.</AiBlocked>
       ) : (
         <>
           <InsightsInputs entries={entries} />
-          <p className="ab-hint">
-            Sends counts, trends, group names, ticket numbers and the names of assignees (masked). No ticket titles, descriptions or notes are sent. The preview shows exactly what will be sent.
-          </p>
+          <p className="ab-hint">Sends counts, trends, group names, ticket numbers and assignees (masked); no titles, descriptions or notes. The preview shows exactly what will be sent.</p>
           {!aiReady && <AiKeyLine eff={eff} />}
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!aiReady || !hasInputs || run.busy} onClick={go}>
+            <AiButton eff={eff} primary={primary} disabled={!aiReady || !hasInputs || run.busy} onClick={go}>
               Explain these numbers
-            </button>
+            </AiButton>
           </div>
         </>
       )}
-      <RunProgress run={run} eff={eff} page={env.page} readingText="Getting the numbers ready…" />
+      <RunProgress run={run} eff={eff} page={page} readingText="Getting the numbers ready…" />
       <AiResult run={run} eff={eff} featureId={FEATURE_ID} heading="What the numbers say" notice={shown ? insightChecks(run.result) : []} />
+    </>
+  );
+}
+
+// The same, as a dashboard widget (a saved dashboard of an earlier version may hold one). The Insights half does not draw AI
+// widgets any more (TRACKER.md 2.3: no AI element on Insights); this stays for the registry and the full-page dashboard's tests.
+export default function InsightsView({ env, eff }) {
+  const entries = useSyncExternalStore(env.loaded ? env.loaded.subscribe : noopSubscribe, env.loaded ? env.loaded.snapshot : getNone, getNone);
+  return (
+    <AiShell title="Explain this dashboard" help="What stands out in the numbers, likely reasons (as hypotheses) and three suggested actions.">
+      <ExplainBody entries={entries} page={env.page} eff={eff} />
     </AiShell>
   );
 }

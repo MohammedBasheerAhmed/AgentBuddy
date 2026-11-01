@@ -23,6 +23,61 @@ export function offsetAt(tz, ms) {
   return Number.isFinite(n) && Math.abs(n) <= 16 * 60 ? n : localOffset(ms);
 }
 
+// ---- The person's ServiceNow time zone ---------------------------------------------------------------------------------------
+// "Today" and "this week" are the person's days. ServiceNow keeps a time zone per user (sys_user.time_zone, a name such as
+// "Europe/Berlin" or "US/Pacific"); when it can be read and the browser knows it, the reports count days in it. Otherwise they use
+// the browser's zone and say so once.
+
+const ZONE_RE = /^[A-Za-z][A-Za-z0-9_+-]{0,40}(\/[A-Za-z0-9_+-]{1,40}){0,2}$/;
+
+/**
+ * A time zone function (minutes west of UTC at an instant, as Date#getTimezoneOffset) for a zone name, or null when the name is
+ * empty, malformed or unknown to this browser. Pure apart from the browser's time zone data (Intl).
+ */
+export function zoneOffset(name) {
+  const zone = String(name || '').trim();
+  if (!ZONE_RE.test(zone)) return null;
+  let format;
+  try {
+    format = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+  } catch {
+    return null; // RangeError: a zone this browser does not know
+  }
+  return (ms) => {
+    const at = Math.floor(Number(ms) / 1000) * 1000;
+    if (!Number.isFinite(at)) return 0;
+    const p = Object.fromEntries(format.formatToParts(new Date(at)).filter((x) => x.type !== 'literal').map((x) => [x.type, Number(x.value)]));
+    const wall = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);
+    return Math.round((at - wall) / MINUTE);
+  };
+}
+
+/** The browser's own zone name ('Europe/Berlin'), or '' when the browser does not say. */
+export function browserZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Which zone the reports count days in. `snZone` is the person's ServiceNow time zone as read ('' when empty, null when it could
+ * not be read). Returns { id, source: 'servicenow' | 'browser', tz (offset function), note }: `note` is '' when nothing needs
+ * saying (the ServiceNow zone was used, or it is the browser's anyway). Pure apart from Intl.
+ */
+export function chooseZone(snZone, { browser = browserZone(), local = localOffset } = {}) {
+  const wanted = typeof snZone === 'string' ? snZone.trim() : '';
+  const tz = wanted ? zoneOffset(wanted) : null;
+  if (tz) return { id: wanted, source: 'servicenow', tz, note: '' };
+  const where = browser ? `your browser's time zone (${browser})` : "your browser's time zone";
+  let note;
+  if (snZone === null || snZone === undefined) note = `"Today" is counted in ${where}: your ServiceNow time zone could not be read.`;
+  else if (!wanted) note = `"Today" is counted in ${where}: your ServiceNow profile uses the system time zone, which Agent Buddy cannot read.`;
+  else note = `"Today" is counted in ${where}: this browser does not know your ServiceNow time zone (${wanted.slice(0, 40)}).`;
+  return { id: browser, source: 'browser', tz: local, note };
+}
+
 /** "Now" for query text: rounded down to the minute, so equal requests in the same minute share one cache entry. */
 export const quantize = (ms) => Math.floor(ms / MINUTE) * MINUTE;
 

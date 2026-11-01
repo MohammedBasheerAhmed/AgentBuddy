@@ -97,13 +97,12 @@ export default function ScopeBar({ scope, tables, selected, context, tabId, bloc
     <div className="ab-scope">
       <div className="ab-seg" role="group" aria-label="Whose tickets">
         {KINDS.map((k) => (
-          <button key={k.id} type="button" className={`ab-btn ab-btn-sm${(k.id === 'chosen' ? showPicker : scope.kind === k.id) ? ' ab-btn-primary' : ''}`} aria-pressed={k.id === 'chosen' ? showPicker : scope.kind === k.id} onClick={() => pick(k.id)} disabled={!canEdit}>
+          <button key={k.id} type="button" className="ab-btn ab-btn-sm ab-seg-btn" aria-pressed={k.id === 'chosen' ? showPicker : scope.kind === k.id} onClick={() => pick(k.id)} disabled={!canEdit}>
             {k.label}
           </button>
         ))}
       </div>
 
-      {scope.kind === 'groups' && context?.groupsNote && <p className="ab-hint">{context.groupsNote}</p>}
       {scope.kind === 'groups' && context?.groups?.length > 0 && <p className="ab-hint">Covers: {context.groups.map((g) => g.name).join(', ')}</p>}
 
       {chosen.length > 0 && (

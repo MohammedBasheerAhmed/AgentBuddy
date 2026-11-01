@@ -26,7 +26,20 @@ const { Checker } = require('./checker.js');
 // Scenarios are every file in e2e/scenarios/ (a new area adds <letter>-<name>.js; nothing here to edit). Each exports { id, title, run }.
 // Order: alphabetical, except e-readonly (it re-checks every request of the whole run) which goes last.
 const SCENARIO_FILES = fs.readdirSync(path.join(__dirname, 'scenarios')).filter((f) => f.endsWith('.js')).map((f) => f.slice(0, -3)).sort();
-const SCENARIOS = [...SCENARIO_FILES.filter((f) => f !== 'e-readonly'), ...SCENARIO_FILES.filter((f) => f === 'e-readonly')].map((f) => require(path.join(__dirname, 'scenarios', f)));
+// A scenario file that does not load (a syntax error while someone edits it) fails as that scenario only: the others still run.
+function loadScenario(file) {
+  try {
+    return require(path.join(__dirname, 'scenarios', file));
+  } catch (err) {
+    const id = file.split('-')[0];
+    return {
+      id,
+      title: `${file} (the file did not load)`,
+      run: async (t) => t.check(`scenario file ${file}.js loads`, false, String(err?.message || err).split('\n')[0]),
+    };
+  }
+}
+const SCENARIOS = [...SCENARIO_FILES.filter((f) => f !== 'e-readonly'), ...SCENARIO_FILES.filter((f) => f === 'e-readonly')].map(loadScenario);
 
 const SCENARIO_TIMEOUT_MS = Number(process.env.E2E_SCENARIO_TIMEOUT_MS) || 45000; // a normal scenario takes 3 to 15 seconds
 const RUN_TIMEOUT_MS = Number(process.env.E2E_RUN_TIMEOUT_MS) || 270000; // a normal run takes under two minutes (20 scenarios); the whole run stays under 4.5 minutes even when steps time out

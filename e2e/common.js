@@ -14,7 +14,8 @@ async function prepare(ctx, { previewMode = 'always', piiMode = 'standard' } = {
   inst.setBehaviour();
   await ctx.ensureEnabled();
   await ctx.configure(
-    { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode, previewMode, previewSeen: [], instances: [inst.origin] },
+    // Round 3: a set-up IT agent (profiles answered, nothing skipped), so one scenario's profile choices never leak into the next.
+    { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode, previewMode, previewSeen: [], instances: [inst.origin], profiles: ['it'], profilesConfirmed: true, showEverything: false, aiSkipped: false, halves: {} },
     { key: { provider: 'custom', value: ai.key } }
   );
 }
@@ -27,7 +28,11 @@ function errorsSince(ctx, mark) {
 const describeErrors = (list) => list.slice(0, 3).map((e) => `${e.from}/${e.kind}: ${e.text.slice(0, 140)}`).join(' | ');
 
 /** Click a tab/section button (role=tab) by its text. */
+// Round 3 renamed two screens; scenarios written before still say the old names.
+const RENAMED_TABS = { 'This page': 'Ticket', 'My day': 'My work' };
+
 async function clickTab(page, label) {
+  label = RENAMED_TABS[label] || label;
   const handle = await page.waitForFunction(
     // (Only a tab a person could see: sections that are not on screen stay mounted, hidden.)
     (text) => [...document.querySelectorAll('[role="tab"]')].find((b) => !b.disabled && b.getClientRects().length > 0 && b.innerText.trim() === text) || null,
@@ -43,7 +48,9 @@ async function clickTab(page, label) {
 /** The label of every tab in a tablist (by the tablist's aria-label), and which one is selected. */
 const tabsOf = (page, ariaLabel) =>
   page.evaluate((name) => {
-    const list = document.querySelector(`[role="tablist"][aria-label="${name}"]`);
+    // The panel's screens were called sections before round 3.
+    const names = name === 'Agent Buddy sections' ? [name, 'Agent Buddy screens'] : [name];
+    const list = names.map((n) => document.querySelector(`[role="tablist"][aria-label="${n}"]`)).find(Boolean);
     if (!list) return null;
     const tabs = [...list.querySelectorAll('[role="tab"]')];
     return { labels: tabs.map((b) => b.innerText.trim()), selected: tabs.filter((b) => b.getAttribute('aria-selected') === 'true').map((b) => b.innerText.trim()) };
@@ -124,18 +131,24 @@ const panelShows = (panel, text, timeout = 20000) => waitForText(panel.page, tex
 
 module.exports = { prepare, errorMark, errorsSince, describeErrors, clickTab, tabsOf, loadingElements, checkAiRun, panelShows, escapeRe, clickButton, waitForText, textOf, leftoverPlaceholders };
 
+const shownButton = (page, re) =>
+  page.evaluate((src, flags) => [...document.querySelectorAll('button')].some((b) => !b.disabled && b.getClientRects().length > 0 && new RegExp(src, flags).test(b.innerText.trim())), re.source, re.flags);
+
 /** Like runFeature() in ui.js, but the first click is made by `act` (for buttons that share one label, such as several "Draft"s). */
 async function runAfter(page, act) {
   // (A run's error banner has role=alert; a summary line on some tabs also looks like a danger note, and must not count. Only what is
   // on screen counts: other sections stay mounted, hidden, with their own results.)
   const ERROR = '.ab-note-danger[role="alert"]';
   await act();
-  await waitForVisible(page, `.ab-dialog, ${ERROR}, .ab-output`);
+  await waitForVisible(page, `.ab-dialog, ${ERROR}, .ab-output, .ab-confirm-short`);
+  // The full check shows the ticket data first with the rules folded (AI0.2): open the exact text to compare with what was sent.
+  if (await shownButton(page, /^Show the exact text/)) await clickButton(page, /^Show the exact text/);
   const preview = await textOf(page, '.ab-preview');
-  if (preview === null) return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, ERROR) };
+  const confirm = await textOf(page, '.ab-confirm-short');
+  if (preview === null && confirm === null) return { preview, confirm, result: await textOf(page, '.ab-output'), error: await textOf(page, ERROR) };
   await clickButton(page, /^Send to AI/);
   await waitForVisible(page, `.ab-output, ${ERROR}`);
-  return { preview, result: await textOf(page, '.ab-output'), error: await textOf(page, ERROR) };
+  return { preview, confirm, result: await textOf(page, '.ab-output'), error: await textOf(page, ERROR) };
 }
 
 /**

@@ -15,6 +15,10 @@ import { MSG } from '../lib/messages.js';
 import { clearAllStored, summarizeStored } from '../lib/storedData.js';
 import { instancePattern, normalizeInstance, isInstanceAllowed, checkProviderAllowed, PII_MODES, PREVIEW_MODES, KEY_STORAGE_MODES } from '../policy/policy.js';
 import { allowedProviderIds, dailyTokenLimit, hostAccessMode, looserThanFloor, parseDeployments, parseLimit, unknownDisabledFeatures } from './policyNotes.js';
+import { diagnosticsText } from './diagnostics.js';
+import ProfilePicker from './ProfilePicker.jsx';
+import Tabs from '../sidepanel/Tabs.jsx';
+import { panelId, tabId } from '../sidepanel/tabKeys.js';
 
 const KEY_MODE_TEXT = {
   local: "Kept in Agent Buddy's own storage in this browser. ServiceNow pages cannot read it, but anyone who can read your browser profile on disk can. Use a key with a spend limit.",
@@ -192,35 +196,39 @@ function AzureFields({ eff, change, model, setStatus }) {
         <Locked why={eff.locked.baseUrl} />
       </div>
 
-      <div className="ab-field">
-        <label className="ab-label" htmlFor="azure-form">How to call it</label>
-        <select id="azure-form" className="ab-select" value={az.form} aria-describedby="azure-form-hint" onChange={(e) => change({ azure: { ...(v.azure || {}), form: e.target.value } })}>
-          <option value="v1">v1 API (recommended): /openai/v1</option>
-          <option value="deployment">Deployment address with an api-version (older resources)</option>
-        </select>
-        <span className="ab-hint" id="azure-form-hint">
-          {az.form === 'v1'
-            ? 'Sends to <resource>/openai/v1/chat/completions with the deployment name as the model.'
-            : 'Sends to <resource>/openai/deployments/<deployment>/chat/completions?api-version=<version>.'}
-        </span>
-      </div>
-
-      {az.form === 'deployment' && (
+      {/* Technical details, folded: most resources use the recommended form. Open when the older form is chosen or its version is wrong. */}
+      <details className="ab-more" open={az.form === 'deployment' && !az.apiVersionOk}>
+        <summary>Technical details: how Agent Buddy calls Azure</summary>
         <div className="ab-field">
-          <label className="ab-label" htmlFor="azure-version">API version</label>
-          <DraftInput
-            id="azure-version"
-            className="ab-input ab-mono"
-            value={v.azure?.apiVersion || ''}
-            placeholder={AZURE_DEFAULT_API_VERSION}
-            aria-invalid={!az.apiVersionOk ? true : undefined}
-            aria-describedby={describedBy('azure-version-hint', !az.apiVersionOk && 'azure-version-error')}
-            onSave={(text) => change({ azure: { ...(v.azure || {}), apiVersion: text.trim() } })}
-          />
-          <FieldError id="azure-version-error" text={az.apiVersionOk ? '' : 'An API version looks like 2024-10-21 or 2025-04-01-preview.'} />
-          <span className="ab-hint" id="azure-version-hint">Leave empty for {AZURE_DEFAULT_API_VERSION}. Use the version your administrator gave you if it differs.</span>
+          <label className="ab-label" htmlFor="azure-form">How to call it</label>
+          <select id="azure-form" className="ab-select" value={az.form} aria-describedby="azure-form-hint" onChange={(e) => change({ azure: { ...(v.azure || {}), form: e.target.value } })}>
+            <option value="v1">v1 API (recommended): /openai/v1</option>
+            <option value="deployment">Deployment address with an api-version (older resources)</option>
+          </select>
+          <span className="ab-hint" id="azure-form-hint">
+            {az.form === 'v1'
+              ? 'Sends to <resource>/openai/v1/chat/completions with the deployment name as the model.'
+              : 'Sends to <resource>/openai/deployments/<deployment>/chat/completions?api-version=<version>.'}
+          </span>
         </div>
-      )}
+
+        {az.form === 'deployment' && (
+          <div className="ab-field">
+            <label className="ab-label" htmlFor="azure-version">API version</label>
+            <DraftInput
+              id="azure-version"
+              className="ab-input ab-mono"
+              value={v.azure?.apiVersion || ''}
+              placeholder={AZURE_DEFAULT_API_VERSION}
+              aria-invalid={!az.apiVersionOk ? true : undefined}
+              aria-describedby={describedBy('azure-version-hint', !az.apiVersionOk && 'azure-version-error')}
+              onSave={(text) => change({ azure: { ...(v.azure || {}), apiVersion: text.trim() } })}
+            />
+            <FieldError id="azure-version-error" text={az.apiVersionOk ? '' : 'An API version looks like 2024-10-21 or 2025-04-01-preview.'} />
+            <span className="ab-hint" id="azure-version-hint">Leave empty for {AZURE_DEFAULT_API_VERSION}. Use the version your administrator gave you if it differs.</span>
+          </div>
+        )}
+      </details>
 
       <div className="ab-field">
         <label className="ab-label" htmlFor="model">Deployment name (required)</label>
@@ -508,7 +516,16 @@ export function ProviderSection({ eff, reload }) {
         <AzureFields eff={eff} change={change} model={model} setStatus={setStatus} />
       ) : (
         <>
-          {(def.userBaseUrl || def.baseUrl) && (
+          {/* A provider with its own fixed address: that address is a technical detail, folded. */}
+          {!def.userBaseUrl && def.baseUrl && (
+            <details className="ab-more">
+              <summary>Technical details: the address requests go to</summary>
+              <p className="ab-hint">
+                <span className="ab-mono">{def.baseUrl}</span> (the provider&apos;s own address). Only masked text is sent there, after you have seen it.
+              </p>
+            </details>
+          )}
+          {def.userBaseUrl && (
             <div className="ab-field">
               <label className="ab-label" htmlFor="baseurl">Address {def.userBaseUrl ? (needsAddress ? '(required)' : '(optional)') : ''}</label>
               <DraftInput
@@ -732,6 +749,7 @@ export function PrivacySection({ eff, reload }) {
   return (
     <section className="ab-section" aria-labelledby="h-privacy">
       <h2 className="ab-h" id="h-privacy">Privacy</h2>
+      <p className="ab-sub">Before anything goes to an AI, Agent Buddy hides names, email addresses, phone and card numbers and other personal data. These two choices say how strictly, and when you see the text first.</p>
       <div className="ab-field">
         <label className="ab-label" htmlFor="pii">Personal-data protection</label>
         <select
@@ -799,11 +817,36 @@ function QuickBarSection({ eff, reload }) {
   );
 }
 
+// What Settings says when the browser did not turn a site on: the next step, for a refused question and for one that never appeared.
+export const SITE_REFUSED_TEXT =
+  'The browser did not turn Agent Buddy on for this site. Press Turn on again and choose Allow. If no question appears, your IT team may block it: ask them.';
+
+/** The sites the organisation turns on itself (exact addresses in its policy, already allowed by the browser), from the service worker. */
+function useManagedSites(eff) {
+  const [managed, setManaged] = useState([]);
+  const key = JSON.stringify([eff.values.instances || [], eff.policy?.allowedInstances || null]);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve()
+      .then(() => chrome.runtime.sendMessage({ type: MSG.LIST_INSTANCES }))
+      .then((answer) => {
+        const listed = Array.isArray(answer?.listed) ? answer.listed : [];
+        if (live) setManaged(listed.filter((x) => x && x.managed === true && typeof x.origin === 'string').map((x) => x.origin));
+      })
+      .catch(() => live && setManaged([]));
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  return managed;
+}
+
 export function InstancesSection({ eff, reload }) {
   const [address, setAddress] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const instances = eff.values.instances || [];
+  const managed = useManagedSites(eff).filter((o) => !instances.includes(o));
 
   async function add() {
     setError('');
@@ -819,7 +862,7 @@ export function InstancesSection({ eff, reload }) {
         // A build with fixed host access (enterprise) cannot ask for a site it was not built for.
         throw new Error('This build of Agent Buddy cannot be turned on for that site. Your organisation decides which instances it works on.');
       }
-      if (!granted) throw new Error('The browser did not grant access to this site.');
+      if (!granted) throw new Error(SITE_REFUSED_TEXT);
       const answer = await chrome.runtime.sendMessage({ type: MSG.ENABLE_INSTANCE, origin });
       if (answer?.error) throw new Error(answer.error.message);
       setAddress('');
@@ -850,12 +893,18 @@ export function InstancesSection({ eff, reload }) {
           ? 'Agent Buddy only runs on instances you turn on. This build was given access to the instances your organisation approved when it was installed, so the browser does not ask.'
           : 'Agent Buddy only runs on instances you turn on. The browser asks you to confirm each one the first time.'}
       </p>
-      {instances.length === 0 && <p className="ab-note">No instance is turned on yet.</p>}
-      <ul style={{ paddingLeft: 18 }}>
+      {instances.length === 0 && managed.length === 0 && <p className="ab-note">No instance is turned on yet.</p>}
+      <ul className="ab-sites">
         {instances.map((o) => (
-          <li key={o} className="ab-row" style={{ justifyContent: 'space-between' }}>
+          <li key={o} className="ab-row ab-site">
             <span className="ab-mono">{o}</span>
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => remove(o)} aria-label={`Turn off ${o}`}>Turn off</button>
+          </li>
+        ))}
+        {managed.map((o) => (
+          <li key={o} className="ab-row ab-site">
+            <span className="ab-mono">{o}</span>
+            <span className="ab-locked">Turned on by your organisation</span>
           </li>
         ))}
       </ul>
@@ -1052,6 +1101,166 @@ function StoredDataSection({ eff, onCleared }) {
   );
 }
 
+/**
+ * What you work on (work profiles), "Show everything" and "Skip AI for now". Profiles decide which cards and actions the panel shows
+ * first; the organisation can limit or lock them (allowedProfiles, lockedProfiles) and approves HR work.
+ */
+export function ProfilesSection({ eff, reload }) {
+  const v = eff.values;
+  const [status, setStatus] = useState(null);
+  const aiOffByOrg = eff.policy?.aiEnabled === false;
+  const change = async (patch) => {
+    try {
+      await saveSettings(patch);
+      setStatus(null);
+      reload();
+    } catch {
+      setStatus({ kind: 'danger', text: 'The browser did not save that change. Try again.' });
+    }
+  };
+  return (
+    <section className="ab-section" aria-labelledby="h-profiles">
+      <h2 className="ab-h" id="h-profiles">What you work on</h2>
+      <p className="ab-sub">Agent Buddy shows the tools for this work first. Tick everything that applies.</p>
+      <ProfilePicker eff={eff} onSave={change} instant idBase="profile" />
+      <label className="ab-check" htmlFor="show-everything">
+        <input id="show-everything" type="checkbox" checked={v.showEverything === true} onChange={(e) => change({ showEverything: e.target.checked })} />
+        <span>Show everything: every card and action, whatever you work on.</span>
+      </label>
+      {!aiOffByOrg && (
+        <label className="ab-check" htmlFor="ai-skipped">
+          <input id="ai-skipped" type="checkbox" checked={v.aiSkipped === true} onChange={(e) => change({ aiSkipped: e.target.checked })} />
+          <span>Skip AI for now: use Agent Buddy without AI. Everything under Insights still works.</span>
+        </label>
+      )}
+      <Status status={status} />
+    </section>
+  );
+}
+
+export const FOLLOW_UP_CHOICES = Object.freeze([2, 3, 5, 7]);
+
+/** My work: after how many days a customer who is waiting (or has not answered) counts as a follow-up due. */
+export function FollowUpSection({ eff, reload }) {
+  const [status, setStatus] = useState(null);
+  const current = Number(eff.values.followUpDays);
+  const value = FOLLOW_UP_CHOICES.includes(current) ? current : 3;
+  async function change(text) {
+    const days = Number(text);
+    if (!FOLLOW_UP_CHOICES.includes(days)) return;
+    try {
+      await saveSettings({ followUpDays: days });
+      setStatus(null);
+      reload();
+    } catch {
+      setStatus({ kind: 'danger', text: 'The browser did not save that change. Try again.' });
+    }
+  }
+  return (
+    <section className="ab-section" aria-labelledby="h-followup">
+      <h2 className="ab-h" id="h-followup">My work</h2>
+      <div className="ab-field">
+        <label className="ab-label" htmlFor="follow-up-days">Follow-ups due after</label>
+        <select id="follow-up-days" className="ab-select" value={String(value)} aria-describedby="follow-up-hint" onChange={(e) => change(e.target.value)}>
+          {FOLLOW_UP_CHOICES.map((d) => (
+            <option key={d} value={String(d)}>{d} days</option>
+          ))}
+        </select>
+        <span className="ab-hint" id="follow-up-hint">A customer who has not had an update, or has not answered, for this long shows under follow-ups in My work.</span>
+      </div>
+      <Status status={status} />
+    </section>
+  );
+}
+
+/**
+ * "Copy diagnostics": versions, settings without any key, the policy in short, the sites, and the last problems of the activity log,
+ * as plain text for support (src/options/diagnostics.js decides what goes in). Shown before it is copied.
+ */
+export function DiagnosticsSection({ eff }) {
+  const [text, setText] = useState('');
+  const [status, setStatus] = useState(null);
+
+  async function build() {
+    const [keyMode, listed, audit] = await Promise.all([
+      eff.values.providedApiKey ? Promise.resolve('none') : keyStore().mode(eff.values.provider).catch(() => 'none'),
+      Promise.resolve()
+        .then(() => chrome.runtime.sendMessage({ type: MSG.LIST_INSTANCES }))
+        .catch(() => null),
+      readAudit().catch(() => []),
+    ]);
+    let manifest = {};
+    try {
+      manifest = chrome.runtime.getManifest();
+    } catch {
+      manifest = {};
+    }
+    return diagnosticsText({ manifest, userAgent: navigator.userAgent, eff, keyMode, instances: Array.isArray(listed?.instances) ? listed.instances : eff.values.instances || [], audit });
+  }
+
+  async function copy() {
+    setStatus(null);
+    try {
+      const made = await build();
+      setText(made);
+      await navigator.clipboard.writeText(made);
+      setStatus({ kind: 'ok', text: 'Copied. Paste it into your message to support. It holds no key and no ticket content.' });
+    } catch {
+      setStatus({ kind: 'warn', text: 'The browser did not let Agent Buddy copy it. Select the text below and copy it yourself.' });
+    }
+  }
+
+  return (
+    <section className="ab-section" aria-labelledby="h-diagnostics">
+      <h2 className="ab-h" id="h-diagnostics">Help from support</h2>
+      <p className="ab-sub">Copies the versions, your settings without any key, your organisation&apos;s policy in short and the last problems. No ticket content.</p>
+      <div className="ab-row">
+        <button type="button" className="ab-btn" onClick={copy}>Copy diagnostics</button>
+      </div>
+      <Status status={status} />
+      {text && (
+        <details className="ab-more">
+          <summary>What was copied</summary>
+          <pre className="ab-diagnostics" tabIndex={0}>{text}</pre>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** Which page of Settings the address asks for: '#ai' is AI Assist, anything else Basics. */
+export const settingsPageFromHash = (hash) => (String(hash || '').replace(/^#/, '').toLowerCase() === 'ai' ? 'ai' : 'basics');
+
+const PAGES = [
+  { id: 'basics', label: 'Basics' },
+  { id: 'ai', label: 'AI Assist' },
+];
+
+/** The AI Assist page: the provider, its key, the model and the limits; when the organisation switched AI off, only that. */
+export function AiAssistPage({ eff, reload, epoch }) {
+  if (eff.policy?.aiEnabled === false) {
+    return (
+      <section className="ab-section" aria-labelledby="h-ai-off">
+        <h2 className="ab-h" id="h-ai-off">AI is switched off</h2>
+        <p className="ab-sub">
+          Your organisation has switched off AI in Agent Buddy. Everything under Insights still works: facts, lists, checks and templates, read
+          from ServiceNow with your own session. Nothing is sent anywhere.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <>
+      <p className="ab-sub ab-page-intro">
+        AI Assist writes summaries, replies and notes with the AI provider you choose. Personal data is masked first, and you can see what is sent.
+        {eff.values.aiSkipped ? ' You chose to skip AI for now: untick it under Basics, "What you work on", to use it.' : ''}
+      </p>
+      <ProviderSection eff={eff} reload={reload} />
+      <UsageSection key={`usage-${epoch}`} eff={eff} />
+    </>
+  );
+}
+
 export default function Options() {
   const [eff, setEff] = useState(null);
   const [failed, setFailed] = useState('');
@@ -1085,25 +1294,65 @@ export default function Options() {
   if (!eff) return <div className="ab-page"><p className="ab-sub">Loading…</p></div>;
   return (
     <main className="ab-page">
-      <h1 className="ab-h" style={{ fontSize: 20 }}>Agent Buddy settings</h1>
-      {Object.keys(eff.locked).some((k) => !eff.floors?.[k]) && <p className="ab-note ab-note-warn">Some settings are managed by your organisation and cannot be changed.</p>}
-      {Object.keys(eff.floors || {}).length > 0 && <p className="ab-note">Your organisation sets a minimum for some privacy settings. You can always choose a stricter one.</p>}
-      <ProviderSection eff={eff} reload={reload} />
-      <UsageSection key={`usage-${epoch}`} eff={eff} />
-      <PrivacySection eff={eff} reload={reload} />
-      <QuickBarSection eff={eff} reload={reload} />
-      <InstancesSection eff={eff} reload={reload} />
-      <PolicySection eff={eff} />
-      <AuditSection key={`audit-${epoch}`} eff={eff} />
-      <StoredDataSection key={`stored-${epoch}`} eff={eff} onCleared={() => { setEpoch((n) => n + 1); reload(); }} />
-      <section className="ab-section" aria-labelledby="h-leaves">
-        <h2 className="ab-h" id="h-leaves">What leaves your computer</h2>
-        <p className="ab-sub">
-          Only two things: reads from your own ServiceNow instance, and the masked text sent to the AI address you chose. Agent Buddy has no server,
-          no analytics and no tracking. It never saves or changes a ServiceNow record by itself: when you choose Insert it fills the field on the open
-          form and you press Save.
-        </p>
-      </section>
+      <h1 className="ab-h ab-page-title">Agent Buddy settings</h1>
+      <SettingsPages eff={eff} reload={reload} epoch={epoch} onCleared={() => { setEpoch((n) => n + 1); reload(); }} />
     </main>
+  );
+}
+
+/**
+ * Settings in two pages (TRACKER.md F2): Basics (where it works, what you work on, privacy in plain words, what it keeps) and AI Assist
+ * (the provider, key, model and limits). The page is part of the address (options.html#ai), so the side panel can open the AI page
+ * straight away and a reload stays where it was.
+ */
+export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, initial }) {
+  const [page, setPage] = useState(() => initial || settingsPageFromHash(typeof location !== 'undefined' ? location.hash : ''));
+  useEffect(() => {
+    const onHash = () => setPage(settingsPageFromHash(location.hash));
+    try {
+      window.addEventListener('hashchange', onHash);
+      return () => window.removeEventListener('hashchange', onHash);
+    } catch {
+      return undefined;
+    }
+  }, []);
+  const choose = (id) => {
+    setPage(id);
+    try {
+      history.replaceState(null, '', id === 'ai' ? '#ai' : `${location.pathname}${location.search}`);
+    } catch {
+      /* the address stays as it was; the page still changes */
+    }
+  };
+  const managedNote = Object.keys(eff.locked).some((k) => !eff.floors?.[k]);
+  return (
+    <>
+      <Tabs idBase="ab-settings" label="Settings pages" className="ab-row ab-settings-tabs" tabs={PAGES} value={page} onChange={choose} />
+      {managedNote && <p className="ab-note ab-note-warn">Some settings are managed by your organisation and cannot be changed.</p>}
+      <div id={panelId('ab-settings', 'basics')} role="tabpanel" aria-labelledby={tabId('ab-settings', 'basics')} hidden={page !== 'basics'}>
+        <p className="ab-sub ab-page-intro">Where Agent Buddy works, what you work on, how personal data is protected, and what it keeps on this computer.</p>
+        <InstancesSection eff={eff} reload={reload} />
+        <ProfilesSection eff={eff} reload={reload} />
+        <FollowUpSection eff={eff} reload={reload} />
+        <QuickBarSection eff={eff} reload={reload} />
+        {Object.keys(eff.floors || {}).length > 0 && <p className="ab-note">Your organisation sets a minimum for some privacy settings. You can always choose a stricter one.</p>}
+        <PrivacySection eff={eff} reload={reload} />
+        <PolicySection eff={eff} />
+        <AuditSection key={`audit-${epoch}`} eff={eff} />
+        <StoredDataSection key={`stored-${epoch}`} eff={eff} onCleared={onCleared} />
+        <DiagnosticsSection eff={eff} />
+        <section className="ab-section" aria-labelledby="h-leaves">
+          <h2 className="ab-h" id="h-leaves">What leaves your computer</h2>
+          <p className="ab-sub">
+            Only two things: reads from your own ServiceNow instance, and the masked text sent to the AI address you chose. Agent Buddy has no server,
+            no analytics and no tracking. It never saves or changes a ServiceNow record by itself: when you choose Insert it fills the field on the open
+            form and you press Save.
+          </p>
+        </section>
+      </div>
+      <div id={panelId('ab-settings', 'ai')} role="tabpanel" aria-labelledby={tabId('ab-settings', 'ai')} hidden={page !== 'ai'}>
+        <AiAssistPage eff={eff} reload={reload} epoch={epoch} />
+      </div>
+    </>
   );
 }

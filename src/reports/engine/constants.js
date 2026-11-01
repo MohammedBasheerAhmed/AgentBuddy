@@ -51,11 +51,46 @@ export const REPORT_TABLES = Object.freeze({
     quality: { category: 'category', ci: 'cmdb_ci' },
     optional: ['reassignment_count', 'closed_at', 'category', 'cmdb_ci'],
   },
+  // The work a change is split into: what implementers and change leads hold day to day.
+  change_task: {
+    label: 'Change tasks',
+    singular: 'change task',
+    resolvedFields: ['closed_at'],
+    quality: {},
+    optional: ['closed_at', 'reassignment_count'],
+  },
+  // HR cases (sn_hr_core_case and its child tables, which the Aggregate API counts with it). SENSITIVE: offered only when the
+  // person works with the HR profile and the organisation's policy allows HR content (the panel asks with allowSensitive, the
+  // content script lowers that unless the managed policy agrees). Never offered to coaching.
+  sn_hr_core_case: {
+    label: 'HR cases',
+    singular: 'HR case',
+    resolvedFields: ['closed_at'],
+    quality: {},
+    optional: ['closed_at', 'reassignment_count'],
+    sensitive: true,
+  },
 });
 
 export const REPORT_TABLE_IDS = Object.freeze(Object.keys(REPORT_TABLES));
 
+/** Is this report table sensitive (HR family)? Its own flag, the `sn_hr_` prefix, or a prefix the organisation's policy adds. */
+export function isSensitiveReportTable(table, prefixes = []) {
+  const name = String(table || '').toLowerCase();
+  if (REPORT_TABLES[name]?.sensitive) return true;
+  return ['sn_hr_', ...(Array.isArray(prefixes) ? prefixes : [])].some((p) => typeof p === 'string' && p && name.startsWith(p.toLowerCase()));
+}
+
+/** The report tables anyone may be offered: every one that is not sensitive. */
+export const STANDARD_TABLE_IDS = Object.freeze(REPORT_TABLE_IDS.filter((t) => !isSensitiveReportTable(t)));
+
 export const tableLabel = (table) => REPORT_TABLES[table]?.label || table;
+
+/**
+ * The one column of the signed-in person's OWN user record the reports read: their ServiceNow time zone, so 'today' and 'this week'
+ * are their days (src/content/ops/reports.js readUserZone; a soft read, the browser's zone when it fails).
+ */
+export const USER_ZONE_FIELDS = Object.freeze(['sys_id', 'time_zone']);
 
 /** Columns on every ticket row the engine reads (all are columns of the task table). */
 export const TICKET_FIELDS = Object.freeze(['sys_id', 'number', 'short_description', 'priority', 'state', 'assigned_to', 'assignment_group', 'opened_at', 'sys_updated_on', 'sys_class_name']);
@@ -82,7 +117,9 @@ export const LIMITS = Object.freeze({
   // SLA rows read in one go, and how many tickets get their details looked up.
   slaRowsMax: 1000,
   slaTicketsMax: 200,
+  // A scope holds at most this many groups (the query stays short); a person's memberships are read up to membershipMax.
   maxGroups: 25,
+  membershipMax: 200,
   maxTables: 6,
   topN: 10,
   // At or above this share of its time used, an SLA is "at risk" (the same line My Day draws).

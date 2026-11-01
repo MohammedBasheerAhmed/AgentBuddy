@@ -127,8 +127,32 @@ test('through the page bridge: the real default path asks for getFormValues and 
   }
 });
 
-test('the operation makes no network call and no write: it only asks the page bridge', () => {
+test('the operations make no network call of their own and no write: the form read only asks the page bridge, the hints read through the guarded deps', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'ops', 'compose.js'), 'utf8').replace(/\/\/.*$/gm, '');
   assert.ok(!/\bfetch\s*\(|queryTable|fetchRecord|XMLHttpRequest|fillField|setValue|method\s*:/.test(source));
-  assert.deepEqual([...source.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]), ['../pageBridge.js', '../../compose/formFields.js']);
+  assert.deepEqual([...source.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]), ['../pageBridge.js', '../../compose/formFields.js', '../../compose/notesHints.js']);
+  // Round 3: notesHints (src/compose/notesHints.js) reads with the deps it is handed (GET-only, policy-guarded), nothing else.
+  const hints = fs.readFileSync(path.join(__dirname, '..', 'src', 'compose', 'notesHints.js'), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(!/\bfetch\s*\(|XMLHttpRequest|fillField|setValue|method\s*:|chrome\./.test(hints));
+});
+
+// ---- Round 3: the form read can be bound to a record ("Check my comment") ----------------------------------------------
+
+test('with `expect`, the form must be that record: another one answers wrongForm and nothing is read', async () => {
+  const A = 'a'.repeat(32);
+  const page = fakePage((args) => args);
+  const call = async (action, args) => {
+    page.calls.push({ action, args });
+    if (action === 'getFormMeta') return { table: 'incident', sysId: 'b'.repeat(32) };
+    return { comments: 'typed' };
+  };
+  assert.deepEqual(await readFormValues({ names: ['comments'], expect: { table: 'incident', sysId: A } }, call), { available: false, values: {}, wrongForm: true });
+  assert.deepEqual(page.calls.map((c) => c.action), ['getFormMeta'], 'the values were never asked for');
+  const same = async (action) => (action === 'getFormMeta' ? { table: 'incident', sysId: A.toUpperCase() } : { comments: 'typed' });
+  assert.deepEqual(await readFormValues({ names: ['comments'], expect: { table: 'incident', sysId: A } }, same), { available: true, values: { comments: 'typed' } });
+  const noForm = async (action) => (action === 'getFormMeta' ? null : { comments: 'typed' });
+  assert.deepEqual(await readFormValues({ names: ['comments'], expect: { table: 'incident', sysId: A } }, noForm), { available: false, values: {} }, 'a Workspace page has no form to read');
+  for (const expect of [{ table: 'inc^ident', sysId: A }, { table: 'incident', sysId: 'x' }, 'incident', 7]) {
+    await assert.rejects(() => readFormValues({ names: ['comments'], expect }, same), /not a valid record/, JSON.stringify(expect));
+  }
 });

@@ -5,6 +5,7 @@ import Notes from '../knowledge/Notes.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { aiNeedsText } from '../aiReady.js';
 import { useLoader } from '../checks/useLoader.js';
+import { chatOverviewOf } from '../../insights/chat.js';
 
 // D1, D2: the facts about this chat (who, how many messages, how long the customer has waited, what they said last) with no
 // AI, and one-click buttons for the two AI features. The messages are read with the person's own session; when the chat tables
@@ -14,32 +15,8 @@ import { useLoader } from '../checks/useLoader.js';
 
 const WAITING_WARN_MINUTES = 5;
 const ROLE = { customer: 'customer', agent: 'agent', opened_for: 'customer', assigned_to: 'agent', journal_author: 'in the chat' };
-const num = (v) => (Number.isFinite(v) ? v : null);
-
-/**
- * The content script's answer, in the shape this tab draws. It comes from the page, so it is checked: an answer that is not an
- * overview is "the chat could not be read", never a crash of the tab.
- */
-export function chatOverviewOf(answer) {
-  const o = answer && typeof answer === 'object' ? answer.overview : null;
-  if (!o || typeof o !== 'object') throw new Error('The chat could not be read. Try again.');
-  return {
-    overview: {
-      ...o,
-      count: Number.isFinite(o.count) ? o.count : 0,
-      byCustomer: num(o.byCustomer) ?? 0,
-      byAgent: num(o.byAgent) ?? 0,
-      byBot: num(o.byBot) ?? 0,
-      waitingMinutes: num(o.waitingMinutes),
-      durationMinutes: num(o.durationMinutes),
-      firstResponseMinutes: num(o.firstResponseMinutes),
-      participants: Array.isArray(o.participants) ? o.participants.filter((p) => p && typeof p.name === 'string') : [],
-      lastCustomer: o.lastCustomer && typeof o.lastCustomer.text === 'string' ? o.lastCustomer : null,
-      lastMessage: o.lastMessage && typeof o.lastMessage.text === 'string' ? o.lastMessage : null,
-    },
-    access: Array.isArray(answer.access) ? answer.access : [],
-  };
-}
+// The answer check lives in src/insights/chat.js (the Ticket screen's chat card uses it too); kept exported here for older imports.
+export { chatOverviewOf };
 
 export default function ChatRecordView({ page, eff, record, run, aiReady, active = true }) {
   const summary = featureById('chat-summary');

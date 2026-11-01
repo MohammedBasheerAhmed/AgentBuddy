@@ -1,39 +1,95 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import RecordLink from '../RecordLink.jsx';
-import { featureById, isFeatureAvailable } from '../../features/registry.js';
-import { gapPack } from '../../knowledge/parts.js';
+import { toCsv } from '../../lib/export.js';
+import { downloadText } from '../reports/download.js';
+import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import Notes from './Notes.jsx';
 import ErrorNote from '../ErrorNote.jsx';
+import { TOPIC_COLUMNS, exportFileName, topicRows } from '../knowledgeScreen/articleInfo.js';
 
-// C7: "articles to write". Recently resolved incidents (and cases) are grouped by what they are about, the ones that already
-// have a knowledge article are left out when that can be read, and the groups are ranked by how many tickets they hold. An
-// outline for one group can be drafted with AI; only the topic words, counts, category and CI are sent, never the tickets.
+// N19 Knowledge-gap radar (Insights, no AI): "articles to write". Recently resolved incidents (and cases) are grouped by what they
+// are about, the ones that already have a knowledge article are left out when that can be read, and the groups are ranked by how
+// many tickets they hold. The scope can be everything the person can see, their own groups, or one category, and the panel says how
+// many of how many tickets were looked at. The topics are handed to the AI Assist half (onFound), where an outline can be drafted.
 // While a search reads, its choices are locked (the answer is for what was chosen when it started) and it can be stopped.
 
 const DAYS = [30, 60, 90];
+const n = (v) => Number(v || 0).toLocaleString('en');
 
-export default function GapsPanel({ page, eff, run, aiReady }) {
+/** "Looked at 500 of 12,400 tickets resolved in the last 60 days in your groups." */
+export function lookedAtText(data, scopeWords = '') {
+  const scanned = Number(data?.scanned) || 0;
+  const total = Number.isFinite(data?.total) ? data.total : null;
+  const count = total !== null && total > scanned ? `${n(scanned)} of ${n(total)}` : n(scanned);
+  return `Looked at ${count} ticket${scanned === 1 && (total === null || total <= 1) ? '' : 's'} resolved in the last ${data?.days || 60} days${scopeWords ? ` ${scopeWords}` : ''}.`;
+}
+
+/** The scope as words, for the summary line ("in your 3 groups", "in category Network"). */
+export function scopeWords(scope, categories = []) {
+  if (scope?.kind === 'mine') return scope.groups ? `in your ${scope.groups === 1 ? 'group' : `${scope.groups} groups`}` : 'in your groups';
+  if (scope?.kind === 'category') return `in category ${categories.find((c) => c.value === scope.category)?.name || scope.category}`;
+  return '';
+}
+
+export default function GapsPanel({ page, active = true, onFound = () => {} }) {
   const [days, setDays] = useState(60);
   const [incidents, setIncidents] = useState(true);
   const [cases, setCases] = useState(false);
+  const [scope, setScope] = useState('all'); // 'all' | 'mine' | 'cat:<value>'
+  const [scopes, setScopes] = useState({ phase: 'idle', categories: [], total: null, key: '' });
   const [state, setState] = useState(null); // { phase, data, error }
+  const [note, setNote] = useState('');
   const token = useRef(0);
-  const feature = featureById('kb-gap-outline');
-  const available = isFeatureAvailable(feature, eff.policy);
+  const scopeToken = useRef(0);
   const loading = state?.phase === 'loading';
+  const tables = [incidents && 'incident', cases && 'sn_customerservice_case'].filter(Boolean);
+  const scopeKey = `${days}|${tables.join(',')}`;
+
+  // What the scope picker offers (categories with counts, and the total): read when the radar is on show, again when the window or
+  // the tables change. Counts and names only. "My groups" is always offered; the groups are read when it is used.
+  useEffect(() => {
+    if (!active || !tables.length || scopes.key === scopeKey) return undefined;
+    scopeToken.current += 1;
+    const mine = scopeToken.current;
+    setScopes((s) => ({ ...s, phase: 'loading', key: scopeKey }));
+    read(page.tabId, 'kbGapScopes', { days, tables })
+      .then((out) => mine === scopeToken.current && setScopes({ phase: 'ready', categories: Array.isArray(out?.categories) ? out.categories : [], total: Number.isFinite(out?.total) ? out.total : null, key: scopeKey }))
+      .catch(() => mine === scopeToken.current && setScopes({ phase: 'error', categories: [], total: null, key: scopeKey }));
+    return undefined;
+    // The window and the tables decide when to read again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, scopeKey]);
+  useEffect(
+    () => () => {
+      token.current += 1;
+      scopeToken.current += 1;
+    },
+    []
+  );
+
+  // A category the new list no longer offers (no tickets in this window) falls back to everything.
+  useEffect(() => {
+    if (scopes.phase !== 'ready') return;
+    if (scope.startsWith('cat:') && !scopes.categories.some((c) => `cat:${c.value}` === scope)) setScope('all');
+  }, [scopes, scope]);
+
+  const scopeArgs = () => (scope === 'mine' ? { scope: 'mine' } : scope.startsWith('cat:') ? { scope: 'category', category: scope.slice(4) } : { scope: 'all' });
 
   async function find() {
     token.current += 1;
     const mine = token.current;
-    run.reset();
+    setNote('');
+    onFound(null);
     setState({ phase: 'loading', data: null, error: '' });
-    const tables = [incidents && 'incident', cases && 'sn_customerservice_case'].filter(Boolean);
     try {
-      const data = await read(page.tabId, 'kbGaps', { days, tables });
+      const data = await read(page.tabId, 'kbGaps', { days, tables, ...scopeArgs() });
       // (the answer comes from the page: a list that is missing is an empty one, never a crash)
       const clean = { ...data, scanned: Number(data?.scanned) || 0, clusters: Array.isArray(data?.clusters) ? data.clusters : [], access: Array.isArray(data?.access) ? data.access : [], link: data?.link || {} };
-      if (mine === token.current) setState({ phase: 'ready', data: clean, error: '' });
+      if (mine !== token.current) return;
+      setState({ phase: 'ready', data: clean, error: '' });
+      const words = scopeWords(clean.scope, scopes.categories);
+      onFound(clean.clusters.length ? { clusters: clean.clusters, days: clean.days || days, scopeText: words, at: Date.now() } : null);
     } catch (err) {
       if (mine === token.current) setState({ phase: 'error', data: null, error: err?.message || 'The tickets could not be read.' });
     }
@@ -44,31 +100,49 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
     setState(null);
   }
 
+  function exportTopics() {
+    try {
+      downloadText(exportFileName('knowledge-gaps'), toCsv(topicRows(state.data.clusters), TOPIC_COLUMNS));
+      setNote(`Saved ${state.data.clusters.length} topic${state.data.clusters.length === 1 ? '' : 's'} as a CSV file in your downloads.`);
+    } catch {
+      setNote('The browser did not save the file.');
+    }
+  }
+
   const data = state?.data;
 
   return (
-    <>
-      <section className="ab-card">
-        <h2 className="ab-h">Articles to write</h2>
-        <p className="ab-sub">Finds topics that keep coming up in recently resolved tickets. Only short descriptions, categories and configuration items are looked at, and nothing is sent to an AI.</p>
+    <div className="ab-kbx-tool">
+      <p className="ab-hint">Topics that keep coming up in resolved tickets without an article. Looks at titles, categories and items only; at most the newest 500.</p>
+      <div className="ab-kbx-controls">
         <div className="ab-field">
           <label className="ab-label" htmlFor="ab-gap-days">Resolved in the last</label>
           <select id="ab-gap-days" className="ab-select" value={days} disabled={loading} onChange={(e) => setDays(Number(e.target.value))}>
             {DAYS.map((d) => <option key={d} value={d}>{d} days</option>)}
           </select>
         </div>
-        <fieldset className="ab-field ab-fieldset">
-          <legend className="ab-label">Tickets to look at</legend>
-          <label className="ab-check"><input type="checkbox" checked={incidents} disabled={loading} onChange={(e) => setIncidents(e.target.checked)} /> Incidents</label>
-          <label className="ab-check"><input type="checkbox" checked={cases} disabled={loading} onChange={(e) => setCases(e.target.checked)} /> Customer service cases</label>
-        </fieldset>
-        <div className="ab-row">
-          <button type="button" className="ab-btn ab-btn-primary" disabled={(!incidents && !cases) || loading} onClick={find}>Find topics</button>
+        <div className="ab-field">
+          <label className="ab-label" htmlFor="ab-gap-scope">Whose tickets</label>
+          <select id="ab-gap-scope" className="ab-select" value={scope} disabled={loading} onChange={(e) => setScope(e.target.value)}>
+            <option value="all">Everything I can see{Number.isFinite(scopes.total) ? ` (${n(scopes.total)})` : ''}</option>
+            <option value="mine">My groups</option>
+            {scopes.categories.map((c) => (
+              <option key={c.value} value={`cat:${c.value}`}>Category: {c.name} ({n(c.count)})</option>
+            ))}
+          </select>
         </div>
-      </section>
+      </div>
+      <fieldset className="ab-field ab-fieldset">
+        <legend className="ab-label">Tickets to look at</legend>
+        <label className="ab-check"><input type="checkbox" checked={incidents} disabled={loading} onChange={(e) => setIncidents(e.target.checked)} /> Incidents</label>
+        <label className="ab-check"><input type="checkbox" checked={cases} disabled={loading} onChange={(e) => setCases(e.target.checked)} /> Customer service cases</label>
+      </fieldset>
+      <div className="ab-row">
+        <button type="button" className="ab-btn" disabled={!tables.length || loading} onClick={find}>Find topics</button>
+      </div>
 
       {loading && (
-        <p className="ab-note" role="status">
+        <p className="ab-sub" role="status">
           Reading resolved tickets…{' '}
           <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={stop}>Stop</button>
         </p>
@@ -76,48 +150,53 @@ export default function GapsPanel({ page, eff, run, aiReady }) {
       {state?.phase === 'error' && <ErrorNote error={state.error} onRetry={find} />}
 
       {data && (
-        <section className="ab-card" aria-label="Topics without an article">
+        <section className="ab-kbx-results" aria-label="Topics without an article">
           <p className="ab-sub">
-            Looked at {data.scanned} resolved ticket{data.scanned === 1 ? '' : 's'} from the last {data.days} days
-            {data.link.known ? `; ${data.withArticle} already had an article.` : '.'}
-            {data.truncated ? ' Only the newest were read.' : ''}
+            {lookedAtText(data, scopeWords(data.scope, scopes.categories))}
+            {data.link.known ? ` ${n(data.withArticle)} already had an article.` : ''}
           </p>
           {data.note && <p className="ab-note ab-note-warn" role="status">{data.note}</p>}
           <Notes access={data.access} />
-          {data.clusters.length === 0 && data.scanned > 0 && <p className="ab-hint">No topic came up more than once.</p>}
-          {data.scanned === 0 && <p className="ab-hint">No resolved tickets were found in that window.</p>}
-          {data.clusters.length > 0 && <p className="ab-hint">Each ticket opens in this tab.</p>}
-          {data.clusters.map((c) => (
-            <div key={c.id} className="ab-kb-cluster">
+          {data.clusters.length === 0 && data.scanned > 0 && <EmptyNote>No topic came up more than once. Try a longer window or a wider scope.</EmptyNote>}
+          {data.scanned === 0 && <EmptyNote>No resolved tickets were found in that window and scope.</EmptyNote>}
+          <ShowMore
+            items={data.clusters}
+            className="ab-list"
+            render={(c) => (
+              <div key={c.id} className="ab-kb-cluster">
+                <div className="ab-row">
+                  <strong>{c.label}</strong>
+                  <span className="ab-spacer" />
+                  <span className="ab-tag">{c.count} ticket{c.count === 1 ? '' : 's'}</span>
+                </div>
+                <div className="ab-tags">
+                  {c.withFix > 0 && <span className="ab-tag">{c.withFix} with a written fix</span>}
+                  {c.category && <span className="ab-tag">{c.category}</span>}
+                  {c.ci && <span className="ab-tag">{c.ci}</span>}
+                </div>
+                <ul className="ab-kb-articles">
+                  {c.examples.map((e) => (
+                    <li key={e.sysId}>
+                      <RecordLink page={page} item={{ table: e.table, sysId: e.sysId }} className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open">
+                        <span className="ab-record-number">{e.number}</span> {e.title}
+                      </RecordLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          />
+          {data.clusters.length > 0 && (
+            <>
               <div className="ab-row">
-                <strong>{c.label}</strong>
-                <span className="ab-spacer" />
-                <span className="ab-tag">{c.count} ticket{c.count === 1 ? '' : 's'}</span>
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={exportTopics}>Export topics (CSV)</button>
               </div>
-              <div className="ab-tags">
-                {c.withFix > 0 && <span className="ab-tag">{c.withFix} with a written fix</span>}
-                {c.category && <span className="ab-tag">{c.category}</span>}
-                {c.ci && <span className="ab-tag">{c.ci}</span>}
-              </div>
-              <ul className="ab-kb-articles">
-                {c.examples.map((e) => (
-                  <li key={e.sysId}>
-                    <RecordLink page={page} item={{ table: e.table, sysId: e.sysId }} className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open">
-                      <span className="ab-record-number">{e.number}</span> {e.title}
-                    </RecordLink>
-                  </li>
-                ))}
-              </ul>
-              <div className="ab-row">
-                <button type="button" className="ab-btn ab-btn-sm" disabled={!aiReady || !available || run.busy} onClick={() => run.run(feature, { getPack: async () => gapPack(c, { days: data.days }) })}>
-                  {feature.title}
-                </button>
-              </div>
-            </div>
-          ))}
-          {data.clusters.length > 0 && <p className="ab-hint">An outline is based on the topic words, the numbers, the category and the configuration item only: no ticket text is sent. Any hidden detail shows as a placeholder such as [PERSON_1].</p>}
+              <p className="ab-hint">To draft an outline for one of these, switch to AI Assist.</p>
+            </>
+          )}
+          {note && <p className="ab-hint" role="status">{note}</p>}
         </section>
       )}
-    </>
+    </div>
   );
 }

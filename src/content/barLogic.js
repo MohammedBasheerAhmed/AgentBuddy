@@ -9,12 +9,32 @@ export const PROBE_MS = 30000;
 // How long an action button must have been on screen, uncovered, before a click on it starts anything (see clickVerdict).
 export const ARM_MS = 500;
 
-const ACTION_ID_RE = /^[a-z][a-z0-9-]{0,63}$/;
+// An AI action (a feature id) or, when AI is off, an Insights card ('card:ready').
+const ACTION_ID_RE = /^(?:card:)?[a-z][a-z0-9-]{0,63}$/;
 export const MAX_ACTIONS = 4;
 
+// Where on the edge the tab sits, as a percentage of the window's height from the top. The person can drag it up or down (the place
+// is remembered); it never goes so high or low that it could leave the window.
+export const TOP_MIN = 8;
+export const TOP_MAX = 88;
+// The default place. Classic forms and portals: a little above the middle. A Workspace has its own strip of icons down the right
+// edge (the contextual side panel), from the top: there the tab starts lower so it does not cover them.
+const DEFAULT_TOP = Object.freeze({ classic: 38, workspace: 72, portal: 38, other: 38 });
+
+/** A place on the edge (a percentage), kept inside the window; null for anything that is not a number (the default then applies). */
+export function clampTop(value) {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  if (!Number.isFinite(n)) return null;
+  return Math.round(Math.min(TOP_MAX, Math.max(TOP_MIN, n)) * 10) / 10;
+}
+
+/** Where the tab sits: the person's place, else the default for this kind of page. */
+export const topFor = (prefs, surface) => clampTop(prefs?.top) ?? (Object.prototype.hasOwnProperty.call(DEFAULT_TOP, surface) ? DEFAULT_TOP[surface] : DEFAULT_TOP.other);
+
 /**
- * Open or folded, and which edge of the page. Kept in the page's own localStorage: two harmless interface choices, nothing about
- * a ticket. Anything unreadable (the page cleared it, or someone wrote something else there) becomes the defaults.
+ * Open or folded, which edge of the page, and (once dragged) how far down. Kept in the page's own localStorage: three harmless
+ * interface choices, nothing about a ticket. Anything unreadable (the page cleared it, or someone wrote something else there) becomes
+ * the defaults. `top` is null until the tab was moved.
  */
 export function parsePrefs(raw) {
   let value = null;
@@ -23,22 +43,89 @@ export function parsePrefs(raw) {
   } catch {
     /* not JSON: defaults */
   }
-  return { open: value?.open === true, side: value?.side === 'left' ? 'left' : 'right' };
+  return { open: value?.open === true, side: value?.side === 'left' ? 'left' : 'right', top: clampTop(value?.top) };
 }
 
-export const serializePrefs = (prefs) => JSON.stringify({ open: prefs.open === true, side: prefs.side === 'left' ? 'left' : 'right' });
+export function serializePrefs(prefs) {
+  const top = clampTop(prefs?.top);
+  return JSON.stringify({ open: prefs?.open === true, side: prefs?.side === 'left' ? 'left' : 'right', ...(top === null ? {} : { top }) });
+}
+
+// A press on the tab that moves the pointer less than this is a click (open the bar); more is a drag (move the tab up or down).
+export const DRAG_PX = 5;
+
+/**
+ * The tab's place while it is dragged: where it was when the drag started, moved by the pointer's travel, as a percentage of the
+ * window's height. null while the pointer has not moved far enough to count as a drag.
+ */
+export function dragTop({ startTop, startY, y, height }) {
+  if (!Number.isFinite(startTop) || !Number.isFinite(startY) || !Number.isFinite(y) || !(height > 0)) return null;
+  if (Math.abs(y - startY) < DRAG_PX) return null;
+  return clampTop(startTop + ((y - startY) / height) * 100);
+}
+
+// ---- Below the page's own dialogs ---------------------------------------------------------------------------------------------
+//
+// The bar must never sit on top of a ServiceNow dialog or its dimmed backdrop (seen on dev364920: the tab stayed bright over a modal).
+// Two things keep it below: its layer is lower than the page's dialog layers (BAR_Z: under the classic UI's 1040 backdrop and 1050
+// dialog), and while the page shows a dialog the content script can see, the bar is hidden.
+export const BAR_Z = 1000;
+
+/**
+ * Does the page show a modal dialog right now? From what the content script can see in the top document and the classic form's frame
+ * (a Next Experience dialog inside a shadow root is not visible to it; the lower layer covers that case):
+ *   bodyClasses  the class names of <body> (the classic UI adds modal-open while a GlideModal is open)
+ *   dialogs      how many open modal dialogs it found: [aria-modal="true"], a shown .modal, a <dialog open>, a .modal-backdrop
+ */
+export function pageHasModal({ bodyClasses = [], dialogs = 0 } = {}) {
+  return (Array.isArray(bodyClasses) && bodyClasses.includes('modal-open')) || (Number.isFinite(dialogs) && dialogs > 0);
+}
+
+// ---- An older copy of the content script, from before an extension update ---------------------------------------------------
+
+/** The DOM event a new copy of the content script sends so that an old copy (in another isolated world) removes its bar. */
+export const TAKEOVER_EVENT = 'agentbuddy-content-takeover';
+
+/** Is this copy's extension still there? After an update or a reload chrome.runtime.id is gone (or reading it throws). */
+export function runtimeAlive(runtime) {
+  try {
+    return Boolean(runtime && runtime.id);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What a copy of the content script does when it starts, given what an earlier copy left on the window (nothing when none):
+ *   'install'  nothing there
+ *   'skip'     a working copy is already there (the tab was injected twice): this one does nothing
+ *   'replace'  the copy there belongs to an extension that was updated or reloaded: retire it and take over
+ */
+export function contentTakeover(prior) {
+  if (!prior || typeof prior !== 'object' || typeof prior.alive !== 'function') return 'install';
+  let alive = false;
+  try {
+    alive = prior.alive() === true;
+  } catch {
+    alive = false;
+  }
+  return alive ? 'skip' : 'replace';
+}
 
 /** Ask the service worker for the actions when the kind of page changed, or when the last answer is old. */
 export function needsAsk({ table, lastTable, lastAt, now }) {
   return table !== lastTable || !Number.isFinite(lastAt) || now - lastAt >= REASK_MS;
 }
 
-/** The service worker's list of actions, checked anyway (it is text that ends up on the page): known shapes only, at most four. */
+/**
+ * The service worker's list of actions, checked anyway (it is text that ends up on the page): known shapes only, at most four. `ai` is
+ * worked out from the id here (a card is the only kind that needs no AI), not taken from the answer.
+ */
 export const cleanActions = (list) =>
   (Array.isArray(list) ? list : [])
     .filter((a) => a && ACTION_ID_RE.test(String(a.id || '')) && typeof a.label === 'string' && a.label.length > 0 && a.label.length <= 60)
     .slice(0, MAX_ACTIONS)
-    .map((a) => ({ id: a.id, label: a.label }));
+    .map((a) => ({ id: a.id, label: a.label, ai: !a.id.startsWith('card:') }));
 
 // A context that was invalidated (the extension was reloaded or updated while the page stayed open): the old script cannot reach the
 // worker any more and must remove its bar rather than show buttons that do nothing.

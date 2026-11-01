@@ -54,3 +54,10 @@ test('DataTable: with rowHref the first cell is a real link; without it (or with
   const plain = renderToStaticMarkup(<DataTable columns={cols} rows={rows} onRowOpen={() => {}} />);
   assert.ok(!plain.includes('<a '), 'no rowHref: unchanged');
 });
+
+test('RecordLink with newTab: still a real link (Ctrl+click, middle click, the menu), titled for the new tab', () => {
+  const html = renderToStaticMarkup(<RecordLink page={classic} item={{ table: 'incident', sysId: SYS }} newTab>INC1</RecordLink>);
+  assert.match(html, /^<a /);
+  assert.ok(html.includes('target="_blank"'));
+  assert.match(html, /new tab next to this ticket/);
+});

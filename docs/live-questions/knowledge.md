@@ -95,3 +95,33 @@ Where to look: `src/context/chat.js` (chat), `src/context/knowledge.js` (article
     privacy filter knows them. A name that is not the caller's (a colleague mentioned in a title) cannot be recognised.
 24. **Performance.** 500 tickets and 300 articles are read with display values; check it is acceptable on a busy instance and that the
     link reads (about 13 requests per link table for 500 tickets, two at a time) do not trip rate limits.
+
+## Round 3: the Knowledge screen (2026-10-30)
+
+25. **Knowledge search (N23)** reads `kb_knowledge` with `workflow_state=published` and, for each word, `short_descriptionLIKE<w>^ORtextLIKE<w>`
+    (every word first; if fewer than ten match and there are several words, any word fills up), 25 rows each, display values, newest change
+    first; ranked locally like the ticket card (`scoreArticle`). Check: (a) that the Table API applies the knowledge bases' "Can read" user
+    criteria to `kb_knowledge` for a fulfiller (on recent releases the read ACL calls the KB user-criteria check; on older ones an article of a
+    restricted base could be listed although the person cannot open it in the portal); (b) `textLIKE` on a large KB is acceptable (it is a
+    LIKE on an HTML column; if it is slow, `123TEXTQUERY321=` (Zing) could replace it, ranking would then differ from the ticket card);
+    (c) an article number typed alone (`KB0010001`) finds that article.
+26. **The share link** is `https://<instance>/kb_view.do?sysparm_article=KB0010001` on the classic UI and
+    `https://<instance>/<portal>?id=kb_article&sysparm_article=KB0010001` when the agent is on a portal. Check that `kb_view.do` with
+    `sysparm_article` opens the current published version for an end user (it may redirect to the portal), and that the Employee Center
+    `kb_article` page accepts `sysparm_article` (else `sys_id=` is needed, which changes with each version).
+27. **Freshness** uses the stored `sys_updated_on` (UTC) and `valid_to`; articles past `valid_to` are left out like on the ticket card.
+    A minor edit (a typo fix) makes an article look fresh; `published` or the version could be better. Check what knowledge managers expect.
+28. **Duplicate finder paging** asks for 300 titles at a time with `sysparm_offset` (300, 600, ...; at most 1,500 titles in all) and compares
+    every page read in the panel. Check that `sysparm_offset` with `ORDERBYDESCsys_updated_on` pages stably for a fulfiller (an article changed
+    between two pages can appear twice; the panel counts it once) and that `sysparm_count` style totals (`countRecords`) are allowed.
+29. **"My groups" for the gap radar** reads `sys_user_grmember` with the dynamic filter `userDYNAMIC90d1921e5f510100a9ad2572f2b477fe` ("Me")
+    and then the tickets with `assignment_groupIN<ids>`, checking every row's `assignment_group`. Check that the dynamic "Me" filter is
+    resolved on `sys_user_grmember.user` through the Table API for a fulfiller (it is for `sys_user.sys_id`, see the session look-up), and
+    that a fulfiller can read their own memberships. If rows of several users come back the panel does not trust them and says so.
+30. **Gap categories and totals** come from the Aggregate API: `GET /api/now/stats/incident?sysparm_count=true&sysparm_group_by=category&sysparm_query=resolved_atISNOTEMPTY^resolved_at>=...`
+    (and the same for `sn_customerservice_case`); the sum of the groups is the "of 12,400". Check that a fulfiller may call the Aggregate API on
+    `incident` (role `itil` normally can) and that an empty category comes back as its own group.
+31. **Exports** (duplicate groups and gap topics) are CSV files made in the panel with the same helper as the Team dashboards (formula-safe
+    cells); ticket titles are not exported (they can name a person), only numbers.
+32. **Article optimise (AI25) from a search result** is not offered: it reads the article form and inserts into it, so it needs the article
+    open; a search result opens the article in this tab, where the Ticket screen's AI Assist offers it.

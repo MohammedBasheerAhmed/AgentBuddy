@@ -8,7 +8,7 @@
 // HONEST LIMIT: a person who is named only inside a ticket title ("Printer broken at Priya's desk") and who is neither the
 // assignee nor the requester of a listed ticket is NOT masked: no pattern finds a free-form name. The panel says so next to the
 // button, and the preview shows exactly what will be sent so the lead can look before anything leaves.
-import { REPORT_TABLE, addPeople, blockedSet, checkAnswer, figure, line, resultNotes, scopeText } from './common.js';
+import { REPORT_TABLE, addPeople, blockedSet, carriesSensitive, checkAnswer, figure, line, resultNotes, scopeText } from './common.js';
 
 export const HANDOVER_HEADINGS = Object.freeze(['Headline:', 'Needs attention now:', 'Waiting on others:', 'Watch during the next shift:', 'Notes for the incoming team:']);
 export const HANDOVER_MAX_WORDS = 220;
@@ -83,7 +83,7 @@ function figuresOf(d) {
  * @param {{ blockedFields?: string[] }} [options] the organisation's blocked field names: a blocked column is left out of the
  *   ticket lines (so the note still works, with less in it)
  */
-export function buildHandoverPack(result, { blockedFields = [] } = {}) {
+export function buildHandoverPack(result, { blockedFields = [], sensitivePrefixes = [] } = {}) {
   const d = result?.data;
   if (!d || d.available === false) return null;
   const blocked = blockedSet(blockedFields);
@@ -99,6 +99,8 @@ export function buildHandoverPack(result, { blockedFields = [] } = {}) {
     sysId: 'handover',
     number: '',
     kind: 'other',
+    // HR cases among the tickets: the pipeline's HR rules apply (src/lib/pipeline.js isSensitivePack).
+    ...(carriesSensitive(result, sensitivePrefixes) ? { sensitive: true } : {}),
     fields: {},
     people,
     journal: [],

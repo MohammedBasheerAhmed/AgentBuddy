@@ -23,10 +23,17 @@ test('feature ids are unique across ALL packs, and so are the context specs', ()
   for (const id of MINE) assert.ok(ids.includes(id), id);
 });
 
-test('each of my features is run from its tab, not listed under Actions: kinds is empty for every record kind', () => {
+// Round 3: the AI buttons of the old record tabs are actions of the Ticket screen's AI Assist half, on the kinds they belong to.
+test('each of my features is an AI Assist action of the kinds it belongs to, and of no other', () => {
+  const expected = {
+    'request-explain': ['request', 'requested_item', 'catalog_task'],
+    'resolution-improve': ['incident', 'requested_item', 'catalog_task', 'case', 'task'],
+    'fulfilment-checklist': ['requested_item', 'catalog_task'],
+  };
   for (const id of MINE) {
-    assert.deepEqual(feature(id).kinds, [], id);
-    for (const kind of KINDS) assert.ok(!featuresFor(kind, normalizePolicy({})).some((f) => f.id === id), `${id} on ${kind}`);
+    assert.deepEqual([...feature(id).kinds].sort(), [...expected[id]].sort(), id);
+    for (const kind of KINDS) assert.equal(featuresFor(kind, normalizePolicy({})).some((f) => f.id === id), expected[id].includes(kind), `${id} on ${kind}`);
+    assert.equal(typeof feature(id).enrich, 'function', `${id} reads what its tab used to read, however it is started`);
   }
 });
 
@@ -54,7 +61,9 @@ test('each feature has a title, a description, a wave, a prompt, an instruction 
 // says about each of them. ResultView is a component; its wiring is covered where it is owned.)
 test('inserts go to the intended form field; the two that the customer reads are customer-visible, the checklist\'s is internal', () => {
   assert.deepEqual(insertsFor(feature('request-explain')).map((i) => i.field), ['comments']);
-  assert.deepEqual(insertsFor(feature('resolution-improve')).map((i) => i.field), ['close_notes']);
+  // One box per kind: "Resolution notes" on incidents and cases, "Close notes" on the request forms; both replace what is there.
+  assert.deepEqual(insertsFor(feature('resolution-improve')).map((i) => i.field), ['close_notes', 'close_notes']);
+  assert.ok(insertsFor(feature('resolution-improve')).every((i) => i.mode === 'replace'), 'the rewrite replaces the notes it started from');
   assert.deepEqual(insertsFor(feature('fulfilment-checklist')).map((i) => i.field), ['work_notes'], 'the checklist is internal');
   for (const id of ['request-explain', 'resolution-improve']) for (const i of insertsFor(feature(id))) assert.equal(isCustomerVisible(i.field), true, `${id} writes to ${i.field}, which the customer can read`);
   assert.equal(isCustomerVisible('work_notes'), false, 'work notes are internal');

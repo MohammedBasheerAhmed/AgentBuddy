@@ -5,7 +5,7 @@
 // and instanceFetch() refuses any method other than GET (tests/readonly.test.js also scans the source for write verbs).
 // "Insert" in the UI only fills a field on the open form; the agent presses the form's own Save.
 
-import { sessionHeaders } from './sessionToken.js';
+import { forgetSessionToken, sessionHeaders } from './sessionToken.js';
 
 // Hard ceiling on rows per request. Guards against a mistyped query pulling tens of thousands of rows into memory.
 const MAX_LIMIT = 1000;
@@ -26,7 +26,61 @@ export function clampLimit(limit) {
 
 // ---- Session and error handling shared by every request ------------------------------------
 
-export const SESSION_EXPIRED_MESSAGE = 'Your ServiceNow session has expired. Log in again, then retry.';
+export const SESSION_EXPIRED_MESSAGE = 'Your ServiceNow session has expired. Sign in to ServiceNow again (reload the page), then try again.';
+
+// Every read has a time limit. An instance that is busy or a network that stalls must not leave the panel waiting for minutes with
+// nothing to say: after READ_TIMEOUT_MS the read stops with a plain reason (code SN_TIMEOUT) and the panel offers "Try again". The
+// time covers the whole read: the request, a retry on 429/503, and the answer's body.
+export const READ_TIMEOUT_MS = 20000;
+export const READ_TIMEOUT_CODE = 'SN_TIMEOUT';
+
+export const READ_TIMEOUT_MESSAGE = `ServiceNow did not answer within ${Math.round(READ_TIMEOUT_MS / 1000)} seconds. It may be busy: try again in a moment.`;
+
+/** The error for a read that ran out of time (the person's sentence names no table or API: it says what happened and what to do). */
+export function readTimeoutError() {
+  const err = new Error(READ_TIMEOUT_MESSAGE);
+  err.code = READ_TIMEOUT_CODE;
+  return err;
+}
+
+/**
+ * Run one read under the time limit. `run(signal)` does the read with the signal it is given: the caller's own when it has one
+ * (its cancel then works as before, and the caller's signal reaches the request unchanged), otherwise one this function aborts when
+ * the time is up. Past `ms` the read stops waiting with readTimeoutError (code SN_TIMEOUT); a caller's own cancel stays its
+ * AbortError. The timers are injected so a test can run the clock itself.
+ */
+export async function withReadLimit(run, { signal = null, ms = READ_TIMEOUT_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  const own = signal ? null : new AbortController();
+  let timer;
+  let timedOut = false;
+  const limit = new Promise((_, reject) => {
+    timer = setTimer(() => {
+      timedOut = true;
+      own?.abort(); // a request with no caller's signal is really stopped, not only no longer waited for
+      reject(readTimeoutError());
+    }, ms);
+  });
+  const work = Promise.resolve().then(() => run(signal || own.signal));
+  work.catch(() => {}); // when the time ran out first, the read's own failure that follows is expected
+  try {
+    return await Promise.race([work, limit]);
+  } catch (err) {
+    throw timedOut ? readTimeoutError() : err;
+  } finally {
+    clearTimer(timer);
+  }
+}
+
+/** One GET read of a JSON answer, start to finish (the request, retries, the body) under the time limit. */
+function readWithLimit(path, init, what) {
+  return withReadLimit(
+    async (signal) => {
+      const response = await instanceFetch(path, { ...init, signal });
+      return readJson(response, what);
+    },
+    { signal: init.signal || null }
+  );
+}
 
 // Busy instance (rate limit, node overloaded): GETs are retried after these delays.
 const RETRY_STATUSES = new Set([429, 503]);
@@ -119,7 +173,12 @@ export async function readJson(response, what) {
     if (err?.name === 'AbortError') throw err;
     return '';
   });
-  if (isSessionExpired(response, text)) throw sessionExpiredError();
+  if (isSessionExpired(response, text)) {
+    // The token belongs to the session that ended: a new sign-in gets a new one, so it is read again from the page next time
+    // instead of being sent (and refused) for the rest of the five minutes it would otherwise be kept.
+    forgetSessionToken();
+    throw sessionExpiredError();
+  }
   if (!response.ok) {
     const detail = serviceNowErrorText(text);
     if (response.status === 403) {
@@ -154,13 +213,11 @@ export async function queryTable(table, query, fields = [], options = {}) {
   params.set('sysparm_display_value', displayValue ? 'all' : 'false');
   params.set('sysparm_exclude_reference_link', 'true');
 
-  const response = await instanceFetch(`/api/now/table/${encodeURIComponent(table)}?${params.toString()}`, {
-    method: 'GET',
-    credentials: 'same-origin',
-    headers: await sessionHeaders(),
-    ...(signal ? { signal } : {}),
-  });
-  const data = await readJson(response, `Table API query on "${table}"`);
+  const data = await readWithLimit(
+    `/api/now/table/${encodeURIComponent(table)}?${params.toString()}`,
+    { method: 'GET', credentials: 'same-origin', headers: await sessionHeaders(), ...(signal ? { signal } : {}) },
+    `Table API query on "${table}"`
+  );
   return data?.result || [];
 }
 
@@ -172,15 +229,15 @@ export async function fetchRecord(table, sysId, fields = [], options = {}) {
 }
 
 /** Number of rows matching `query`, via the Aggregate API (no rows transferred). */
-export async function countRecords(table, query = '') {
+export async function countRecords(table, query = '', { signal } = {}) {
   checkTable(table);
   const params = new URLSearchParams({ sysparm_count: 'true' });
   if (query) params.set('sysparm_query', query);
-  const response = await instanceFetch(`/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`, {
-    credentials: 'same-origin',
-    headers: await sessionHeaders(),
-  });
-  const data = await readJson(response, `Count on "${table}"`);
+  const data = await readWithLimit(
+    `/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`,
+    { credentials: 'same-origin', headers: await sessionHeaders(), ...(signal ? { signal } : {}) },
+    `Count on "${table}"`
+  );
   const count = Number(data?.result?.stats?.count);
   if (!Number.isFinite(count)) throw new Error('The instance returned no count.');
   return count;
@@ -190,16 +247,16 @@ export async function countRecords(table, query = '') {
  * Counts per value of one column over `query`, via the Aggregate API (nothing but the counts is transferred).
  * Returns the raw `result` array: [{ stats: { count }, groupby_fields: [{ field, value, display_value }] }].
  */
-export async function countByColumn(table, query, column) {
+export async function countByColumn(table, query, column, { signal } = {}) {
   checkTable(table);
   if (!AGGREGATE_COLUMN_RE.test(String(column))) throw new Error('That is not a valid column name.');
   const params = new URLSearchParams({ sysparm_count: 'true', sysparm_group_by: column, sysparm_display_value: 'all' });
   if (query) params.set('sysparm_query', query);
-  const response = await instanceFetch(`/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`, {
-    credentials: 'same-origin',
-    headers: await sessionHeaders(),
-  });
-  const data = await readJson(response, `Breakdown of "${table}" by ${column}`);
+  const data = await readWithLimit(
+    `/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`,
+    { credentials: 'same-origin', headers: await sessionHeaders(), ...(signal ? { signal } : {}) },
+    `Breakdown of "${table}" by ${column}`
+  );
   return data?.result || [];
 }
 
@@ -227,12 +284,11 @@ export async function aggregate(table, { query = '', groupBy = [], avgFields = [
   }
   if (avgFields.length) params.set('sysparm_avg_fields', avgFields.join(','));
   if (having) params.set('sysparm_having', having);
-  const response = await instanceFetch(`/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`, {
-    credentials: 'same-origin',
-    headers: await sessionHeaders(),
-    ...(signal ? { signal } : {}),
-  });
-  const data = await readJson(response, `Report on "${table}"`);
+  const data = await readWithLimit(
+    `/api/now/stats/${encodeURIComponent(table)}?${params.toString()}`,
+    { credentials: 'same-origin', headers: await sessionHeaders(), ...(signal ? { signal } : {}) },
+    `Report on "${table}"`
+  );
   return data?.result ?? null;
 }
 

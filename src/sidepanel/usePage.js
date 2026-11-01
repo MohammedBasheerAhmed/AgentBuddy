@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MSG } from '../lib/messages.js';
 import { initialPageState, reducePage } from './pageState.js';
+import { hostLooksLikeServiceNow, siteVerdict } from './firstRun.js';
 
 const POLL_MS = 2500;
 
@@ -98,4 +99,105 @@ export function usePage() {
   }, [refresh]);
 
   return { page: state.page, stale: state.stale, lastGood: state.lastGood, lastSeen: state.lastSeen, refresh };
+}
+
+// ---- Is the tab that is not turned on a ServiceNow page? ------------------------------------------------------------------------
+
+/**
+ * Runs IN the page, once, when the panel looks at a tab it may offer to turn on (chrome.scripting with the toolbar click's activeTab:
+ * no new permission). It reads only whether a few ServiceNow globals and script addresses exist, and returns booleans: no text, no
+ * values. Self-contained on purpose (it is serialised and run in the page's own world).
+ */
+export function pageMarkers() {
+  const w = window;
+  let scripts = false;
+  try {
+    scripts = Array.from(document.scripts || [])
+      .slice(0, 400)
+      .some((s) => /\/(?:scripts\/[^?#]*\.jsx|uxasset\/|api\/now\/|amb\/)/i.test(s.src || ''));
+  } catch (e) {
+    scripts = false;
+  }
+  return {
+    gck: typeof w.g_ck === 'string' && w.g_ck.length >= 20,
+    now: typeof w.NOW === 'object' && w.NOW !== null,
+    glide: typeof w.GlideAjax === 'function' || (typeof w.g_user === 'object' && w.g_user !== null),
+    scripts,
+  };
+}
+
+/** One look at the tab's page for ServiceNow marks; null when the browser does not let the panel look (no activeTab grant). */
+export async function lookForServiceNow(tabId) {
+  try {
+    if (!Number.isInteger(tabId) || !chrome.scripting?.executeScript) return null;
+    const [result] = await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func: pageMarkers });
+    const found = result?.result;
+    if (!found || typeof found !== 'object') return null;
+    // The answer comes from the page: only the four booleans are kept.
+    return { gck: found.gck === true, now: found.now === true, glide: found.glide === true, scripts: found.scripts === true };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 'servicenow' | 'other' | 'unknown' for a page that is not turned on, '' for any other page, 'checking' while the look runs.
+ * A ServiceNow address needs no look; every other address is looked at once per tab and address.
+ */
+export function useSiteCheck(page) {
+  const origin = page?.status === 'not-enabled' ? String(page.origin || '') : '';
+  const tabId = page?.tabId;
+  const [seen, setSeen] = useState({ key: '', verdict: '' });
+  const key = `${tabId}|${origin}`;
+  useEffect(() => {
+    if (!origin || hostLooksLikeServiceNow(origin)) return undefined;
+    let live = true;
+    const look = () =>
+      lookForServiceNow(tabId).then((markers) => {
+        if (live) setSeen({ key, verdict: siteVerdict({ origin, markers }) });
+      });
+    look();
+    // The tab moved to another page of the same site (the address the panel sees is only the origin): look again once it loaded.
+    const onUpdated = (id, change) => {
+      if (id === tabId && change?.status === 'complete') look();
+    };
+    try {
+      chrome.tabs.onUpdated.addListener(onUpdated);
+    } catch {
+      /* no tab events here: the first look stands */
+    }
+    return () => {
+      live = false;
+      try {
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+      } catch {
+        /* gone with the panel */
+      }
+    };
+  }, [origin, tabId, key]);
+  if (!origin) return '';
+  if (hostLooksLikeServiceNow(origin)) return 'servicenow';
+  return seen.key === key ? seen.verdict : 'checking';
+}
+
+/**
+ * The sites Agent Buddy runs on now, as the service worker says (the person's and the organisation's, still granted by the browser);
+ * null until it answered. Asked again when the settings change.
+ */
+export function useActiveInstances(eff) {
+  const [list, setList] = useState(null);
+  const instances = JSON.stringify(eff?.values?.instances || []);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve()
+      .then(() => chrome.runtime.sendMessage({ type: MSG.LIST_INSTANCES }))
+      .then((answer) => {
+        if (live && Array.isArray(answer?.instances)) setList(answer.instances.filter((o) => typeof o === 'string'));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [instances]);
+  return list;
 }

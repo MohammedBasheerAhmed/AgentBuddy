@@ -10,5 +10,10 @@ import itsm from './itsm.js';
 import domain from './domain.js';
 import compose from './compose.js';
 import checks from './checks.js';
+import insights from './insights.js';
+import mywork from './mywork.js';
+import profiles from './profiles.js';
+// The one read-only operation of the fill path: which of the boxes Insert could use are on the open form (asks the page bridge only).
+import { FILL_OPS } from '../fill.js';
 
-export const OPS = Object.freeze({ ...reports, ...knowledge, ...chat, ...misc, ...itsm, ...domain, ...compose, ...checks });
+export const OPS = Object.freeze({ ...reports, ...knowledge, ...chat, ...misc, ...itsm, ...domain, ...compose, ...checks, ...insights, ...mywork, ...profiles, ...FILL_OPS });

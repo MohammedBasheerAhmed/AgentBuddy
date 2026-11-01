@@ -102,9 +102,12 @@ test('a finished run remembers the record it is for and its work notes (for the 
       { type: 'work_note', by: 'Beth', text: 'Internal: the finance share is being restructured' },
     ],
   };
-  assert.deepEqual(lastPackOf(pack, internalTextsOf), { table: 'incident', sysId: 'a'.repeat(32), number: 'INC0010001', internalTexts: ['Internal: the finance share is being restructured'] });
+  assert.deepEqual(lastPackOf(pack, internalTextsOf), { table: 'incident', sysId: 'a'.repeat(32), number: 'INC0010001', internalTexts: ['Internal: the finance share is being restructured'], gaps: [] });
   // a text the person pasted has a made-up record and no notes
-  assert.deepEqual(lastPackOf({ table: 'compose', sysId: 'b'.repeat(32), journal: [] }, internalTextsOf), { table: 'compose', sysId: 'b'.repeat(32), number: '', internalTexts: [] });
-  assert.deepEqual(lastPackOf(null, internalTextsOf), { table: undefined, sysId: undefined, number: '', internalTexts: [] });
+  assert.deepEqual(lastPackOf({ table: 'compose', sysId: 'b'.repeat(32), journal: [] }, internalTextsOf), { table: 'compose', sysId: 'b'.repeat(32), number: '', internalTexts: [], gaps: [] });
+  assert.deepEqual(lastPackOf(null, internalTextsOf), { table: undefined, sysId: undefined, number: '', internalTexts: [], gaps: [] });
   assert.deepEqual(lastPackOf(pack).internalTexts, [], 'without a reader there are no notes');
+  // what could not be read travels with it, as plain words (the "Made without" line under an answer); people lookups are quiet
+  const gappy = { ...pack, access: [{ source: 'journal', status: 'denied' }, { source: 'task_sla', status: 'error' }, { source: 'sys_user', status: 'denied' }, { source: 'sysapproval_approver', status: 'ok' }, { source: 'journal', status: 'error' }] };
+  assert.deepEqual(lastPackOf(gappy, internalTextsOf).gaps, ['notes and comments', 'SLAs']);
 });

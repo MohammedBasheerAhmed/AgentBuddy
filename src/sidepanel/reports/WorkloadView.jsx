@@ -1,10 +1,11 @@
 import React from 'react';
-import { Tile, StackedBar, HeatStrip, DataTable } from '../charts/index.js';
+import { Tile, StackedBar, HeatStrip } from '../charts/index.js';
+import TicketList from './TicketList.jsx';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
 
 // Tones for the state classes (colour is never the only cue: the legend and every value are written out).
-const CLASS_TONE = { new: 'c1', working: 'c2', waiting: 'c3', other: 'neutral' };
+const CLASS_TONE = { new: 'c1', working: 'c2', waiting: 'c3', resolved: 'c4', other: 'neutral' };
 
 const rowsOf = (list) => list.map((r) => ({ key: r.key, label: r.name, parts: Object.entries(r.classes).map(([key, value]) => ({ key, value })) }));
 
@@ -30,7 +31,9 @@ export function WorkloadBody({ d, env }) {
   const age = d.ageing;
   const ageTarget = (cell) => {
     const best = age.byTable.map((t) => ({ table: t.table, count: t.buckets.find((b) => b.key === cell.key)?.count || 0 })).sort((a, b) => b.count - a.count)[0];
-    return best?.count && age.queries?.[cell.key] ? { table: best.table, query: age.queries[cell.key] } : null;
+    // Each table leaves out its own resolved-but-active states, so the query of the table that holds most of the cell is used.
+    const query = age.queriesByTable?.[best?.table]?.[cell.key] || age.queries?.[cell.key];
+    return best?.count && query ? { table: best.table, query } : null;
   };
   const ageDrill = (cell) => {
     const target = ageTarget(cell);
@@ -49,6 +52,7 @@ export function WorkloadBody({ d, env }) {
         {d.totals.unassigned !== null && <Tile label="Unassigned" value={d.totals.unassigned} tone={d.totals.unassigned > 0 ? 'warn' : 'neutral'} hint="Nobody owns them" />}
         <Tile label={`No update in ${d.staleDays}+ days`} value={d.totals.stale} unavailable={d.totals.stale === null} tone={d.totals.stale > 0 ? 'warn' : 'neutral'} hint="Open and untouched" />
         {d.pingPong.available && <Tile label={`Reassigned ${d.pingPong.threshold}+ times`} value={d.pingPong.count} tone={d.pingPong.count > 0 ? 'warn' : 'neutral'} hint="Handed from group to group" />}
+        {d.totals.resolvedActive > 0 && <Tile label="Resolved, not closed" value={d.totals.resolvedActive} hint="Waiting to close. Not counted as open." />}
       </div>
 
       {age.open > 0 ? (
@@ -84,20 +88,7 @@ export function WorkloadBody({ d, env }) {
         />
       )}
 
-      {d.pingPong.items.length > 0 && (
-        <DataTable
-          caption={`Tickets reassigned ${d.pingPong.threshold}+ times`}
-          columns={[
-            { key: 'number', label: 'Ticket' },
-            { key: 'title', label: 'Short description' },
-            { key: 'reassignments', label: 'Moves', align: 'right' },
-            { key: 'group', label: 'Group' },
-          ]}
-          rows={d.pingPong.items}
-          onRowOpen={(row) => env.openTicket({ table: row.table, sysId: row.sysId })}
-          rowHref={(row) => (row.table && env.ticketHref?.({ table: row.table, sysId: row.sysId })) || ''}
-        />
-      )}
+      {d.pingPong.items.length > 0 && <TicketList caption={`Tickets reassigned ${d.pingPong.threshold}+ times`} items={d.pingPong.items} env={env} meta={(t) => [`${t.reassignments} moves`, t.owner || 'Unassigned', t.group]} />}
     </>
   );
 }

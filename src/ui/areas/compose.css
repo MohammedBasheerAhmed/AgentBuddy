@@ -34,3 +34,39 @@
 .ab-compose-preview { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--ab-text-md); }
 .ab-compose-vars { display: flex; flex-direction: column; gap: 6px; }
 .ab-compose-vars p { margin: 0; }
+
+/* ---- The Write screen (round 3): two halves, each a few folding cards ---- */
+.ab-write { display: flex; flex-direction: column; gap: 8px; }
+.ab-write-for { margin: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-write-for-record { color: var(--ab-fg); font-weight: 600; }
+.ab-compose-input { display: flex; flex-direction: column; gap: 8px; }
+.ab-compose-input .ab-field { margin-bottom: 0; }
+.ab-compose-editor { display: flex; flex-direction: column; gap: 8px; }
+.ab-write-ailabel { display: flex; align-items: center; gap: 6px; }
+
+/* the safe-to-send check */
+.ab-write-check { display: flex; flex-direction: column; gap: 6px; }
+.ab-write-check-row { flex-wrap: wrap; align-items: center; }
+.ab-write-check-row .ab-compose-select { flex: 1 1 9em; }
+.ab-write-findings { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; padding: 0; }
+.ab-write-finding { margin: 0; overflow-wrap: anywhere; }
+.ab-write-paste { align-self: flex-start; }
+
+/* snippets */
+.ab-snip-org { background: var(--ab-accent-soft); color: var(--ab-fg); border-color: var(--ab-accent-line); }
+.ab-snip-detail { padding-top: 8px; border-top: 1px solid var(--ab-border); }
+.ab-snip-insert { align-items: center; flex-wrap: wrap; }
+.ab-snip-backup { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px dashed var(--ab-border-strong); border-radius: var(--ab-radius-sm); }
+
+/* notes to ticket */
+.ab-write-blank { flex-wrap: wrap; }
+.ab-write-reason { margin: 0 0 6px; }
+.ab-write-hints { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); border: 1px solid var(--ab-border); }
+.ab-write-hints .ab-compose-sub { margin-top: 0; }
+
+/* AI buttons of the Write and Knowledge screens: the AI colour, with the AI mark inside (TRACKER.md 2.3). */
+.ab-wk-aibtn { background: var(--ab-ai); color: var(--ab-ai-fg); border-color: var(--ab-ai); }
+.ab-wk-aibtn:hover:not(:disabled) { background: var(--ab-ai-hover); border-color: var(--ab-ai-hover); }
+.ab-wk-aibtn .ab-ai-badge { color: inherit; }
+.ab-wk-aibtn-quiet { color: var(--ab-ai); border-color: var(--ab-ai-line); background: var(--ab-bg-raised); }
+.ab-wk-aibtn-quiet:hover:not(:disabled) { background: var(--ab-ai-soft); }

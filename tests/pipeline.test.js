@@ -106,7 +106,9 @@ test('HR content is blocked unless the organisation allows it', () => {
   const hr = { ...PACK, table: 'sn_hr_core_case', kind: 'hr_case' };
   const base = { feature: featureById('record-summary'), pack: hr, values: values(), config: config() };
   assert.throws(() => assertRunnable({ ...base, policy: policy() }), (e) => e.code === 'HR_BLOCKED');
-  assert.doesNotThrow(() => assertRunnable({ ...base, policy: policy({ allowHrContent: true, aiProvider: 'anthropic' }) }));
+  // Allowed by the organisation, but every function on an HR record needs Strict (or Local-only) privacy mode (AI0.2).
+  assert.throws(() => assertRunnable({ ...base, policy: policy({ allowHrContent: true, aiProvider: 'anthropic' }) }), (e) => e.code === 'MODE_TOO_LOW');
+  assert.doesNotThrow(() => assertRunnable({ ...base, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic' }) }));
 });
 
 test('a feature can require a stricter privacy mode than the person chose', () => {

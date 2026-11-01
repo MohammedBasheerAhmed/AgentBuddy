@@ -10,7 +10,10 @@
 // strictly: anything unknown, mistyped, not canonical or wider than one exact host fails the build with a message saying what to write.
 import { PROVIDERS, ANTHROPIC_API_URL, OPENAI_API_URL } from '../providers/config.js';
 import { FEATURES } from '../features/registry.js';
-import { KEY_STORAGE_MODES, PII_MODES, POLICY_KEYS, PREVIEW_MODES, instancePattern, normalizeEndpoint, normalizeInstance } from './policy.js';
+import { KEY_STORAGE_MODES, PII_MODES, POLICY_KEYS, PREVIEW_MODES, PRIORITY_ACCOUNT_LIMITS, instancePattern, normalizeEndpoint, normalizeInstance } from './policy.js';
+import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
+import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION } from '../reports/layoutFile.js';
+import { orgDashboardProblems } from '../reports/dashboards.js';
 
 /** Keys that describe the build, not the policy. `$comment` is ignored. */
 export const BUILD_KEYS = Object.freeze(['$comment', 'label', 'updateUrl']);
@@ -66,6 +69,23 @@ function instanceProblem(item) {
   if (!canonical) return 'not an https address of one host.';
   if (canonical !== item) return `write it as ${shown(canonical)}.`;
   return '';
+}
+
+// The organisation's dashboard in a config: exactly a saved layout file (an object, not its text), with nothing left out or read
+// differently by the Team screen. Every note the policy check would give is an error here.
+function dashboardConfigProblems(value) {
+  const shape = `{ "kind": "${LAYOUT_KIND}", "version": ${LAYOUT_VERSION}, "dashboard": { "name", "scope", "tables", "widgets" } }`;
+  if (!isPlainObject(value)) return [`must be one dashboard layout as "Save layout as a file" writes it: ${shape}.`];
+  const out = [];
+  const extra = Object.keys(value).filter((k) => !['kind', 'version', 'dashboard'].includes(k));
+  if (extra.length) out.push(`may only have kind, version and dashboard (not ${extra.join(', ')}).`);
+  if (value.kind !== LAYOUT_KIND || value.version !== LAYOUT_VERSION) out.push(`kind must be "${LAYOUT_KIND}" and version ${LAYOUT_VERSION}.`);
+  if (!isPlainObject(value.dashboard)) return [...out, `dashboard must be an object: ${shape}.`];
+  const inner = Object.keys(value.dashboard).filter((k) => !['name', 'scope', 'tables', 'widgets'].includes(k));
+  if (inner.length) out.push(`dashboard may only have name, scope, tables and widgets (not ${inner.join(', ')}).`);
+  if (JSON.stringify(value).length > LAYOUT_MAX_CHARS) out.push(`it is longer than ${LAYOUT_MAX_CHARS} characters.`);
+  if (!out.length) out.push(...orgDashboardProblems(value).map((p) => p.message));
+  return out;
 }
 
 /**
@@ -173,7 +193,35 @@ export function validateEnterpriseConfig(raw) {
     });
   }
 
-  for (const key of ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar']) {
+  const wordList = (key, known) => {
+    if (has(key)) policy[key] = checkStringList(key, raw[key], errors, { each: (item) => (known.includes(item) ? '' : `not one of ${known.join(', ')} (lower case).`) });
+  };
+  wordList('disabledSections', HIDEABLE_SCREENS);
+  wordList('allowedProfiles', PROFILE_IDS);
+  wordList('lockedProfiles', PROFILE_IDS);
+  if (has('internalPhrases')) policy.internalPhrases = checkStringList('internalPhrases', raw.internalPhrases, errors, { max: 200 });
+  if (has('orgSnippets')) {
+    if (!Array.isArray(raw.orgSnippets)) errors.push('orgSnippets must be a list of { "title", "body" } objects.');
+    else {
+      raw.orgSnippets.forEach((item, i) => {
+        if (!isPlainObject(item) || typeof item.title !== 'string' || !item.title.trim() || typeof item.body !== 'string' || !item.body.trim()) errors.push(`orgSnippets[${i}] needs a text "title" and a text "body".`);
+        else if (Object.keys(item).some((k) => !['title', 'body', 'shortcut'].includes(k))) errors.push(`orgSnippets[${i}] may only have title, body and shortcut.`);
+      });
+      if (raw.orgSnippets.length > 200) errors.push(`orgSnippets has ${raw.orgSnippets.length} entries; at most 200 are allowed.`);
+      if (!errors.some((e) => e.startsWith('orgSnippets'))) policy.orgSnippets = raw.orgSnippets.map((s) => ({ ...s }));
+    }
+  }
+  if (has('priorityAccounts')) {
+    const { count, length } = PRIORITY_ACCOUNT_LIMITS;
+    policy.priorityAccounts = checkStringList('priorityAccounts', raw.priorityAccounts, errors, { max: count, each: (item) => (item.length > length ? `longer than ${length} characters.` : '') });
+  }
+  if (has('defaultDashboard')) {
+    const problems = dashboardConfigProblems(raw.defaultDashboard);
+    problems.forEach((p) => errors.push(`defaultDashboard: ${p}`));
+    if (!problems.length) policy.defaultDashboard = JSON.parse(JSON.stringify(raw.defaultDashboard));
+  }
+
+  for (const key of ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar', 'aiEnabled']) {
     if (!has(key)) continue;
     if (typeof raw[key] !== 'boolean') errors.push(`${key} must be true or false (not ${shown(raw[key])}).`);
     else policy[key] = raw[key];

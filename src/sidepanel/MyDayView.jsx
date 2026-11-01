@@ -37,6 +37,8 @@ export function accessText(access) {
 }
 
 // F1. The agent's own open tickets, most urgent first. No AI: just reads with the person's own session.
+// Round 3: replaced by the My work screen (src/sidepanel/mywork). Kept until the old 'myday' READ and the tests that import the helpers
+// above (tests/reports-links-ui.test.js) are moved; no screen draws this view any more.
 export default function MyDayView({ page }) {
   const [state, setState] = useState({ phase: 'loading', items: [], access: [], empty: null, error: '' });
   const run = useRef(0);

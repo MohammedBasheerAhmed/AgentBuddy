@@ -64,6 +64,7 @@ export function OverviewBody({ d, env }) {
               ...(env.scopeKind === 'mine' ? [] : [{ key: 'unassigned', label: 'Unassigned', align: 'right' }]),
               { key: 'stale', label: 'Stale', align: 'right' },
               { key: 'waiting', label: 'Waiting', align: 'right' },
+              ...(d.resolvedActive > 0 ? [{ key: 'resolvedActive', label: 'Resolved, not closed', align: 'right' }] : []),
               { key: 'openedToday', label: 'Opened today', align: 'right' },
               { key: 'resolvedToday', label: 'Resolved today', align: 'right' },
             ]}

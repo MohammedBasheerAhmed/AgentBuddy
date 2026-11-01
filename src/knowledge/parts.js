@@ -9,10 +9,12 @@ const clip = (text, max) => {
 
 const ZERO_ID = '0'.repeat(32);
 
-function add(parts, label, field, text, max = 6000) {
+function add(parts, label, field, text, max = 6000, inline = false) {
   const value = clip(text, max);
-  if (value) parts.push({ label, field, text: value });
+  if (value) parts.push({ label, field, text: value, ...(inline ? { inline: true } : {}) });
 }
+// A short value: one "Label: value" line of the firewall's shared fields block when it fits on one line (src/features/parts.js).
+const addLine = (parts, label, field, text, max) => add(parts, label, field, text, max, true);
 
 // ---- C5: improve this article --------------------------------------------------------------------------
 
@@ -20,14 +22,14 @@ function add(parts, label, field, text, max = 6000) {
 export function articleParts(pack) {
   const f = pack?.fields || {};
   const parts = [];
-  add(parts, 'Article title', 'short_description', f.short_description, 300);
+  addLine(parts, 'Article title', 'short_description', f.short_description, 300);
   add(parts, 'Article text', 'text', f.text);
-  add(parts, 'Search keywords', 'meta', f.meta, 500);
-  add(parts, 'Category', 'kb_category', f.kb_category, 200);
-  add(parts, 'Article format', 'article_type', f.article_type, 40);
-  add(parts, 'First published', 'published', f.published, 40);
-  add(parts, 'Valid until', 'valid_to', f.valid_to, 40);
-  add(parts, 'Last changed', 'sys_updated_on', f.sys_updated_on, 40);
+  addLine(parts, 'Search keywords', 'meta', f.meta, 500);
+  addLine(parts, 'Category', 'kb_category', f.kb_category, 200);
+  addLine(parts, 'Article format', 'article_type', f.article_type, 40);
+  addLine(parts, 'First published', 'published', f.published, 40);
+  addLine(parts, 'Valid until', 'valid_to', f.valid_to, 40);
+  addLine(parts, 'Last changed', 'sys_updated_on', f.sys_updated_on, 40);
   return parts;
 }
 
@@ -41,6 +43,7 @@ export function mergeParts(pack) {
   const articles = (pack?.related?.articles || []).slice(0, MERGE_MAX_ARTICLES);
   const parts = [];
   articles.forEach((a, i) => {
+    // The title and keywords stay next to their text (a block each): the model has to keep the articles apart.
     add(parts, `Article ${i + 1} title`, 'short_description', `${a.number}: ${a.title}`, 400);
     add(parts, `Article ${i + 1} text`, 'text', a.text, MERGE_TEXT_CHARS);
     add(parts, `Article ${i + 1} keywords`, 'meta', a.meta, 400);
@@ -78,10 +81,10 @@ export function mergePack(articles, access = [], people = []) {
 export function gapParts(pack) {
   const g = pack?.related?.gap || {};
   const parts = [];
-  add(parts, 'Topic words', 'short_description', g.label, 200);
-  add(parts, 'Volume', 'volume', g.volume, 200);
-  add(parts, 'Category', 'category', g.category, 100);
-  add(parts, 'Configuration item', 'cmdb_ci', g.ci, 100);
+  addLine(parts, 'Topic words', 'short_description', g.label, 200);
+  addLine(parts, 'Volume', 'volume', g.volume, 200);
+  addLine(parts, 'Category', 'category', g.category, 100);
+  addLine(parts, 'Configuration item', 'cmdb_ci', g.ci, 100);
   return parts;
 }
 

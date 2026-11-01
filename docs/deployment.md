@@ -39,7 +39,7 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 
 | Key | Type | When not set | What it does |
 |---|---|---|---|
-| `allowedInstances` | list of text | any instance the person turns on | Only these ServiceNow sites can be turned on. Each entry is an exact https address (`https://acme.service-now.com`) or a wildcard with at least two names after `*.` (`*.corp.example.com`, which matches any sub-domain but not `corp.example.com` itself). An empty list, or one with no usable entry, allows no site. |
+| `allowedInstances` | list of text | any instance the person turns on | Only these ServiceNow sites can be turned on. An exact address whose host permission the browser already granted (force-installed with host access, or the enterprise build) is turned on by itself; a wildcard entry never is. Each entry is an exact https address (`https://acme.service-now.com`) or a wildcard with at least two names after `*.` (`*.corp.example.com`, which matches any sub-domain but not `corp.example.com` itself). An empty list, or one with no usable entry, allows no site. |
 | `aiProvider` | text | the person chooses | The only AI provider allowed: `anthropic`, `openai` (OpenAI or a company gateway), `azure` (Azure OpenAI; see below), `gemini`, `mistral`, `groq`, `deepseek`, `openrouter`, `ollama` or `custom`. Not case-sensitive. A name the extension does not know allows nothing. |
 | `aiBaseUrl` | text | the provider's own address, or what the person types | The only AI address allowed. https only (http only for `localhost` or `127.0.0.1`), no user name or password, no `?query` or `#fragment`. Compared in canonical form (lower-case host, no `:443`, no trailing slash). An address that is not valid blocks every AI call. |
 | `allowedProviders` | list of text | any provider | The providers people may choose from (ids as for `aiProvider`, not case-sensitive), for example `["openai", "azure"]` to rule out every other vendor. A provider this version does not know never matches; an empty list allows none. When `aiProvider` is set it must be on the list. |
@@ -57,6 +57,14 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 | `auditExport` | true / false | `true` | Allows exporting the local activity log as CSV. |
 | `coachingEnabled` | true / false | `false` | Switches on the coaching snapshot (also needs Strict mode). |
 | `disablePageBar` | true / false | `false` | Removes the bar of main actions from ServiceNow pages for everyone. |
+| `aiEnabled` | true / false | `true` | `false` hides every AI Assist half and AI action for everyone; the Insights halves (no AI, nothing sent anywhere) stay. |
+| `disabledSections` | list of text | every screen shows | Screens to hide for everyone: `mywork`, `team`, `write`, `knowledge`. The Ticket screen cannot be hidden. |
+| `allowedProfiles` | list of text | every profile | Work profiles people may choose: `it`, `req`, `csm`, `hr`, `lead`, `km`, `mpc`. The `hr` profile is only offered when it is named here or `allowHrContent` is `true`. |
+| `lockedProfiles` | list of text | people choose | Work profiles set for everyone (same ids as `allowedProfiles`); people cannot change them. |
+| `orgSnippets` | list of objects | none | Canned replies for everyone, read-only in the panel: `{ "title", "body", "shortcut" }`, plain text, at most 200. |
+| `internalPhrases` | list of text | the built-in list only | More words and phrases the safe-to-send check flags in customer-visible text (internal team or system names). |
+| `defaultDashboard` | object | the ready-made dashboards only | One Team-screen dashboard for everyone: exactly what "Save layout as a file" writes for one dashboard (see "Organisation dashboard and priority accounts" below). People with no dashboards yet on an instance start with it, first and on show; anyone else gets "Add your organisation's dashboard" in the dashboard's ⋯ menu. Never locked. |
+| `priorityAccounts` | list of text | no account is marked | Customer accounts marked "Priority account" on customer service cases (the Account card and the line at the top of the ticket), written as ServiceNow shows the account's name. At most 500 names of up to 100 characters. |
 
 ### How a policy value is read
 
@@ -72,6 +80,41 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 - Check a policy file before deploying it: `node scripts/check-policy.js <file>` (a `.reg`, `.mobileconfig`, `.plist` or `.json` file)
   lists every key that would be ignored, read differently from how it is written, or that blocks AI calls, and prints the policy as
   Agent Buddy will read it. It exits with code 1 when something would not work as written.
+
+### Organisation dashboard and priority accounts
+
+```json
+{
+  "defaultDashboard": {
+    "kind": "agentbuddy-dashboard-layout",
+    "version": 1,
+    "dashboard": {
+      "name": "Service desk today",
+      "scope": { "kind": "groups" },
+      "widgets": [
+        { "type": "section", "section": "overview" },
+        { "type": "section", "section": "sla" },
+        { "type": "section", "section": "workload", "params": { "staleDays": 5 } }
+      ]
+    }
+  },
+  "priorityAccounts": ["Boxeo", "Acme Corporation EMEA"]
+}
+```
+
+- `defaultDashboard`: build the dashboard on the Team screen, choose "Save layout as a file" under Customize > More, and paste the
+  file's contents as the value. It is read exactly like a file a person loads: unknown parts are left out, names are cut to 60
+  characters, at most 24 widgets, and a value that is not such a layout (or holds no section this version knows) is ignored. The
+  scope `groups` means each person's own groups; `chosen` names groups by sys_id, which only mean something on the instance they
+  were saved on. A dashboard over every table has no `"tables"` in the file (files saved before 2026-10-31 wrote `"tables": null`
+  there: delete that line, as the browser's policy check may refuse a `null`). In a Windows registry policy the value can also be the file's text as one string (`REG_SZ`).
+- Nothing is locked: the organisation's dashboard becomes each person's own copy, which they can change, rename or remove. It is
+  matched by its name, so someone who renamed or removed it is offered it again in the ⋯ menu. A ready-made dashboard with the
+  same name gives way to it. An enterprise build can compile one in; a managed policy that sets its own replaces it.
+- `priorityAccounts`: the account names exactly as the case's Account field shows them (case and spaces do not matter). ServiceNow
+  has no standard "priority account" column, so this list is the only source; nothing more is read from ServiceNow for it. Names
+  longer than 100 characters, values that are not text and names after the 500th are ignored (`node scripts/check-policy.js`
+  lists each). The names compiled into an enterprise build and those in the managed policy are joined.
 
 ### Azure OpenAI
 
@@ -136,6 +179,7 @@ The HR case brief also needs Strict (or Local-only) privacy mode.
 | Write: rewrite and notes | `rewrite-short`, `rewrite-friendly`, `rewrite-plain`, `rewrite-formal`, `rewrite-fix`, `rewrite-translate`, `rewrite-bilingual`, `notes-to-ticket` |
 | Team (reports) | `reports` (the whole section), `shift-handover`, `dashboard-insights`, `coaching-snapshot` (off until `coachingEnabled` is `true`; needs Strict mode) |
 | Record tabs | `request-explain`, `resolution-improve`, `fulfilment-checklist` |
+| AI Assist on the ticket | `ask-ticket` (Ask about this ticket), `rewrite-own` (refine an answer with your own instruction) |
 
 The deterministic tabs (Request, Check, Article, Duplicates, Gaps, Snippets and the lists) have no feature id: `disabledFeatures`
 switches off their AI buttons only. Use `blockedTables` to stop what they read.

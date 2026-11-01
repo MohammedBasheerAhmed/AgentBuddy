@@ -4,7 +4,7 @@
 // WHAT IS SENT: counts, trends, group names, ticket numbers, and the names of assignees (which go into `pack.people`, so the
 // firewall masks them). NOT sent: ticket titles or descriptions, callers' names (repeat callers are only counted), notes. A
 // section that is not on the dashboard is not sent, and the AI is told it is missing so it does not guess.
-import { REPORT_TABLE, addPeople, blockedSet, checkAnswer, figure, line, resultNotes, scopeText } from './common.js';
+import { REPORT_TABLE, addPeople, blockedSet, carriesSensitive, checkAnswer, figure, line, resultNotes, scopeText } from './common.js';
 
 export const INSIGHT_HEADINGS = Object.freeze(['What stands out:', 'Likely reasons (hypotheses):', 'Suggested actions:']);
 export const INSIGHT_MAX_WORDS = 220;
@@ -168,7 +168,7 @@ const COMPACT = { overview: overviewLines, handover: handoverLines, workload: wo
  * @param {{ id: string, section: string, result: object }[]} entries the widgets' loaded results
  * @param {{ blockedFields?: string[] }} [options]
  */
-export function buildInsightsPack(entries, { blockedFields = [] } = {}) {
+export function buildInsightsPack(entries, { blockedFields = [], sensitivePrefixes = [] } = {}) {
   const bySection = collectLoaded(entries);
   const present = INSIGHT_SECTIONS.filter((s) => bySection[s.id]);
   if (!present.length) return null;
@@ -190,6 +190,8 @@ export function buildInsightsPack(entries, { blockedFields = [] } = {}) {
     sysId: 'insights',
     number: '',
     kind: 'other',
+    // Figures read from HR cases are HR content: the pipeline's HR rules apply.
+    ...(carriesSensitive(present.map((s) => bySection[s.id]), sensitivePrefixes) ? { sensitive: true } : {}),
     fields: {},
     people,
     journal: [],

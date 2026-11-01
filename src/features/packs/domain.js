@@ -5,6 +5,7 @@
 import { domainParts } from '../../domain/parts.js';
 import { mergeAccountCases, accountCasesFailed } from '../../domain/accountCases.js';
 import { sectionPicker } from '../../domain/sections.js';
+import { notClosed } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
 
 const workNotes = () => ({ field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' });
@@ -33,10 +34,12 @@ const HR_PEOPLE = ['subject_person', 'opened_for', 'opened_by', 'assigned_to'];
 
 const hrCaseBrief = {
   id: 'hr-case-brief',
-  title: 'HR case brief',
+  title: 'Brief me on this HR case',
   description: 'Request type, status and due date, what was done, what is pending and the next steps. Needs Strict privacy mode.',
   wave: 2,
   kinds: ['hr_case'],
+  group: 'understand',
+  primary: 'copy',
   journal: 15,
   requires: { minMode: 'strict' },
   insert: workNotes(),
@@ -73,6 +76,8 @@ const accountBriefing = {
   description: 'Who the customer is, their entitlement, this case, the account\'s history and what to watch out for.',
   wave: 2,
   kinds: ['case'],
+  group: 'understand',
+  primary: 'copy',
   journal: 10,
   insert: workNotes(),
   // The account's other cases are read through the `accountCases` read operation (src/content/ops/domain.js): GET-only, at most 10
@@ -111,6 +116,9 @@ const caseEngEscalation = {
   description: 'A bug-report style hand-off: summary, impact, environment, steps, evidence and what has been tried.',
   wave: 3,
   kinds: ['case'],
+  group: 'work',
+  primary: 'insert',
+  when: notClosed,
   journal: 25,
   insert: workNotes(),
   // Who the customer contact is does not help engineering reproduce anything, so the identity columns stay out of the parts
@@ -144,6 +152,8 @@ const problemRca = {
   description: 'Problem statement, timeline from the linked incidents, probable cause (as a hypothesis), workaround and fix options.',
   wave: 3,
   kinds: ['problem'],
+  group: 'work',
+  primary: 'insert',
   journal: 20,
   // One button per part of the answer: each fills one field and the person presses Save.
   insert: [
@@ -171,10 +181,13 @@ const problemRca = {
 
 const changeCabBrief = {
   id: 'change-cab-brief',
-  title: 'Brief for the CAB',
+  title: 'Prepare the CAB brief',
   description: 'What changes, why, when, who is affected, risk, plans, approvals, conflicts and the questions the CAB should ask.',
   wave: 3,
   kinds: ['change'],
+  group: 'work',
+  primary: 'copy', // read at the CAB meeting; "Add to work notes" stays as the second button
+  when: notClosed,
   journal: 8,
   insert: workNotes(),
   parts: (pack) =>

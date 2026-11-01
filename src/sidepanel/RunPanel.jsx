@@ -4,7 +4,9 @@ import ResultView from './ResultView.jsx';
 import { resolveProviderConfig } from '../providers/config.js';
 import { auditInsert } from '../lib/storage.js';
 import { auditRefFromPage, expectFromPage, sourceFromPack } from '../lib/fillable.js';
-import { startedOnAfter } from './runLogic.js';
+import { madeWithoutLine, otherRecordsSummary, previewStyle, startedOnAfter } from './runLogic.js';
+import { madeWithoutText } from '../features/parts.js';
+import { RunError, RunProgress } from './ticket/assist/answers/RunStatus.jsx';
 
 const NO_TEXTS = [];
 
@@ -16,6 +18,10 @@ const NO_TEXTS = [];
  * requested item but written from its task still goes into the task's form, and into no other). Insert is offered only while that
  * record is the one that is open. A draft that copies words from an internal work note is flagged before it goes into a field the
  * customer can read: those notes come from `run.lastPack.internalTexts` when the run provides them.
+ *
+ * Round 3: while the AI is asked it shows the seconds and the try after a busy answer (RunProgress); an error offers the step that
+ * can fix it (RunError: Try again, Open Settings); the check before sending is the short one for look-alike tickets after the first
+ * time (runLogic previewStyle); and the answer says what it was made without.
  *
  * props: run (from useRun), eff, page, readingText? (what to say while the data is being read)
  */
@@ -31,16 +37,14 @@ export default function RunPanel({ run, eff, page, readingText = 'Reading the ti
   const source = startedOn.current && startedOn.current.expect ? startedOn.current : null;
   // The audit entry names the record the pack was about; a pasted text (Rewrite, Notes) is audited against the page it was used on.
   const ref = sourceFromPack(lastPack) ? lastPack : auditRefFromPage(page);
+  // The short check for an action that uses other records and was checked in full before (runLogic previewStyle).
+  const others = phase === 'preview' && prepared ? otherRecordsSummary(prepared.p) : '';
+  const short = Boolean(others) && previewStyle({ previewMode: eff.values.previewMode, feature: prepared.p.feature, pack: prepared.p.pack, seen: eff.values.previewSeen || [], others }) === 'short';
   return (
     <>
-      {(phase === 'reading' || phase === 'sending') && (
-        <p className="ab-note" role="status">
-          {phase === 'reading' ? readingText : 'Waiting for the AI…'}
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={run.reset} style={{ marginLeft: 8 }}>Stop waiting</button>
-        </p>
-      )}
+      <RunProgress run={run} onStop={run.reset} readingText={readingText} />
 
-      {phase === 'error' && <p className="ab-note ab-note-danger" role="alert">{error}</p>}
+      {phase === 'error' && <RunError error={error} code={run.errorCode} onRetry={run.again} />}
 
       {phase === 'preview' && prepared && (
         <PreviewDialog
@@ -48,6 +52,8 @@ export default function RunPanel({ run, eff, page, readingText = 'Reading the ti
           prepared={prepared.p}
           config={prepared.cfg}
           canSkipNext={eff.values.previewMode === 'first'}
+          short={short}
+          others={others}
           onSend={run.confirmPreview}
           onCancel={run.cancelPreview}
           onMask={run.maskMore}
@@ -60,6 +66,7 @@ export default function RunPanel({ run, eff, page, readingText = 'Reading the ti
 
       {phase === 'done' && result !== null && active && (
         <ResultView
+          internalPhrases={eff.policy?.internalPhrases || NO_TEXTS}
           feature={active}
           text={result}
           page={page}
@@ -67,6 +74,7 @@ export default function RunPanel({ run, eff, page, readingText = 'Reading the ti
           scan={scan}
           source={source}
           internalTexts={Array.isArray(lastPack?.internalTexts) ? lastPack.internalTexts : NO_TEXTS}
+          madeWithout={Array.isArray(lastPack?.madeWithout) ? madeWithoutText(lastPack.madeWithout) : madeWithoutLine(lastPack?.gaps)}
           onAgain={run.again}
           onClose={run.reset}
           audit={(outcome) => auditInsert({ feature: active.id, table: ref.table, sysId: ref.sysId, provider: config.provider, model: config.model, mode: eff.values.piiMode, outcome })}

@@ -1,25 +1,44 @@
 import { useState } from 'react';
 import { MSG } from '../lib/messages.js';
 import { instancePattern, isInstanceAllowed } from '../policy/policy.js';
-import MyDayView from './MyDayView.jsx';
-import { aiNeeds, setupProblem } from './aiReady.js';
+import { isAiReady } from './aiReady.js';
 import { plainError } from './ask.js';
+import { firstRunSteps } from './firstRun.js';
+import { useActiveInstances, useSiteCheck } from './usePage.js';
 
-// Shown when the active tab is not a ticket: the site is not enabled yet, or it is enabled but no record is open.
-export default function SetupView({ page, eff, onChanged }) {
+// What the browser said when it did not turn the site on, and the next step. A refused prompt and a prompt that never appeared (an
+// organisation's browser policy can block site access) look the same from here, so both are named.
+export const REFUSED_TEXT =
+  'The browser did not turn Agent Buddy on for this site. Press the button again and choose Allow. If no question appears, your IT team may block it: ask them, or add the address in Settings.';
+
+/**
+ * Turn Agent Buddy on for the site of the active tab: one button straight from the click (the browser asks for the site), then the
+ * service worker registers the content scripts. Offered as the main action only on a ServiceNow page (its address, or the marks a
+ * one-time look at the page found); anywhere else it says "This does not look like ServiceNow" and keeps a small "Turn on anyway"
+ * for an instance on a custom domain.
+ *
+ * props: page (a 'not-enabled' page with its origin), eff, onChanged (look at the page again), primary (the screen's one filled button)
+ */
+export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  // A local model (Ollama, or a server on this computer) needs no key. 'unlock' | 'add-key' | 'setup' | '' (ready).
-  const needs = aiNeeds(eff);
+  const verdict = useSiteCheck(page);
 
   async function enable() {
     setError('');
     setBusy(true);
     try {
       // The permission request must run straight from the click.
-      const granted = await chrome.permissions.request({ origins: [instancePattern(page.origin)] });
-      if (!granted) throw new Error('The browser did not grant access to this site.');
+      let granted = false;
+      try {
+        granted = await chrome.permissions.request({ origins: [instancePattern(page.origin)] });
+      } catch {
+        granted = false; // a build with fixed sites, or a browser policy that blocks the prompt
+      }
+      if (!granted) {
+        setError(REFUSED_TEXT);
+        return;
+      }
       const answer = await chrome.runtime.sendMessage({ type: MSG.ENABLE_INSTANCE, origin: page.origin });
       if (answer?.error) throw new Error(answer.error.message);
       onChanged();
@@ -30,68 +49,93 @@ export default function SetupView({ page, eff, onChanged }) {
     }
   }
 
-  const allowed = page.origin ? isInstanceAllowed(page.origin, eff.policy) : false;
+  if (!page?.origin) {
+    return <p className="ab-sub">Open your ServiceNow instance in this tab, then click the Agent Buddy button in the browser toolbar. You can also add its address in Settings.</p>;
+  }
+  if (!isInstanceAllowed(page.origin, eff?.policy)) return <p className="ab-note ab-note-warn">Your organisation has not approved this site for Agent Buddy.</p>;
 
+  const host = page.origin.replace('https://', '');
+  const errorNote = error ? (
+    <p className="ab-note ab-note-danger" role="alert">
+      {error}
+    </p>
+  ) : null;
+
+  if (verdict === 'checking') return <p className="ab-sub" role="status">Checking this page…</p>;
+  if (verdict === 'servicenow') {
+    return (
+      <div className="ab-turnon">
+        <p className="ab-sub">
+          Agent Buddy reads only what you can already see on <span className="ab-mono">{host}</span>, including its portal pages. Nothing is written to ServiceNow.
+        </p>
+        <div className="ab-row">
+          <button type="button" className={`ab-btn${primary ? ' ab-btn-primary' : ''}`} disabled={busy} onClick={enable}>
+            Turn on for this site
+          </button>
+        </div>
+        {errorNote}
+      </div>
+    );
+  }
   return (
-    <>
-      {page.status === 'no-record' && (
-        <>
-          <MyDayView page={page} />
-          <section className="ab-card">
-            <h2 className="ab-h">Open a ticket</h2>
-            <p className="ab-sub">
-              {page.surface === 'portal'
-                ? 'Open a ticket, request or case on this portal and Agent Buddy will offer help for it here.'
-                : 'Open an incident, request, catalog task or case, in the platform, in a workspace or on a portal ticket page (Service Portal, Employee Center, customer service portal), and Agent Buddy will offer help for it here.'}
-            </p>
-          </section>
-        </>
-      )}
+    <div className="ab-turnon">
+      <p className="ab-sub">
+        {verdict === 'other' ? 'This does not look like ServiceNow.' : 'Agent Buddy could not check this page.'} Open your ServiceNow instance in this tab, then click
+        the Agent Buddy button in the browser toolbar.
+      </p>
+      <p className="ab-hint ab-turnon-anyway">
+        Is <span className="ab-mono">{host}</span> your ServiceNow on its own web address?{' '}
+        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={busy} onClick={enable}>
+          Turn on anyway
+        </button>
+      </p>
+      {errorNote}
+    </div>
+  );
+}
 
-      {page.status === 'not-enabled' && (
-        <section className="ab-card">
-          <h2 className="ab-h">Not turned on for this page</h2>
-          {page.origin ? (
-            allowed ? (
-              <>
-                <p className="ab-sub">
-                  Agent Buddy only works on sites you turn it on for. Turning it on lets it read tickets you can already see on <span className="ab-mono">{page.origin.replace('https://', '')}</span>, including its portal pages. A portal that has its own web address is turned on separately.
-                </p>
-                <div className="ab-row">
-                  <button type="button" className="ab-btn ab-btn-primary" disabled={busy} onClick={enable}>
-                    Turn on for this site
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p className="ab-note ab-note-warn">Your organisation has not approved this site for Agent Buddy.</p>
-            )
-          ) : (
-            <p className="ab-sub">
-              Open your ServiceNow instance in this tab, then click the Agent Buddy button in the toolbar. You can also add the address in Settings.
-            </p>
-          )}
-          {error && <p className="ab-note ab-note-danger" role="alert">{error}</p>}
-        </section>
-      )}
+/**
+ * The Ticket screen when the active tab is not a ticket: the site is not turned on yet, or it is on and no record is open. The first
+ * run's steps (turn on, what you work on, AI, open a ticket) are the "Getting started" card (FirstRun.jsx, drawn just above): whatever
+ * that card offers is not repeated here.
+ *
+ * props: page, eff, lastSeen?, onChanged (look at the page again), onOpenScreen?(id) (switch the panel to another screen)
+ */
+export default function SetupView({ page, eff, lastSeen = null, onChanged = () => {}, onOpenScreen = null }) {
+  const activeInstances = useActiveInstances(eff);
+  const firstRun = firstRunSteps({ page, lastSeen, aiReady: isAiReady(eff), eff, activeInstances });
 
-      {needs && (
-        <section className="ab-card">
-          <h2 className="ab-h">{{ unlock: 'Unlock your AI key', setup: 'Finish the AI set-up' }[needs] || 'Add an AI key'}</h2>
-          <p className="ab-sub">
-            {needs === 'unlock'
-              ? 'Your key is protected by a passphrase. Enter it in Settings to use the key in this browser session.'
-              : needs === 'setup'
-                ? `${setupProblem(eff)} Settings has the fields for it.`
-                : 'Agent Buddy works with the AI provider you choose. Add a key in Settings. Personal data is masked before anything is sent.'}
-          </p>
+  if (page.status === 'no-record') {
+    if (firstRun.show) return null; // "Open a ticket" is the card's last step
+    return (
+      <section className="ab-card ab-setup-open">
+        <h2 className="ab-h">Open a ticket</h2>
+        <p className="ab-sub">
+          {page.surface === 'portal'
+            ? 'Open a ticket, request or case on this portal and Agent Buddy offers help for it here.'
+            : 'Open an incident, request, catalog task or case and Agent Buddy offers help for it here.'}
+        </p>
+        {onOpenScreen && (
           <div className="ab-row">
-            <button type="button" className="ab-btn" onClick={() => chrome.runtime.openOptionsPage()}>
-              Open Settings
+            <button type="button" className="ab-btn ab-btn-sm" onClick={() => onOpenScreen('mywork')}>
+              See my work
             </button>
           </div>
-        </section>
-      )}
-    </>
-  );
+        )}
+      </section>
+    );
+  }
+
+  if (page.status === 'not-enabled') {
+    // The card turns the site on while that is its next step (on a tab whose address the panel can see); a second site, or one turned
+    // off later, is turned on here. A tab whose address cannot be seen gets the "open your instance" help here, never in the card.
+    if (page.origin && firstRun.show && firstRun.next === 'site') return null;
+    return (
+      <section className="ab-card ab-setup-site">
+        <h2 className="ab-h">Not turned on for this page</h2>
+        <TurnOnSite page={page} eff={eff} onChanged={onChanged} primary={!firstRun.show} />
+      </section>
+    );
+  }
+  return null;
 }

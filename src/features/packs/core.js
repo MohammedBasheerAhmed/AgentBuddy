@@ -1,8 +1,13 @@
 // The first five features: summary, customer reply, resolution notes, hand-off brief, missing information.
+//
+// Round 3 fields (docs/round3.md): `group` (Understand, Reply, Work it, Resolve), `primary` ('copy' for a note to self, 'insert' for
+// text that belongs on the form) and `when(record, header)` (state rules, src/features/stages.js). An insert may name the `kinds`
+// it is for (the problem form has no resolution-notes box) and a `mode` ('replace' for notes that are rewritten as a whole).
 import { packToParts } from '../parts.js';
 import { ALL_TASKS, WORKABLE } from './kinds.js';
 import { relatedParts } from '../../itsm/parts.js';
-import { pickRequesterQuestions, pickResolutionNotes } from '../picks.js';
+import { pickCauseNotes, pickFixNotes, pickRequesterQuestions, pickResolutionNotes } from '../picks.js';
+import { hasCustomer, notClosed, notNew } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
 
 // The extras a record carries (SLAs, approvals, tasks, answers on the request form). Which of them a feature actually gets is
@@ -14,9 +19,11 @@ const CORE = [
   {
     id: 'record-summary',
     title: 'Summarise this ticket',
-    description: 'Issue, impact, what was tried, current state and the next step.',
+    description: 'Issue, impact, what was tried and the next step, in five lines.',
     wave: 1,
     kinds: ALL_TASKS,
+    group: 'understand',
+    primary: 'copy', // a note for the agent: Copy first, "Add to work notes" second
     journal: 15,
     parts: withRelated('record-summary', 15),
     insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
@@ -38,6 +45,10 @@ const CORE = [
     description: 'A short, polite reply to the latest message, ready to edit and send.',
     wave: 1,
     kinds: WORKABLE,
+    group: 'reply',
+    primary: 'insert',
+    // Not on a closed ticket (nobody is waiting for a reply), nor on a task of a problem or a change (there is no customer).
+    when: (record, header) => notClosed(record, header) && hasCustomer(record),
     journal: 10,
     insert: { field: 'comments', label: 'Insert as customer comment', fieldLabel: 'Additional comments' },
     system:
@@ -54,13 +65,24 @@ const CORE = [
   {
     id: 'resolution-notes',
     title: 'Write resolution notes',
-    description: 'Cause, fix and verification from the work notes and comments.',
+    description: 'Cause, fix and how it was checked, from the notes and comments.',
     wave: 1,
     kinds: ['incident', 'problem', 'requested_item', 'catalog_task', 'case', 'task'], // not 'request': its ceiling has no close_notes
+    group: 'resolve',
+    primary: 'insert',
+    when: notNew, // a ticket that has just come in has nothing to write up yet
     journal: 25,
     parts: withRelated('resolution-notes', 25),
     // The close code has its own choice field: the Insert leaves the "Suggested close code" line out (src/features/picks.js).
-    insert: { field: 'close_notes', label: 'Insert into resolution notes', fieldLabel: 'Resolution notes', pick: pickResolutionNotes },
+    // Resolution notes are written as a whole, so Insert REPLACES what the box holds (Try again + Insert never doubles them); the
+    // person can still choose "Add below" before inserting. Each kind gets its own box: incidents and cases call it "Resolution
+    // notes", the request and task forms "Close notes", and a problem has "Cause notes" and "Fix notes" instead (no close_notes).
+    insert: [
+      { field: 'close_notes', kinds: ['incident', 'case'], label: 'Insert into resolution notes', fieldLabel: 'Resolution notes', mode: 'replace', pick: pickResolutionNotes },
+      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], label: 'Insert into close notes', fieldLabel: 'Close notes', mode: 'replace', pick: pickResolutionNotes },
+      { field: 'fix_notes', kinds: ['problem'], label: 'Insert into fix notes', fieldLabel: 'Fix notes', mode: 'replace', pick: pickFixNotes },
+      { field: 'cause_notes', kinds: ['problem'], label: 'Insert the cause into cause notes', fieldLabel: 'Cause notes', mode: 'replace', pick: pickCauseNotes },
+    ],
     system:
       'You help a service desk agent write resolution notes for a ServiceNow ticket they are about to resolve.\n' +
       'Write exactly these lines:\n' +
@@ -77,10 +99,13 @@ const CORE = [
   },
   {
     id: 'handoff-brief',
-    title: 'Hand-off brief',
+    title: 'Write a hand-off brief',
     description: 'A structured note so the next person does not re-ask the customer.',
     wave: 1,
     kinds: WORKABLE,
+    group: 'work',
+    primary: 'insert', // it is written for the work notes, where the next person looks
+    when: notClosed,
     journal: 20,
     parts: withRelated('handoff-brief', 20),
     insert: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' },
@@ -94,10 +119,13 @@ const CORE = [
   },
   {
     id: 'missing-info',
-    title: 'What is missing? Questions to ask',
-    description: 'Spots missing details and proposes clear questions for the requester.',
+    title: 'Ask the customer for missing details',
+    description: 'Spots what the ticket does not say and drafts questions to send to the customer.',
     wave: 1,
     kinds: WORKABLE,
+    group: 'reply',
+    primary: 'insert',
+    when: (record, header) => notClosed(record, header) && hasCustomer(record),
     journal: 8,
     parts: withRelated('missing-info', 8),
     // The "Missing:" line is the agent's checklist: only the questions go into the customer comment (src/features/picks.js).

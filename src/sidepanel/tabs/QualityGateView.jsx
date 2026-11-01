@@ -7,7 +7,7 @@ import { CheckList, CheckSummary } from '../checks/CheckList.jsx';
 import { useLoader } from '../checks/useLoader.js';
 
 // C2, "Check before you resolve". Reads the saved ticket and, where the page has a classic form, what has been typed on it but
-// not saved yet, and lists what is worth a second look. It only advises: nothing is blocked, changed or sent. The optional AI
+// not saved yet (on a Workspace page: the notes boxes only), and lists what is worth a second look. It only advises: nothing is blocked, changed or sent. The optional AI
 // button rewrites the notes the agent has started (preview and privacy checks apply as for every AI action).
 //
 // props: { page, eff, record, header, run, aiReady }
@@ -45,9 +45,11 @@ export default function QualityGateView({ page, eff, record, run, aiReady, activ
         <p className="ab-sub">Advice only: nothing is blocked or changed. Worked out on this computer; nothing is sent to an AI.</p>
         {view && (
           <p className="ab-hint" role="note">
-            {view.usedForm
-              ? 'Checked against what is on the form right now, plus the saved ticket.'
-              : 'Checked the saved ticket only. This page has no form Agent Buddy can read, so anything you have typed and not saved is not included.'}
+            {view.formSource === 'boxes'
+              ? 'Checked the notes typed on this page, plus the saved ticket.'
+              : view.usedForm
+                ? 'Checked against what is on the form right now, plus the saved ticket.'
+                : 'Checked the saved ticket only. This page has no form Agent Buddy can read, so anything you have typed and not saved is not included.'}
           </p>
         )}
       </section>

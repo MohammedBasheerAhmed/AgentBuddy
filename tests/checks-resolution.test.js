@@ -258,6 +258,78 @@ test('buildCheckView says whether the form was used; withCurrentNotes swaps in t
   assert.ok(withCurrentNotes(pack, { close_notes: 'x'.repeat(5000) }).fields.close_notes.length <= 2000);
 });
 
+// ---- a Workspace page: only the notes boxes were read (TRACKER.md N4) ------------------------------------------------------------------
+
+const boxes = (form) => ({ form, formSource: 'boxes' });
+
+test('Workspace boxes: the notes typed in the box count, as on a classic form', () => {
+  const empty = incident({ fields: { state: 'In Progress', close_code: 'Solution provided', close_notes: '' } });
+  assert.equal(find(resolutionCheck(empty, boxes({ close_notes: GOOD_NOTES })), 'notes').status, 'ok', 'typed, not saved: counted');
+  assert.match(find(resolutionCheck(empty, boxes({ close_notes: 'Done.' })), 'notes').title, /only say "resolved"/);
+  assert.equal(find(resolutionCheck(incident(), boxes({ close_notes: '' })), 'notes').status, 'warn', 'the box was emptied');
+  // a work note typed in the composer is mentioned, and the hint does not claim the page has no form
+  const notes = find(resolutionCheck(empty, boxes({ close_notes: '', work_notes: 'Fixed the cert' })), 'notes');
+  assert.match(notes.hint, /work note you have typed is separate/);
+  assert.doesNotMatch(notes.hint, /no form|not found/);
+});
+
+test('Workspace boxes: no notes box found is the saved notes, and the hint says typed notes were not seen', () => {
+  const empty = incident({ fields: { state: 'In Progress', close_code: 'Solution provided', close_notes: '' } });
+  const notes = find(resolutionCheck(empty, boxes({ work_notes: 'wn' })), 'notes');
+  assert.equal(notes.status, 'warn');
+  assert.match(notes.hint, /resolution notes box was not found on this page, so notes typed there and not saved are not counted/);
+  assert.doesNotMatch(notes.hint, /no form Agent Buddy can read/, 'the page was read: it is the box that is missing');
+  // saved notes still count when the box is not found
+  assert.equal(find(resolutionCheck(incident(), boxes({ work_notes: 'wn' })), 'notes').status, 'ok');
+});
+
+test('Workspace boxes: the close code, the hold reason and the state are always the saved ones, never "no close code" from a missing field', () => {
+  const saved = incident({ fields: { state: 'In Progress', close_code: 'Solution provided', close_notes: GOOD_NOTES, hold_reason: 'Awaiting Caller' } });
+  // a box answer never carries a code; if one did, it is ignored (not just missing: ignored)
+  const checks = resolutionCheck(saved, boxes({ close_notes: GOOD_NOTES, close_code: '', hold_reason: '', state: '6' }));
+  assert.equal(find(checks, 'code').status, 'ok', 'the saved code, not the empty one in the answer');
+  assert.equal(find(checks, 'hold').status, 'warn', 'the saved hold reason stays');
+  // nothing saved: a warning, and it says a code picked on this page is not counted (rather than "this page has no form")
+  const noCode = find(resolutionCheck(incident({ fields: { state: 'x', close_code: '', close_notes: GOOD_NOTES } }), boxes({ close_notes: GOOD_NOTES })), 'code');
+  assert.equal(noCode.status, 'warn');
+  assert.match(noCode.hint, /only the notes are read, so a code picked and not saved yet is not counted/);
+  assert.doesNotMatch(noCode.hint, /no form/);
+  // the same answer marked as a classic form behaves as before: the form's empty code wins and nothing more is said
+  const classic = find(resolutionCheck(incident({ fields: { state: 'x', close_code: 'x', close_notes: GOOD_NOTES } }), { form: { close_notes: GOOD_NOTES, close_code: '' } }), 'code');
+  assert.equal(classic.status, 'warn');
+  assert.doesNotMatch(classic.hint, /only the notes|no form/);
+});
+
+test('Workspace boxes: the personal-data check scans the typed notes and comment, and says when a box was not found', () => {
+  const pack = incident({ fields: { state: 'x', close_code: 'x', close_notes: '' } });
+  const found = find(resolutionCheck(pack, boxes({ close_notes: `${GOOD_NOTES} Confirmed with priya.raman@example.com.`, comments: 'Card 4111 1111 1111 1111' })), 'pii');
+  assert.equal(found.status, 'warn');
+  assert.match(found.hint, /1 email address in the resolution notes/);
+  assert.match(found.hint, /1 card number in the comment you have not sent yet/);
+  assert.ok(!JSON.stringify(found).includes('4111') && !JSON.stringify(found).includes('priya.raman@'));
+  const all = find(resolutionCheck(incident(), boxes({ close_notes: GOOD_NOTES, comments: '' })), 'pii');
+  assert.equal(all.status, 'ok');
+  assert.equal(all.hint, '', 'both boxes were read');
+  const partly = find(resolutionCheck(incident(), boxes({ close_notes: GOOD_NOTES })), 'pii');
+  assert.match(partly.hint, /Some boxes on this page could not be found, so text typed there and not saved was not checked/);
+});
+
+test('buildCheckView says where the typed values came from: the form, the Workspace boxes, or nowhere', () => {
+  const view = (facts) => buildCheckView(incident(), facts, { now: NOW });
+  assert.deepEqual([view({ form: { close_notes: 'x' } }).formSource, view({ form: { close_notes: 'x' } }).usedForm], ['form', true]);
+  assert.deepEqual([view(boxes({ close_notes: 'x' })).formSource, view(boxes({ close_notes: 'x' })).usedForm], ['boxes', true]);
+  assert.deepEqual([view({ form: null }).formSource, view({ form: null }).usedForm], ['', false]);
+  assert.deepEqual([view(undefined).formSource, view(undefined).usedForm], ['', false]);
+  // boxes with nothing in them (or only fields a box never gives) is no form at all: "the saved ticket only" stays true
+  for (const form of [{}, { close_code: 'x' }, ['close_notes']]) {
+    const v = view(boxes(form));
+    assert.deepEqual([v.formSource, v.usedForm], ['', false], JSON.stringify(form));
+    assert.match(find(v.checks, 'pii').hint, /typed and not saved on this page was not checked/);
+  }
+  // "Improve my resolution notes" starts from the notes typed in the Workspace box
+  assert.equal(withCurrentNotes(incident(), { close_notes: 'Typed in the box' }).fields.close_notes, 'Typed in the box');
+});
+
 // ---- from a real pack (the fixture incident) --------------------------------------------------------------------------------------------------
 
 test('the fixture incident: customer has not answered, one open task, no close notes yet', async () => {

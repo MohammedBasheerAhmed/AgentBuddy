@@ -8,6 +8,9 @@
 //                  an email to the customer has no use for them.
 // 'compose-people' only the people on a record, so a rewrite or notes run can mask their names precisely. No notes, no extras.
 // 'snippet-fill'   what the Snippets panel fills a snippet's {{variables}} from (no AI is involved).
+// 'send-check'     what "Check my comment" reads about the open record: its people and its notes (no AI is involved).
+// Notes to ticket's suggestions (src/compose/notesHints.js) read look-alike tickets' title, category and group, and active users by
+// exact name, directly through the guarded deps: HINT_TICKET_FIELDS stay inside the incident and case ceilings (tested).
 
 const WHO = ['caller_id', 'requested_for', 'contact', 'consumer'];
 // Read only so the firewall knows these people by name (a name can appear inside a description or a comment). The draft's parts
@@ -47,9 +50,18 @@ export default {
         hr_case: ['opened_for', 'subject_person'],
       },
     },
+    // "Check my comment" (N22, no AI): the people on the record, so their own email addresses are not flagged and a name that is not
+    // theirs is, and the notes, so words copied from an internal work note are found (src/safeSend/review.js). Nothing is sent
+    // anywhere: the check runs in the panel and keeps nothing.
+    'send-check': {
+      common: ['number', 'assigned_to', 'opened_by', ...WHO],
+      by: {
+        hr_case: ['opened_for', 'subject_person'],
+      },
+    },
   },
-  journal: { 'email-compose': true, 'compose-people': false, 'snippet-fill': false },
-  related: { 'email-compose': ['slas', 'approvals'], 'compose-people': [], 'snippet-fill': ['slas'] },
+  journal: { 'email-compose': true, 'compose-people': false, 'snippet-fill': false, 'send-check': true },
+  related: { 'email-compose': ['slas', 'approvals'], 'compose-people': [], 'snippet-fill': ['slas'], 'send-check': [] },
   // The email suggestion compares when the ticket was opened and resolved with when the last note was written (stored UTC)
   // and with the clock; the display values are in the reader's time zone, hours off. Their stored values ride along.
   times: { 'email-compose': ['opened_at', 'resolved_at', 'closed_at'] },

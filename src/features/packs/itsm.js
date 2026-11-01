@@ -8,14 +8,19 @@ import { ALL_TASKS, CUSTOMER_FACING } from './kinds.js';
 import { PEOPLE_COLUMNS, REQUESTER_COLUMNS, fieldParts, journalParts, referenceParts, relatedParts, sentimentParts } from '../../itsm/parts.js';
 import { addReference } from '../../itsm/reference.js';
 import { pickArticleBody, pickArticleTitle } from '../../itsm/sections.js';
+import { isMajorIncident, notClosed, notNew, stillOpen } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
 
 const notHr = (kinds) => kinds.filter((k) => k !== 'hr_case');
+// A catalog task and the other task tables are internal work items: the customer writes on the request or the parent ticket, so
+// there is no customer mood to read there.
+const INTERNAL = ['hr_case', 'catalog_task', 'task'];
 
 const WORK_NOTE = { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' };
 
-// Said in every prompt: facts only, say so when something is missing, which language, and the data cannot give orders
-// (src/prompts/rules.js). A knowledge article is published for others, so it follows the language of its source instead.
+// Said in every prompt: facts only, say so when something is missing, and which language (src/prompts/rules.js). That the data
+// cannot give orders is said once per request by the firewall (RULES_PREAMBLE). A knowledge article is published for others, so
+// it follows the language of its source instead.
 const FACTS = 'Use only facts in the ticket data and never invent anything. Write "Not stated" when something is missing. ';
 const DATA_RULES = FACTS + rulesFor('agent');
 const ARTICLE_RULES = FACTS + rulesFor('published');
@@ -28,13 +33,16 @@ export default [
   // ---- A5 ---------------------------------------------------------------------------------------------------
   {
     id: 'sentiment-risk',
-    title: 'Sentiment and escalation risk',
+    title: 'Check mood and escalation risk',
     description: 'Is the customer getting upset? Mood, risk of escalation and what to do about it.',
     wave: 2,
-    kinds: notHr(CUSTOMER_FACING),
+    kinds: CUSTOMER_FACING.filter((k) => !INTERNAL.includes(k)),
+    group: 'understand',
+    // Copy only: "Mood: frustrated" is the agent's reading, never a note on the ticket (the customer may read the record one day).
+    primary: 'copy',
+    when: notClosed,
     journal: 20,
     parts: (pack) => sentimentParts(pack, { depth: 20 }),
-    insert: { ...WORK_NOTE },
     system:
       'You help a service desk agent and their lead see early whether a customer is getting upset, so the ticket can be handled before it escalates.\n' +
       'The data holds the ticket, a part called "Signals counted by simple rules" (counts made locally; use them as evidence), and the newest notes. ' +
@@ -54,10 +62,13 @@ export default [
   // ---- A7 ---------------------------------------------------------------------------------------------------
   {
     id: 'next-best-action',
-    title: 'Next best actions',
-    description: 'A tick-box list of steps taken from similar solved tickets and matching articles.',
+    title: 'Suggest next steps',
+    description: 'A checklist of steps from similar solved tickets and matching articles.',
     wave: 2,
     kinds: ['incident', 'case', 'requested_item', 'catalog_task', 'task'],
+    group: 'work',
+    primary: 'copy', // a checklist for the agent; "Add to work notes" stays as the second button
+    when: stillOpen,
     journal: 12,
     // Up to three solved look-alikes and three articles. If a read is refused or empty the run goes on without it, and the
     // status part tells the model so (src/itsm/reference.js).
@@ -89,11 +100,15 @@ export default [
 
   // ---- A8 ---------------------------------------------------------------------------------------------------
   {
+    // AI2 next to AI1 ("Summarise this ticket"): kept as its own action with a name that says what is different. The summary
+    // answers "what is this ticket?"; this one answers "where did the conversation get to?" (decisions, open questions, owners).
     id: 'thread-summary',
-    title: 'Summarise the discussion',
-    description: 'Decisions, open questions and who owns what, from a long thread of comments and notes.',
+    title: 'Catch up on the discussion',
+    description: 'Decisions, open questions and who owns what, from the comments and notes.',
     wave: 1,
     kinds: notHr(ALL_TASKS),
+    group: 'understand',
+    primary: 'copy',
     journal: 30,
     insert: { ...WORK_NOTE },
     system:
@@ -112,10 +127,13 @@ export default [
   // ---- E1 ---------------------------------------------------------------------------------------------------
   {
     id: 'routing-hint',
-    title: 'Where should this go?',
-    description: 'Suggested category, assignment group and priority, based on similar solved tickets.',
+    title: 'Suggest where it should go',
+    description: 'Category, assignment group and priority, based on similar solved tickets.',
     wave: 2,
     kinds: ['incident', 'case'], // the other kinds' ceilings have no category (a request is routed through its items)
+    group: 'work',
+    primary: 'copy',
+    when: stillOpen,
     journal: 0,
     // 'routingLookalikes' is this area's read (src/content/ops/itsm.js): like 'similar', plus each ticket's group and priority.
     enrich: (pack, ctx) => addReference(pack, ctx, { similar: 'routingLookalikes', closeNotes: false }),
@@ -141,10 +159,13 @@ export default [
   // ---- C3 ---------------------------------------------------------------------------------------------------
   {
     id: 'kb-article-draft',
-    title: 'Turn this into a knowledge article',
-    description: 'A draft article with no names or personal details, checked against existing articles first.',
+    title: 'Draft a knowledge article',
+    description: 'An article with no names or personal details, checked against existing articles first.',
     wave: 2,
     kinds: ['incident', 'problem', 'case', 'requested_item', 'task'],
+    group: 'resolve',
+    primary: 'insert', // into the article form, which the result card opens
+    when: notNew, // offered once there is a fix to write up (it is a Resolve suggestion, src/features/stages.js)
     journal: 25,
     keepMasked: true, // the article is published for others: masked values must not come back into it
     enrich: (pack, ctx) => addReference(pack, ctx, { knowledge: true }),
@@ -185,10 +206,15 @@ export default [
   // ---- B7 ---------------------------------------------------------------------------------------------------
   {
     id: 'major-incident-comms',
-    title: 'Major incident updates',
-    description: 'Three short updates (executives, technical teams, customers) from the record, its tasks and the timeline.',
+    title: 'Draft major incident updates',
+    description: 'Updates for executives, technical teams and customers, from the record, its tasks and the timeline.',
     wave: 3,
-    kinds: ['incident', 'problem', 'change'],
+    // Only on a major incident (AI15): an incident whose major incident state is proposed or accepted, or priority 1 where that
+    // state is not read (src/features/stages.js isMajorIncident). Problems and changes do not get stakeholder updates from here.
+    kinds: ['incident'],
+    when: isMajorIncident,
+    group: 'work',
+    primary: 'copy',
     journal: 20,
     // Copy only: an update that customers will read must be a deliberate act, so there is no Insert.
     // The owner shows (who is on it); the callers do not (an update is not about one caller).

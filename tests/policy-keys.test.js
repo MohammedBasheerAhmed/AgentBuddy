@@ -48,12 +48,15 @@ test('docs/deployment.md has one row per policy key in "Every policy key", and n
 });
 
 test('every schema key has a title, a type the parser expects and a description; enums match the code', () => {
-  const lists = ['allowedInstances', 'allowedProviders', 'allowedModels', 'disabledFeatures', 'blockedTables', 'blockedFields', 'sensitiveTablePrefixes'];
-  const booleans = ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar'];
+  const lists = ['allowedInstances', 'allowedProviders', 'allowedModels', 'disabledFeatures', 'blockedTables', 'blockedFields', 'sensitiveTablePrefixes', 'disabledSections', 'allowedProfiles', 'lockedProfiles', 'internalPhrases', 'priorityAccounts'];
+  const booleans = ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar', 'aiEnabled'];
   for (const [key, def] of Object.entries(schema.properties)) {
     assert.ok(def.title, `${key} has a title`);
     assert.ok(def.description || key === 'allowedModels', `${key} has a description`);
-    if (lists.includes(key)) assert.deepEqual([def.type, def.items], ['array', { type: 'string' }], key);
+    if (key === 'orgSnippets') assert.deepEqual([def.type, def.items.type, Object.keys(def.items.properties).sort()], ['array', 'object', ['body', 'shortcut', 'title']]);
+    // Every part of a saved layout file is declared (tests/policy-org-keys.test.js walks a real export against it).
+    else if (key === 'defaultDashboard') assert.deepEqual([def.type, Object.keys(def.properties).sort(), Object.keys(def.properties.dashboard.properties).sort()], ['object', ['dashboard', 'kind', 'version'], ['name', 'scope', 'tables', 'widgets']]);
+    else if (lists.includes(key)) assert.deepEqual([def.type, def.items], ['array', { type: 'string' }], key);
     else if (booleans.includes(key)) assert.equal(def.type, 'boolean', key);
     else if (key === 'tokenBudgetPerDay') assert.deepEqual([def.type, def.minimum], ['integer', 0]);
     else assert.equal(def.type, 'string', key);

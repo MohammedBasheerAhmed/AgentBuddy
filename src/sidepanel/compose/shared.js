@@ -55,7 +55,7 @@ export async function readRecordPeople(page, eff) {
 
 /**
  * Insert and copy for the Write panels, with the review in front of anything that goes into a form.
- *   insert({ field, value, label, mode, key?, expect?, number? }, { people, scan, internalTexts, force })
+ *   insert({ field, value, label, mode, key?, expect?, number? }, { people, scan, internalTexts, internalPhrases, force })
  *     The review (src/safeSend/review.js) looks at the text for the field it goes into; serious findings are held in `findings`
  *     until the person chooses.
  *     expect: the record the text was written for (see fillField); number: its number, for the message when it is not open.
@@ -68,7 +68,7 @@ export async function readRecordPeople(page, eff) {
  */
 export function useFill({ page, eff, run, feature = '' }) {
   const [note, setNote] = useState(null); // { kind: 'ok' | 'danger' | 'warn', text }
-  const [findings, setFindings] = useState(null); // { items, hints, spec, people, scan, internalTexts }
+  const [findings, setFindings] = useState(null); // { items, hints, spec, people, scan, internalTexts, internalPhrases }
   const [busy, setBusy] = useState(false);
   const [inserted, setInserted] = useState({});
   const guard = useRef(null); // one insert at a time, decided at once (not at the next render)
@@ -113,7 +113,7 @@ export function useFill({ page, eff, run, feature = '' }) {
   );
 
   const insert = useCallback(
-    async (spec, { people, scan, internalTexts, force = false } = {}) => {
+    async (spec, { people, scan, internalTexts, internalPhrases, force = false } = {}) => {
       setNote(null);
       const value = String(spec.value ?? '');
       if (!value.trim()) {
@@ -132,7 +132,13 @@ export function useFill({ page, eff, run, feature = '' }) {
             force,
             expect: spec.expect,
             number: spec.number,
-            review: { people: people ?? run?.people ?? [], scan: scan ?? run?.scan ?? null, internalTexts: internalTexts ?? run?.lastPack?.internalTexts ?? [] },
+            // The organisation's internal-only phrases (policy) are checked on top of the built-in ones.
+            review: {
+              people: people ?? run?.people ?? [],
+              scan: scan ?? run?.scan ?? null,
+              internalTexts: internalTexts ?? run?.lastPack?.internalTexts ?? [],
+              internalPhrases: internalPhrases ?? eff.policy?.internalPhrases ?? [],
+            },
             send: (tabId, message) => chrome.tabs.sendMessage(tabId, message),
           });
         } finally {
@@ -141,7 +147,7 @@ export function useFill({ page, eff, run, feature = '' }) {
       });
       if (!outcome) return null;
       if (outcome.status === 'findings') {
-        setFindings({ items: outcome.items, hints: outcome.hints, spec, people, scan, internalTexts });
+        setFindings({ items: outcome.items, hints: outcome.hints, spec, people, scan, internalTexts, internalPhrases });
         return null;
       }
       setFindings(null);
@@ -154,7 +160,7 @@ export function useFill({ page, eff, run, feature = '' }) {
       }
       return outcome.answer;
     },
-    [page, run, audit, copy]
+    [page, run, eff, audit, copy]
   );
 
   const clear = useCallback(() => {
@@ -168,9 +174,9 @@ export function useFill({ page, eff, run, feature = '' }) {
 }
 
 /** The non-blocking findings for text that is about to go into `field` (what ReviewHints shows before the person presses Insert). */
-export function hintsFor(field, text, { people, scan, internalTexts } = {}) {
+export function hintsFor(field, text, { people, scan, internalTexts, internalPhrases } = {}) {
   if (!isCustomerVisible(field) || !String(text || '').trim()) return [];
-  return reviewForInsert(field, text, { people, scan, internalTexts }).hints;
+  return reviewForInsert(field, text, { people, scan, internalTexts, internalPhrases }).hints;
 }
 
 /** The warning and the result line that go with useFill(). */
@@ -190,7 +196,7 @@ export function FillFeedback({ fill }) {
           </ul>
           <ReviewHints hints={findings.hints} />
           <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.insert(findings.spec, { people: findings.people, scan: findings.scan, internalTexts: findings.internalTexts, force: true })}>
+            <button type="button" className="ab-btn ab-btn-sm" disabled={fill.busy} onClick={() => fill.insert(findings.spec, { people: findings.people, scan: findings.scan, internalTexts: findings.internalTexts, internalPhrases: findings.internalPhrases, force: true })}>
               Insert anyway
             </button>
             <button

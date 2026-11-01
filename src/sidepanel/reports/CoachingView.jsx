@@ -4,7 +4,8 @@ import ErrorNote from '../ErrorNote.jsx';
 import { useRun } from '../useRun.js';
 import { COACHING_LIMITS, COACHING_REMINDER, buildCoachingPack, checkCoachingAnswer, coachingBlockedBy, formatDay, rangeFromDays } from '../../reports/ai/coaching.js';
 import { PER_PERSON_NOTE, flagPerPersonScoring } from '../../reports/ai/scoring.js';
-import { AiBlocked, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
+import { AiBlocked, AiButton, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
+import { isSensitiveReportTable } from '../../reports/engine/constants.js';
 import { plural } from './format.js';
 
 const FEATURE_ID = 'coaching-snapshot';
@@ -28,6 +29,16 @@ export function coachingNeeds(eff) {
   const mode = eff.values?.piiMode;
   if (mode !== 'strict' && mode !== 'local-only') return 'Coaching needs Strict privacy mode. Change it in Settings.';
   return coachingBlockedBy(eff.policy?.blockedFields) || '';
+}
+
+/** The card the tool sits in on a dashboard; none when it is drawn inside the Team screen's AI Assist card (`bare`). */
+function Frame({ bare, children }) {
+  if (bare) return <div className="ab-coach">{children}</div>;
+  return (
+    <AiShell title="Coaching snapshot" help="A rubric review of a sample of tickets one group resolved, for its team lead.">
+      {children}
+    </AiShell>
+  );
 }
 
 /** One group: your own groups as choices, or a search by name. Calls `onPick({ id, name })`. */
@@ -54,7 +65,7 @@ function OneGroupPicker({ tabId, blocked, myGroups, groupsNote, value, onPick })
   }, [tabId, text, blocked]);
 
   const choice = (g) => (
-    <button key={g.id} type="button" className={`ab-btn ab-btn-sm${value?.id === g.id ? ' ab-btn-primary' : ''}`} aria-pressed={value?.id === g.id} onClick={() => onPick(g)}>
+    <button key={g.id} type="button" className="ab-btn ab-btn-sm ab-seg-btn" aria-pressed={value?.id === g.id} onClick={() => onPick(g)}>
       {g.name}
     </button>
   );
@@ -119,7 +130,11 @@ export default function CoachingView({ env, eff }) {
   return <CoachingTool env={env} eff={eff} needs={needs} />;
 }
 
-function CoachingTool({ env, eff, needs }) {
+/**
+ * The coaching tool itself (AI30), for a person the gate lets through (coachingGate above: the organisation's coachingEnabled;
+ * coachingNeeds: Strict mode and no blocked field it needs). `env` carries { page, tables, blocked, myGroups, groupsNote }.
+ */
+export function CoachingTool({ env, eff, needs, bare = false }) {
   const run = useRun({ page: env.page, eff, record: null });
   const offset = useMemo(() => new Date().getTimezoneOffset(), []);
   const [group, setGroup] = useState(null);
@@ -149,7 +164,9 @@ function CoachingTool({ env, eff, needs }) {
     run.reset();
     setSample({ phase: 'reading', result: null, error: '' });
     try {
-      const result = await read(env.page.tabId, 'coachingSample', { groupId: group.id, groupName: group.name, fromMs: range.fromMs, toMs: range.toMs, sample: size, tables: env.tables, blocked: env.blocked });
+      // HR cases are never coached on: they are not even asked for (the page refuses them too).
+      const tables = (env.tables || []).filter((t) => !isSensitiveReportTable(t, eff.policy?.sensitiveTablePrefixes));
+      const result = await read(env.page.tabId, 'coachingSample', { groupId: group.id, groupName: group.name, fromMs: range.fromMs, toMs: range.toMs, sample: size, tables, blocked: env.blocked });
       setSample({ phase: 'ready', result, error: '' });
     } catch (err) {
       setSample({ phase: 'error', result: null, error: err.code === 'SESSION_EXPIRED' ? 'Your ServiceNow session has expired. Log in again, then try again.' : err.message || 'The sample could not be read.' });
@@ -177,11 +194,14 @@ function CoachingTool({ env, eff, needs }) {
   const notice = checks?.missing.length ? [`The answer is missing: ${checks.missing.join(' ')}`] : [];
 
   return (
-    <AiShell title="Coaching snapshot" help="A rubric review of a sample of tickets one group resolved, for its team lead.">
+    <Frame bare={bare}>
       <p className="ab-note ab-note-warn ab-coach-reminder">{COACHING_REMINDER}</p>
-      <p className="ab-hint">
+      <details className="ab-details">
+        <summary>What it reads and sends</summary>
+        <p className="ab-hint">
         You pick one group and some days. Agent Buddy picks up to {COACHING_LIMITS.sampleMax} resolved tickets by a fixed rule (evenly over the dates, whoever worked on them), reads only their close notes, close code and the customer-visible comments the group&apos;s agents wrote, and asks the AI to rate the writing and to find group-level themes. The AI is told not to name, score or rank people, and its answer is checked for that. Nothing is stored.
-      </p>
+        </p>
+      </details>
       {needs && <p className="ab-note ab-note-warn" role="status">{needs}</p>}
 
       <fieldset className="ab-fieldset">
@@ -224,9 +244,9 @@ function CoachingTool({ env, eff, needs }) {
         <button type="button" className="ab-btn ab-btn-sm" disabled={!group || Boolean(rangeProblem) || sample.phase === 'reading' || Boolean(needs)} onClick={pick}>
           Pick the sample
         </button>
-        <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!ready || !aiReady || run.busy || Boolean(needs)} onClick={go}>
+        <AiButton eff={eff} disabled={!ready || !aiReady || run.busy || Boolean(needs)} onClick={go}>
           Write the coaching snapshot
-        </button>
+        </AiButton>
       </div>
       {!aiReady && <AiKeyLine eff={eff} />}
       {sample.phase === 'reading' && <p className="ab-note" role="status">Reading the sample with your session…</p>}
@@ -243,6 +263,6 @@ function CoachingTool({ env, eff, needs }) {
         withhold={verdict?.tripped ? { note: PER_PERSON_NOTE, findings: verdict.findings } : null}
       />
       {shown && <p className="ab-note ab-coach-reminder">{COACHING_REMINDER}</p>}
-    </AiShell>
+    </Frame>
   );
 }

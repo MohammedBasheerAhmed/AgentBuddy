@@ -41,8 +41,9 @@ none of them can make the tabs write anything.
 
 7. **The page bridge returns the unsaved form values** (`getFormValues`) for `close_notes, close_code, resolution_code, state,
    hold_reason, comments, work_notes` on the classic form, including inside the `gsft_main` frame, and `getFormMeta` returns the
-   same table and sys_id as the panel's record. On a Workspace or portal it returns null and the tab says "Checked the saved ticket only".
-   Check: type notes without saving, press "Check again": the notes check changes. On a Workspace record: the "saved ticket only" line shows.
+   same table and sys_id as the panel's record. On a portal it returns null and the tab says "Checked the saved ticket only". On a
+   Workspace see question 20.
+   Check: type notes without saving, press "Check again": the notes check changes.
    Not done by the checks: `work_notes` is read but only used for one sentence ("the work note you have typed is separate").
 
 8. **`g_form.getValue('state')` returns the choice value (a number), not the label.** The checks do not use the form's state at all
@@ -101,3 +102,21 @@ none of them can make the tabs write anything.
     first plus last name, without case, accents or word order; a login that matches nobody gives "Could not tell who wrote the last
     message" instead of a guess. Check as a fulfiller who cannot read sys_user: a ticket where the customer wrote last.
 19. **`kb_use` column** for the "linked to an article" line: see `docs/live-questions/knowledge.md` question 21 (detected, not assumed).
+
+## Added 2026-10-31 (N4: notes typed on a Workspace page)
+
+20. **The notes boxes of a Workspace record page.** With no g_form, "Ready to resolve?" and the Check tab read the text now in three boxes
+    (bridge action `getBoxValues`, read only: nothing is focused, typed or fired): `close_notes`, `work_notes`, `comments`. Each box is
+    found the way an insert finds it: an attribute `name` / `id` / `data-field-name` / `formcontrolname` equal to the column (or ending
+    in `.close_notes`), or an exact label (aria-label, aria-labelledby, `<label>`): "Resolution notes" on an incident or a CSM case,
+    "Close notes" on the other kinds, "Work notes", "Additional comments". A label with a marker after it ("Work notes (internal)")
+    also counts. Hidden, locked and look-alike boxes are not read. The close code, the state and the hold reason are never read from
+    a Workspace page (they are choices); the checks use the saved values for them and say so ("only the notes are read").
+    The record is the one in the page address (`/now/<workspace>/record/<table>/<sys_id>`), checked against the panel's record first.
+    Assumed: the Workspace form shows close_notes as a plain textarea (or a contenteditable) holding the record's current value, so an
+    empty box means empty notes; the activity composer's box carries "Work notes" or "Additional comments" as its label.
+    Check: in Service Operations Workspace open an incident, type in "Resolution notes" (do not save), open "Ready to resolve?": the
+    line says "Checked the notes typed on this page, plus the saved ticket." and the notes check follows what you typed. Then look
+    at an HR case in HR Agent Workspace and a catalog task: does the box say "Resolution notes" or "Close notes"?
+    Change: the labels are `boxLabelsFor` in `src/content/ops/checks.js` (keep them equal to the `fieldLabel` of the inserts: a test
+    compares them). A box that is never found only means the saved notes are checked, with a line saying so.

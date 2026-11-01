@@ -18,6 +18,8 @@ if (!files.length) {
 }
 
 const { normalizePolicy, policyProblems } = loadEsm(root, 'src/policy/policy.js');
+// The dashboard inside defaultDashboard is checked with the reports code, exactly as the Team screen reads it.
+const { orgDashboardProblems } = loadEsm(root, 'src/reports/dashboards.js');
 // The provider ids this version knows, so a misspelt aiProvider or allowedProviders entry is reported.
 const providers = Object.keys(loadEsm(root, 'src/providers/config.js').PROVIDERS);
 const schema = JSON.parse(fs.readFileSync(path.join(root, 'managed_schema.json'), 'utf8'));
@@ -39,7 +41,7 @@ for (const file of files) {
   }
   for (const { browser, extensionId, policy, browserPolicy } of found) {
     console.log(`${file}${browser ? ` (${browser}${extensionId ? `, extension ${extensionId}` : ''})` : ''}`);
-    const problems = policyProblems(policy, { providers });
+    const problems = policyProblems(policy, { providers, checkDashboard: orgDashboardProblems });
     const forced = browserPolicy?.ExtensionInstallForcelist;
     if (Array.isArray(forced) && extensionId && !forced.some((entry) => String(entry).split(';')[0] === extensionId)) {
       problems.push({ level: 'error', message: `ExtensionInstallForcelist does not install ${extensionId}, the extension this policy is for.` });
@@ -50,7 +52,12 @@ for (const file of files) {
     const read = normalizePolicy(policy);
     const shown = Object.entries(read)
       .filter(([k, v]) => k !== 'providedApiKey' && v !== null && v !== '' && !(Array.isArray(v) && !v.length))
-      .map(([k, v]) => `    ${k}: ${JSON.stringify(v)}`);
+      // A dashboard layout is long: its name and size say enough here.
+      .map(([k, v]) => {
+        if (k !== 'defaultDashboard') return `    ${k}: ${JSON.stringify(v)}`;
+        const count = Array.isArray(v.dashboard?.widgets) ? v.dashboard.widgets.length : 0;
+        return `    ${k}: ${JSON.stringify(String(v.dashboard?.name ?? ''))} (${count} widget${count === 1 ? '' : 's'})`;
+      });
     console.log(`  Agent Buddy reads it as:\n${shown.join('\n')}${read.providedApiKey ? '\n    providedApiKey: (set, not shown)' : ''}`);
   }
 }

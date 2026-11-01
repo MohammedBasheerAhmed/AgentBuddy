@@ -529,8 +529,67 @@ async function readRecentChanges(record, deps, memo) {
   return { items, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY), names: personNames(kept), reference: items.length > 0 };
 }
 
+/**
+ * N25 (Insights, not a pack extra): changes on the record's configuration item OR business service whose window touches the last
+ * `beforeDays` days or the next `afterDays`, for any kind that has those columns (incident, problem, case). The CI and service are
+ * read from the record itself (by id: no text from the record goes into the query); each answer row is checked against the id
+ * again. Rows carry their stored window (startUtc, endUtc) so the panel can say "ended 2 d ago"; they go to the panel only.
+ * @returns {Promise<{ items: object[], keys: string[], access: object[] }>} keys: which of cmdb_ci / business_service were used
+ */
+export async function readChangesOnTarget(record, deps, { beforeDays = 7, afterDays = 3, max = 8, now = nowOf(deps), memo = new Map() } = {}) {
+  const ceiling = FIELDS_BY_KIND[kindForTable(record.table)] || [];
+  const columns = ['cmdb_ci', 'business_service'].filter((c) => ceiling.includes(c));
+  if (!columns.length) return { items: [], keys: [], access: [accessEntry(CHANGE_TABLE, STATUS.SKIPPED, 'This kind of record has no configuration item or service.')] };
+  const own = await recordColumns(record, columns, deps, memo);
+  if (own.failure) return { items: [], keys: [], access: [accessEntry(CHANGE_TABLE, own.failure.status, own.failure.note)] };
+  const keys = columns.map((c) => [c, raw(own.row[c]).toLowerCase()]).filter(([, id]) => SYS_ID_RE.test(id));
+  if (!keys.length) return { items: [], keys: [], access: [accessEntry(CHANGE_TABLE, STATUS.SKIPPED, 'This ticket has no configuration item or service, so changes on it were not looked up.')] };
+
+  const from = now - beforeDays * DAY;
+  const until = now + afterDays * DAY;
+  const found = new Map();
+  const failures = [];
+  let read = false;
+  for (const [field, id] of keys) {
+    const query = `${field}=${id}^sys_id!=${record.sysId}^end_date>=${formatSnTime(from - DAY)}^start_date<=${formatSnTime(until + DAY)}^ORDERBYDESCstart_date`;
+    // eslint-disable-next-line no-await-in-loop -- two small reads at most, kept sequential.
+    const { rows, failure } = await softRead(deps, CHANGE_TABLE, query, CHANGE_FIELDS, { limit: RECENT_READ, displayValue: true });
+    if (failure) {
+      failures.push(failure);
+      continue;
+    }
+    if (rows.some((row) => !sameId(raw(row[field]), id))) {
+      failures.push(filterIgnored(CHANGE_TABLE, field));
+      continue;
+    }
+    read = true;
+    for (const row of rows) {
+      const rowId = raw(row.sys_id).toLowerCase();
+      const s = parseSnTime(raw(row.start_date));
+      const e = parseSnTime(raw(row.end_date));
+      if (!SYS_ID_RE.test(rowId) || !Number.isFinite(s) || !Number.isFinite(e) || e < from || s > until) continue;
+      const hit = found.get(rowId) || { table: CHANGE_TABLE, sysId: rowId, ...shapeChange(row), startUtc: raw(row.start_date), endUtc: raw(row.end_date), same: [] };
+      hit.same.push(field);
+      found.set(rowId, hit);
+    }
+  }
+  if (!read) {
+    const first = failures[0] || { status: STATUS.ERROR, note: 'Could not read changes.' };
+    return { items: [], keys: keys.map(([c]) => c), access: [accessEntry(CHANGE_TABLE, first.status, first.note)] };
+  }
+  const items = [...found.values()].sort((a, b) => parseSnTime(b.startUtc) - parseSnTime(a.startUtc)).slice(0, max);
+  let access;
+  if (items.length) access = accessEntry(CHANGE_TABLE, STATUS.OK, failures.length ? 'One of the two checks (configuration item or service) could not be read.' : '');
+  else {
+    // None found: a fact only when the user can see changes at all.
+    const seen = await confirmEmptyIsReallyEmpty(CHANGE_TABLE, deps, memo);
+    access = accessEntry(CHANGE_TABLE, seen.status, seen.status === STATUS.EMPTY ? '' : seen.note);
+  }
+  return { items, keys: keys.map(([c]) => c), access: [access] };
+}
+
 // Extras that are not a plain list of rows linked to the record.
-const READERS = Object.freeze({ __proto__: null, variables: readVariables, linkedIncidents: readLinkedIncidents, conflicts: readConflicts, recentChanges: readRecentChanges });
+const READERS =Object.freeze({ __proto__: null, variables: readVariables, linkedIncidents: readLinkedIncidents, conflicts: readConflicts, recentChanges: readRecentChanges });
 
 // ---- Putting it together -------------------------------------------------------------------------------
 

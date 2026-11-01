@@ -10,7 +10,7 @@
 //   - the answer is checked here for that kind of language (flagPerPersonScoring) and held back behind a warning if it appears;
 //   - nothing is stored anywhere, and the whole feature is off until the organisation's policy switches coaching on.
 import { SYS_ID_RE, oneLine } from '../../context/util.js';
-import { REPORT_TABLE_IDS } from '../engine/constants.js';
+import { REPORT_TABLE_IDS, STANDARD_TABLE_IDS } from '../engine/constants.js';
 import { REPORT_TABLE, addPeople, blockedSet, checkAnswer, line } from './common.js';
 
 export const COACHING_REMINDER = 'This is a coaching aid for the team lead only, not a performance rating.';
@@ -104,7 +104,7 @@ export function normalizeCoachingRequest(input, { now = Date.now() } = {}) {
   const tables = asked.filter((t, i) => REPORT_TABLE_IDS.includes(t) && asked.indexOf(t) === i);
   const n = Math.floor(Number(input?.sample));
   const sample = Number.isFinite(n) ? Math.min(COACHING_LIMITS.sampleMax, Math.max(1, n)) : COACHING_LIMITS.sampleDefault;
-  return { groupId, groupName: oneLine(input?.groupName || '', 80), fromMs, toMs, sample, tables: tables.length ? tables : [...REPORT_TABLE_IDS] };
+  return { groupId, groupName: oneLine(input?.groupName || '', 80), fromMs, toMs, sample, tables: tables.length ? tables : [...STANDARD_TABLE_IDS] };
 }
 
 // ---- The sample ----------------------------------------------------------------------------------------------------------

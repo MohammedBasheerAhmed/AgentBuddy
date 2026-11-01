@@ -22,7 +22,7 @@ module.exports = {
     await ctx.vault('remove', [slot, 'agentbuddy_key_deepseek', 'agentbuddy_keyenc_deepseek']);
 
     const page = await ctx.newPage('options-key-box');
-    await page.goto(ctx.extUrl('options.html'), { waitUntil: 'load' });
+    await page.goto(ctx.extUrl('options.html#ai'), { waitUntil: 'load' }); // the key box is on the AI Assist page
     await page.waitForSelector('#key');
     const text = () => page.evaluate(() => document.body.innerText);
 

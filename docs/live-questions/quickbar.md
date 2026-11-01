@@ -73,3 +73,24 @@ person with only fulfiller roles, and what to change if it is different.
     ("Move to the left") or change its `top`.
 13. **Is half a second on screen before a click counts too long for anyone?** A click within 0.5 s of the actions appearing says "Nothing
     was started yet. Click the action again". Watch real people use it; lower `ARM_MS` in `src/content/barLogic.js` if it trips them.
+
+## Round 3: the tab on the page (F6, Foundation)
+
+14. **Is the tab below every ServiceNow dialog?** The bar's layer is now `z-index: 1000` (`BAR_Z` in `src/content/barLogic.js`), under the
+    classic UI's dialog backdrop (1040) and dialog (1050), and the bar hides while the top document or the classic form's frame shows
+    `body.modal-open`, `[aria-modal="true"]`, a shown `.modal`, a `<dialog open>` or a `.modal-backdrop`. A Next Experience dialog
+    inside a shadow root is not visible to the content script, so there only the layer protects. Check on dev364920 (Next Experience,
+    `itil`): open an incident, open a dialog (Resolve with a mandatory field, or "Add attachment"), and see that the dialog and its dim
+    backdrop cover the tab. If the tab still shows on top, read the dialog's `z-index` in DevTools (it is in a shadow root: the
+    `now-modal` element) and lower `BAR_Z` under it.
+15. **Does the lower layer hide the tab under something ordinary?** With `z-index: 1000` a fixed header, a Workspace side panel or a
+    floating chat bubble with a higher layer can now cover the tab; a click on a covered tab says "something on the page was covering the
+    bar". Check classic, Next Experience and a Workspace record; if something covers the tab, drag it to a free place (the place is kept).
+16. **Is the default place on a Workspace (72% of the window's height) clear of the Workspace's own icons on the right edge?** Assumed:
+    the contextual side panel's icon strip starts at the top of the record area. Check in Service Operations Workspace; change
+    `DEFAULT_TOP.workspace` in `src/content/barLogic.js` if the tab sits on an icon.
+17. **Does dragging work with a pen and a touch screen?** The tab uses pointer events with `touch-action: none` and pointer capture; a
+    press that moves less than 5 px is a click. Check on a touch laptop.
+18. **Does the page bar's "no AI" offer make sense?** With AI off (switched off, "Skip AI for now", or no key saved) the worker offers
+    `card:ready` ("Ready to resolve?") and `card:related` ("Related tickets") for ticket kinds, which open that Insights card in the
+    panel. Whether the panel opens the card for such a launch is the Ticket screen's part (the lead's `TicketView.jsx`).

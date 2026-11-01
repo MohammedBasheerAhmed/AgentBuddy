@@ -7,6 +7,8 @@ import { logAudit } from '../../lib/storage.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { aiNeedsText, isAiReady } from '../aiReady.js';
 import AiKeyNote from '../AiKeyNote.jsx';
+import { AiBadge } from '../ui/primitives.jsx';
+import { destinationOf } from '../shell/shellParts.jsx';
 
 export { isAiReady };
 
@@ -16,6 +18,25 @@ export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this') || 'Add an AI ke
 /** That sentence as the panel's shared note, with the way there ("Open Settings"). Nothing when the AI can be used. */
 export function AiKeyLine({ eff }) {
   return <AiKeyNote eff={eff} what="this" />;
+}
+
+/**
+ * An AI action button: the AI mark, and on hover where the text goes (TRACKER.md 2.3). `primary` makes it the screen's one filled
+ * button. Every other prop goes to the <button>.
+ */
+export function AiButton({ eff, primary = false, className = '', children, ...rest }) {
+  const where = destinationOf(eff);
+  return (
+    <button
+      type="button"
+      className={`ab-btn ab-btn-sm ${primary ? 'ab-btn-ai' : 'ab-btn-ai-quiet'}${className ? ` ${className}` : ''}`}
+      title={where ? `Sends masked text to ${where}. You see it first.` : 'Sends masked text to the AI you chose. You see it first.'}
+      {...rest}
+    >
+      <AiBadge label="" title="" />
+      {children}
+    </button>
+  );
 }
 
 /** A feature by id, and whether the organisation's policy lets it run. */
@@ -68,7 +89,10 @@ export function AiResult({ run, eff, featureId, heading, notice = [], withhold =
 
   return (
     <section className="ab-card ab-ai-result" aria-live="polite" aria-label={heading}>
-      <h3 className="ab-h">{heading}</h3>
+      <h3 className="ab-h ab-ai-result-h">
+        <AiBadge />
+        <span>{heading}</span>
+      </h3>
       {notice.map((n) => (
         <p key={n} className="ab-note ab-note-warn">{n}</p>
       ))}
@@ -93,7 +117,8 @@ export function AiResult({ run, eff, featureId, heading, notice = [], withhold =
       )}
       {note && <p className="ab-note ab-note-ok" role="status">{note}</p>}
       <div className="ab-row ab-ai-actions">
-        {!held && <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" onClick={copy}>Copy</button>}
+        {/* Not filled: the one filled button of the screen is the action that wrote this. */}
+        {!held && <button type="button" className="ab-btn ab-btn-sm" onClick={copy}>Copy</button>}
         {!held && <button type="button" className="ab-btn ab-btn-sm" onClick={() => window.print()}>Print</button>}
         {run.again && <button type="button" className="ab-btn ab-btn-sm" onClick={run.again}>Try again</button>}
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={run.reset}>Close</button>

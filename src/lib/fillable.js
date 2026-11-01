@@ -11,6 +11,10 @@
 //                                        send check looks at this text first. A field that is not listed counts as visible.
 //   expect            the record a text was written for. The panel sends it with FILL_FIELD; the content script compares it with
 //                     the form that is open now and answers 'wrong-record' on a mismatch.
+//   replacing         (round 3) the text this panel put into the same box before: on append, the page swaps that one copy for the
+//                     new text when the box still holds it as a whole block, so "Try again" + Insert never leaves two answers.
+//   describeInsert()  where an insert lands and what the person does next (Save; Post in a Workspace; the page's own Send on a
+//                     portal), said before the click (TRACKER.md F5).
 //
 // A new insert in a feature pack needs its field here: tests/insert-fillable.test.js walks the whole registry and fails when an
 // insert field is missing, so a new feature cannot silently fail to insert.
@@ -27,6 +31,7 @@ export const FILLABLE_FIELDS = Object.freeze({
   description: Object.freeze({ customerVisible: true }),
   short_description: Object.freeze({ singleLine: true, customerVisible: true }),
   cause_notes: Object.freeze({}),
+  fix_notes: Object.freeze({}), // a problem's "Fix notes": where its resolution goes (a problem form has no close_notes box)
   workaround: Object.freeze({}),
   text: Object.freeze({ html: true, customerVisible: true }), // the knowledge article body
   // The email client.
@@ -56,6 +61,57 @@ export const isCustomerVisible = (field) => (has(field) ? FILLABLE_FIELDS[field]
 export function fillModeFor(field, requested) {
   if (isSingleLineField(field)) return 'replace';
   return requested === 'replace' ? 'replace' : 'append';
+}
+
+/** The modes a person may choose for `field`: a one-line field only replaces; anything else can replace or go below. */
+export const fillModesFor = (field) => (isSingleLineField(field) ? ['replace'] : ['replace', 'append']);
+
+// Journal fields: written on the form, posted when the form is saved (classic) or with the composer's Post (Workspace).
+const JOURNAL = new Set(['comments', 'work_notes']);
+export const isJournalField = (field) => JOURNAL.has(field);
+
+// ---- Where the text lands, and what the person does next ------------------------------------------------------------
+
+const FIELD_NAMES = { comments: 'Additional comments', work_notes: 'Work notes', close_notes: 'Resolution notes', text: 'the article body', short_description: 'Short description', subject: 'the email subject', body: 'the email body' };
+// The email client's own boxes (an AI email draft carried to the email form, AI9). They are named for what they are, whatever the
+// page calls them, and nothing goes anywhere until the person presses Send there.
+const EMAIL_FIELDS = new Set(['subject', 'body']);
+export const EMAIL_NEXT = 'Nothing is sent until you press Send in the email form.';
+
+/**
+ * One line that says where an insert lands, one that says what to do after it, and a caution when the box is not what it seems.
+ * Shown BEFORE the click, next to the Insert button (TRACKER.md F5: "say where text lands and the next step").
+ * @param {{ field: string, fieldLabel?: string, mode?: string, kind?: string, surface?: string, table?: string }} target
+ *   surface: 'classic' | 'workspace' | 'portal' | 'other' (the page the person is on); table: the form the insert belongs to
+ * @returns {{ where: string, next: string, caution: string }}
+ */
+export function describeInsert({ field, fieldLabel = '', mode = 'append', kind = '', surface = 'classic', table = '' } = {}) {
+  const email = EMAIL_FIELDS.has(field);
+  const name = (email ? FIELD_NAMES[field] : fieldLabel) || FIELD_NAMES[field] || field;
+  const replacing = fillModeFor(field, mode) === 'replace';
+  const into = table === 'kb_knowledge' ? `the article form (${name})` : name;
+  let where = replacing ? `Replaces what is in ${into}` : `Goes below what is in ${into}`;
+  if (field === 'comments') where += ', which the customer sees';
+  else if (field === 'work_notes') where += ', which only your colleagues see';
+  else if (isCustomerVisible(field) && table !== 'kb_knowledge' && !email) where += ', which the customer can often read';
+  where += '.';
+  if (email) return { where, next: EMAIL_NEXT, caution: '' };
+
+  let next = 'Then press Save.';
+  let caution = '';
+  if (isJournalField(field) && surface === 'workspace') {
+    next = 'Then press Post.';
+    caution = `In a Workspace one box can hold both comments and work notes: check it is set to ${field === 'comments' ? 'Additional comments' : 'Work notes'} before you post.`;
+  } else if (isJournalField(field) && surface === 'portal') {
+    next = 'Then press the page\'s own Send.';
+  } else if (field === 'comments') {
+    next = 'Then press Save. Saving sends the comment to the customer.';
+  } else if (table === 'kb_knowledge') {
+    next = 'Then save the article.';
+  }
+  if (field === 'comments' && kind === 'catalog_task') caution = 'The requester does not see comments on a catalog task. Use the requested item to reach them.';
+  else if (field === 'comments' && kind === 'task' && !caution) caution = 'Comments on a task may not reach the customer. Check who can see them.';
+  return { where, next, caution };
 }
 
 /** A line break, tab or run of spaces is one space; for one-line fields. */
@@ -204,8 +260,9 @@ export function wrongRecordText(source) {
  * The line shown after a successful insert. A box found in the page (Workspace, portal) is named as well, so a wrong box is easy to
  * see before the person saves: 'It went into the box labelled "Additional comments".'
  */
-export function insertedNote(answer) {
-  const base = 'Inserted into the form. Review it, then save the record yourself.';
+export function insertedNote(answer, target = null) {
+  // With the target ({ field, surface, ... }) the note names the next step for that box (Post in a Workspace, Save on a form).
+  const base = target?.field ? `Inserted. Review it. ${describeInsert(target).next}` : 'Inserted into the form. Review it, then save the record yourself.';
   if (answer?.method === 'dom' && typeof answer.label === 'string' && answer.label) return `${base} It went into the box labelled "${answer.label}".`;
   return base;
 }
@@ -215,13 +272,20 @@ export const auditRefFromPage = (page) => ({ table: page?.record?.table || page?
 
 // ---- The message ---------------------------------------------------------------------------------------------------
 
+/** Longest `replacing` text sent with FILL_FIELD (the content script and the bridge use the same limit for any text). */
+export const MAX_REPLACING_CHARS = 20000;
+
 /**
  * The FILL_FIELD message for the content script. `value` is plain text: the content script turns it into HTML for an HTML field.
  * `expect` undefined means "the page as it is now" (a safe default for a caller that forgot); pass null to say "any form".
+ * `replacing` (append only, never for an HTML or one-line field): the text this panel put into the same box earlier. When the box
+ * still holds it, the page swaps it for the new text instead of adding a second copy below (Try again, then Insert again).
  */
-export function buildFillMessage({ field, value, label = '', mode = 'append', expect, page = null }) {
+export function buildFillMessage({ field, value, label = '', mode = 'append', expect, page = null, replacing = '' }) {
   const message = { type: MSG.FILL_FIELD, field, value, label, mode: fillModeFor(field, mode) };
   const want = expect === undefined ? expectFromPage(page) : expect;
   if (want) message.expect = want;
+  const earlier = typeof replacing === 'string' ? replacing.trim() : '';
+  if (message.mode === 'append' && earlier && earlier.length <= MAX_REPLACING_CHARS && !isHtmlField(field)) message.replacing = earlier;
   return message;
 }

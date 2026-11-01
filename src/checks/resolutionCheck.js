@@ -2,8 +2,10 @@
 // It ADVISES and never blocks: nothing here stops the agent, changes the record or asks for anything.
 //
 // Inputs are the saved record (a ContextPack, kind incident / problem / request / requested item / catalog task / case /
-// task) and the form's CURRENT, unsaved values for a fixed set of fields when the page has a form we can read. Where the
-// form cannot be read (portals, Workspaces) the saved record is checked and the caller says so.
+// task) and the form's CURRENT, unsaved values for a fixed set of fields when the page has a form we can read. On a Workspace
+// (no g_form) only the notes boxes are read (`formSource: 'boxes'`): every other field, and a box that was not found, is the
+// saved value, and the hints say that what was not read is not counted. Where nothing can be read (portals) the saved record is
+// checked and the caller says so.
 //
 // Personal data and secrets are reported by KIND and COUNT only ("1 email address"). The value itself is never copied into
 // a result, so the list is safe to show, log or screenshot.
@@ -70,6 +72,9 @@ const fold = (s) => text(s).toLowerCase().replace(/\s+/g, ' ');
 const NOT_READ = new Set(['denied', 'empty-or-hidden', 'error', 'skipped', 'blocked']);
 export const NOTES_UNREADABLE = 'Could not read the notes and comments';
 const NO_FORM = 'This page has no form Agent Buddy can read, so anything you have typed and not saved is not counted.';
+// A Workspace page: the notes boxes are read, nothing else.
+const NO_NOTES_BOX = 'The resolution notes box was not found on this page, so notes typed there and not saved are not counted.';
+const CODE_NOT_READ = 'On this page only the notes are read, so a code picked and not saved yet is not counted.';
 
 /** The access entry for the notes when they could not be read (or may be hidden from this user); null when they were read. */
 function unreadableNotes(pack) {
@@ -83,6 +88,14 @@ const sentence = (s) => text(s).replace(/([^.!?])$/, '$1.');
 function effective(pack, form, name) {
   if (form && typeof form[name] === 'string') return { value: form[name], fromForm: true };
   return { value: text(pack?.fields?.[name]), fromForm: false };
+}
+
+// What to add to a hint about `name` when its value is only the saved one: nothing when the form had it (or a form with g_form does
+// not have the field at all, so nothing can be typed there); NO_FORM when nothing could be read; on a Workspace, `notRead`.
+function notCounted(form, source, fromForm, notRead) {
+  if (fromForm) return '';
+  if (!form) return ` ${NO_FORM}`;
+  return source === 'boxes' ? ` ${notRead}` : '';
 }
 
 // ---- resolution notes ----------------------------------------------------------------------------------------------
@@ -100,14 +113,15 @@ export function isFillerNote(note) {
   return words.length > 0 && words.length <= 8 && words.every((w) => FILLER.has(w));
 }
 
-function notesCheck(pack, form) {
-  const { value } = effective(pack, form, 'close_notes');
+function notesCheck(pack, form, source) {
+  const { value, fromForm } = effective(pack, form, 'close_notes');
   const body = text(value);
   if (!body) {
     // A work note typed on the form is not a substitute: it stays internal and is not what the next person searches.
     const workNote = form && text(form.work_notes) ? ' The work note you have typed is separate from these notes.' : '';
-    // With no readable form the notes being empty is only what is SAVED: say that the typed ones could not be seen.
-    const noForm = form ? '' : ` ${NO_FORM}`;
+    // With no readable form (or, on a Workspace, no notes box found) the notes being empty is only what is SAVED: say that the
+    // typed ones could not be seen.
+    const noForm = notCounted(form, source, fromForm, NO_NOTES_BOX);
     return check('notes', 'warn', 'No resolution notes yet', `Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.${workNote}${noForm}`);
   }
   if (isFillerNote(body)) return check('notes', 'warn', 'The notes only say "resolved"', 'Add what was wrong and what you did, in a sentence or two. "Resolved" does not help anyone later.');
@@ -120,11 +134,12 @@ function notesCheck(pack, form) {
 
 // ---- close code ----------------------------------------------------------------------------------------------------
 
-function codeCheck(pack, form) {
+function codeCheck(pack, form, source) {
   const field = CODE_FIELD[pack?.kind];
   if (!field) return null;
-  const { value } = effective(pack, form, field);
-  if (!text(value)) return check('code', 'warn', 'No close code chosen', `Pick the code that best describes the fix. Reports and trends use it.${form ? '' : ` ${NO_FORM}`}`);
+  // (On a Workspace the code is never read from the page: the form object has no such field, so this is the saved code.)
+  const { value, fromForm } = effective(pack, form, field);
+  if (!text(value)) return check('code', 'warn', 'No close code chosen', `Pick the code that best describes the fix. Reports and trends use it.${notCounted(form, source, fromForm, CODE_NOT_READ)}`);
   return check('code', 'ok', 'A close code is chosen');
 }
 
@@ -247,7 +262,7 @@ function describeCounts(counts) {
   return [...counts.entries()].map(([kind, n]) => plural(n, KIND_LABEL[kind] || 'item')).join(', ');
 }
 
-function piiCheck(pack, form) {
+function piiCheck(pack, form, source) {
   const people = pack?.people || [];
   const unreadable = unreadableNotes(pack);
   const where = [];
@@ -297,7 +312,9 @@ function piiCheck(pack, form) {
       : 'The comments already on the ticket were not checked for personal data.';
     return check('pii', 'info', NOTES_UNREADABLE, `${sentence(unreadable.note) || 'Your user may not be able to read them.'} ${checked}`);
   }
-  const unsaved = form ? '' : 'Text you have typed and not saved on this page was not checked.';
+  // On a Workspace the boxes that were found were checked; a box that was not found may hold text that was not.
+  const missedBox = source === 'boxes' && ['close_notes', 'comments'].some((name) => typeof form[name] !== 'string');
+  const unsaved = !form ? 'Text you have typed and not saved on this page was not checked.' : missedBox ? 'Some boxes on this page could not be found, so text typed there and not saved was not checked.' : '';
   return check('pii', 'ok', scanned ? 'No personal data or secrets spotted in the text' : 'Nothing written yet to scan for personal data', unsaved);
 }
 
@@ -317,26 +334,43 @@ function finishedCheck(pack) {
   return check('state', 'info', `This ticket is already ${state.toLowerCase()}`, 'The checks below look at what is saved on it.');
 }
 
+// The only fields a Workspace page gives (src/content/ops/checks.js BOX_FIELDS): the text boxes, never a choice.
+const BOX_FIELDS = ['close_notes', 'work_notes', 'comments'];
+
+/** The form values and where they came from: { form: object | null, source: 'form' | 'boxes' | '' }. */
+function formOf(facts) {
+  const given = facts?.form && typeof facts.form === 'object' && !Array.isArray(facts.form) ? facts.form : null;
+  if (!given) return { form: null, source: '' };
+  if (facts.formSource !== 'boxes') return { form: given, source: 'form' };
+  // Boxes: anything but the notes is dropped, so the close code, the state and the hold reason are always the saved ones.
+  const form = {};
+  for (const name of BOX_FIELDS) if (typeof given[name] === 'string') form[name] = given[name];
+  // (no box at all is no form: the saved ticket only)
+  return Object.keys(form).length ? { form, source: 'boxes' } : { form: null, source: '' };
+}
+
 /**
  * The checks for one ticket.
  * @param {object} pack ContextPack (saved record: fields, people, journal, related, access)
- * @param {{ form?: object | null, links?: { problem?: {status: string, note?: string}, knowledge?: {status: string, note?: string} } | null }} [facts]
+ * @param {{ form?: object | null, formSource?: 'form' | 'boxes' | null, links?: { problem?: {status: string, note?: string}, knowledge?: {status: string, note?: string} } | null }} [facts]
  *   form: the unsaved values (close_notes, close_code, resolution_code, state, hold_reason, comments, work_notes) or null
- *   when the page has no form to read; links: from the resolutionFacts read operation.
+ *   when the page has no form to read; formSource: 'boxes' when they are a Workspace page's notes boxes only (close_notes,
+ *   work_notes, comments; any other field is ignored and the saved value used), else a form with g_form; links: from the
+ *   resolutionFacts read operation.
  * @param {{ now?: number, waitDays?: number }} [options]
  * @returns {{ id: string, status: 'ok' | 'warn' | 'info', title: string, hint: string }[]}
  */
 export function resolutionCheck(pack, facts = {}, { now = Date.now(), waitDays = DEFAULT_WAIT_DAYS } = {}) {
-  const form = facts?.form && typeof facts.form === 'object' ? facts.form : null;
+  const { form, source } = formOf(facts);
   const notes = effective(pack, form, 'close_notes').value;
   return [
     finishedCheck(pack),
-    notesCheck(pack, form),
-    codeCheck(pack, form),
+    notesCheck(pack, form, source),
+    codeCheck(pack, form, source),
     customerCheck(pack, now, waitDays),
     childCheck(pack),
     linkCheck(pack, facts?.links || null, notes),
-    piiCheck(pack, form),
+    piiCheck(pack, form, source),
     holdCheck(pack, form),
   ].filter(Boolean);
 }
@@ -359,12 +393,16 @@ export function summarizeChecks(checks) {
 
 
 /**
- * Everything the Check tab draws: the ordered list, the summary line, and whether the form's unsaved values were used.
- * @returns {{ checks: object[], summary: object, usedForm: boolean }}
+ * Everything the Check tab draws: the ordered list, the summary line, whether unsaved values from the page were used, and from where.
+ *   usedForm    true when anything typed on the page was read (a form with g_form, or a Workspace page's notes boxes)
+ *   formSource  'form' (the form's fields) | 'boxes' (a Workspace: the notes only; the close code and the rest are the saved ones)
+ *               | '' (nothing read: the saved ticket only)
+ * @returns {{ checks: object[], summary: object, usedForm: boolean, formSource: 'form' | 'boxes' | '' }}
  */
 export function buildCheckView(pack, facts, options) {
   const checks = resolutionCheck(pack, facts, options);
-  return { checks: orderChecks(checks), summary: summarizeChecks(checks), usedForm: Boolean(facts?.form && typeof facts.form === 'object') };
+  const { source } = formOf(facts);
+  return { checks: orderChecks(checks), summary: summarizeChecks(checks), usedForm: Boolean(source), formSource: source };
 }
 
 /**

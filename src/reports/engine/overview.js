@@ -3,7 +3,7 @@
 // out and named; a number that is missing for any table is flagged, never shown as zero.
 import { LIMITS } from './constants.js';
 import { attempt } from './reader.js';
-import { andQuery, clampInt, sectionResult, stateClass, sumResults, usableTables, resolvedColumn } from './common.js';
+import { andQuery, clampInt, sectionResult, stateClass, sumResults, usableTables, resolvedColumn, resolvedStates, notResolved, onlyResolved } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { DAY, HOUR, startOfLocalDay } from './time.js';
 import { readSlaSnapshot } from './sla.js';
@@ -24,21 +24,30 @@ async function readTable(ctx, t, { staleDays, dayStart }) {
   const open = q('active=true');
   const resolved = resolvedColumn(t);
   const staleCut = buildQuery([{ op: 'before', field: 'sys_updated_on', ms: ctx.now - staleDays * DAY }]);
-  const [openN, unassigned, stale, states, openedToday, resolvedToday] = await Promise.all([
+  // The state breakdown comes first: it says which states mean "resolved, waiting to close" on this instance (an incident stays
+  // active after Resolved), so Open, Unassigned and Stale leave those out and they are counted on their own. It is the same question
+  // the hand-over and the workload ask, so one cached request serves all three.
+  const states = await attempt(() => reader.groups(t.table, open, ['state']), t.table);
+  const done = states.ok ? resolvedStates(states.value) : { count: 0, values: [], labels: [] };
+  const live = notResolved(done.values);
+  const [openN, unassigned, stale, openedToday, resolvedToday] = await Promise.all([
     attempt(() => reader.count(t.table, open), t.table),
-    scope.unassignedMeaningful ? attempt(() => reader.count(t.table, q('active=true', 'assigned_toISEMPTY')), t.table) : null,
-    attempt(() => reader.count(t.table, q('active=true', staleCut)), t.table),
-    attempt(() => reader.groups(t.table, open, ['state']), t.table),
+    scope.unassignedMeaningful ? attempt(() => reader.count(t.table, q('active=true', 'assigned_toISEMPTY', live)), t.table) : null,
+    attempt(() => reader.count(t.table, q('active=true', staleCut, live)), t.table),
     attempt(() => reader.count(t.table, q(buildQuery([{ op: 'since', field: 'opened_at', ms: dayStart }]))), t.table),
     resolved ? attempt(() => reader.count(t.table, q(buildQuery([{ op: 'since', field: resolved, ms: dayStart }]))), t.table) : null,
   ]);
   return {
     table: t.table,
     label: t.meta.label,
-    open: openN,
+    // Active minus resolved-but-active (the breakdown and the count are read a moment apart, so never below zero).
+    open: openN.ok ? { ok: true, value: Math.max(0, openN.value - done.count) } : openN,
     unassigned,
     stale,
     waiting: states.ok ? { ok: true, value: waitingStates(states.value).count, detail: waitingStates(states.value) } : states,
+    resolvedActive: states.ok ? { ok: true, value: done.count } : states,
+    doneValues: done.values,
+    doneLabels: done.labels,
     openedToday,
     resolvedToday: resolvedToday || { ok: false, status: 'error', note: 'No resolved date column on this table.' },
   };
@@ -74,10 +83,12 @@ export async function overviewSection(ctx) {
         const value = key === 'waiting' ? (r.waiting.ok ? r.waiting.value : null) : r[key]?.ok ? r[key].value : null;
         const t = tables.find((x) => x.table === r.table);
         const resolved = resolvedColumn(t);
+        const live = notResolved(r.doneValues);
         const queries = {
-          open: scopeQ('active=true'),
-          unassigned: scopeQ('active=true', 'assigned_toISEMPTY'),
-          stale: scopeQ('active=true', buildQuery([{ op: 'before', field: 'sys_updated_on', ms: ctx.now - staleDays * DAY }])),
+          open: scopeQ('active=true', live),
+          unassigned: scopeQ('active=true', 'assigned_toISEMPTY', live),
+          stale: scopeQ('active=true', buildQuery([{ op: 'before', field: 'sys_updated_on', ms: ctx.now - staleDays * DAY }]), live),
+          resolvedActive: onlyResolved(r.doneValues) ? scopeQ('active=true', onlyResolved(r.doneValues)) : '',
           waiting: r.waiting.ok && r.waiting.detail.values.length ? scopeQ('active=true', buildQuery([{ op: 'in', field: 'state', values: r.waiting.detail.values }])) : '',
           openedToday: scopeQ(buildQuery([{ op: 'since', field: 'opened_at', ms: dayStart }])),
           resolvedToday: resolved ? scopeQ(buildQuery([{ op: 'since', field: resolved, ms: dayStart }])) : '',
@@ -118,6 +129,12 @@ export async function overviewSection(ctx) {
     { ...tile('openedToday', 'Opened today', total(rows, 'openedToday')), drills: drill('openedToday'), hint: 'Since midnight' },
     { ...tile('resolvedToday', 'Resolved today', total(rows, 'resolvedToday')), drills: drill('resolvedToday'), hint: 'Resolved or closed since midnight' }
   );
+  // Resolved but not yet closed: only when there are some, so a queue without them shows no extra tile. Never part of Open.
+  const resolvedActive = total(rows, 'resolvedActive');
+  const doneLabels = [...new Set(rows.flatMap((r) => r.doneLabels || []))];
+  if (resolvedActive.value > 0) {
+    tiles.splice(1, 0, { ...tile('resolvedActive', 'Resolved, not closed', resolvedActive), drills: drill('resolvedActive'), hint: `Waiting to close${doneLabels.length ? ` (${doneLabels.join(', ')})` : ''}. Not counted as open.` });
+  }
   tiles.forEach((t) => {
     if (t.partial) t.hint = `${t.hint}. Some tables could not be counted.`;
     t.drills = t.drills || [];
@@ -139,9 +156,11 @@ export async function overviewSection(ctx) {
       unassigned: r.unassigned?.ok ? r.unassigned.value : null,
       stale: r.stale.ok ? r.stale.value : null,
       waiting: r.waiting.ok ? r.waiting.value : null,
+      resolvedActive: r.resolvedActive.ok ? r.resolvedActive.value : null,
       openedToday: r.openedToday.ok ? r.openedToday.value : null,
       resolvedToday: r.resolvedToday.ok ? r.resolvedToday.value : null,
     })),
+    resolvedActive: resolvedActive.value,
     sla: sla.ok ? { activeSlas: sla.activeSlas, ticketsAtIssue: sla.tickets.length } : { unavailable: true, note: sla.note },
   });
 }
@@ -167,6 +186,7 @@ export function overviewTables(result) {
         { key: 'unassigned', label: 'Unassigned' },
         { key: 'stale', label: `No update in ${d.staleDays}+ days` },
         { key: 'waiting', label: 'Waiting' },
+        { key: 'resolvedActive', label: 'Resolved, not closed' },
         { key: 'openedToday', label: 'Opened today' },
         { key: 'resolvedToday', label: 'Resolved today' },
       ],

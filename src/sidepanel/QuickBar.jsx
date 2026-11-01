@@ -1,21 +1,28 @@
 import { useEffect, useId, useState } from 'react';
-import { MAX_QUICK, QUICK_LABELS, isQuickId, quickActions } from '../features/quick.js';
+import { MAX_QUICK, QUICK_CARDS, QUICK_LABELS, isQuickCard, isQuickId, quickItems } from '../features/quick.js';
 import { saveSettings } from '../lib/storage.js';
+import { AiBadge } from './ui/primitives.jsx';
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const cardId = (card) => `card:${card}`;
+const AI_HOVER = 'Uses AI. Masked text goes to the AI you chose, after a preview.';
 
 /**
- * The few actions worth one click, above the record's tabs. It folds down to one strip (the choice is remembered) and the person can
- * choose which actions it holds, per kind of record. The same choice feeds the bar on the ServiceNow page.
+ * The few actions worth one click, in the ticket at a glance. It holds items from both halves of the Ticket screen, each marked:
+ * AI actions (the AI mark; they start the action exactly like a click in AI Assist does, preview first) and Insights items (no mark;
+ * they open that card of the Insights half, nothing is sent). It folds down to one strip (the choice is remembered) and the person
+ * can choose which items it holds, per kind of record. The same choice feeds the bar on the ServiceNow page (AI items only there).
  *
  * What the person changes shows at once and is saved behind the scenes: the saved settings come back a moment later (storage, then
  * the panel's settings reload), and two ticks in that moment must both count, so the bar works from its own copy until the saved one
  * has caught up with it.
  *
- * props: kind (of the open record), features (what the full Actions list offers for it: the bar shows only these), eff,
- *        disabled (no AI key yet, or an answer is on screen), onRun(feature) (starts the action like a click in the list does)
+ * props: kind (of the open record), stage (src/features/stages.js; null when unknown), features (the AI actions this record offers
+ *        right now: only these can show), cards (the ids of the Insights cards this record shows: 'ready', 'related'), eff,
+ *        disabled (an answer is on its way: the AI items wait), aiReady (false: AI cannot be used now, so no AI items at all),
+ *        onRun(feature), onShowCard(cardId)
  */
-export default function QuickBar({ kind, features, eff, disabled, onRun }) {
+export default function QuickBar({ kind, stage = null, features = [], cards = [], eff, disabled = false, aiReady = true, onRun, onShowCard }) {
   const bodyId = useId();
   const [choosing, setChoosing] = useState(false);
   const [mine, setMine] = useState(null); // { open?, pins? } changed here and not saved back yet
@@ -31,15 +38,20 @@ export default function QuickBar({ kind, features, eff, disabled, onRun }) {
     if ((!('open' in mine) || mine.open === savedOpen) && (!('pins' in mine) || same(mine.pins, savedPins))) setMine(null);
   }, [mine, savedOpen, savedPins]);
 
-  const byId = new Map(features.map((f) => [f.id, f]));
-  // Only what the Actions list really offers for this record. Pins that name nothing it offers (a hand-edited setting, an action
-  // renamed in a later version) must not leave the bar empty: the suggestions stand in.
-  const offered = (own) => quickActions({ kind, pins: own, policy: eff.policy }).filter((a) => byId.has(a.id));
-  const own = offered(pins);
-  const actions = own.length ? own : offered({});
-  const shownIds = actions.map((a) => a.id);
-  const pinnable = features.filter((f) => isQuickId(f.id));
-  if (!actions.length && !pinnable.length) return null;
+  const aiFeatures = aiReady ? features : [];
+  const byId = new Map(aiFeatures.map((f) => [f.id, f]));
+  // Insights items only where the shell can open a card.
+  const shownCards = typeof onShowCard === 'function' ? cards.filter((c) => isQuickCard(cardId(c))) : [];
+  // Only what this record really offers. Pins that name nothing it offers (a hand-edited setting, an action renamed in a later
+  // version, an AI action while AI is off) must not leave the bar empty: the suggestions stand in.
+  const itemsFor = (own) => quickItems({ kind, stage, pins: own, policy: eff.policy, offered: aiFeatures.map((f) => f.id), cards: shownCards, ai: aiReady });
+  const items = itemsFor(pins);
+  const shownIds = items.map((a) => a.id);
+  const pinnable = [
+    ...aiFeatures.filter((f) => isQuickId(f.id)).map((f) => ({ id: f.id, label: QUICK_LABELS[f.id], ai: true })),
+    ...shownCards.map((c) => ({ id: cardId(c), label: QUICK_CARDS[cardId(c)].label, ai: false })),
+  ];
+  if (!items.length && !pinnable.length) return null;
 
   const save = (patch, local) => {
     setProblem('');
@@ -76,23 +88,31 @@ export default function QuickBar({ kind, features, eff, disabled, onRun }) {
         <div id={bodyId}>
           {!choosing && (
             <div className="ab-quick-actions" role="group" aria-label="Quick actions">
-              {actions.map((a, i) => (
-                <button key={a.id} type="button" data-quick={a.id} className={`ab-btn ab-btn-sm${i === 0 ? ' ab-btn-primary' : ''}`} disabled={disabled} onClick={() => onRun(byId.get(a.id))}>
-                  {a.label}
-                </button>
-              ))}
+              {items.map((a) =>
+                a.ai ? (
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-btn-ai-quiet ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={`${a.label} (AI)`} onClick={() => onRun(byId.get(a.id))}>
+                    {a.label}
+                    <AiBadge label="" title={AI_HOVER} />
+                  </button>
+                ) : (
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-quick-insight" title="Opens the card in Insights. Stays in ServiceNow." onClick={() => onShowCard(a.card)}>
+                    {a.label}
+                  </button>
+                )
+              )}
             </div>
           )}
 
           {choosing && (
             <fieldset className="ab-quick-choose">
-              <legend className="ab-hint">Pick up to {MAX_QUICK} for this kind of record. They also show on the ServiceNow page.</legend>
-              {pinnable.map((f) => {
-                const on = shownIds.includes(f.id);
+              <legend className="ab-hint">Pick up to {MAX_QUICK} for this kind of record. The AI ones also show on the ServiceNow page.</legend>
+              {pinnable.map((p) => {
+                const on = shownIds.includes(p.id);
                 return (
-                  <label key={f.id} className="ab-check">
-                    <input type="checkbox" checked={on} disabled={on ? shownIds.length === 1 : shownIds.length >= MAX_QUICK} onChange={() => toggle(f.id)} />
-                    <span>{QUICK_LABELS[f.id]}</span>
+                  <label key={p.id} className="ab-check">
+                    <input type="checkbox" checked={on} disabled={on ? shownIds.length === 1 : shownIds.length >= MAX_QUICK} onChange={() => toggle(p.id)} />
+                    <span className="ab-quick-choice">{p.label}</span>
+                    {p.ai && <AiBadge />}
                   </label>
                 );
               })}

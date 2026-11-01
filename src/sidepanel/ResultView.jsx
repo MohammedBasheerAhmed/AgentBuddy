@@ -6,8 +6,9 @@ import { insertsFor } from '../features/registry.js';
 import { currentFromPage, expectForInsert, fillModeFor, isCustomerVisible, matchesExpect, wrongRecordText } from '../lib/fillable.js';
 import { openNewRecord } from './openRecord.js';
 import { originOf, setPending } from './pendingDraft.js';
-import { createGuard, performInsert } from './insertFlow.js';
+import { choicesOf, createGuard, insertTargets, insertText, insertsForKind, performInsert, primaryOf } from './insertFlow.js';
 import ReviewHints from './ReviewHints.jsx';
+import InsertEditor from './ticket/assist/answers/InsertEditor.jsx';
 
 const NO_TEXTS = []; // (one array, so the memoised review below is not redone on every render)
 
@@ -24,13 +25,14 @@ const NO_TEXTS = []; // (one array, so the memoised review below is not redone o
  *   target                   an expectation that replaces `source` for every insert (a draft waiting on a blank form: { table, newRecord: true })
  *   onAgain, onClose, audit  Try again, Close, and audit(outcome) for 'inserted' / 'copied'
  *   onInserted               called after a successful insert (a draft carried to a blank form is dropped then)
+ *   madeWithout              the line "Made without: ..." (what the request could not include), '' for none
  *   focusOnShow              move the focus to the answer when it appears (default). A draft that waits on a blank form does not:
  *                            it shows up because the page changed, not because the person asked for something here.
  *
  * The card is not one big live region (a screen reader would read the whole answer, then read it again with every note): the focus
  * moves to its heading when it appears, and the short notes under it (inserted, copied, could not insert) are announced as status.
  */
-export default function ResultView({ feature, text, page, people, scan, onAgain, onClose, audit, source = null, internalTexts = NO_TEXTS, target, onInserted, focusOnShow = true }) {
+export default function ResultView({ feature, text, page, people, scan, onAgain, onClose, audit, source = null, internalTexts = NO_TEXTS, target, onInserted, focusOnShow = true, madeWithout = '', internalPhrases = NO_TEXTS }) {
   const [note, setNote] = useState(null);
   const headingId = useId();
   const heading = useRef(null);
@@ -46,7 +48,12 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   if (!guard.current) guard.current = createGuard();
   const plain = toPlainText(parseSafeText(text));
 
-  const inserts = insertsFor(feature);
+  // The boxes this kind of record has (an insert may name its kinds: the problem form has no resolution-notes box).
+  const kind = page.record?.kind;
+  const inserts = kind ? insertsForKind(feature, kind) : insertsFor(feature);
+  // A note to self (a summary) leads with Copy; text that belongs on the form leads with its first Insert.
+  const copyFirst = primaryOf(feature, kind) === 'copy';
+  const [editing, setEditing] = useState(null); // { key, text }: "Edit first" opened the text in a box before it goes in
 
   // A feature may offer several inserts (title and body of an article, say). `pick(text)` chooses the part for one of them.
   const textFor = (spec) => {
@@ -60,7 +67,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
 
   // Low-severity findings (another person's name, an IP address...) are shown, never hidden: they do not block anything.
   const hints = useMemo(
-    () => (insertsFor(feature).some((s) => isCustomerVisible(s.field)) ? reviewForCustomer(plain, { people, scan, internalTexts }).hints : []),
+    () => (insertsFor(feature).some((s) => isCustomerVisible(s.field)) ? reviewForCustomer(plain, { people, scan, internalTexts, internalPhrases }).hints : []),
     [feature, plain, people, scan, internalTexts]
   );
 
@@ -107,7 +114,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
           force,
           expect,
           number: source?.number,
-          review: { people, scan, internalTexts },
+          review: { people, scan, internalTexts, internalPhrases },
           send: (tabId, message) => chrome.tabs.sendMessage(tabId, message),
         });
       } finally {
@@ -130,6 +137,37 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     }
   }
 
+  // Edit before Insert: the edited text goes in through the same insert path (insertFlow insertText: the record it was written
+  // for, one field, the review again on the edited text, never a save). The editor shows the review's findings itself.
+  async function insertEdited(t, value, mode, force) {
+    if (guard.current.busy) return null;
+    setNote(null);
+    setBusy(true);
+    let outcome;
+    try {
+      outcome = await guard.current.run(null, () =>
+        insertText({ page, target: t, text: value, mode, source, pinned: target, review: { people, scan, internalTexts, internalPhrases }, force, send: (tabId, message) => chrome.tabs.sendMessage(tabId, message) })
+      );
+    } finally {
+      setBusy(false);
+    }
+    if (!outcome || outcome.status === 'findings') return outcome;
+    if (outcome.status === 'inserted') {
+      setNote({ kind: 'ok', text: outcome.note });
+      setDone((prev) => ({ ...prev, [t.key]: true }));
+      setEditing(null);
+      audit('inserted');
+      if (onInserted) onInserted(t.spec);
+    } else if (outcome.status === 'blocked') {
+      setNote({ kind: 'warn', text: outcome.why });
+    } else if (outcome.status !== 'empty') {
+      await copy(outcome.why, value);
+    }
+    return outcome;
+  }
+  const targets = editing ? insertTargets(feature, { record: page.record, page }) : [];
+  const choices = choicesOf(feature, plain);
+
   const replacing = inserts.some((spec) => fillModeFor(spec.field, spec.mode) === 'replace');
   // Which ticket this answer belongs to, said on the card itself where it can be inserted: an answer must never be taken for another
   // ticket's. (A Copy-only answer, such as a rewrite of pasted text, is not bound to a record, so it names none.)
@@ -140,8 +178,21 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       <h2 className="ab-h" id={headingId} ref={heading} tabIndex={-1}>{feature.title}</h2>
       {writtenFor && <p className="ab-sub ab-result-for">{writtenFor}</p>}
       <div className="ab-output">
-        <SafeText text={text} />
+        {choices.length ? (
+          // A set of choices (the chat replies): each with its own Copy, since only one of them is sent.
+          <ol className="ab-answer-choices">
+            {choices.map((c, i) => (
+              <li key={i}>
+                <SafeText text={c} />
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={`Copy reply ${i + 1}`}>Copy this</button>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <SafeText text={text} />
+        )}
       </div>
+      {madeWithout && <p className="ab-hint ab-answer-gaps" style={{ marginTop: 8 }}>{madeWithout}</p>}
       {findings && (
         <div className="ab-note ab-note-warn" role="alert" style={{ marginTop: 8 }}>
           <strong>{isCustomerVisible(findings.spec.field) ? 'Check before sending to the customer:' : 'Check before inserting:'}</strong>
@@ -152,12 +203,25 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
           </ul>
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.spec, findings.key, true)}>Insert anyway</button>
-            {/* The part that was about to be inserted, not the whole answer. */}
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { const value = findings.value; setFindings(null); copy('Not inserted.', value); }}>Edit first (copy instead)</button>
+            {/* The part that was about to be inserted, not the whole answer, in a box to change before it goes in. */}
+            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { const { key, value } = findings; setFindings(null); setNote(null); setEditing({ key, text: value }); }}>Edit first</button>
           </div>
         </div>
       )}
-      {!findings && <ReviewHints hints={hints} />}
+      {!findings && !editing && <ReviewHints hints={hints} />}
+      {editing && (
+        <InsertEditor
+          targets={[...targets.filter((t) => t.key === editing.key), ...targets.filter((t) => t.key !== editing.key)]}
+          initial={editing.text}
+          textFor={(t) => textFor(t.spec)}
+          review={{ people, scan, internalTexts, internalPhrases }}
+          page={page}
+          record={page.record}
+          busy={busy}
+          onInsert={insertEdited}
+          onCancel={() => setEditing(null)}
+        />
+      )}
       {wrongRecord && <p className="ab-note ab-note-warn" role="status" style={{ marginTop: 8 }}>{wrongRecordText(source)}</p>}
       {note && <p className={`ab-note ab-note-${note.kind}`} role="status" style={{ marginTop: 8 }}>{note.text}</p>}
       <div className="ab-row" style={{ marginTop: 8 }}>
@@ -168,7 +232,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             <button
               key={key}
               type="button"
-              className={`ab-btn ab-btn-sm${i === 0 ? ' ab-btn-primary' : ''}`}
+              className={`ab-btn ab-btn-sm${i === 0 && !copyFirst ? ' ab-btn-primary' : ''}`}
               disabled={busy || inserted || (wrongRecord && !spec.table)}
               onClick={() => insert(spec, key, false)}
             >
@@ -195,7 +259,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             {feature.open.label || 'Open a new form'}
           </button>
         )}
-        <button type="button" className="ab-btn ab-btn-sm" onClick={() => copy()}>Copy</button>
+        <button type="button" className={`ab-btn ab-btn-sm${copyFirst ? ' ab-btn-primary' : ''}`} onClick={() => copy()}>Copy</button>
         {onAgain && <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>Try again</button>}
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>Close</button>
       </div>

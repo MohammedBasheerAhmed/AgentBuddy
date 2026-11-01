@@ -7,6 +7,8 @@
 //                      not something to send to the customer.
 //   resolution-notes   The answer ends with "Suggested close code: ...", advice for the agent who picks the code in its own
 //                      choice field. It does not belong in the resolution notes, which other agents search and customers can read.
+//                      On a problem the same answer is split: the Cause into cause_notes, Fix and Verification into fix_notes.
+//   chat-reply         The three numbered replies, each on its own (numberedChoices), so each can be copied alone.
 
 const LIST_START = /^\s*(?:\d{1,2}[.)]|[-*])\s+/;
 
@@ -47,4 +49,53 @@ export function pickRequesterQuestions(plain) {
 /** Resolution notes without the "Suggested close code" advice (the code has its own field on the form). */
 export function pickResolutionNotes(plain) {
   return withoutBlocks(plain, CLOSE_CODE, NOTE_LABELS);
+}
+
+// A problem has no single resolution-notes box: its form has "Cause notes" and "Fix notes" (close_notes is not on it). The same
+// answer is split: the Cause block goes into cause_notes, the Fix and Verification blocks into fix_notes.
+const CAUSE = labelLine(['cause']);
+const FIX_OR_CHECK = labelLine(['fix', 'verification']);
+
+/** The text after "Cause:" (the line and anything under it, up to the next label), or '' when it is missing or "Not confirmed". */
+export function pickCauseNotes(plain) {
+  const out = [];
+  let inside = false;
+  for (const line of String(plain ?? '').replace(/\r\n?/g, '\n').split('\n')) {
+    if (CAUSE.test(line)) {
+      inside = true;
+      out.push(line.replace(CAUSE, '').replace(/^[\s*_]+/, '').trim()); // ("**Cause:** Disk full": the closing ** goes too)
+      continue;
+    }
+    if (inside && (FIX_OR_CHECK.test(line) || CLOSE_CODE.test(line))) break;
+    if (inside) out.push(line);
+  }
+  const text = tidy(out);
+  return /^not (confirmed|stated)\.?$/i.test(text) ? '' : text;
+}
+
+/**
+ * The numbered items of an answer ("1. ...", "2) ..."), each with the lines that follow it, as separate texts: the three chat
+ * replies, so each can be copied on its own. A line before the first number (an introduction) is left out. At most `max`; [] when
+ * the answer has no numbered items (the card then shows the answer whole).
+ */
+export function numberedChoices(plain, max = 3) {
+  const items = [];
+  let open = false; // a blank line ends an item: a closing remark after the list is not part of reply 3
+  for (const line of String(plain ?? '').replace(/\r\n?/g, '\n').split('\n')) {
+    const start = /^\s*(?:\*\*)?\d{1,2}[.)](?:\*\*)?\s+(.*)$/.exec(line);
+    if (start) {
+      items.push([start[1]]);
+      open = true;
+    } else if (!line.trim()) open = false;
+    else if (open) items[items.length - 1].push(line.trim());
+  }
+  return items
+    .map((lines) => lines.join(' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, Math.max(0, max));
+}
+
+/** The Fix and Verification lines of resolution notes, for a problem's fix notes: no Cause line, no close-code advice. */
+export function pickFixNotes(plain) {
+  return withoutBlocks(withoutBlocks(plain, CLOSE_CODE, NOTE_LABELS), CAUSE, FIX_OR_CHECK);
 }

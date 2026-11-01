@@ -26,14 +26,30 @@ test('feature ids are unique across every pack, and all fourteen of ours are reg
   assert.deepEqual(REWRITE_IDS, ['rewrite-short', 'rewrite-friendly', 'rewrite-plain', 'rewrite-formal', 'rewrite-fix', 'rewrite-translate', 'rewrite-bilingual']);
 });
 
-test('none of them is on any Actions list: kinds is empty, so a view runs them itself', () => {
+test('rewrite and notes-to-ticket are on no ticket (the Write screen runs them); the email drafts are on the Ticket screen under Reply (round 3)', () => {
+  const emails = new Set(EMAIL_TYPES.map((t) => t.featureId));
   for (const f of ours()) {
+    if (emails.has(f.id)) {
+      assert.deepEqual([...f.kinds].sort(), ['case', 'catalog_task', 'hr_case', 'incident', 'request', 'requested_item'], f.id);
+      assert.equal(f.group, 'reply', f.id);
+      assert.equal(f.primary, 'copy', f.id);
+      assert.equal(typeof f.when, 'function', f.id);
+      continue;
+    }
     assert.ok(Array.isArray(f.kinds) && f.kinds.length === 0, f.id);
   }
   for (const kind of KINDS) {
     const listed = featuresFor(kind, normalizePolicy({})).map((f) => f.id);
-    for (const id of OURS) assert.ok(!listed.includes(id), `${id} is listed for ${kind}`);
+    for (const id of OURS) if (!emails.has(id)) assert.ok(!listed.includes(id), `${id} is listed for ${kind}`);
   }
+  // Only the emails that fit where the ticket is: a resolution email is not offered on a new ticket, a closure email not while it is
+  // being worked, an approval reminder only on requests; an unknown state hides nothing.
+  const at = (state, kind = 'incident') => [...emails].filter((id) => featureById(id).when({ kind }, { state })).sort();
+  assert.deepEqual(at('New'), ['email-ask-info', 'email-status-update']);
+  assert.deepEqual(at('In Progress'), ['email-apology', 'email-ask-info', 'email-resolution', 'email-status-update']);
+  assert.deepEqual(at('Resolved'), ['email-closure', 'email-resolution']);
+  assert.deepEqual(at('In Progress', 'requested_item'), ['email-apology', 'email-approval-nudge', 'email-ask-info', 'email-resolution', 'email-status-update']);
+  assert.equal(at('Something else').length, 5, 'an unknown state hides nothing (the approval reminder is still for requests only)');
 });
 
 test('each has a title, a description, a task and an instruction, and no template holes', () => {

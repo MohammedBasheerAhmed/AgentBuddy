@@ -31,7 +31,8 @@ export function sessionExpiredError() {
 
 // ---- Query language ---------------------------------------------------------------------------------
 
-const CONDITION = /^([a-z0-9_.]+?)(ISNOTEMPTY|ISEMPTY|!=|>=|<=|NOTIN|IN|NOTLIKE|LIKE|STARTSWITH|ENDSWITH|=|>|<)(.*)$/;
+// "NOT IN" (with a space) is how ServiceNow writes it and what src/reports/engine/queryBuilder.js emits; "NOTIN" is kept for older tests.
+const CONDITION = /^([a-z0-9_.]+?)(ISNOTEMPTY|ISEMPTY|!=|>=|<=|NOT IN|NOTIN|IN|NOTLIKE|LIKE|STARTSWITH|ENDSWITH|=|>|<)(.*)$/;
 
 function parseQuery(query) {
   const groups = [];
@@ -76,6 +77,7 @@ function matches(row, { field, op, value }, knownColumns, ignoreUnknownColumns) 
     case '=': return raw === value || shown === value;
     case '!=': return raw !== value && shown !== value;
     case 'IN': return value.split(',').includes(raw) || value.split(',').includes(shown);
+    case 'NOT IN':
     case 'NOTIN': return !value.split(',').includes(raw);
     case 'LIKE': return shown.toLowerCase().includes(lower) || raw.toLowerCase().includes(lower);
     case 'NOTLIKE': return !shown.toLowerCase().includes(lower);

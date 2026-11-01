@@ -1,15 +1,21 @@
 // The run pipeline for an AI feature, from ContextPack to text on screen:
 //
-//   policy checks -> firewall (mask + seal) -> [preview, person confirms] -> provider -> re-hydrate -> audit
+//   policy checks -> parts (fitted to the model, with what is not available) -> firewall (mask + seal) -> [preview, person
+//   confirms] -> provider -> re-hydrate -> audit
+//
+// Fitting (fitToModel, src/lib/tokens.js): every request is estimated before it is sent; when it would be longer than the model
+// takes, the oldest notes are left out first and the request says so. A local server (Ollama) would otherwise cut the START of the
+// prompt, the rules and the task, without a word. The system rules are never cut.
 //
 // Dependencies are injected so the whole flow is unit-tested without a browser or network (tests/pipeline.test.js).
 // The side panel passes the real firewall, sendChat and logAudit. Nothing here knows about React or chrome.*.
 
 import { checkProviderAllowed, isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { partsFor, isFeatureAvailable } from '../features/registry.js';
-import { peopleFor } from '../features/parts.js';
-import { NEVER_REHYDRATE } from '../pii/firewall.js';
+import { NOT_AVAILABLE_FIELD, isJournalPart, journalCut, madeWithout, notAvailablePart, peopleFor, unavailable } from '../features/parts.js';
+import { NEVER_REHYDRATE, RULES_PREAMBLE } from '../pii/firewall.js';
 import { truncationNote } from '../providers/messages.js';
+import { estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
 
 // A placeholder of a kind that is never put back (a password, a card, an IBAN, an ID number), as the tokenizer writes it.
 const KEPT_PLACEHOLDER = new RegExp(`\\[(?:${NEVER_REHYDRATE.join('|')})_\\d{1,6}\\]`);
@@ -37,6 +43,17 @@ export class RunBlocked extends Error {
  * (`task`) and its real class could not be looked up, so it is treated as HR rather than guessed to be harmless.
  */
 export const isSensitivePack = (pack, policy) => pack?.sensitive === true || isSensitiveByPolicy(pack?.table, policy);
+
+/**
+ * The privacy mode a run needs, so a view can say "Needs Strict privacy mode" before the click: the feature's own minimum
+ * (`requires.minMode`), and Strict on any record of a sensitive (HR) table, for every function (AI0.2). '' when any mode will do.
+ * assertRunnable enforces the same rules.
+ */
+export function requiredMode(feature, pack, policy, pageTable = '') {
+  const own = feature?.requires?.minMode || '';
+  const hr = isSensitivePack(pack, policy) || (pageTable && isSensitiveByPolicy(pageTable, policy)) ? 'strict' : '';
+  return (MODE_RANK[own] ?? -1) >= (MODE_RANK[hr] ?? -1) ? own : hr;
+}
 
 /**
  * Should the person see the exact outgoing text first? `seen` is the set of feature ids already confirmed once.
@@ -94,6 +111,12 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey, 
         'HR_BLOCKED'
       );
     }
+    // And every function on an HR record runs in Strict (or Local-only) privacy mode, not only the HR brief: Strict masks names with no
+    // cue in front of them and refuses sensitive fields (src/pii/firewall.js). Keyed on the table (isSensitivePack), not on the record
+    // kind, so an HR child table (sn_hr_core_case_payroll...) or a policy prefix is covered whatever kind it is mapped to.
+    if ((MODE_RANK[values?.piiMode] ?? 0) < MODE_RANK.strict) {
+      throw new RunBlocked('HR records need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.', 'MODE_TOO_LOW');
+    }
   }
   const problem = connectionProblem(config);
   if (problem) throw new RunBlocked(problem, 'BAD_URL');
@@ -124,15 +147,75 @@ export function prepareRun({ feature, pack, values, policy, config, hasKey = tru
     sensitivePrefixes: policy?.sensitiveTablePrefixes || [],
     sensitiveRecord: sensitive,
   });
-  const input = Object.freeze({
-    feature: feature.id,
-    table: pack.table,
-    system: feature.system,
-    userInstruction: feature.instruction,
-    parts: Object.freeze(partsFor(feature, pack)),
-  });
-  const request = firewall.buildRequest(input);
-  return { request, firewall, preview: request.preview, stats: request.stats, input, feature, pack };
+  const budget = promptBudget(config);
+  const built = partsFor(feature, pack);
+  let fit = fitToModel({ feature, pack, parts: built, budget: budget.prompt, source: budget.source });
+  const make = (parts) =>
+    Object.freeze({ feature: feature.id, table: pack.table, system: feature.system, userInstruction: feature.instruction, parts: Object.freeze(parts) });
+  let input = make(fit.parts);
+  let request = firewall.buildRequest(input);
+  // The estimate made before masking is generous; this is the one that counts: the finished text, rules and wrappers included.
+  // When it is still over, leave out more of the oldest notes and build again (a few rounds at most).
+  let tokens = estimateMessages(request.messages);
+  for (let round = 0; tokens > budget.prompt; round++) {
+    const tighter = round < 3 ? fitToModel({ feature, pack, parts: built, budget: fit.target - (tokens - budget.prompt) - 32, source: budget.source }) : null;
+    if (!tighter || tighter.trimmed <= fit.trimmed) throw tooLong(tokens, budget);
+    fit = tighter;
+    input = make(fit.parts);
+    request = firewall.buildRequest(input);
+    tokens = estimateMessages(request.messages);
+  }
+  return {
+    request,
+    firewall,
+    preview: request.preview,
+    stats: request.stats,
+    input,
+    feature,
+    pack,
+    // What the answer was made without ({ what, why, status }, plain words): the panel shows "Made without: ..." next to the answer.
+    madeWithout: fit.madeWithout,
+    // About how big the request is, and what the model takes (numbers only).
+    size: { tokens, window: budget.window, budget: budget.prompt, source: budget.source, notesLeftOut: fit.trimmed },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The size of a request: fit the model, say what is missing
+// ---------------------------------------------------------------------------------------------------------------
+
+// What the firewall adds to every system message, and the slack for the "Not available" part growing by a line once notes are cut.
+const RULES_TOKENS = estimateTokens(RULES_PREAMBLE);
+const NOT_AVAILABLE_SLACK = 40;
+
+function tooLong(tokens, budget) {
+  const local = budget.source === 'local-default' ? ' A model on this computer reads about 4,000 tokens unless its server was set up for more.' : '';
+  return new RunBlocked(
+    `This is too long for the chosen AI model, even with only the newest note: about ${tokens.toLocaleString('en-US')} tokens, and the model reads about ${budget.prompt.toLocaleString('en-US')}.${local} Choose a model that reads more in Settings.`,
+    'TOO_LONG'
+  );
+}
+
+/**
+ * The parts to send for a model that reads at most `budget` tokens: the oldest notes are left out first (never the fixed prompt, its
+ * rules or the record's own columns), and one part says what was not available or was left out. Pure.
+ * @returns {{ parts: object[], madeWithout: object[], trimmed: number, target: number }} `target`: the budget it fitted to
+ */
+export function fitToModel({ feature, pack, parts, budget, source = '' }) {
+  // A feature's own "not available" part (the domain features add one) is replaced by the complete one built here.
+  const own = (Array.isArray(parts) ? parts : []).filter((p) => p && p.field !== NOT_AVAILABLE_FIELD);
+  const list = unavailable(pack);
+  const depth = Number(feature?.journal) || 0;
+  const notes = own.filter(isJournalPart);
+  const sent = notes.length;
+  const fields = new Set(notes.map((p) => p.field));
+  const draft = notAvailablePart(list, journalCut(pack, { sent, depth, fields }));
+  const fixed = RULES_TOKENS + estimateTokens(feature?.system) + estimateTokens(feature?.instruction) + 16 + (draft ? estimateParts([draft]) : 0) + NOT_AVAILABLE_SLACK;
+  const fit = fitParts({ parts: own, fixed, budget, droppable: isJournalPart, keep: 1 });
+  if (!fit.fits) throw tooLong(fit.tokens, { prompt: budget, source });
+  const cut = journalCut(pack, { sent: sent - fit.dropped, depth, trimmed: fit.dropped, fields });
+  const missing = notAvailablePart(list, cut);
+  return { parts: missing ? [...fit.parts, missing] : fit.parts, madeWithout: madeWithout(list, cut), trimmed: fit.dropped, target: budget };
 }
 
 // ---------------------------------------------------------------------------------------------------------------

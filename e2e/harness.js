@@ -31,7 +31,8 @@ function loadData() {
 
 /** Copy dist/ and patch ONLY the copy's manifest. Returns { dir, manifest, realManifestHash }. */
 function prepareExtension() {
-  const dist = path.join(ROOT, 'dist');
+  // E2E_DIST: a build in another folder (node build.js --out <folder>), so several people can run the e2e run at once.
+  const dist = process.env.E2E_DIST ? path.resolve(process.env.E2E_DIST) : path.join(ROOT, 'dist');
   if (!fs.existsSync(path.join(dist, 'manifest.json'))) throw new Error('dist/ is missing. Run `node build.js` first (npm run e2e does).');
   const realManifestHash = sha256(path.join(dist, 'manifest.json'));
   const dir = path.join(TMP, 'extension');
@@ -105,20 +106,20 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
     args: ['--no-sandbox', '--ignore-certificate-errors', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--window-size=1200,900'],
   });
 
-  /** Every network request seen by any page or the service worker: { from, url, method }. */
+  /** Every network request of any page (with its frames and workers) or the service worker: { from, url, method }. */
   const net = [];
   /** Page errors and console errors: { from, kind: 'pageerror'|'console'|'csp', text, url }. */
   const errors = [];
   /** Every console line of every page and the service worker (any level), to prove personal data is never logged. */
   const consoleLog = [];
-  /** Every browser target ever created: { type, url }. */
+  /** Every browser target ever created: { type, url, id }. */
   const targets = [];
   const tracked = new WeakSet();
 
+  /** Errors and console lines of a page (its network requests are logged by watchNetwork below, from the page's start). */
   const trackPage = (page, label) => {
     if (tracked.has(page)) return;
     tracked.add(page);
-    page.on('request', (req) => net.push({ from: label, url: req.url(), method: req.method() }));
     page.on('pageerror', (err) => errors.push({ from: label, kind: 'pageerror', text: String(err?.message || err), url: page.url() }));
     page.on('console', (msg) => {
       const text = msg.text();
@@ -132,6 +133,81 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
       document.addEventListener('securitypolicyviolation', (e) => window.__cspViolations.push(`${e.violatedDirective} ${e.blockedURI}`));
     }).catch(() => {});
   };
+
+  // ---- The network log of every page, from its first request to its last (TRACKER R7) ----
+  // Not puppeteer's page.on('request'), which missed reads at both ends of a page's life:
+  //  - at the START: puppeteer attaches to a new tab paused but resumes it at once, and switches the tab's Network domain on only
+  //    when its Page object is built, after 'targetcreated', many round trips later.
+  //  - at the END: Network.requestWillBeSent comes from the page's renderer, which sends these notes in batches. A read the page makes
+  //    in its last moments (the tab is closed, or it navigates and a new document takes the frame over) reaches the instance, but its
+  //    note is dropped with the old document. This is what the runs actually lost (a few reads per run, from the My work and
+  //    Insights polls of a tab that was just being closed or navigated).
+  // So the harness keeps its own log, through its own browser-level DevTools session:
+  //  1. Network on every page from its start: the session auto-attaches to pages with waitForDebuggerOnStart, and on each sends
+  //     Network.enable, then the same auto-attach for the page's frames in another process and its workers, then
+  //     Runtime.runIfWaitingForDebugger, back to back without waiting for answers. Chrome runs one session's commands in order, so a
+  //     target Chrome paused at start (a link opened in a new tab, a frame in another process, a worker) runs only with Network on;
+  //     every session that paused a target must release it, so puppeteer releasing it first changes nothing. A tab the browser makes
+  //     itself (chrome.tabs.create) is not paused, but this session hears of it as it is created and Network is on one round trip
+  //     later, before the document is in. These notes give each request its page (the label).
+  //  2. Fetch, browser-wide, as the backstop: every http(s) request of every page and frame is held in the BROWSER (not the page)
+  //     until this session lets it go on, which it does at once. A request cannot reach a server without this session having seen
+  //     it, whatever happens to the page afterwards. One request is logged once: Fetch names the Network note of the same request
+  //     (networkId), and a request without one never had a note.
+  // Puppeteer's own auto-attach (tab targets, then their pages) is not touched, and its Page objects still report errors and console
+  // lines (trackPage). The service worker is left out of both: an attached session would keep it alive (see watchWorker), so it has
+  // its own session (trackWorker), and requests without a frame (workers, the browser itself) are not logged from Fetch.
+  /** targetId -> true when Chrome had paused the page at its start, false when it was already running (an existing or browser-made page). */
+  const watchedPages = new Map();
+  /** frameId -> label of the page it belongs to (a page's main frame has the page's target id). */
+  const frameLabels = new Map();
+  /** `${requestId} ${url}` -> which source told first ('network', 'fetch'), or 'both' once the note followed a Fetch report. */
+  const toldBy = new Map();
+  let fetchOnlyWithoutId = 0;
+  const logRequest = (source, key, entry) => {
+    if (!key) fetchOnlyWithoutId += 1;
+    else if (toldBy.has(key)) {
+      if (toldBy.get(key) === 'fetch' && source === 'network') toldBy.set(key, 'both');
+      return; // the other source told first
+    } else toldBy.set(key, source);
+    net.push(entry);
+  };
+  /** Requests known only from the browser side (Fetch): the page's own note never came, as it closed or navigated. */
+  const notelessRequests = () => fetchOnlyWithoutId + [...toldBy.values()].filter((v) => v === 'fetch').length;
+  const watchNetwork = (session, info, label) => {
+    let url = info.url;
+    const from = label || (() => `page:${url.slice(0, 60) || 'new'}`);
+    if (info.type === 'page') {
+      watchedPages.set(info.targetId, Boolean(info.waitingForDebugger));
+      frameLabels.set(info.targetId, from);
+    }
+    session.on('Network.requestWillBeSent', (e) => {
+      if (!url) url = e.documentURL || e.request.url; // a page opened by a link starts without an address
+      if (e.frameId && !frameLabels.has(e.frameId)) frameLabels.set(e.frameId, from);
+      logRequest('network', `${e.requestId} ${e.request.url}`, { from: from(), url: e.request.url, method: e.request.method });
+    });
+    session.on('Target.attachedToTarget', (child) => {
+      const s = session.connection()?.session(child.sessionId);
+      if (s) watchNetwork(s, { ...child.targetInfo, waitingForDebugger: child.waitingForDebugger }, from);
+    });
+    // In this order, not awaited in between (see above). Errors: the target went away.
+    session.send('Network.enable').catch(() => {});
+    if (info.type !== 'worker') session.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true, filter: [{ type: 'iframe' }, { type: 'worker' }] }).catch(() => {});
+    session.send('Runtime.runIfWaitingForDebugger').catch(() => {});
+  };
+  const pageWatcher = await browser.target().createCDPSession();
+  pageWatcher.on('Target.attachedToTarget', (e) => {
+    const s = pageWatcher.connection()?.session(e.sessionId);
+    if (s) watchNetwork(s, { ...e.targetInfo, waitingForDebugger: e.waitingForDebugger });
+  });
+  pageWatcher.on('Fetch.requestPaused', (e) => {
+    pageWatcher.send('Fetch.continueRequest', { requestId: e.requestId }).catch(() => {}); // (an error: the request was cancelled meanwhile)
+    if (!e.frameId) return;
+    const label = frameLabels.get(e.frameId);
+    logRequest('fetch', e.networkId ? `${e.networkId} ${e.request.url}` : '', { from: label ? label() : `frame:${e.frameId.slice(0, 8)}`, url: e.request.url, method: e.request.method });
+  });
+  await pageWatcher.send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
+  await pageWatcher.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true, filter: [{ type: 'page' }] });
 
   // The service worker is not a Page: watch it through its own DevTools session.
   const trackWorker = async (target) => {
@@ -151,7 +227,7 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
   };
 
   browser.on('targetcreated', async (target) => {
-    targets.push({ type: target.type(), url: target.url() });
+    targets.push({ type: target.type(), url: target.url(), id: target._targetId });
     if (target.type() === 'service_worker' && watchWorker) trackWorker(target);
     else if (target.type() === 'page') {
       const page = await target.page().catch(() => null);
@@ -165,7 +241,7 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
   const extUrl = (file) => `chrome-extension://${extId}/${file}`;
 
   const ctx = {
-    TMP, data, inst, ai, extension: ext, browser, extId, extUrl, net, errors, consoleLog, targets, swTarget, sleep, KEYS,
+    TMP, data, inst, ai, extension: ext, browser, extId, extUrl, net, errors, consoleLog, targets, watchedPages, notelessRequests, swTarget, sleep, KEYS,
     origin: inst.origin,
     shots: [],
 

@@ -1,4 +1,8 @@
 // F1 "My Day": the signed-in agent's own open tickets, ordered by how urgent they are. Deterministic, no AI, read-only.
+//
+// Round 3: the My work screen reads through src/mywork/read.js (every class counted first, then read in pages; approvals; the group
+// queue; who wrote last). readMyDay below only answers the old 'myday' READ (src/content/reads.js), which no view asks any more; the SLA
+// helpers (slaPercent, isPaused, worstSla, riskOf, SLA_COLUMNS, AT_RISK_PERCENT) are shared with the reports engine and src/mywork/sla.js.
 // The reads go through dependency-injected `deps` (same shapes as src/content/tableApi.js), so it is unit-tested with a fake.
 //
 // Order: breached SLA first, then SLA nearly used up, then priority, then oldest update first (the thing nobody has
