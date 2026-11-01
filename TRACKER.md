@@ -10,35 +10,45 @@ what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` 
 
 ## Where to pick up (updated 2026-11-01)
 
-Everything planned is built and on GitHub (`62b4d42` to the latest commit on `main`). Status: 77 ready for review, 1 partly built
-(R1), 3 need you (V1 to V3), 3 agreed for later (R3, R5, R6). Nothing has been seen on the real instance yet.
+Everything planned is built and on GitHub (`62b4d42` to the latest commit on `main`). Status: 78 ready for review, 1 partly built
+(R6), 3 need you (V1 to V3), 2 agreed for later (R3, R5). Nothing has been seen on the real instance yet.
 
-Why those two labels: **R1 is partly built** because its e2e job does not pass on GitHub yet (the checks job does). **R3, R5 and
-R6 are "agreed for later"** because Claude left them out of round 3 to wait for your decisions; you did not ask for that.
+Why those labels: **R6 is partly built** because its accessibility and dark-mode check is done but its shortcuts and languages wait for
+your decision. **R3 and R5 are "agreed for later"** because Claude left them out of round 3 to wait for your decisions; you did not
+ask for that.
+
+**Done since (2026-11-01, session after the wrap-up):**
+
+- **R1 is finished.** The e2e job passes on GitHub's `ubuntu-latest` (run 41265048867: 1,010 pass, 0 fail). The cause: headless Chrome on
+  Linux makes the popup that holds the panel the "last focused window" about 350 ms after it loads, and the panel reads the active tab
+  of that window, so it read itself and never found the ServiceNow tab (scenario b, then every scenario after it). The harness now
+  takes the main window's focus away and gives it back (the only way that worked there). Also: a failed scenario now prints the pages,
+  windows, focus changes and errors; the workflow can be run by hand with a list of scenarios; the actions are on Node 24 (v7).
+  Left: take `continue-on-error: true` off the e2e job once it has passed a few times.
+- **R6, accessibility and dark mode: done and proven.** New e2e scenario `zz` (`e2e/a11y.js`) audits every screen and half, the
+  cards opened, the first-run card, the preview dialog, an answer, the Team full page and Settings in light and dark: contrast, names,
+  labels, tab structure, visible focus, 24 px targets, duplicate ids; then reduced motion and 320 px. Contrast was already fine. It
+  found two real faults, both fixed: the selected Insights / AI Assist tab lost its keyboard focus ring, and a screen with one half
+  was a tab panel named by a tab that does not exist.
 
 **When you say "continue", Claude starts here:**
 
-1. **Ask you the three decisions** that hold back R3, R5 and R6:
+1. **Ask you the three decisions** that hold back R3, R5 and the rest of R6 (still open):
    - R3: Chrome Web Store, or self-hosted (your own update address, the extension pushed by Chrome policy)?
    - R5: OK to ship minified bundles (the content script is 380 KB on every ServiceNow page), with a readable copy kept for the
      security review?
    - R6: keyboard shortcuts yes or no (they need a manifest `commands` change, which the build rules forbid without your
      approval), and which languages, if any?
-2. **Without waiting for the answers, build what needs no decision:**
-   - R1: make the e2e job pass on GitHub's `ubuntu-latest`. In run 41260411478 it was 265 pass, 21 fail: seven scenarios (b, d, g,
-     i, j, l, m) time out waiting in the side panel, then the harness's control page is lost and every later scenario fails at
-     once. Also move `actions/checkout`, `setup-node` and `upload-artifact` off Node 20 (GitHub warns).
-   - R6, the part that needs no approval: an accessibility pass and a dark-mode check of every screen.
-3. **Then R3, R5 and the rest of R6**, as you decided.
-4. **V1, the real-instance walk-through, whenever you are at Chrome** (it can go first if you are). Reload Agent Buddy in the
-   already-open Chrome from `D:\AgentBuddy\dist` (no separate automation window), sign in to dev364920 yourself, and walk a real
+2. **Then R3, R5 and the rest of R6**, as you decided.
+3. **V1, the real-instance walk-through, whenever you are at Chrome** (it can go first if you are). Reload Agent Buddy in the
+   already-open Chrome from `D:AgentBuddydist` (no separate automation window), sign in to dev364920 yourself, and walk a real
    ticket screen by screen. Answer the open questions in `docs/live-questions/`, these four first: the email form takes Insert or
    forces Copy (`compose.md` 3), Chrome accepts the `defaultDashboard` policy as one object (`policy.md` 15), priority-account names
    match the case (`policy.md` 16), the labels of a Workspace's notes boxes (`checks.md` 20).
-5. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (you enter the key in Settings, never in chat).
+4. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (you enter the key in Settings, never in chat).
 
-How to check a change: `node tests/run.js` (unit, 2,725), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
-(965 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
+How to check a change: `node tests/run.js` (unit, 2,729), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
+(1,010 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
 `--check` to rewrite the map). Rules for every change: `docs/build-rules.md`.
 
 ---
@@ -323,12 +333,12 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | V1 | Full real-instance check | - | - | Partly | ~235 open questions in `docs/live-questions/` | Answer them on dev364920 (CSM, HR, chat tables; Workspace and portal Insert; time zones) | Partly | Needs you |
 | V2 | AI answer quality | - | - | New | Tested only against a stub | Every AI function on real tickets with DeepSeek | - | Needs you |
 | V3 | Prove it | - | - | New | - | Shadow a few agents; baseline numbers before rollout (reassignment, reopen, time to first response, customer-update gap); compare after; five-second test of each screen | - | Needs you |
-| R1 | CI | - | - | New | None | Unit tests, compile check and e2e on every push. Done: `.github/workflows/ci.yml`; on GitHub the checks job (unit, compile, build, traceability, audit) passes. Left: the e2e job fails on `ubuntu-latest` (265 pass, 21 fail, run 41260411478), see "Where to pick up" 3 | - | Partly built |
+| R1 | CI | - | - | New | None | Unit tests, compile check and e2e on every push. Done: `.github/workflows/ci.yml`; on GitHub the checks job (unit, compile, build, traceability, audit) passes. The e2e job now passes on `ubuntu-latest` too (1,010 pass, run 41265048867); still allowed to fail until it has passed a few times | - | Ready for review |
 | R2 | Version and release package | - | - | New | Version 0.1.0, no packaging step | One release with both halves; zip; changelog | - | Ready for review |
 | R3 | Deployment | - | - | Partly | `docs/deployment.md`, policy samples | Chrome/Edge policy install, update address, store or self-hosted | - | Agreed |
 | R4 | e2e stability | - | - | New | Scenario b timed out once under load | Find out whether it is flaky and fix it | - | Ready for review |
 | R5 | Performance | - | - | New | Unminified: 380 KB content script on every ServiceNow page, 1.35 MB panel | Smaller bundles, measured load time | - | Agreed |
-| R6 | Accessibility, dark mode, shortcuts, languages | - | - | Partly | Dark-mode tokens and focus fixes exist; no keyboard shortcuts | Accessibility pass, dark mode check, shortcuts, other languages | - | Agreed |
+| R6 | Accessibility, dark mode, shortcuts, languages | - | - | Partly | Dark-mode tokens and focus fixes exist; no keyboard shortcuts | Accessibility pass and dark-mode check, shortcuts, other languages. Done: accessibility and dark-mode audit in the real browser (e2e scenario `zz`, light and dark, every screen; two faults found and fixed). Left: shortcuts (manifest change) and other languages, they wait for your decision | - | Partly built |
 | R7 | e2e harness: attach to a new tab before its first request | - | - | New | Record links from the Ticket screen open in a new tab; the harness can miss its first reads, so the coverage check tolerates up to 5 plain GET reads (listed) | Attach through the DevTools protocol before the tab starts (auto-attach, wait for debugger), then drop the tolerance. Done: new pages are logged from their start, and every http(s) request is logged in the browser (held and continued at once), so the reads a page makes as it closes or navigates are seen too; coverage has zero tolerance (0 missing in 4 of 4 full runs) | - | Ready for review |
 
 ---
@@ -372,3 +382,4 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-10-30 | **Round 3 built.** Eight agents in parallel (docs/round3.md) plus the lead: the frame (screens, Insights / AI Assist, profiles, policy keys), Ticket Insights (17 cards), AI Assist (grouped state-aware actions, answer area, preview, ask), Insert, what is sent (34% smaller on the fixtures), My work, Team, Write, Knowledge, setup and settings, the page tab, CI and release packaging. Unit tests 2,666 of 2,666 pass; the full end-to-end run in real Chrome 937 of 937 (fake ServiceNow, stub AI). Integration fixes by the lead: AI email drafts brought to the Ticket screen, one shared AI button style, organisation phrases for AI inserts, folded cards fill their summaries, e2e helpers for the new screens. Not yet seen on the real instance (V1). Nothing committed yet: waiting for your review. |
 | 2026-10-31 | **Partly built rows finished.** Four agents plus the lead: the header follows a Save (N1), notes typed on a Workspace count in Ready to resolve (N4), organisation dashboard and priority accounts through two new policy keys (N17, N28), the key unlocked in the panel (AI0.1), AI email drafts inserted into the email form (AI9), and an e2e harness that logs every request from the start to the end of each page with zero tolerance (R7). Status: 78 ready for review, 3 need you (V1 to V3), 3 agreed for later (R3, R5, R6), none partly built. Unit tests 2,725 of 2,725; the full end-to-end run 965 of 965, twice in a row. Nothing committed yet. |
 | 2026-11-01 | **Pushed to `main`:** `62b4d42` (round 3, 386 files); `6e93694` (CI file fix: GitHub refused the whole workflow because a job-level `env` used `runner.temp`); `61fb3c7` (the review map `docs/review-pack/traceability.md` regenerated; CI's check had found it stale). First CI run on GitHub: the checks job passes, the e2e job (allowed to fail) 265 pass, 21 fail on Linux (R1 left as partly built). Next: V1 on dev364920. |
+| 2026-11-01 | **R1 and the accessibility half of R6 built** (`f7c30a4` to `f55fa1d`). The e2e job fails on Linux because headless Chrome makes the popup that holds the panel the last focused window, so the panel read itself; found with a focus log (two guesses were wrong first: keeping the main window focused, and bringToFront), fixed by taking the main window's focus away and giving it back. The e2e run now passes on GitHub: 1,010 of 1,010. New scenario `zz` audits every screen in light and dark in the real browser (contrast, names, labels, focus, target size, reduced motion, 320 px) and found two faults, fixed: no focus ring on the selected Insights / AI Assist tab, and a tab panel named by a tab that does not exist on one-half screens. Unit tests 2,729 of 2,729. Still waiting for your three decisions (R3, R5, rest of R6). |
