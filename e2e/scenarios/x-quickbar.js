@@ -43,6 +43,9 @@ module.exports = {
     await p.waitForFunction((n) => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === n, { timeout: 15000 }, WORKING.length);
 
     // 1. What it holds, and how each item is marked.
+    // (Until the ticket's state has been read the bar shows the defaults for the kind, which are also four items in another order: on a slow
+    // runner the first look is of those. Wait for the list the state decides.)
+    await ctx.waitUntil('the bar to hold what fits a ticket in progress', async () => (await toggleState(p)) === 'true' && JSON.stringify(await barButtons(p)) === JSON.stringify(WORKING), { timeout: 15000 }).catch(() => {});
     t.check('the bar is open and holds what fits an incident in progress, from both halves', (await toggleState(p)) === 'true' && JSON.stringify(await barButtons(p)) === JSON.stringify(WORKING), JSON.stringify(await barButtons(p)));
     const marks = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).map((b) => ({ ai: Boolean(b.querySelector('.ab-ai-badge')), insight: b.classList.contains('ab-quick-insight'), primary: b.classList.contains('ab-btn-primary') })));
     t.check('every AI item carries the AI mark, the Insights item does not', JSON.stringify(marks.map((m) => m.ai)) === JSON.stringify([true, true, true, false]) && marks[3].insight, JSON.stringify(marks));
