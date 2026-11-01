@@ -88,6 +88,11 @@ async function describeFailure(ctx, id) {
     ['(the control page did not answer)']
   );
   for (const line of windows) say(line);
+  // A request from the bar to the panel waits in session storage until the panel takes it (it holds a tab, a record and an action
+  // id, no text); one that is still there was not taken. Also whether the browser's clock and ours agree (a request dated after
+  // the browser's "now" is not believed).
+  const session = await boxed(ctx.ext(async () => ({ at: Date.now(), items: await chrome.storage.session.get(null) })), null);
+  if (session) say(`session storage: ${JSON.stringify(Object.fromEntries(Object.entries(session.items).map(([k, v]) => [k, k === 'ab:launch' ? v : '(held)'])))}; browser clock minus ours: ${session.at - Date.now()} ms`);
   const focusLog = await boxed(ctx.ext(() => window.__focusLog || []), []);
   for (const line of focusLog.slice(-40)) say(`focus ${line}`);
   for (const e of ctx.errors.slice(-6)) say(`error [${e.from}/${e.kind}] ${String(e.text).slice(0, 200)}`);
