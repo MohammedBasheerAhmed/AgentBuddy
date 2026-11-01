@@ -320,6 +320,59 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
     })
     .catch(() => {});
 
+  // On Linux (CI) headless Chrome makes the popup the last focused window about 350 ms after it has loaded (the log above shows it),
+  // although it was created with focused:false; Windows does not. The panel then read itself and never found the ServiceNow tab.
+  // Whenever the popup is the last focused window, put the main window back, trying one way after the other and saying which works.
+  if (process.platform !== 'win32') {
+    const tried = new Map();
+    let busy = false;
+    const lastFocusedIsMain = (main) => ctx.ext(async (m) => (await chrome.windows.getLastFocused()).id === m, main);
+    const ways = [
+      ['windows.update focused', (main) => ctx.ext((m) => chrome.windows.update(m, { focused: true }), main)],
+      [
+        'bringToFront of the active tab',
+        async (main) => {
+          const url = await ctx.ext(async (m) => (await chrome.tabs.query({ active: true, windowId: m }))[0]?.url || '', main);
+          const page = (await browser.pages()).find((x) => x.url() === url);
+          if (page) await page.bringToFront();
+        },
+      ],
+      [
+        'focus away and back',
+        async (main) => {
+          await ctx.ext(async (m) => {
+            await chrome.windows.update(m, { focused: false }).catch(() => {});
+            await chrome.windows.update(m, { focused: true });
+          }, main);
+        },
+      ],
+    ];
+    const main = await ctx.ext(async () => (await chrome.windows.getCurrent()).id);
+    const timer = setInterval(async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        if (await lastFocusedIsMain(main)) return;
+        for (const [name, way] of ways) {
+          await way(main).catch(() => {});
+          await sleep(120);
+          const worked = await lastFocusedIsMain(main).catch(() => false);
+          tried.set(name, [...(tried.get(name) || []), worked]);
+          if (!tried.has('reported:' + name)) {
+            tried.set('reported:' + name, true);
+            console.log(`  info  focus: "${name}" ${worked ? 'put the main window back in front' : 'did not change the last focused window'}`);
+          }
+          if (worked) break;
+        }
+      } catch {
+        /* the browser is closing, or the control page is busy: look again at the next tick */
+      } finally {
+        busy = false;
+      }
+    }, 150);
+    timer.unref?.();
+  }
+
   /** Merge a patch into the extension settings (the way saveSettings does) and optionally store the AI key (key store mode 'local'). */
   ctx.configure = async (patch, { key } = {}) => {
     await ctx.ext(async (settingsKey, patch, keyArg) => {
