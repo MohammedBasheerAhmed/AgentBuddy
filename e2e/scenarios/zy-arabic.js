@@ -116,6 +116,9 @@ module.exports = {
 
     // ---- the bar on the ServiceNow page: the worker tells it the language, and the labels of its actions come in it -----------------------
     const arabic = /[؀-ۿ]/;
+    // (the bar remembers in the page whether it was left open or moved; an earlier scenario on the same address may have left it so)
+    await ticket.evaluate(() => localStorage.removeItem('agentbuddy-bar'));
+    await ticket.reload({ waitUntil: 'load' });
     const bar = await barDriver(ticket);
     await ctx.waitUntil('the bar to appear', async () => (await bar.view()).visible, { timeout: 20000 });
     const handle = await bar.find('handle');
