@@ -45,9 +45,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: checks
-    # Allowed to fail at first: headless Chrome with an extension and a side panel on a hosted runner has not been proven yet (the
-    # run is proven on Windows with Chrome). Remove this line once the job has passed a few times.
-    continue-on-error: true
+    # This job must pass: it ran green on this runner three times in a row at the commit that removed the allowance to fail (it is the
+    # same suite as on Windows; docs: TRACKER.md R1).
     env:
       CHROME_PATH: /usr/bin/google-chrome
     steps:

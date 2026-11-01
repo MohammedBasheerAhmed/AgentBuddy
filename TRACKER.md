@@ -17,8 +17,8 @@ been seen on the real instance yet. Unit tests 2,784, end-to-end 1,057 checks (r
 
 - **R1, e2e on GitHub:** passes on `ubuntu-latest`. The cause was headless Chrome on Linux making the popup that holds the panel the
   "last focused window"; the harness takes the main window's focus away and gives it back. A failed scenario prints pages, windows, a
-  focus log and errors; the workflow can be run by hand with a list of scenarios. The job is still allowed to fail until it has passed
-  a few more times in a row (scenario q had a timing flake, now waited out).
+  focus log and errors; the workflow can be run by hand with a list of scenarios. The job no longer is allowed to fail: it passed three
+  full runs in a row on GitHub (1,057 of 1,057) after two timing flakes were fixed (scenarios o, c, q and zy).
 - **R6 accessibility and dark mode:** scenario `zz` audits every screen in light and dark (contrast, names, labels, focus, 24 px targets,
   reduced motion, 320 px); it found and we fixed two faults.
 - **Masking for Arabic tickets (a gap found on the way):** a phone or card number in Arabic digits, a password after "كلمة المرور", an
@@ -41,8 +41,7 @@ been seen on the real instance yet. Unit tests 2,784, end-to-end 1,057 checks (r
    https address for the files, and someone to keep the signing key (`node scripts/selfhost.js init`).
 3. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (you enter the key in Settings, never in chat), Arabic
    tickets included.
-4. Small leftovers: take `continue-on-error: true` off the e2e job; ServiceNow-in-Arabic comparisons of displayed values
-   (`docs/live-questions/i18n.md` 4).
+4. A small leftover: ServiceNow-in-Arabic comparisons of displayed values (`docs/live-questions/i18n.md` 4).
 
 How to check a change: `node tests/run.js` (unit, 2,784), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
 (1,057 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
