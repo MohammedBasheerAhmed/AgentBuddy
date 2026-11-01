@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { MAX_QUICK, QUICK_CARDS, QUICK_LABELS, isQuickCard, isQuickId, quickItems } from '../features/quick.js';
 import { saveSettings } from '../lib/storage.js';
 import { AiBadge } from './ui/primitives.jsx';
+import { Icon, featureIcon } from './ui/icons.jsx';
 import { t, t as tr } from '../i18n/index.js';
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -91,13 +92,15 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
             <div className="ab-quick-actions" role="group" aria-label={t('Quick actions')}>
               {items.map((a) =>
                 a.ai ? (
-                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-btn-ai-quiet ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={t('{label} (AI)', { label: tr(a.label) })} onClick={() => onRun(byId.get(a.id))}>
-                    {tr(a.label)}
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-ai-quiet ab-quick-tile ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={t('{label} (AI)', { label: tr(a.label) })} onClick={() => onRun(byId.get(a.id))}>
+                    <span className="ab-quick-icon"><Icon name={featureIcon(a.id)} size={16} /></span>
+                    <span className="ab-quick-label">{tr(a.label)}</span>
                     <AiBadge label="" title={AI_HOVER} />
                   </button>
                 ) : (
-                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-sm ab-quick-insight" title={t('Opens the card in Insights. Stays in ServiceNow.')} onClick={() => onShowCard(a.card)}>
-                    {tr(a.label)}
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-quick-tile ab-quick-insight" title={t('Opens the card in Insights. Stays in ServiceNow.')} onClick={() => onShowCard(a.card)}>
+                    <span className="ab-quick-icon"><Icon name={featureIcon(a.id)} size={16} /></span>
+                    <span className="ab-quick-label">{tr(a.label)}</span>
                   </button>
                 )
               )}

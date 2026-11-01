@@ -4,6 +4,7 @@ import ReportsDashboard from '../sidepanel/reports/ReportsDashboard.jsx';
 import { checkSourceTab, nextSource, parseTabId } from './sourceTab.js';
 import { t, tm, t as tr } from '../i18n/index.js';
 import { useLanguage } from '../i18n/useLanguage.js';
+import { useTheme } from '../ui/useTheme.js';
 
 const MESSAGES = {
   'no-tab': tm('This page needs a ServiceNow tab to read from. Open ServiceNow, open the Agent Buddy side panel, choose Team and press "Open full page".'),
@@ -16,6 +17,7 @@ const MESSAGES = {
 export default function DashboardApp() {
   const eff = useEffective();
   const lang = useLanguage(eff.values?.language);
+  useTheme(eff.values?.theme);
   const tabId = useMemo(() => parseTabId(window.location.search), []);
   const [source, setSource] = useState({ status: 'checking' });
 

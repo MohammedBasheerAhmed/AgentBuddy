@@ -106,13 +106,14 @@ export async function handleBarMessage(message, sender, deps) {
   const bar = settings.pageBar !== false && !policy.disablePageBar;
   // The bar speaks the language of the panel (Settings > Language); the labels below are written in it.
   const language = setLanguage(resolveLanguage(settings.language, browserLanguage()));
-  if (probe) return { actions: [], bar, language };
+  const theme = settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : ''; // '' = follows the computer
+  if (probe) return { actions: [], bar, language, theme };
 
   // Hidden for this record: the organisation blocked the table, or it is HR content the organisation does not allow.
   const shown = bar && isTableAllowed(table, policy) && !(isSensitiveByPolicy(table, policy) && !policy.allowHrContent);
   const actions = shown ? await barActions({ table, settings, policy, deps }) : [];
 
-  if (message.type === MSG.BAR_ACTIONS) return { actions, bar, language };
+  if (message.type === MSG.BAR_ACTIONS) return { actions, bar, language, theme };
 
   // BAR_LAUNCH: only an action the bar was allowed to offer for this table.
   if (!actions.some((a) => a.id === message.featureId)) throw new Error(tm('That action is not available here.'));

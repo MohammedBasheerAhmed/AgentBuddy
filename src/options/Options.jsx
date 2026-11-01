@@ -22,6 +22,7 @@ import { panelId, tabId } from '../sidepanel/tabKeys.js';
 import { t, tm, tn, isolate, t as tr } from '../i18n/index.js';
 import { tx } from '../i18n/jsx.jsx';
 import { useLanguage } from '../i18n/useLanguage.js';
+import { THEMES, useTheme } from '../ui/useTheme.js';
 import { LANGUAGES } from '../i18n/index.js';
 
 // (English texts marked with tm(); each is shown with tr(), the translation function, at the moment it is used)
@@ -1189,6 +1190,37 @@ export function LanguageSection({ eff, reload }) {
   );
 }
 
+const THEME_WORDS = { system: tm('Same as the computer'), light: tm('Light'), dark: tm('Dark') };
+
+/** Light, dark, or the computer's own setting: the panel, this page, the team page and the bar on the ServiceNow page follow it. */
+export function AppearanceSection({ eff, reload }) {
+  const [status, setStatus] = useState(null);
+  async function change(theme) {
+    try {
+      await saveSettings({ theme });
+      setStatus(null);
+      reload();
+    } catch {
+      setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
+    }
+  }
+  return (
+    <section className="ab-section" aria-labelledby="h-appearance">
+      <h2 className="ab-h" id="h-appearance">{t('Appearance')}</h2>
+      <div className="ab-field">
+        <label className="ab-label" htmlFor="theme-choice">{t('Colours')}</label>
+        <select id="theme-choice" className="ab-select" value={eff.values.theme} aria-describedby="theme-hint" onChange={(e) => change(e.target.value)}>
+          {THEMES.map((id) => (
+            <option key={id} value={id}>{t(THEME_WORDS[id])}</option>
+          ))}
+        </select>
+        <span className="ab-hint" id="theme-hint">{t('The panel, this page, the team page and the bar on the ServiceNow page. The sun and moon button in the panel switches it too.')}</span>
+      </div>
+      <Status status={status} />
+    </section>
+  );
+}
+
 // What the activity log says happened to a run (src/audit/auditLog.js OUTCOMES); the action and the table are codes, shown as they are.
 const OUTCOME_WORDS = { sent: tm('sent'), blocked: tm('blocked'), error: tm('error'), cancelled: tm('cancelled'), inserted: tm('inserted'), copied: tm('copied') };
 
@@ -1366,6 +1398,7 @@ export function AiAssistPage({ eff, reload, epoch }) {
 export default function Options() {
   const [eff, setEff] = useState(null);
   const lang = useLanguage(eff?.values?.language); // before anything below draws a text
+  useTheme(eff?.values?.theme);
   useEffect(() => {
     document.title = t('Agent Buddy settings'); // the tab's name, in the language of the page
   }, [lang]);
@@ -1437,6 +1470,7 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
       {managedNote && <p className="ab-note ab-note-warn">{t('Some settings are managed by your organisation and cannot be changed.')}</p>}
       <div id={panelId('ab-settings', 'basics')} role="tabpanel" aria-labelledby={tabId('ab-settings', 'basics')} hidden={page !== 'basics'}>
         <p className="ab-sub ab-page-intro">{t('Where Agent Buddy works, what you work on, how personal data is protected, and what it keeps on this computer.')}</p>
+        <AppearanceSection eff={eff} reload={reload} />
         <LanguageSection eff={eff} reload={reload} />
         <InstancesSection eff={eff} reload={reload} />
         <ProfilesSection eff={eff} reload={reload} />

@@ -1,0 +1,23 @@
+/* The command palette (src/sidepanel/palette/CommandPalette.jsx): a box over the panel with a search line, the commands, and the keys. Only --ab-* tokens. */
+
+.ab-palette-backdrop { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 56px 10px 10px; background: var(--ab-backdrop); }
+.ab-palette { width: 100%; max-width: 480px; max-height: min(540px, calc(100vh - 72px)); display: flex; flex-direction: column; overflow: hidden; background: var(--ab-bg-raised); border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius-lg); box-shadow: var(--ab-shadow); }
+.ab-palette-box { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--ab-border); color: var(--ab-fg-muted); }
+.ab-palette-glass { flex: none; }
+.ab-palette-input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: var(--ab-text-lg); color: var(--ab-fg); padding: 2px 0; }
+.ab-palette-input::placeholder { color: var(--ab-fg-muted); }
+.ab-palette-input:focus-visible { box-shadow: none; outline: 2px solid var(--ab-accent); outline-offset: 4px; border-radius: var(--ab-radius-xs); }
+.ab-palette-list { overflow: auto; padding: 4px 6px 6px; }
+.ab-palette-group { padding: 8px 8px 4px; font-size: var(--ab-text-xs); font-weight: 650; letter-spacing: 0.03em; color: var(--ab-fg-muted); }
+.ab-palette-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 8px; border-radius: var(--ab-radius-sm); cursor: pointer; }
+.ab-palette-item.is-active { background: var(--ab-accent-soft); }
+.ab-palette-icon { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--ab-bg-sunken); color: var(--ab-fg-soft); }
+.ab-palette-icon.is-ai { background: var(--ab-ai-soft); color: var(--ab-ai); }
+.ab-palette-item.is-active .ab-palette-icon { background: var(--ab-bg-raised); }
+.ab-palette-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ab-palette-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-palette-hint { font-size: var(--ab-text-xs); color: var(--ab-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-palette-empty { margin: 0; padding: 20px 12px; text-align: center; color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-palette-foot { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 7px 12px; border-top: 1px solid var(--ab-border); background: var(--ab-bg-subtle); font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
+.ab-palette-foot kbd { font-family: var(--ab-mono); font-size: 10px; padding: 0 4px; border: 1px solid var(--ab-border-strong); border-radius: 4px; background: var(--ab-bg); color: var(--ab-fg-soft); }
+.ab-palette-foot kbd { display: inline-flex; align-items: center; }

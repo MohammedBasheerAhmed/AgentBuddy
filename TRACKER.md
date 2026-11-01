@@ -10,8 +10,8 @@ what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` 
 
 ## Where to pick up (updated 2026-11-01)
 
-Everything planned is built and on GitHub (latest commit on `main`). Status: 82 ready for review, 3 need you (V1 to V3). Nothing has
-been seen on the real instance yet. Unit tests 2,784, end-to-end 1,057 checks (real Chrome, fake ServiceNow, fake AI).
+Everything planned is built and on GitHub (latest commit on `main`). Status: 83 ready for review, 3 need you (V1 to V3). Nothing has
+been seen on the real instance yet. Unit tests 2,802, end-to-end 1,097 checks (real Chrome, fake ServiceNow, fake AI).
 
 **Done since the last wrap-up (2026-11-01, one long session):**
 
@@ -29,6 +29,11 @@ been seen on the real instance yet. Unit tests 2,784, end-to-end 1,057 checks (r
 - **R6 shortcuts, R3 self-hosted install, R5 minified build:** see the table. Decisions made by Claude on your instruction "take the best
   approach": shortcut keys are digits (they work with an Arabic keyboard layout); the release is minified with a readable copy.
 
+- **R9 look and feel, colours, command palette (built after your "the ui ux is not at all great"):** compared with NowBuddy and rebuilt the
+  header, the ticket at a glance and the quick actions; added Settings > Appearance (light, dark, same as the computer, also for the
+  bar on the ServiceNow page) and the command palette (`Ctrl+K`). Steps 1 to 3 of the plan only: the other screens (My work, Team,
+  Write, Knowledge, the Settings page) are not restyled yet. Questions for you in `docs/live-questions/look.md`.
+
 **When you say "continue", Claude starts here:**
 
 1. **V1, the real-instance walk-through, whenever you are at Chrome.** Reload Agent Buddy in the already-open Chrome from
@@ -42,9 +47,11 @@ been seen on the real instance yet. Unit tests 2,784, end-to-end 1,057 checks (r
 3. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (you enter the key in Settings, never in chat), Arabic
    tickets included.
 4. A small leftover: ServiceNow-in-Arabic comparisons of displayed values (`docs/live-questions/i18n.md` 4).
+5. **R9, next steps:** look at the new header, tiles and palette in the real panel (`docs/live-questions/look.md`), then restyle My work,
+   Team, Write, Knowledge and the Settings page the same way.
 
-How to check a change: `node tests/run.js` (unit, 2,784), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
-(1,057 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
+How to check a change: `node tests/run.js` (unit, 2,802), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
+(1,097 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
 `--check` to rewrite the map). Rules for every change: `docs/build-rules.md`.
 
 ---
@@ -337,6 +344,7 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | R6 | Accessibility, dark mode, shortcuts, languages | - | - | Partly | Dark-mode tokens and focus fixes exist; no keyboard shortcuts | Done: accessibility and dark-mode audit (scenario `zz`), keyboard shortcuts (`Alt+Shift+1/2/3`, Mac `Control+Shift+1/2/3`: open the panel, summarise, draft a reply; Settings lists them), Arabic with right-to-left layout (below, R8) | Not yet | Ready for review |
 | R7 | e2e harness: attach to a new tab before its first request | - | - | New | Record links from the Ticket screen open in a new tab; the harness can miss its first reads, so the coverage check tolerates up to 5 plain GET reads (listed) | Attach through the DevTools protocol before the tab starts (auto-attach, wait for debugger), then drop the tolerance. Done: new pages are logged from their start, and every http(s) request is logged in the browser (held and continued at once), so the reads a page makes as it closes or navigates are seen too; coverage has zero tolerance (0 missing in 4 of 4 full runs) | - | Ready for review |
 | R8 | Arabic (and a language setting) | - | - | New | English only | Settings > Language (English, العربية, same as the browser). 2,760 texts in Arabic across the panel, Settings, the Team page and the bar on the ServiceNow page; right to left; masking that understands Arabic digits, Arabic labels and Arabic spellings of a name (`tests/pii-arabic.test.js`); AI answers in the ticket's language (default) or the panel's (`Language of AI answers`). Checked by `tests/i18n.test.js` and scenario `zy` (every screen: no English left, nothing sideways at 320 px, the accessibility audit) | Not yet (`docs/live-questions/i18n.md`) | Ready for review |
+| R9 | Look and feel, colours, command palette | - | - | New | Plain text header, text-only action pills, a title cut off at one line, no way to switch light and dark, no palette | Built (steps 1 to 3 of the plan you approved on 2026-11-01): a real header (mark, name, instance, four buttons), one icon set, the ticket at a glance with the title on two lines and state / priority / SLA chips, quick actions as icon tiles; Settings > Appearance (Same as the computer, Light, Dark) for the panel, Settings, the Team page and the bar on the ServiceNow page, with a sun / moon button in the header; the command palette (`Ctrl+K`, Mac `Cmd+K`, or the header button): screens, every AI action of the open ticket, Insights cards, the two halves, Settings, colours, languages, in English and Arabic. Scenario `zx`, `tests/palette.test.js`. Left for later steps: the same treatment for My work, Team, Write, Knowledge and Settings pages | Not yet (`docs/live-questions/look.md`) | Ready for review |
 
 ---
 
@@ -381,3 +389,4 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-11-01 | **Pushed to `main`:** `62b4d42` (round 3, 386 files); `6e93694` (CI file fix: GitHub refused the whole workflow because a job-level `env` used `runner.temp`); `61fb3c7` (the review map `docs/review-pack/traceability.md` regenerated; CI's check had found it stale). First CI run on GitHub: the checks job passes, the e2e job (allowed to fail) 265 pass, 21 fail on Linux (R1 left as partly built). Next: V1 on dev364920. |
 | 2026-11-01 | **R1 and the accessibility half of R6 built** (`f7c30a4` to `f55fa1d`). The e2e job fails on Linux because headless Chrome makes the popup that holds the panel the last focused window, so the panel read itself; found with a focus log (two guesses were wrong first: keeping the main window focused, and bringToFront), fixed by taking the main window's focus away and giving it back. The e2e run now passes on GitHub: 1,010 of 1,010. New scenario `zz` audits every screen in light and dark in the real browser (contrast, names, labels, focus, target size, reduced motion, 320 px) and found two faults, fixed: no focus ring on the selected Insights / AI Assist tab, and a tab panel named by a tab that does not exist on one-half screens. Unit tests 2,729 of 2,729. Still waiting for your three decisions (R3, R5, rest of R6). |
 | 2026-11-01 | **Arabic, shortcuts, self-hosted install and the minified build** (`4038b82` and the commits around it). You said: self-hosted for now; Arabic as well as English; Mac and Windows, Chrome and Edge; do all steps; take the best approach; AI answers in the ticket's language and the panel's. Built by Claude with four parallel workers (one per area of the panel) and a one-off codemod for the first 756 texts; every text has an Arabic entry and a test keeps it so. Unit tests 2,784; end-to-end 1,057. Not seen by anyone who reads Arabic yet: the wording is the model's (glossary in `docs/i18n-arabic.md`). |
+| 2026-11-01 | **Look and feel, colours and the command palette (R9).** You said the UI/UX was not great against NowBuddy and SN Utils and approved steps 1 to 3 ("go ahead"). Claude rendered NowBuddy's own preview and the panel side by side, then built the header, the icon set, the glance chips and tiles, the theme setting (panel, Settings, Team page, page bar) and the palette. Scenario `zx` (40 checks), `tests/palette.test.js`. The rest of the screens wait for your look at the real panel. |

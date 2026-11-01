@@ -11,7 +11,13 @@ import { planPanel, withVisited } from './sections.js';
 import { nextTabIndex, panelId, tabId } from './tabKeys.js';
 import { screensFor } from '../profiles/profiles.js';
 import { ShieldMark } from './ui/primitives.jsx';
+import { BrandMark, Icon } from './ui/icons.jsx';
 import { SettingsButton } from './shell/shellParts.jsx';
+import CommandPalette, { isPaletteKey, paletteShortcut } from './palette/CommandPalette.jsx';
+import { buildCommands } from './palette/commands.js';
+import { makeLaunch } from '../lib/launch.js';
+import { saveSettings } from '../lib/storage.js';
+import { nextTheme, systemIsDark, themeAttribute } from '../ui/useTheme.js';
 import ScreenView from './shell/ScreenView.jsx';
 import TicketView from './ticket/TicketView.jsx';
 import MyWorkView from './mywork/index.js';
@@ -20,6 +26,7 @@ import { WriteInsights, WriteAssist } from './write/index.js';
 import { KnowledgeInsights, KnowledgeAssist } from './knowledgeScreen/index.js';
 import { t, isolate } from '../i18n/index.js';
 import { useLanguage } from '../i18n/useLanguage.js';
+import { useTheme } from '../ui/useTheme.js';
 
 // The panel's screens (TRACKER.md 2.1): Ticket is the record that is open (or the setup / open-a-ticket help); the others work from any
 // page of an enabled ServiceNow site. Which screens a person sees comes from their work profiles and the organisation's policy
@@ -46,17 +53,37 @@ function instanceOf(page) {
   }
 }
 
-function Header({ base }) {
+/** The sun or moon in the header: one click to the other colours (the Settings page has the full choice, including "same as the computer"). */
+function ThemeButton({ eff }) {
+  const setting = eff.values?.theme || 'system';
+  const dark = (themeAttribute(setting) || (systemIsDark() ? 'dark' : 'light')) === 'dark';
+  const label = dark ? t('Switch to light colours') : t('Switch to dark colours');
+  return (
+    <button type="button" className="ab-iconbtn" aria-label={label} title={label} onClick={() => saveSettings({ theme: nextTheme(setting, systemIsDark()) }).catch(() => {})}>
+      <Icon name={dark ? 'sun' : 'moon'} size={16} />
+    </button>
+  );
+}
+
+function Header({ base, eff, onPalette }) {
   const instance = base ? instanceOf(base) : null;
+  const search = t('Search commands');
   return (
     <header className="ab-header">
-      <span className="ab-brand">{t('Agent Buddy')}</span>
-      {instance && (
-        <span className="ab-instance" title={t('Reading {host} with your own session', { host: isolate(instance.host) })}>
-          {instance.short}
-        </span>
-      )}
+      <BrandMark size={28} />
+      <div className="ab-brandtext">
+        <span className="ab-brand">{t('Agent Buddy')}</span>
+        {instance && (
+          <span className="ab-instance" title={t('Reading {host} with your own session', { host: isolate(instance.host) })}>
+            {instance.short}
+          </span>
+        )}
+      </div>
       <span className="ab-spacer" />
+      <button type="button" className="ab-iconbtn" aria-label={search} title={`${search} (${paletteShortcut()})`} aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog" onClick={onPalette}>
+        <Icon name="command" size={16} />
+      </button>
+      <ThemeButton eff={eff} />
       <ShieldMark />
       <SettingsButton />
     </header>
@@ -114,12 +141,32 @@ function rememberedScreen(ids) {
  * page: the current page (a held answer counts); lastGood / lastSeen: see usePage.js; section: the chosen screen; visited: Set of ids.
  * Pending: the card for a draft carried to a blank form (a prop so a test can leave it out).
  * launch / onLaunchDone: an action the bar on the ServiceNow page asked for; it goes to the record on screen (see TicketView).
+ * paletteOpen / onPalette / onPaletteClose / onOwnLaunch: the command palette (Panel holds its state; onOwnLaunch gets an action the
+ * palette chose for the record on screen, as a launch).
  */
-export function AppView({ eff, page, lastGood = null, lastSeen = null, section, visited, onChoose = () => {}, onChanged = () => {}, Pending = PendingDraft, launch = null, onLaunchDone = () => {} }) {
+export function AppView({ eff, page, lastGood = null, lastSeen = null, section, visited, onChoose = () => {}, onChanged = () => {}, Pending = PendingDraft, launch = null, onLaunchDone = () => {}, paletteOpen = false, onPalette = () => {}, onPaletteClose = () => {}, onOwnLaunch = () => {} }) {
   const screens = screensFor(eff);
   const ids = screens.map((s) => s.id);
   const chosen = ids.includes(section) ? section : 'ticket';
   const plan = planPanel({ ids, active: chosen, visited, page, lastGood, lastSeen });
+
+  // The command palette (open and closed by Panel: Ctrl+K, or Cmd+K on a Mac, or the button in the header). A command that runs an action
+  // on the record is handed to the Ticket screen as a launch, exactly like the keyboard shortcuts and the bar on the ServiceNow page do.
+  const commands = paletteOpen ? buildCommands({ eff, screens, active: plan.visible, recordPage: plan.recordPage }) : [];
+  const runCommand = ({ action }) => {
+    if (action.type === 'screen') onChoose(action.id);
+    else if (action.type === 'half') saveSettings({ halves: { ...(eff.values?.halves || {}), [action.screen]: action.half } }).catch(() => {});
+    else if (action.type === 'settings') chrome.runtime.openOptionsPage();
+    else if (action.type === 'theme') saveSettings({ theme: action.value }).catch(() => {});
+    else if (action.type === 'language') saveSettings({ language: action.value }).catch(() => {});
+    else if (action.type === 'run' && plan.recordPage?.record) {
+      const { record, tabId } = plan.recordPage;
+      const request = makeLaunch({ tabId, table: record.table, sysId: record.sysId, featureId: action.featureId, now: Date.now() });
+      if (!request) return;
+      onChoose('ticket');
+      onOwnLaunch(request);
+    }
+  };
 
   // A screen that is not on show keeps the page it last had: it neither follows the person from record to record nor reads anything
   // in the background. It gets the current page the moment it is shown again.
@@ -169,7 +216,7 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
 
   return (
     <div className="ab-app">
-      <Header base={plan.base || lastSeen} />
+      <Header base={plan.base || lastSeen} eff={eff} onPalette={onPalette} />
       {plan.showNav && <ScreenTabs screens={screens} value={plan.visible} onChange={onChoose} />}
       <main className="ab-main">
         {plan.enabled && (
@@ -198,6 +245,7 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
           );
         })}
       </main>
+      <CommandPalette open={paletteOpen} onClose={onPaletteClose} commands={commands} onRun={runCommand} />
     </div>
   );
 }
@@ -205,8 +253,20 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
 function Panel() {
   const eff = useEffective();
   const lang = useLanguage(eff.values?.language); // before anything below draws a text
+  useTheme(eff.values?.theme);
   const { page, lastGood, lastSeen, refresh } = usePage();
   const { launch, clear: clearLaunch } = useLaunch();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [ownLaunch, setOwnLaunch] = useState(null); // an action the palette chose (src/sidepanel/palette): handled like `launch`
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!isPaletteKey(e)) return;
+      e.preventDefault();
+      setPaletteOpen((open) => !open);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   const [nav, setNav] = useState(() => {
     const section = rememberedScreen(['ticket', 'mywork', 'team', 'write', 'knowledge']);
     return { section, visited: new Set([section]) };
@@ -236,7 +296,28 @@ function Panel() {
     );
   }
 
-  return <AppView key={lang} eff={eff} page={page} lastGood={lastGood} lastSeen={lastSeen} section={nav.section} visited={nav.visited} onChoose={choose} onChanged={refresh} launch={launch} onLaunchDone={clearLaunch} />;
+  return (
+    <AppView
+      key={lang}
+      eff={eff}
+      page={page}
+      lastGood={lastGood}
+      lastSeen={lastSeen}
+      section={nav.section}
+      visited={nav.visited}
+      onChoose={choose}
+      onChanged={refresh}
+      launch={launch || ownLaunch}
+      onLaunchDone={() => {
+        setOwnLaunch(null);
+        clearLaunch();
+      }}
+      paletteOpen={paletteOpen}
+      onPalette={() => setPaletteOpen(true)}
+      onPaletteClose={() => setPaletteOpen(false)}
+      onOwnLaunch={setOwnLaunch}
+    />
+  );
 }
 
 export default function App() {

@@ -83,7 +83,7 @@ export default function Glance({ page, eff, record, header, headPhase, quickBar 
         )}
       </div>
       {g.line2.length > 0 && (
-        <p className="ab-glance-line">
+        <p className="ab-glance-line ab-glance-chips">
           {g.line2.map((bit, i) => (
             <span key={`${bit.text}:${i}`} className={`ab-glance-bit${bit.tone ? ` ab-glance-${bit.tone}` : ''}`}>
               {bit.text}

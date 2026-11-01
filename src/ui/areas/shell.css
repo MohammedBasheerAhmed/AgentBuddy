@@ -1,10 +1,17 @@
 /* The panel frame and the shared building blocks (src/sidepanel/ui/primitives.jsx, App.jsx). Owned by the lead (docs/round3.md).
    Only --ab-* tokens. Inviting, not cluttered: one primary button per screen, quiet chrome, short lines (TRACKER.md 2.4). */
 
-/* ---- header: name, instance, settings ---- */
-.ab-header { gap: 8px; padding: 8px 12px; }
-.ab-instance { font-size: var(--ab-text-xs); color: var(--ab-fg-muted); border: 1px solid var(--ab-border); border-radius: 999px; padding: 1px 8px; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--ab-bg); }
-.ab-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--ab-radius-sm); border: 1px solid transparent; background: transparent; color: var(--ab-fg-soft); cursor: pointer; }
+/* ---- header: the mark, the name and the instance it reads, then the palette, the colours, the privacy shield and Settings ---- */
+.ab-header { gap: 10px; padding: 8px 12px; background: var(--ab-bg); }
+.ab-brandmark { flex: none; }
+.ab-brandmark-tile { fill: var(--ab-accent); }
+.ab-brandmark-bubble { fill: var(--ab-accent-fg); }
+.ab-brandmark-tick { stroke: var(--ab-accent); }
+.ab-brandtext { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.ab-brandtext .ab-brand { font-weight: 700; }
+.ab-instance { display: inline-flex; align-items: center; gap: 5px; font-family: var(--ab-mono); font-size: var(--ab-text-xs); color: var(--ab-fg-muted); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-instance::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ab-ok); }
+.ab-iconbtn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; border-radius: var(--ab-radius-sm); border: 1px solid transparent; background: transparent; color: var(--ab-fg-soft); cursor: pointer; }
 .ab-iconbtn:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
 .ab-shield { display: inline-flex; color: var(--ab-ok); }
 

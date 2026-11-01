@@ -5,6 +5,19 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Look and feel, colours and the command palette (R9)
+- A real header: the product mark, the name, the instance the panel reads (with a green dot), and four buttons: search commands, the
+  sun or moon, the privacy shield, Settings. One small icon set (`src/sidepanel/ui/icons.jsx`) for the whole panel.
+- The ticket at a glance: the number and the VIP marks on one line, the title under them (two lines instead of cut off), the state,
+  priority and SLA as chips (amber and red when they need a look). The quick actions are tiles with an icon, the name and the AI mark.
+- Settings > Basics > Appearance: Same as the computer, Light or Dark. It applies to the panel, Settings, the Team page and the bar on
+  the ServiceNow page (the worker tells the bar, as it does the language). The sun or moon button in the header switches it in one click.
+- The command palette: `Ctrl+K` (Mac `Cmd+K`) or the header button. Type "reply", "team", "dark", "arabic" and press Enter. It lists the
+  screens, every AI action the open ticket offers, the Insights cards of the quick bar, Show Insights / Show AI Assist, Settings, the
+  colours and the languages, in English or Arabic (English words still find the Arabic commands). An AI action chosen here opens the
+  same preview as its button: nothing is sent by the palette. The panel behind it is inert while it is open.
+- The half a screen shows (Insights or AI Assist) now follows a change made elsewhere, so a command can switch it.
+
 ### Setup and turn-on (F1)
 - "Turn on for this site" is offered only on a ServiceNow page: a ServiceNow address, or a page that shows ServiceNow's marks (one
   look through the toolbar click's `activeTab`, no new permission). Elsewhere the panel says "This does not look like ServiceNow"

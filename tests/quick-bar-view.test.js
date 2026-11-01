@@ -17,7 +17,7 @@ const html = (props = {}) => {
 };
 
 // Round 3: the bar holds no filled button (the screen's one primary is the first AI Assist suggestion), and every AI item is marked.
-const labels = (markup) => [...markup.matchAll(/<button[^>]*data-quick="[^"]+"[^>]*>([^<]*)/g)].map((m) => m[1]);
+const labels = (markup) => [...markup.matchAll(/<button[^>]*data-quick="[^"]+"[^>]*>.*?<span class="ab-quick-label">([^<]*)/g)].map((m) => m[1]);
 
 test('open: the three main actions of an incident, each with the AI mark, none filled, a toggle that says it is open', () => {
   const markup = html();
@@ -32,7 +32,7 @@ test('open: the three main actions of an incident, each with the AI mark, none f
 test('state-aware: a resolved incident offers "Ready to resolve?" (Insights, no AI mark) first, then the resolution notes', () => {
   const markup = html({ over: { stage: 'resolve', cards: ['ready', 'related'], onShowCard: () => {} } });
   assert.deepEqual(labels(markup), ['Ready to resolve?', 'Resolution notes', 'Knowledge article', 'Draft a reply']);
-  assert.match(markup, /data-quick="card:ready" class="ab-btn ab-btn-sm ab-quick-insight"/);
+  assert.match(markup, /data-quick="card:ready" class="ab-btn ab-quick-tile ab-quick-insight"/);
   assert.equal((markup.match(/class="ab-ai-badge"/g) || []).length, 3, 'only the AI items carry the mark');
 });
 
@@ -82,7 +82,7 @@ test('an action the policy switched off is not shown', () => {
 
 test('buttons are off while the AI is not ready or an answer is on screen', () => {
   const markup = html({ over: { disabled: true } });
-  assert.equal((markup.match(/<button[^>]*class="ab-btn ab-btn-sm[^"]*"[^>]*disabled=""/g) || []).length, 3);
+  assert.equal((markup.match(/<button[^>]*class="ab-btn [^"]*ab-quick-tile[^"]*"[^>]*disabled=""/g) || []).length, 3);
 });
 
 test('another kind of record has its own defaults', () => {

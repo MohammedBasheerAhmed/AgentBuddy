@@ -112,6 +112,14 @@ module.exports = {
     t.check('...and nothing about the checklist is in long-lived (local) storage', !/agentbuddy_checklists/.test(local));
 
     // A reload of the panel: the ticks come back
+    // (the second tick is written to the session store a moment after it is shown: reload only when the stored value has stopped changing)
+    let storedBefore = '';
+    await ctx.waitUntil('the ticks to be saved', async () => {
+      const now = await sessionStore(ctx);
+      const same = now === storedBefore;
+      storedBefore = now;
+      return same;
+    }, { timeout: 8000, every: 400 });
     await p.reload({ waitUntil: 'load' });
     await p.waitForSelector('.ab-app', { timeout: 10000 });
     await settleOnRecord(ctx, data.CHECKLIST_TASK_ID);
@@ -164,19 +172,29 @@ module.exports = {
       await ticket.evaluate(() => { document.getElementById('incident.close_notes').value = ''; });
       await ticket.type('[id="incident.close_notes"]', value, { delay: 0 });
     };
+    // "Check again" pressed while the answer to the earlier press is still on its way is not taken up (the button is busy), so the check is
+    // pressed again until the answer shows what was typed.
+    const checkAgainUntil = async (what, done) => {
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        await clickButton(p, /^Check again/).catch(() => {});
+        try {
+          await waitPanel(ctx, p, what, done, { timeout: 6000 });
+          return;
+        } catch (err) {
+          if (attempt === 3) throw err;
+        }
+      }
+    };
     await typeInForm('Done.');
-    await clickButton(p, /^Check again/);
-    await waitPanel(ctx, p, 'the notes warning', async () => /only say "resolved"/.test(findCheck(await checkRows(p), /notes/i)?.text || ''), { timeout: 15000 });
+    await checkAgainUntil('the notes warning', async () => /only say "resolved"/.test(findCheck(await checkRows(p), /notes/i)?.text || ''));
     rows = await checkRows(p);
     t.check('typed "Done." (unsaved): the check now warns that the notes only say "resolved"', findCheck(rows, /only say/)?.status === 'warn');
     await typeInForm('Fixed it');
-    await clickButton(p, /^Check again/);
-    await waitPanel(ctx, p, 'the short-notes warning', async () => /notes/i.test(findCheck(await checkRows(p), /notes/i)?.text || '') && !/No resolution notes yet/.test(findCheck(await checkRows(p), /notes/i)?.text || ''), { timeout: 15000 });
+    await checkAgainUntil('the short-notes warning', async () => /notes/i.test(findCheck(await checkRows(p), /notes/i)?.text || '') && !/No resolution notes yet/.test(findCheck(await checkRows(p), /notes/i)?.text || ''));
     rows = await checkRows(p);
     t.check('typed a few words: "Check again" reads the form again and warns the notes are very short (or filler)', ['warn'].includes(findCheck(rows, /notes/i)?.status), findCheck(rows, /notes/i)?.text);
     await typeInForm('Replaced the expired gateway certificate on EU-2 and restarted the gateway service. Confirmed with priya.raman@example.com that the VPN stays up.');
-    await clickButton(p, /^Check again/);
-    await waitPanel(ctx, p, 'the notes to pass', async () => findCheck(await checkRows(p), /Resolution notes are filled in/)?.status === 'ok', { timeout: 15000 });
+    await checkAgainUntil('the notes to pass', async () => findCheck(await checkRows(p), /Resolution notes are filled in/)?.status === 'ok');
     rows = await checkRows(p);
     t.check('typed a proper note: "Resolution notes are filled in" is Fine', findCheck(rows, /Resolution notes are filled in/)?.status === 'ok');
     const pii = findCheck(rows, /personal data or secrets/i);

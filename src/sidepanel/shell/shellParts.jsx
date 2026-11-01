@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Icon } from '../ui/icons.jsx';
 import { PROVIDERS, endpointHost, providerName, resolveProviderConfig } from '../../providers/config.js';
 import { modelChoices } from '../../lib/modelChoices.js';
 import { saveSettings } from '../../lib/storage.js';
@@ -30,8 +31,15 @@ export function destinationOf(eff) {
  * AI off. Returns [half, setHalf]; setHalf shows the half at once and saves the choice in the background.
  */
 export function useHalf(screen, eff) {
-  const saved = eff?.values?.halves?.[screen];
-  const [half, setHalfState] = useState(saved === 'assist' ? 'assist' : 'insights');
+  const saved = eff?.values?.halves?.[screen] === 'assist' ? 'assist' : 'insights';
+  const [half, setHalfState] = useState(saved);
+  // A choice made elsewhere (the command palette) arrives as a changed setting: the half follows it. The first look is skipped (state starts from it).
+  const seen = useRef(saved);
+  useEffect(() => {
+    if (seen.current === saved) return;
+    seen.current = saved;
+    setHalfState(saved);
+  }, [saved]);
   const setHalf = (next) => {
     if (next !== 'insights' && next !== 'assist') return;
     setHalfState(next);
@@ -104,16 +112,7 @@ export function ProfileHint({ kind, eff }) {
 export function SettingsButton() {
   return (
     <button type="button" className="ab-iconbtn" aria-label={t('Settings')} title={t('Settings')} onClick={() => chrome.runtime.openOptionsPage()}>
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-        <path
-          d="M6.9 1.5h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3-1.9-.4V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinejoin="round"
-        />
-        <circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
+      <Icon name="gear" size={16} />
     </button>
   );
 }

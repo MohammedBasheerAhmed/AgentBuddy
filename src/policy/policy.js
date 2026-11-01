@@ -685,6 +685,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   piiMode: 'standard',
   language: 'auto', // the language of the panel and the settings page: 'auto' (the browser's), 'en' or 'ar' (src/i18n)
   answerLanguage: 'ticket', // the language of what the AI writes: 'ticket' (the language of the ticket) or 'panel' (the panel's language)
+  theme: 'system', // the colours of the panel, the settings page, the team page and the bar: 'system' (follows the computer), 'light' or 'dark'
   previewMode: 'first',
   previewSeen: [],
   instances: [],
@@ -720,6 +721,7 @@ export function effectiveSettings(user, policyInput) {
   if (!KEY_STORAGE_MODES.includes(values.keyStorage)) values.keyStorage = DEFAULT_SETTINGS.keyStorage;
   if (!['auto', 'en', 'ar'].includes(values.language)) values.language = DEFAULT_SETTINGS.language;
   if (!['ticket', 'panel'].includes(values.answerLanguage)) values.answerLanguage = DEFAULT_SETTINGS.answerLanguage;
+  if (!['system', 'light', 'dark'].includes(values.theme)) values.theme = DEFAULT_SETTINGS.theme;
 
   if (policy.piiMode) {
     // The policy is a floor: a stricter personal choice is kept.

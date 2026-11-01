@@ -59,7 +59,7 @@ function modalShown(doc, win) {
 
 // theme.css is written for extension pages (:root); in the bar's shadow root the same tokens belong to :host.
 const TOKENS = themeCss
-  .replace(/:root:not\(\[data-theme='light'\]\)/g, ':host')
+  .replace(/:root:not\(\[data-theme='light'\]\)/g, ":host(:not([data-theme='light']))")
   .replace(/:root\[data-theme='dark'\]/g, ":host([data-theme='dark'])")
   .replace(/:root/g, ':host');
 
@@ -100,7 +100,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     },
   };
   let prefs = parsePrefs(prefsBox.read());
-  const state = { record: null, actions: [], busy: false, notice: '', modal: false, language: 'en' };
+  const state = { record: null, actions: [], busy: false, notice: '', modal: false, language: 'en', theme: '' };
   let appliedLanguage = '';
   let stopped = false;
   let refreshing = false;
@@ -195,6 +195,8 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
 
   function render() {
     applyLanguage();
+    if (state.theme) host.setAttribute('data-theme', state.theme); // 'light' or 'dark'; none: the colours follow the computer
+    else host.removeAttribute('data-theme');
     const visible = Boolean(state.record) && state.actions.length > 0 && !state.modal;
     bar.hidden = !visible;
     bar.setAttribute('data-side', prefs.side);
@@ -367,6 +369,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     state.record = result.record;
     state.actions = result.actions;
     if (result.language) state.language = result.language;
+    if (typeof result.theme === 'string') state.theme = result.theme;
     state.modal = Boolean(result.record) && modalShown(doc, win);
     if (!stopped) render();
   }

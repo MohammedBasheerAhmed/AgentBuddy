@@ -27,6 +27,7 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
   let askedAt = NaN;
   let actions = [];
   let language = ''; // what the worker said the bar should speak
+  let theme = ''; // and which colours: 'light', 'dark' or '' (the computer's)
 
   // One question to the worker. null when the answer ended the bar (the site is off).
   async function ask(message, at) {
@@ -38,6 +39,7 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
     }
     checkedAt = at;
     if (typeof answer?.language === 'string') language = answer.language;
+    if (typeof answer?.theme === 'string') theme = answer.theme;
     return answer || {};
   }
 
@@ -79,7 +81,7 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
       if (barOn !== true) return NOTHING;
     }
     const shown = { table: record.table, sysId: record.sysId };
-    const said = language ? { language } : {};
+    const said = language ? { language, theme } : {};
     return actions.length ? { status: 'shown', record: shown, actions, ...said } : { ...NOTHING, record: shown, ...said };
   }
 

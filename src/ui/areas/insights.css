@@ -3,13 +3,22 @@
    long text wraps and nothing scrolls sideways at 320 px. No AI colours: Insights uses the green accent. */
 
 /* ---- N1, the ticket at a glance ---- */
-.ab-glance { display: flex; flex-direction: column; gap: 3px; }
+.ab-glance { display: flex; flex-direction: column; gap: 6px; }
 .ab-glance-line { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 1px; min-width: 0; }
-.ab-glance-head { flex-wrap: nowrap; }
-.ab-glance-title { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The number and the marks on one line, the title under them (it wraps to two lines instead of being cut off). */
+.ab-glance-head { flex-wrap: wrap; align-items: center; row-gap: 3px; }
+.ab-glance-head .ab-record-number { order: 0; }
+.ab-glance-vip { order: 1; }
+.ab-glance-title { order: 3; flex: 1 1 100%; min-width: 0; font-size: var(--ab-text-lg); font-weight: 650; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .ab-glance-vip { flex: none; white-space: nowrap; font-size: var(--ab-text-xs); font-weight: 700; letter-spacing: 0.04em; padding: 0 6px; border-radius: 999px; border: 1px solid var(--ab-warn-line); background: var(--ab-warn-soft); color: var(--ab-warn); }
 .ab-glance-bit { font-size: var(--ab-text-sm); }
 .ab-glance-bit + .ab-glance-bit::before { content: '·'; color: var(--ab-fg-muted); margin-inline-end: 6px; }
+/* The state, the priority and the SLA are chips. */
+.ab-glance-chips { gap: 6px; align-items: center; }
+.ab-glance-chips .ab-glance-bit { padding: 1px 9px; border-radius: 999px; border: 1px solid var(--ab-border); background: var(--ab-bg-subtle); font-size: var(--ab-text-xs); font-weight: 600; color: var(--ab-fg-soft); }
+.ab-glance-chips .ab-glance-bit + .ab-glance-bit::before { content: none; }
+.ab-glance-chips .ab-glance-warn { background: var(--ab-warn-soft); border-color: var(--ab-warn-line); color: var(--ab-warn); }
+.ab-glance-chips .ab-glance-danger { background: var(--ab-danger-soft); border-color: var(--ab-danger-line); color: var(--ab-danger); }
 .ab-glance-soft .ab-glance-bit { color: var(--ab-fg-muted); }
 .ab-glance-warn { color: var(--ab-warn); font-weight: 600; }
 .ab-glance-danger { color: var(--ab-danger); font-weight: 650; }
