@@ -1,11 +1,34 @@
 # Agent Buddy: production plan and tracker
 
 The plan for taking Agent Buddy from "works against a fake ServiceNow" to "approved and used daily by real agents", and the
-status of every item. The plan was agreed on 2026-10-30 and round 3 is built (see the progress log); nothing is committed until you approve it.
+status of every item. The plan was agreed on 2026-10-30; round 3 is built and was pushed to `main` on 2026-11-01 (see the
+progress log). **Next session: start at "Where to pick up" just below.**
 
 **Status:** `Planned` (in the plan, not yet agreed) · `Agreed` (you approved the plan for it) · `Building` · `Ready for review`
-(built and tested; waiting for you to look at it and approve the commit) · `Partly built` (the row says what is left) · `Done`
-(built, tested, shown to you, committed) · `Needs you` (only you can do it) · `Dropped`.
+(built, tested and pushed; waiting for you to see it working, best on the real instance in V1) · `Partly built` (the row says
+what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` (only you can do it) · `Dropped`.
+
+## Where to pick up (updated 2026-11-01)
+
+Everything planned is built and on GitHub (`62b4d42`, `6e93694`, `61fb3c7`). Status: 77 ready for review, 1 partly built (R1),
+3 need you (V1 to V3), 3 agreed for later (R3, R5, R6). Nothing has been seen on the real instance yet. In this order:
+
+1. **V1, the real-instance walk-through.** Reload Agent Buddy in the already-open Chrome from `D:\AgentBuddy\dist` (no separate
+   automation window), sign in to dev364920 yourself, and walk a real ticket screen by screen. Answer the open questions in
+   `docs/live-questions/`, these four first: the email form takes Insert or forces Copy (`compose.md` 3), Chrome accepts the
+   `defaultDashboard` policy as one object (`policy.md` 15), priority-account names match the case (`policy.md` 16), the labels of
+   a Workspace's notes boxes (`checks.md` 20).
+2. **V2, AI answer quality.** Every AI function on real tickets with DeepSeek (the key is entered by you in Settings, never in chat).
+3. **R1, end-to-end on GitHub.** The checks job passes; the e2e job (allowed to fail) does not pass on `ubuntu-latest` yet: 265
+   pass, 21 fail in run 41260411478. Seven scenarios (b, d, g, i, j, l, m) time out waiting in the side panel, then the harness's
+   control page is lost and every later scenario fails at once. Also move `actions/checkout`, `setup-node` and `upload-artifact`
+   off Node 20 (GitHub warns).
+4. **Later, as agreed:** R3 deployment path, R5 performance, R6 accessibility, shortcuts and languages (shortcuts need a manifest
+   change, which the build rules forbid without your approval).
+
+How to check a change: `node tests/run.js` (unit, 2,725), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
+(965 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
+`--check` to rewrite the map). Rules for every change: `docs/build-rules.md`.
 
 ---
 
@@ -289,7 +312,7 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | V1 | Full real-instance check | - | - | Partly | ~235 open questions in `docs/live-questions/` | Answer them on dev364920 (CSM, HR, chat tables; Workspace and portal Insert; time zones) | Partly | Needs you |
 | V2 | AI answer quality | - | - | New | Tested only against a stub | Every AI function on real tickets with DeepSeek | - | Needs you |
 | V3 | Prove it | - | - | New | - | Shadow a few agents; baseline numbers before rollout (reassignment, reopen, time to first response, customer-update gap); compare after; five-second test of each screen | - | Needs you |
-| R1 | CI | - | - | New | None | Unit tests, compile check and e2e on every push | - | Ready for review |
+| R1 | CI | - | - | New | None | Unit tests, compile check and e2e on every push. Done: `.github/workflows/ci.yml`; on GitHub the checks job (unit, compile, build, traceability, audit) passes. Left: the e2e job fails on `ubuntu-latest` (265 pass, 21 fail, run 41260411478), see "Where to pick up" 3 | - | Partly built |
 | R2 | Version and release package | - | - | New | Version 0.1.0, no packaging step | One release with both halves; zip; changelog | - | Ready for review |
 | R3 | Deployment | - | - | Partly | `docs/deployment.md`, policy samples | Chrome/Edge policy install, update address, store or self-hosted | - | Agreed |
 | R4 | e2e stability | - | - | New | Scenario b timed out once under load | Find out whether it is flaky and fix it | - | Ready for review |
@@ -317,6 +340,7 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-10-30 | Integration fix: the six AI email drafts (AI9) were unreachable once the Email tab left Write; they are now on the Ticket screen's AI Assist under Reply, only the types that fit the ticket's state, Copy first. |
 | 2026-10-30 | **Build everything planned now** ("implement whatever has been planned and make the best UI/UX"), with as many agents as useful. Eight agents in parallel with fixed file ownership (`docs/round3.md`); the lead builds the frame and integrates. Not in this round: R3 deployment path, R5 performance, R6 accessibility/shortcuts (keyboard shortcuts need a manifest change). |
 | 2026-10-31 | **Finish everything** that was partly built: N1 (refresh after Save), N4 (notes typed on a Workspace), N17 (organisation dashboard: policy `defaultDashboard`), N28 (priority accounts: policy `priorityAccounts`, a list of account names, since ServiceNow has no standard column), AI0.1 (unlock the key in the panel), AI9 (email draft into the email form, which opens in a new tab; the subject keeps the ticket number), and R7. R3, R5 and R6 stay agreed for later. |
+| 2026-11-01 | **Push round 3 to GitHub** (`main`, as for every earlier round). The MohammedBasheerAhmed login got the `workflow` permission so the CI file could be pushed. |
 
 ## Baseline (2026-10-30, before any change)
 
@@ -335,3 +359,4 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-10-30 | Baseline checks; screenshot tour of every panel screen; two read-only code reviews; first real-instance check; exact AI payloads captured for 23 functions; plan written and restructured: the split inside each screen (Insights / AI Assist), one release, conventions agreed. Pain-point analysis added new items N24 to N29 and V3. No source code changed. |
 | 2026-10-30 | **Round 3 built.** Eight agents in parallel (docs/round3.md) plus the lead: the frame (screens, Insights / AI Assist, profiles, policy keys), Ticket Insights (17 cards), AI Assist (grouped state-aware actions, answer area, preview, ask), Insert, what is sent (34% smaller on the fixtures), My work, Team, Write, Knowledge, setup and settings, the page tab, CI and release packaging. Unit tests 2,666 of 2,666 pass; the full end-to-end run in real Chrome 937 of 937 (fake ServiceNow, stub AI). Integration fixes by the lead: AI email drafts brought to the Ticket screen, one shared AI button style, organisation phrases for AI inserts, folded cards fill their summaries, e2e helpers for the new screens. Not yet seen on the real instance (V1). Nothing committed yet: waiting for your review. |
 | 2026-10-31 | **Partly built rows finished.** Four agents plus the lead: the header follows a Save (N1), notes typed on a Workspace count in Ready to resolve (N4), organisation dashboard and priority accounts through two new policy keys (N17, N28), the key unlocked in the panel (AI0.1), AI email drafts inserted into the email form (AI9), and an e2e harness that logs every request from the start to the end of each page with zero tolerance (R7). Status: 78 ready for review, 3 need you (V1 to V3), 3 agreed for later (R3, R5, R6), none partly built. Unit tests 2,725 of 2,725; the full end-to-end run 965 of 965, twice in a row. Nothing committed yet. |
+| 2026-11-01 | **Pushed to `main`:** `62b4d42` (round 3, 386 files); `6e93694` (CI file fix: GitHub refused the whole workflow because a job-level `env` used `runner.temp`); `61fb3c7` (the review map `docs/review-pack/traceability.md` regenerated; CI's check had found it stale). First CI run on GitHub: the checks job passes, the e2e job (allowed to fail) 265 pass, 21 fail on Linux (R1 left as partly built). Next: V1 on dev364920. |

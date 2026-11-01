@@ -33,8 +33,9 @@ Everything here fails soft today: a read that is refused or empty is said as suc
    releases known errors are also knowledge articles (Known Error template, `kb_knowledge` linked through `problem`). *Check* whether
    itil can read `problem` at all and whether the instance uses known-error articles; if so, add them to the card.
 9. **Account at a glance (N28).** Uses the case's `account`, `entitlement`, `product`, `asset` display values and the existing
-   `accountCases` read. **Not built:** the "priority account" flag; I could not find a standard column on `customer_account` for it.
-   *Check* the account form on the instance (and whether entitlements carry a service level) and name the column to read.
+   `accountCases` read. The "priority account" flag comes from the policy list `priorityAccounts` (account names), since I could
+   not find a standard column on `customer_account` for it (see policy.md 16). *Check* the account form on the instance (and whether
+   entitlements carry a service level): if it has such a column, name it and the flag can read it instead of the list.
 10. **Outage threshold (N29).** "Possible outage" = 3 or more OTHER open tickets on the same CI or service opened in the last 2 hours
     (from the existing open-duplicates check, 24-hour window, at most 25 listed). *Check* with a team lead whether 3 in 2 h is right
     for the instance's volume; the rule is `OUTAGE_RULE` in `src/insights/outage.js`.
