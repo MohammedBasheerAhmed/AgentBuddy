@@ -13,6 +13,8 @@
 // Ambiguity is handled honestly: if two people share a token ("Beth Anglin" and "Beth Jones"), a bare "Beth" is not
 // attributed to either; it gets its own placeholder instead of being guessed.
 
+import { foldArabicLetters } from './arabic.js';
+
 const APOSTROPHES = "'" + String.fromCharCode(0x2019);
 // A word is letters, marks and digits with apostrophes inside it (O'Brien). A hyphen separates words: "Abel-Tuter" is two.
 const WORD = new RegExp(`[\\p{L}\\p{M}\\p{N}_]+(?:[${APOSTROPHES}][\\p{L}\\p{M}\\p{N}_]+)*`, 'gu');
@@ -27,7 +29,8 @@ const OPENERS = new Set([' ', '\t', '"', "'", '(', '[', String.fromCharCode(0x20
 /** Lowercase and strip accents. ASCII takes a fast path. */
 export function fold(s) {
   if (ASCII_ONLY.test(s)) return s.toLowerCase();
-  return s.normalize('NFD').replace(COMBINING, '').normalize('NFC').toLowerCase().split(CURLY_APOS).join("'");
+  // (Arabic spellings are made one before the text is put back together: a hamza is a combining mark until then)
+  return foldArabicLetters(s.normalize('NFD').replace(COMBINING, '')).normalize('NFC').toLowerCase().split(CURLY_APOS).join("'");
 }
 
 /** Lowercase text while keeping every index aligned with the original (a few characters change length when lowercased). */

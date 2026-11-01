@@ -8,6 +8,8 @@
 // handed out. A model that writes [PERSON_9] (which we never issued) or "[person_1]" gets the text back unchanged, and a
 // value that itself looks like a placeholder is never re-processed, so nothing is substituted twice.
 
+import { foldDigits } from './arabic.js';
+
 // Which placeholder label each finding kind uses.
 const LABELS = Object.freeze({
   PERSON: 'PERSON',
@@ -36,7 +38,7 @@ const PLACEHOLDER = /\[([A-Z]{2,12})_(\d{1,6})\]/g;
 
 // Normalised comparison: two spellings of the same value share one placeholder.
 function normalise(label, value) {
-  const v = String(value);
+  const v = foldDigits(String(value)); // the same number in Arabic-Indic and in ASCII digits is one value
   switch (label) {
     case 'EMAIL':
     case 'IP':

@@ -11,6 +11,8 @@
 // repetition, or is replaced by a plain indexOf/char scan. There are no nested unbounded quantifiers, so there is no
 // catastrophic backtracking; tests/pii-detectors.test.js feeds 200k characters of adversarial input to prove it.
 
+import { detectArabic, foldDigits } from './arabic.js';
+
 export const KINDS = Object.freeze([
   'EMAIL',
   'PHONE',
@@ -789,6 +791,10 @@ const PLACEHOLDER = /\[[A-Z]{2,12}_\d{1,6}\]/;
  */
 export function detectCandidates(text, options = {}) {
   if (typeof text !== 'string' || !text) return [];
+  // The detectors read ASCII digits (a phone number written in Arabic-Indic digits is still a phone number); a finding keeps the
+  // value as it was written, and the offsets are the same because folding changes no length (src/pii/arabic.js).
+  const written = text;
+  text = foldDigits(written);
   const regions = normalizeRegions(options.regions);
   const kinds = options.kinds ? new Set(options.kinds) : null;
   const min = typeof options.minConfidence === 'number' ? options.minConfidence : DEFAULT_MIN_CONFIDENCE;
@@ -803,8 +809,10 @@ export function detectCandidates(text, options = {}) {
   if (want('PHONE')) detectPhones(text, found, regions);
   if (want('IP') || want('MAC')) detectNetwork(text, found);
   if (want('DOB') || want('EMPLOYEE_ID') || want('ADDRESS')) detectDobEmployeeAddress(text, found, regions);
+  detectArabic(text, found); // what Arabic labels and formats reveal (kinds are filtered below)
   // A finding that is, or contains, one of our own placeholders ([ID_1]) is never real data.
-  return found.filter((f) => want(f.kind) && f.confidence >= min && !PLACEHOLDER.test(f.value));
+  const kept = found.filter((f) => want(f.kind) && f.confidence >= min && !PLACEHOLDER.test(f.value));
+  return text === written ? kept : kept.map((f) => ({ ...f, value: written.slice(f.start, f.end) }));
 }
 
 /**
