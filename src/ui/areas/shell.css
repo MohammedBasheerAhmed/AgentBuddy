@@ -19,6 +19,8 @@
 .ab-halfswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 3px; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); border: 1px solid var(--ab-border); }
 .ab-halfswitch-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; background: transparent; padding: 5px 8px; border-radius: var(--ab-radius-sm); font-weight: 600; color: var(--ab-fg-soft); cursor: pointer; min-width: 0; }
 .ab-halfswitch-tab.is-on { background: var(--ab-bg-raised); color: var(--ab-fg); border-color: var(--ab-border); box-shadow: 0 1px 1px var(--ab-border); }
+/* The selected tab has a shadow of its own, which would hide the focus ring of ui.css (:focus-visible is less specific). */
+.ab-halfswitch-tab:focus-visible, .ab-halfswitch-tab.is-on:focus-visible { box-shadow: var(--ab-ring); }
 .ab-halfswitch-insights.is-on { color: var(--ab-accent); }
 .ab-halfswitch-assist.is-on { color: var(--ab-ai); border-color: var(--ab-ai-line); }
 .ab-halfswitch-note { font-weight: 500; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }

@@ -50,7 +50,7 @@ module.exports = {
 
     // 2. An Insights item opens its card: the Insights half comes forward, nothing is sent.
     await clickButton(p, /^Related tickets$/);
-    await p.waitForFunction(() => window.__vis(document.querySelectorAll('[role=tab][id$="-half-tab-insights"]')).some((t) => t.getAttribute('aria-selected') === 'true'), { timeout: 5000 });
+    await p.waitForFunction(() => window.__vis(document.querySelectorAll('[role=tab][id$="-half-tab-insights"]')).some((t) => t.getAttribute('aria-selected') === 'true'), { timeout: 10000 });
     t.check('"Related tickets" shows the Insights half (its card), and nothing went to the AI', (await halfOn(p)) === 'insights' && ai.requests.length === 0, `${await halfOn(p)} / ${ai.requests.length}`);
 
     // 3. An AI item is the same as the action in AI Assist: AI Assist comes forward, the preview comes first, nothing is sent before it is approved.

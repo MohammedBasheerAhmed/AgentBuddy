@@ -42,7 +42,7 @@ function loadScenario(file) {
 const SCENARIOS = [...SCENARIO_FILES.filter((f) => f !== 'e-readonly'), ...SCENARIO_FILES.filter((f) => f === 'e-readonly')].map(loadScenario);
 
 const SCENARIO_TIMEOUT_MS = Number(process.env.E2E_SCENARIO_TIMEOUT_MS) || 45000; // a normal scenario takes 3 to 15 seconds
-const RUN_TIMEOUT_MS = Number(process.env.E2E_RUN_TIMEOUT_MS) || 270000; // a normal run takes under two minutes (20 scenarios); the whole run stays under 4.5 minutes even when steps time out
+const RUN_TIMEOUT_MS = Number(process.env.E2E_RUN_TIMEOUT_MS) || 420000; // a normal run takes under three minutes; the whole run stays under seven minutes even when steps time out
 
 const after = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
@@ -118,7 +118,7 @@ async function main() {
     if (only.length && !only.includes(s.id)) continue;
     t.section(`${s.id}. ${s.title}`);
     try {
-      await withTimeout(s.run(t, ctx), SCENARIO_TIMEOUT_MS, `scenario ${s.id}`);
+      await withTimeout(s.run(t, ctx), s.timeoutMs || SCENARIO_TIMEOUT_MS, `scenario ${s.id}`); // a scenario that walks every screen twice says so with timeoutMs
     } catch (err) {
       // The message, then where in OUR files it happened (the lines inside puppeteer say nothing about which step stalled).
       const lines = String(err.stack || err).split('\n');

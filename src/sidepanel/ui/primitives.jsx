@@ -147,10 +147,14 @@ export function HalfSwitch({ value, onChange, idBase, assist = true, assistNote 
   );
 }
 
-/** The panel a half switch controls. */
-export function HalfPanel({ idBase, half, hidden, children }) {
+/**
+ * The panel a half switch controls. `switched` is false where there is no switch (a screen with one half, or AI switched off): the
+ * panel is then a plain pane, since a tab panel named by a tab that is not there is a broken reference for a screen reader.
+ */
+export function HalfPanel({ idBase, half, hidden, switched = true, children }) {
+  const tabProps = switched ? { role: 'tabpanel', 'aria-labelledby': `${idBase}-tab-${half}` } : {};
   return (
-    <div id={`${idBase}-panel-${half}`} role="tabpanel" aria-labelledby={`${idBase}-tab-${half}`} className="ab-pane" hidden={hidden || undefined}>
+    <div id={`${idBase}-panel-${half}`} {...tabProps} className="ab-pane" hidden={hidden || undefined}>
       {children}
     </div>
   );

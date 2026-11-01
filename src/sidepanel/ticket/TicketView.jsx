@@ -144,7 +144,7 @@ export default function TicketView({ page, eff, active = true, launch = null, on
         </div>
       )}
 
-      <HalfPanel idBase="ab-ticket-half" half="insights" hidden={shown !== 'insights'}>
+      <HalfPanel idBase="ab-ticket-half" half="insights" hidden={shown !== 'insights'} switched={Boolean(aiOn)}>
         {(visited.has('insights') || shown === 'insights') && (
           <TicketInsights page={page} eff={eff} record={record} header={head.header} active={active && shown === 'insights'} openCard={openCard} onShowCard={showCard} />
         )}

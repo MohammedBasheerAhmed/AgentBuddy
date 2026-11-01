@@ -28,7 +28,7 @@ export default function ScreenView({ screen, Insights, Assist = null, page, eff,
     <div className="ab-pane">
       {hasAssist && <HalfSwitch idBase={idBase} value={shown} onChange={choose} assistNote={skipped ? 'off' : ''} />}
       {hasAssist && <HalfRule half={shown} destination={destinationOf(eff)} />}
-      <HalfPanel idBase={idBase} half="insights" hidden={shown !== 'insights'}>
+      <HalfPanel idBase={idBase} half="insights" hidden={shown !== 'insights'} switched={hasAssist}>
         {mounted('insights') && (
           <ErrorBoundary resetKey={`${screen}:insights`}>
             <Insights page={page} eff={eff} active={active && shown === 'insights'} {...extra} />
