@@ -5,6 +5,16 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### The panel's screens as an icon dock at the bottom (R10, phase 2)
+- The row of text tabs under the header (Ticket, My work, Team, Write, Knowledge) is now a **floating icon dock at the bottom centre of the
+  panel**, the same pill as the one on the ServiceNow page: a ticket, an inbox, two people, a pen and a book. The screen on show is filled
+  green. It floats above the screen while it scrolls and sits after the last card at the end.
+- **Hover or tab to an icon and its name shows above it.** The name is also the icon's text for a screen reader, so the tab list is as it was
+  (one tab stop, left and right arrows, Home and End); it comes after the screens in the page, as it does on the screen, and is inert behind
+  the command palette and the dialogs like the rest of the panel. In Arabic it is mirrored and the names are Arabic.
+- Scenario `zw` (the dock), `tests/icon-dock.test.js` (every screen and every action has an icon that can be drawn); questions for you in
+  `docs/live-questions/look.md` (8 to 10).
+
 ### The icon dock on the ServiceNow page (R10, phase 1)
 - The small tab on the right edge of the page, and the 236 px card of text buttons it opened, are replaced by a **dock at the bottom
   centre** of the window: a white pill with the Buddy mark and one round icon button per main action (the same icons as the panel's

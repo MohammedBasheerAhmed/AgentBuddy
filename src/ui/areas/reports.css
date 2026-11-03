@@ -248,7 +248,7 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
 .ab-statusline { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
 .ab-inline-check { display: inline-flex; vertical-align: middle; margin-inline-start: 4px; }
 .ab-offscreen { position: fixed; inset-inline-start: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
-.ab-details > summary { cursor: pointer; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); padding: 2px 0; }
+.ab-details > summary { cursor: pointer; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); padding: 4px 0; min-height: 24px; }
 .ab-details[open] > summary { margin-bottom: 4px; }
 .ab-fieldset { border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); padding: 8px 10px; margin: 0 0 12px; min-width: 0; }
 .ab-fieldset legend { padding: 0 4px; }

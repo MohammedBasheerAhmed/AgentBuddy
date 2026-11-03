@@ -21,3 +21,10 @@ browser's own side panel and never on a real instance. These are the things only
    and the AI actions in it are named in Arabic. Typing English words ("settings", "dark") still finds the commands. Does it feel right?
 7. **Which commands are missing?** The palette lists the screens, every AI action this ticket offers, the Insights cards the quick
    bar can open, the two halves, Settings, the colours and the languages. What would you type that finds nothing?
+8. **The icon dock at the bottom of the panel (R10).** The screens are five round icons in a pill at the bottom centre. Do the icons read
+   without the words (ticket, inbox, two people, pen, book) and does the name on hover or on the keyboard help? Does the dock cover
+   something you need while a screen scrolls behind it (a button at the bottom of a card, the Ask box)? A screenshot of the spot is enough.
+9. **Is the screen on show clear enough?** It is the green filled icon; the others are plain. Without a visible name, would you want the
+   name of the screen on show written next to its icon (it would make the dock a little wider and move when you change screen)?
+10. **The dock at the real width and in Arabic.** At about 400 px the dock is about 230 px wide. In Arabic it is mirrored (Ticket at the
+   right end). Anything cut off, too small, or in the wrong order?

@@ -35,3 +35,9 @@ const FEATURE_ICONS = {
 
 /** The icon name for a feature or card id; the AI spark for one this table does not know. */
 export const featureIcon = (id) => FEATURE_ICONS[id] || 'spark';
+
+// The icon of each screen of the panel (src/profiles/profiles.js SCREENS): the icon bar at the bottom of the panel shows these.
+const SCREEN_ICONS = { ticket: 'ticket', mywork: 'inbox', team: 'users', write: 'pen', knowledge: 'book' };
+
+/** The icon name for a screen id; a plain dot-less fallback (the AI spark) for one this table does not know. */
+export const screenIcon = (id) => SCREEN_ICONS[id] || 'spark';

@@ -8,10 +8,10 @@ progress log). **Next session: start at "Where to pick up" just below.**
 (built, tested and pushed; waiting for you to see it working, best on the real instance in V1) · `Partly built` (the row says
 what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` (only you can do it) · `Dropped`.
 
-## Where to pick up (updated 2026-11-01)
+## Where to pick up (updated 2026-11-03)
 
-Everything planned is built and on GitHub (latest commit on `main`). Status: 83 ready for review, 3 need you (V1 to V3). Nothing has
-been seen on the real instance yet. Unit tests 2,802, end-to-end 1,097 checks (real Chrome, fake ServiceNow, fake AI).
+Everything planned is built and on GitHub (latest commit on `main`). Status: 84 ready for review, 3 need you (V1 to V3). Nothing has
+been seen on the real instance yet. Unit tests 2,805, end-to-end 1,128 checks (real Chrome, fake ServiceNow, fake AI).
 
 **Done since the last wrap-up (2026-11-01, one long session):**
 
@@ -34,6 +34,17 @@ been seen on the real instance yet. Unit tests 2,802, end-to-end 1,097 checks (r
   bar on the ServiceNow page) and the command palette (`Ctrl+K`). Steps 1 to 3 of the plan only: the other screens (My work, Team,
   Write, Knowledge, the Settings page) are not restyled yet. Questions for you in `docs/live-questions/look.md`.
 
+**Done since then (2026-11-03):**
+
+- **R10 icon docks (after your "the small side bar is not looking great ... icons, on hover it will show what it is"):** the bar on the
+  ServiceNow page is now a pill at the bottom centre with one round icon per action (names on hover and on the keyboard, folds to the
+  mark, drag or arrow keys move it along the bottom), and the panel's screens (Ticket, My work, Team, Write, Knowledge) are an icon dock
+  at the bottom centre of the panel. Scenarios `y`, `z`, `zy`, new `zw`, `tests/bar-logic.test.js`, new `tests/icon-dock.test.js`.
+  Questions for you: `docs/live-questions/quickbar.md` (19 to 22) and `look.md` (8 to 10). Also two summary rows ("By table" and the
+  setup "more") are now 24 px tall (the dock next to them showed they were 23).
+  Two unit tests that time a parse (`tests/render-safetext.test.js`, `tests/pii-detectors.test.js`) can fail when the whole suite runs
+  at once on a busy computer; each passes alone (about 150 ms against a 500 ms limit).
+
 **When you say "continue", Claude starts here:**
 
 1. **V1, the real-instance walk-through, whenever you are at Chrome.** Reload Agent Buddy in the already-open Chrome from
@@ -50,8 +61,8 @@ been seen on the real instance yet. Unit tests 2,802, end-to-end 1,097 checks (r
 5. **R9, next steps:** look at the new header, tiles and palette in the real panel (`docs/live-questions/look.md`), then restyle My work,
    Team, Write, Knowledge and the Settings page the same way.
 
-How to check a change: `node tests/run.js` (unit, 2,802), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
-(1,097 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
+How to check a change: `node tests/run.js` (unit, 2,805), `node scripts/check-compile.js`, `node build.js`, `node e2e/run.js`
+(1,128 checks, needs puppeteer-core), `node scripts/traceability.js --check` (CI fails if the review map is stale; run it without
 `--check` to rewrite the map). Rules for every change: `docs/build-rules.md`.
 
 ---
@@ -345,6 +356,7 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | R7 | e2e harness: attach to a new tab before its first request | - | - | New | Record links from the Ticket screen open in a new tab; the harness can miss its first reads, so the coverage check tolerates up to 5 plain GET reads (listed) | Attach through the DevTools protocol before the tab starts (auto-attach, wait for debugger), then drop the tolerance. Done: new pages are logged from their start, and every http(s) request is logged in the browser (held and continued at once), so the reads a page makes as it closes or navigates are seen too; coverage has zero tolerance (0 missing in 4 of 4 full runs) | - | Ready for review |
 | R8 | Arabic (and a language setting) | - | - | New | English only | Settings > Language (English, العربية, same as the browser). 2,760 texts in Arabic across the panel, Settings, the Team page and the bar on the ServiceNow page; right to left; masking that understands Arabic digits, Arabic labels and Arabic spellings of a name (`tests/pii-arabic.test.js`); AI answers in the ticket's language (default) or the panel's (`Language of AI answers`). Checked by `tests/i18n.test.js` and scenario `zy` (every screen: no English left, nothing sideways at 320 px, the accessibility audit) | Not yet (`docs/live-questions/i18n.md`) | Ready for review |
 | R9 | Look and feel, colours, command palette | - | - | New | Plain text header, text-only action pills, a title cut off at one line, no way to switch light and dark, no palette | Built (steps 1 to 3 of the plan you approved on 2026-11-01): a real header (mark, name, instance, four buttons), one icon set, the ticket at a glance with the title on two lines and state / priority / SLA chips, quick actions as icon tiles; Settings > Appearance (Same as the computer, Light, Dark) for the panel, Settings, the Team page and the bar on the ServiceNow page, with a sun / moon button in the header; the command palette (`Ctrl+K`, Mac `Cmd+K`, or the header button): screens, every AI action of the open ticket, Insights cards, the two halves, Settings, colours, languages, in English and Arabic. Scenario `zx`, `tests/palette.test.js`. Left for later steps: the same treatment for My work, Team, Write, Knowledge and Settings pages | Not yet (`docs/live-questions/look.md`) | Ready for review |
+| R10 | Icon docks: the page bar and the panel screens | - | - | New | A small green tab on the right edge of the ServiceNow page that opened a 236 px card of text buttons; text tabs for the five screens under the header | Built (plan agreed 2026-11-03: both, page first). The page bar is a pill at the bottom centre: the Buddy mark and one round icon per action (the panel's own icons, AI spark on AI actions), the name at once on hover and on the keyboard, folds to the mark, drag or arrow keys move it along the bottom, remembered in the page; nothing it may do changed (closed shadow root, trusted clicks, visibility check, below the page's dialogs). The panel's screens are an icon dock at the bottom centre, the screen on show filled, names on hover and focus, inert behind the palette, mirrored in Arabic. Scenarios `y`, `z`, `zy`, `zw`, `tests/bar-logic.test.js`, `tests/icon-dock.test.js` | Not yet (`docs/live-questions/quickbar.md` 19 to 22, `look.md` 8 to 10) | Ready for review |
 
 ---
 
@@ -390,3 +402,4 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-11-01 | **R1 and the accessibility half of R6 built** (`f7c30a4` to `f55fa1d`). The e2e job fails on Linux because headless Chrome makes the popup that holds the panel the last focused window, so the panel read itself; found with a focus log (two guesses were wrong first: keeping the main window focused, and bringToFront), fixed by taking the main window's focus away and giving it back. The e2e run now passes on GitHub: 1,010 of 1,010. New scenario `zz` audits every screen in light and dark in the real browser (contrast, names, labels, focus, target size, reduced motion, 320 px) and found two faults, fixed: no focus ring on the selected Insights / AI Assist tab, and a tab panel named by a tab that does not exist on one-half screens. Unit tests 2,729 of 2,729. Still waiting for your three decisions (R3, R5, rest of R6). |
 | 2026-11-01 | **Arabic, shortcuts, self-hosted install and the minified build** (`4038b82` and the commits around it). You said: self-hosted for now; Arabic as well as English; Mac and Windows, Chrome and Edge; do all steps; take the best approach; AI answers in the ticket's language and the panel's. Built by Claude with four parallel workers (one per area of the panel) and a one-off codemod for the first 756 texts; every text has an Arabic entry and a test keeps it so. Unit tests 2,784; end-to-end 1,057. Not seen by anyone who reads Arabic yet: the wording is the model's (glossary in `docs/i18n-arabic.md`). |
 | 2026-11-01 | **Look and feel, colours and the command palette (R9).** You said the UI/UX was not great against NowBuddy and SN Utils and approved steps 1 to 3 ("go ahead"). Claude rendered NowBuddy's own preview and the panel side by side, then built the header, the icon set, the glance chips and tiles, the theme setting (panel, Settings, Team page, page bar) and the palette. Scenario `zx` (40 checks), `tests/palette.test.js`. The rest of the screens wait for your look at the real panel. |
+| 2026-11-03 | **Icon docks (R10).** You said the small side bar was not looking great and should be in the centre at the bottom, with an icon for each function that names itself on hover. Claude read the bar and the panel, found two candidates (the tab on the ServiceNow page; the panel's screen tabs), and you chose both, page first, with the dock folding to a small pill. Built the page dock (phase 1, `977df81`) and the panel dock (phase 2); scenarios `y`, `z`, `zy`, `zw` and the full run of 1,128 checks passed. |

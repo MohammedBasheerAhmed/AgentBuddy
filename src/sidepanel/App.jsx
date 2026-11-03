@@ -11,7 +11,7 @@ import { planPanel, withVisited } from './sections.js';
 import { nextTabIndex, panelId, tabId } from './tabKeys.js';
 import { screensFor } from '../profiles/profiles.js';
 import { ShieldMark } from './ui/primitives.jsx';
-import { BrandMark, Icon } from './ui/icons.jsx';
+import { BrandMark, Icon, screenIcon } from './ui/icons.jsx';
 import { SettingsButton } from './shell/shellParts.jsx';
 import CommandPalette, { isPaletteKey, paletteShortcut } from './palette/CommandPalette.jsx';
 import { buildCommands } from './palette/commands.js';
@@ -90,7 +90,11 @@ function Header({ base, eff, onPalette }) {
   );
 }
 
-/** The row of screens: plain tabs with an underline (one tab stop, arrow keys move). */
+/**
+ * The screens, as a floating icon dock at the bottom centre of the panel: one round icon per screen, the one on show filled. The name of
+ * an icon shows above it on hover and on the keyboard (CSS, shell.css); the name is also the button's text for a screen reader (one
+ * tab stop, arrow keys move). It comes after the screens in the page, as it does on the screen.
+ */
 function ScreenTabs({ screens, value, onChange }) {
   const buttons = useRef({});
   const at = screens.findIndex((s) => s.id === value);
@@ -117,9 +121,11 @@ function ScreenTabs({ screens, value, onChange }) {
           aria-controls={panelId(NAV, s.id)}
           tabIndex={s.id === value ? 0 : -1}
           className="ab-screen-tab"
+          data-name={s.label}
           onClick={() => onChange(s.id)}
         >
-          {s.label}
+          <Icon name={screenIcon(s.id)} size={20} />
+          <span className="ab-sr">{s.label}</span>
         </button>
       ))}
     </nav>
@@ -217,7 +223,6 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
   return (
     <div className="ab-app">
       <Header base={plan.base || lastSeen} eff={eff} onPalette={onPalette} />
-      {plan.showNav && <ScreenTabs screens={screens} value={plan.visible} onChange={onChoose} />}
       <main className="ab-main">
         {plan.enabled && (
           <ErrorBoundary resetKey={page.href}>
@@ -245,6 +250,7 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
           );
         })}
       </main>
+      {plan.showNav && <ScreenTabs screens={screens} value={plan.visible} onChange={onChoose} />}
       <CommandPalette open={paletteOpen} onClose={onPaletteClose} commands={commands} onRun={runCommand} />
     </div>
   );

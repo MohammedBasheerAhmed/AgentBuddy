@@ -23,7 +23,7 @@ export function Icon({ name, size = 16, className = '' }) {
   );
 }
 
-export { featureIcon } from './featureIcons.js';
+export { featureIcon, screenIcon } from './featureIcons.js';
 
 /** The mark of the product: the tile of the extension's own icon (a speech bubble with a tick), drawn in the accent colour. */
 export function BrandMark({ size = 26 }) {
