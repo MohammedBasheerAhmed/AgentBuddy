@@ -9,6 +9,9 @@
 
 button { font-size: inherit; color: inherit; cursor: pointer; margin: 0; }
 button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
+/* The icons' focus ring must not reach the next icon (the gap is 4 px): the browser's visibility check counts a neighbour's ring over an
+   icon as "covering" it. A 2 px gap of the dock's colour, then a thin ring of the accent: 3.5 px in all. */
+.handle:focus-visible, .act:focus-visible, .fold:focus-visible { box-shadow: 0 0 0 2px var(--ab-bg), 0 0 0 3.5px var(--ab-accent); }
 
 /* the name of an icon button for a screen reader, not drawn */
 .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -46,15 +49,17 @@ button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 .fold { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ab-fg-muted); }
 .fold:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
 
-/* what a hovered or focused icon is called: above the dock, dark on a light page and light on a dark one. It cannot be clicked. */
-.tip, .notice { position: absolute; bottom: calc(100% + 10px); left: 0; width: max-content; pointer-events: none; }
-.tip { max-width: min(260px, calc(100vw - 16px)); padding: 6px 10px; border-radius: var(--ab-radius); background: var(--ab-fg); color: var(--ab-bg); box-shadow: var(--ab-shadow); font-size: var(--ab-text-sm); line-height: 1.35; animation: tip-in 120ms ease-out; }
+/* what a hovered or focused icon is called: above the dock, dark on a light page and light on a dark one. It cannot be clicked.
+   KEEP ITS SHADOW SMALL: the browser's visibility check (bar.js) counts anything painted over an icon, its shadow too, as "covering" it,
+   and then refuses the click. The gap (12 px) plus the dock's padding (6 px) must stay clear of the shadow (offset + blur, 8 px here). */
+.tip, .notice { position: absolute; bottom: calc(100% + 12px); left: 0; width: max-content; pointer-events: none; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28); }
+.tip { max-width: min(260px, calc(100vw - 16px)); padding: 6px 10px; border-radius: var(--ab-radius); background: var(--ab-fg); color: var(--ab-bg); font-size: var(--ab-text-sm); line-height: 1.35; animation: tip-in 120ms ease-out; }
 .tip-line { display: flex; align-items: center; gap: 6px; font-weight: 650; }
 .tip-ai { flex: none; padding: 0 5px; border: 1px solid currentColor; border-radius: var(--ab-radius-sm); font-size: var(--ab-text-xs); font-weight: 650; line-height: 1.4; }
 .tip-hint { display: block; margin-top: 2px; font-size: var(--ab-text-xs); color: color-mix(in srgb, var(--ab-bg) 80%, var(--ab-fg)); }
 @keyframes tip-in { from { transform: translateY(3px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 /* what the person needs to know after a click that started nothing */
-.notice { max-width: min(320px, calc(100vw - 16px)); margin: 0; padding: 6px 10px; border: 1px solid var(--ab-warn-line); border-radius: var(--ab-radius); background: var(--ab-warn-soft); color: var(--ab-warn); box-shadow: var(--ab-shadow); font-size: var(--ab-text-sm); }
+.notice { max-width: min(320px, calc(100vw - 16px)); margin: 0; padding: 6px 10px; border: 1px solid var(--ab-warn-line); border-radius: var(--ab-radius); background: var(--ab-warn-soft); color: var(--ab-warn); font-size: var(--ab-text-sm); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

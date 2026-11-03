@@ -108,4 +108,6 @@ person with only fulfiller roles, and what to change if it is different.
     Check at a window about 400 px wide and with the page zoomed to 150% or 200%.
 22. **Is clicking the mark to fold and open it found by people?** The chevron at the right end folds it too; the mark both folds and
     opens, and drags. If people drag when they meant to fold (or the other way round), say which, and the 5 px threshold (`DRAG_PX`) or the
-    chevron can change.
+    chevron can change.23. **Does pressing an icon work after hovering it?** (Fixed 2026-11-03 after it failed on dev364920.) Hover an icon until its name shows,
+    then press it: the panel opens and the action starts behind its preview. If the dock still says "something on the page was covering
+    the bar", note the page type (classic form, Next Experience, Workspace, portal) and what is drawn near the bottom centre.

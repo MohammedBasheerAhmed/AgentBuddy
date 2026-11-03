@@ -5,6 +5,18 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Fix: pressing an icon of the page dock after hovering it (R10)
+- Seen on dev364920: hover an icon until its name shows, press it, and the dock said "Nothing was started: something on the page was
+  covering the bar". The name's soft drop shadow reached down over the icons, and Chrome's visibility check (the guard against a page
+  drawing over the dock, `clickVerdict`) counts a shadow as covering. The name and the note above the dock now have a small shadow that
+  stays clear of the icons, the gap above the dock is 12 px, and the icons' keyboard focus ring fits inside the 4 px gap between icons
+  (a focused icon must not "cover" its neighbour either). The guard itself is unchanged.
+- A dialog that is in the page but not shown (a classic form keeps a hidden light box with `aria-modal="true"` in the page) no longer
+  hides the dock; only a dialog that is on screen does.
+- Scenario `z` now hovers the icon for a moment before pressing it (the earlier run pressed it before Chrome had looked again, which is
+  why it passed); scenario `y` checks the hidden-dialog case; `tests/bar-logic.test.js` reads the stylesheet and fails if a shadow or ring
+  would reach an icon again.
+
 ### The panel's screens as an icon dock at the bottom (R10, phase 2)
 - The row of text tabs under the header (Ticket, My work, Team, Write, Knowledge) is now a **floating icon dock at the bottom centre of the
   panel**, the same pill as the one on the ServiceNow page: a ticket, an inbox, two people, a pen and a book. The screen on show is filled

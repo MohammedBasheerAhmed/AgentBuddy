@@ -144,4 +144,43 @@ test('a note above the dock goes away by itself', () => {
   assert.ok(NOTICE_MS >= 5000 && NOTICE_MS <= 30000);
 });
 
+test('the dock is a pill at the bottom centre with icons, a tooltip, and none of the old right-edge tab', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const bar = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'bar.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'bar.css'), 'utf8');
+  assert.match(bar, /pin\('bottom'/, 'fixed to the bottom edge');
+  assert.match(bar, /dockLeft\(/, 'centred on the chosen place by the tested function');
+  assert.match(bar, /featureIcon\(action\.id\)/, 'every action has its own icon');
+  assert.match(bar, /class: 'tip'/, 'a tooltip of its own (the browser title is slow and never shows for the keyboard)');
+  assert.match(bar, /':focus-visible'/, 'the keyboard shows the name too');
+  assert.match(bar, /e\.isTrusted && press\(action, button\)/, 'only a real click starts an action');
+  assert.ok(!/title:/.test(bar), 'no native title: it would show a second tooltip over ours');
+  assert.ok(!/data-side|Move to the (left|right)|writing-mode/.test(bar + css), 'the old tab on the edge is gone');
+  assert.ok(!/opacity\s*:/.test(css.replace(/@keyframes[^}]*\}[^}]*\}/g, '')), 'no opacity on the dock: the visibility check counts a see-through button as covered');
+});
 
+// Seen on dev364920: hover an icon, its name shows, press it: "something on the page was covering the bar". The browser's visibility check
+// (IntersectionObserver v2) counts anything painted over an icon, its shadow too, as covering it, and the dock then refuses the click.
+// The name's big drop shadow reached down into the icons. So the name and the note above the dock keep a small shadow (offset + blur inside
+// the gap above the dock plus its padding), and the icons' focus ring stays inside the 4 px gap between icons.
+test('nothing the dock draws next to an icon reaches over it: small shadow on the name and note, thin focus ring', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'bar.css'), 'utf8');
+  const body = (selector) => {
+    const at = css.indexOf(selector + ' {');
+    return at < 0 ? '' : css.slice(at, css.indexOf('}', at));
+  };
+  const above = body('.tip, .notice');
+  const gap = Number((above.match(/bottom: calc\(100% \+ (\d+)px\)/) || [])[1]);
+  const padding = Number((body('.dock').match(/padding: (\d+)px/) || [])[1]) + 1; // the dock's padding and its border
+  const shadow = above.match(/box-shadow: (-?\d+)(?:px)? (-?\d+)px (\d+)px/);
+  assert.ok(gap >= 10 && padding >= 6 && shadow, 'the gap, the padding and the shadow can be read from the stylesheet');
+  const reach = Math.abs(Number(shadow[2])) + Number(shadow[3]);
+  assert.ok(reach < gap + padding, `the shadow reaches ${reach} px, the icons are ${gap + padding} px away`);
+  assert.ok(!/var\(--ab-shadow\)/.test(body('.tip')) && !/var\(--ab-shadow\)/.test(body('.notice')), 'the big shared shadow is not used above the dock');
+  const ring = body('.handle:focus-visible, .act:focus-visible, .fold:focus-visible');
+  assert.ok(ring && !/var\(--ab-ring\)/.test(ring) && /3\.5px/.test(ring), 'the icons focus ring is thinner than the 4 px gap between them');
+  assert.match(body('.actions'), /gap: 4px/, 'the gap between icons that the ring has to fit in');
+});

@@ -62,6 +62,22 @@ module.exports = {
     await ticket.evaluate(() => document.body.classList.remove('modal-open'));
     await until('the dock to come back after the dialog', (x) => x.visible, 8000);
     t.check('the dialog closes: the dock is back', (await state()).visible);
+    // A classic form keeps a hidden light box (display: none, aria-modal="true") in the page all the time: only a shown dialog hides the dock.
+    await ticket.evaluate(() => {
+      const box = document.createElement('div');
+      box.id = 'ab-test-lightbox';
+      box.setAttribute('aria-modal', 'true');
+      box.className = 'modal';
+      box.style.display = 'none';
+      document.body.append(box);
+    });
+    await ctx.sleep(3500);
+    t.check('a dialog that is in the page but not shown does not hide the dock', (await state()).visible);
+    await ticket.evaluate(() => (document.getElementById('ab-test-lightbox').style.display = 'block'));
+    await until('the dock to hide behind the shown dialog', (x) => !x.visible, 8000);
+    t.check('the same dialog shown: the dock hides', !(await state()).visible);
+    await ticket.evaluate(() => document.getElementById('ab-test-lightbox').remove());
+    await until('the dock to come back', (x) => x.visible, 8000);
     t.check('the page can not reach the buttons by searching the document', await ticket.evaluate(() => !document.querySelector('button.handle, .act, .dock, .fold') && ![...document.querySelectorAll('*')].some((e) => /Agent Buddy/.test(e.getAttribute('aria-label') || ''))));
 
     // 2c. Drag the folded mark to the right with the mouse: the pill moves by about the pointer's travel, stays folded (a drag is not a

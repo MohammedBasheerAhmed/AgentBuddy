@@ -55,11 +55,17 @@ module.exports = {
     // A click counts only once the actions have been on screen for half a second (src/content/barLogic.js ARM_MS: a page cannot
     // show the bar just under a click meant for something else). A person is never that fast; this test can be, so it waits.
     await ctx.sleep(ARM_MS + 200);
+    // A person hovers over an icon (its name shows) before pressing it. Chrome's visibility check looks again about 100 ms after anything
+    // near an icon changes, so the pause matters: a name whose shadow reached the icon made it "covered" and the click was refused.
+    await bar.hover(actionButton);
+    await ctx.waitUntil('the name of the icon', async () => (await bar.view()).tipShown, { timeout: 4000 });
+    await ctx.sleep(1500);
     await bar.click(actionButton);
     await ctx.waitUntil('the request for the panel', async () => (await ctx.ext(() => window.__launchLog)).some((x) => x.set), { timeout: 8000 });
     const left = (await ctx.ext(() => window.__launchLog)).find((x) => x.set).set;
     t.check('the click left one request: this tab, this record, this action, and nothing else', left && left.tabId === tabId && left.table === 'incident' && left.sysId === data.INCIDENT_ID && left.featureId === 'record-summary' && Object.keys(left).sort().join(',') === 'at,featureId,sysId,tabId,table', JSON.stringify(left));
     t.check('the request is fresh', Date.now() - left.at < 15000);
+    t.check('a click after a hover (the name showing) is taken: the dock does not say something covered it', !/covering/.test((await bar.view()).noticeText), (await bar.view()).noticeText);
     t.check('nothing was sent to the AI by the bar or the service worker', ai.requests.length === 0, String(ai.requests.length));
 
     // 2. The browser opens the side panel for the click (the click's permission travels page -> service worker), and a panel takes the

@@ -60,13 +60,25 @@ function brandMark(doc, size = 30) {
   return svg;
 }
 
+// Is this element drawn (not display: none, not visibility: hidden, in a tree that is shown)?
+function isShown(el) {
+  try {
+    if (typeof el.checkVisibility === 'function') return el.checkVisibility({ visibilityProperty: true });
+    return el.getClientRects().length > 0;
+  } catch {
+    return true; // when unsure, count it: the dock then stays out of the way
+  }
+}
+
 // Is a modal dialog open, as far as the top document and the classic form's frame can be seen from here (pageHasModal)?
 function modalShown(doc, win) {
   const look = (d) => {
     if (!d) return {};
     let dialogs = 0;
     try {
-      dialogs = d.querySelectorAll('[aria-modal="true"], .modal.in, .modal.show, dialog[open], .modal-backdrop').length;
+      // Only a dialog that is on screen counts: a classic form keeps a hidden light box (display: none, aria-modal="true") in the page
+      // all the time, which must not hide the dock.
+      dialogs = [...d.querySelectorAll('[aria-modal="true"], .modal.in, .modal.show, dialog[open], .modal-backdrop')].filter(isShown).length;
     } catch {
       dialogs = 0;
     }
