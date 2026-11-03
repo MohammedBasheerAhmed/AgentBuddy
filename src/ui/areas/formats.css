@@ -1,0 +1,26 @@
+/* Answer formats (R11): the editor on the Settings page and under an action in the side panel (src/formats/FormatEditor.jsx). Logical
+   properties only, so right to left needs nothing of its own. Colours are the theme's tokens. */
+.ab-fmt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ab-fmt-group { margin-block: 12px; }
+.ab-fmt-grouphead { margin: 0 0 4px; font-size: var(--ab-text-md); font-weight: 650; }
+.ab-fmt-item > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 28px; }
+.ab-fmt-title { font-weight: 600; color: var(--ab-fg); }
+.ab-fmt-state { padding: 1px 8px; border: 1px solid var(--ab-accent-line); border-radius: 999px; background: var(--ab-accent-soft); color: var(--ab-fg); font-size: var(--ab-text-sm); }
+.ab-fmt-state-locked { border-color: var(--ab-warn-line); background: var(--ab-warn-soft); color: var(--ab-warn); }
+.ab-fmt-rows { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ab-fmt-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
+.ab-fmt-btns { display: flex; gap: 4px; justify-content: flex-end; }
+.ab-fmt-btn { min-width: 28px; min-height: 28px; padding: 0 6px; font-size: var(--ab-text-lg); line-height: 1; }
+.ab-fmt-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0 12px; }
+.ab-fmt-words { max-width: 8rem; }
+.ab-fmt-extra { min-height: 70px; }
+.ab-fmt-preview { margin: 0 0 6px; padding: 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-sunken); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }
+.ab-fmt-preview:focus-visible { outline: none; box-shadow: var(--ab-ring); }
+.ab-fmt-actions { flex-wrap: wrap; gap: 8px; margin-block: 8px 4px; }
+.ab-fmt-open { margin-block-start: 4px; }
+@media (min-width: 560px) {
+  .ab-fmt-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: center; }
+}
+/* in the side panel the editor sits under its action, in a box of its own so it reads as part of that action */
+.ab-act-item .ab-fmt { margin-block-start: 6px; padding: 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
+.ab-act-item .ab-fmt-row { background: var(--ab-bg); }

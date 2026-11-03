@@ -176,6 +176,48 @@
         }
       }
     },
+    "orgFormats": {
+      "title": "Formats for AI answers",
+      "description": "How some AI actions write their answer, for everyone: a list of objects, each with the \"feature\" (the action's id, for example record-summary), and any of: \"sections\" (a list of { \"name\", \"hint\" } for the ticket summary, the hand-off brief and the discussion catch-up), \"style\" (lines or bullets), \"words\" (30 to 500) and \"extra\" (a few sentences of extra instructions, up to 600 characters). \"locked\": true stops people changing that action. The rules about facts, customer safety and language always stay. At most 40 are used.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "hint": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "style": {
+            "type": "string",
+            "enum": ["lines", "bullets"]
+          },
+          "words": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 500
+          },
+          "extra": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
     "internalPhrases": {
       "title": "Internal-only phrases",
       "description": "Words and phrases the safe-to-send check flags in text going to a customer (internal team names, system names, project code names), on top of the built-in list. Not case-sensitive.",

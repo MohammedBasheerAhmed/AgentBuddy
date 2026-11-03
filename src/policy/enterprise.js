@@ -13,6 +13,7 @@ import { FEATURES } from '../features/registry.js';
 import { KEY_STORAGE_MODES, PII_MODES, POLICY_KEYS, PREVIEW_MODES, PRIORITY_ACCOUNT_LIMITS, instancePattern, normalizeEndpoint, normalizeInstance } from './policy.js';
 import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION } from '../reports/layoutFile.js';
+import { FORMAT_LIMITS, normalizeFormat, specOf } from '../formats/formats.js';
 import { orgDashboardProblems } from '../reports/dashboards.js';
 
 /** Keys that describe the build, not the policy. `$comment` is ignored. */
@@ -209,6 +210,23 @@ export function validateEnterpriseConfig(raw) {
       });
       if (raw.orgSnippets.length > 200) errors.push(`orgSnippets has ${raw.orgSnippets.length} entries; at most 200 are allowed.`);
       if (!errors.some((e) => e.startsWith('orgSnippets'))) policy.orgSnippets = raw.orgSnippets.map((s) => ({ ...s }));
+    }
+  }
+  if (has('orgFormats')) {
+    if (!Array.isArray(raw.orgFormats)) errors.push('orgFormats must be a list of { "feature", ... } objects.');
+    else {
+      const seen = new Set();
+      raw.orgFormats.forEach((item, i) => {
+        const id = isPlainObject(item) && typeof item.feature === 'string' ? item.feature.trim().toLowerCase() : '';
+        if (!id) errors.push(`orgFormats[${i}] needs a text "feature" (the id of an AI action).`);
+        else if (!specOf(id)) errors.push(`orgFormats[${i}]: "${id}" is not an AI action whose format can be changed.`);
+        else if (seen.has(id)) errors.push(`orgFormats[${i}]: "${id}" is listed twice.`);
+        else if (Object.keys(item).some((k) => !['feature', 'sections', 'style', 'words', 'extra', 'locked'].includes(k))) errors.push(`orgFormats[${i}] may only have feature, sections, style, words, extra and locked.`);
+        else if (!normalizeFormat(item, id)) errors.push(`orgFormats[${i}]: "${id}" has nothing that changes the action's format.`);
+        else seen.add(id);
+      });
+      if (raw.orgFormats.length > FORMAT_LIMITS.orgCount) errors.push(`orgFormats has ${raw.orgFormats.length} entries; at most ${FORMAT_LIMITS.orgCount} are allowed.`);
+      if (!errors.some((e) => e.startsWith('orgFormats'))) policy.orgFormats = raw.orgFormats.map((f) => JSON.parse(JSON.stringify(f)));
     }
   }
   if (has('priorityAccounts')) {

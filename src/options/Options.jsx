@@ -17,6 +17,7 @@ import { instancePattern, normalizeInstance, isInstanceAllowed, checkProviderAll
 import { allowedProviderIds, dailyTokenLimit, hostAccessMode, looserThanFloor, parseDeployments, parseLimit, unknownDisabledFeatures } from './policyNotes.js';
 import { diagnosticsText } from './diagnostics.js';
 import ProfilePicker from './ProfilePicker.jsx';
+import { FormatsSection } from './FormatsSection.jsx';
 import Tabs from '../sidepanel/Tabs.jsx';
 import { panelId, tabId } from '../sidepanel/tabKeys.js';
 import { t, tm, tn, isolate, t as tr } from '../i18n/index.js';
@@ -1390,6 +1391,7 @@ export function AiAssistPage({ eff, reload, epoch }) {
         {eff.values.aiSkipped ? ` ${t('You chose to skip AI for now: untick it under Basics, "What you work on", to use it.')}` : ''}
       </p>
       <ProviderSection eff={eff} reload={reload} />
+      <FormatsSection eff={eff} reload={reload} />
       <UsageSection key={`usage-${epoch}`} eff={eff} />
     </>
   );

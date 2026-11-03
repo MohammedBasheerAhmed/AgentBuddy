@@ -147,6 +147,10 @@ module.exports = {
       await settings.waitForFunction(() => document.querySelector('#ab-settings-tab-ai')?.getAttribute('aria-selected') === 'true', { timeout: 10000 });
       await settle();
       await look(settings, 'Settings / AI Assist', scheme);
+      // the answer formats (R11), open: the editor of a summary (sections) and of a customer reply (extra instructions), then one with a format set
+      for (const feature of ['record-summary', 'reply-draft']) await settings.click(`details.ab-fmt-item[data-feature="${feature}"] > summary`);
+      await settle();
+      await look(settings, 'Settings / AI Assist / answer formats open', scheme);
       t.check(`${scheme}: the settings page switches to the ${scheme} theme too`, await schemeIs(settings, scheme));
       await settings.close();
     }

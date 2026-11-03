@@ -19,6 +19,7 @@ import { BAKED_POLICY } from './baked.js';
 import { t, tm } from '../i18n/core.js'; // (the mechanism only: the Arabic texts are registered by the pages that show these messages)
 import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from '../reports/layoutFile.js';
+import { FORMAT_LIMITS, cleanFormats, normalizeFormat, readOrgFormats, specOf } from '../formats/formats.js';
 
 export const PII_MODES = ['standard', 'strict', 'local-only'];
 export const PREVIEW_MODES = ['always', 'first', 'never'];
@@ -52,6 +53,7 @@ export const POLICY_KEYS = Object.freeze([
   'allowedProfiles',
   'lockedProfiles',
   'orgSnippets',
+  'orgFormats',
   'internalPhrases',
   'defaultDashboard',
   'priorityAccounts',
@@ -194,6 +196,18 @@ function readOrgSnippets(value) {
   return out;
 }
 
+// The organisation's formats for AI answers (R11): for an action both policies name, the managed one wins, and the action is locked when either
+// locks it. Each side was read by readOrgFormats already.
+function mergeOrgFormats(floor, managed) {
+  const out = [];
+  for (const entry of [...(managed || []), ...(floor || [])]) {
+    const at = out.findIndex((o) => o.feature === entry.feature);
+    if (at === -1) out.push({ ...entry });
+    else if (entry.locked) out[at] = { ...out[at], locked: true };
+  }
+  return out.slice(0, FORMAT_LIMITS.orgCount);
+}
+
 // The organisation's dashboard (N17): one dashboard layout exactly as the Team screen's "Save layout as a file" writes it,
 // { kind, version, dashboard: { name, scope, tables, widgets } }. Only its envelope and size are checked here (src/reports/layoutFile.js);
 // src/reports/dashboards.js cleans the dashboard inside exactly like a file a person loads, and drops one with no section it knows.
@@ -283,6 +297,8 @@ function readPolicy(raw) {
     allowedProfiles: Array.isArray(p.allowedProfiles) ? knownWords(p.allowedProfiles, PROFILE_IDS) : null,
     lockedProfiles: Array.isArray(p.lockedProfiles) ? knownWords(p.lockedProfiles, PROFILE_IDS) : null,
     orgSnippets: readOrgSnippets(p.orgSnippets),
+    // How some AI actions write their answer, for everyone (R11): a list of { feature, sections?, style?, words?, extra?, locked? }.
+    orgFormats: readOrgFormats(p.orgFormats),
     // More phrases the safe-to-send check treats as internal-only (team names, system names), on top of the built-in list.
     internalPhrases: unique(list(p.internalPhrases).map((s) => s.slice(0, 120))).slice(0, 200),
     // The Team screen's first dashboard for someone with none yet, and offered once to anyone else; never locked (N17).
@@ -382,6 +398,8 @@ export function mergePolicies(floorInput, managedInput) {
     // A profile set is not "stricter" than another: the managed side, when it locks profiles, decides.
     lockedProfiles: b.lockedProfiles ? [...b.lockedProfiles] : a.lockedProfiles ? [...a.lockedProfiles] : null,
     orgSnippets: readOrgSnippets([...a.orgSnippets, ...b.orgSnippets]),
+    // A format is not stricter or looser than another: for an action both name, the managed policy's wins; locked if either locks it.
+    orgFormats: mergeOrgFormats(a.orgFormats, b.orgFormats),
     internalPhrases: unique([...a.internalPhrases, ...b.internalPhrases]),
     // A dashboard is not stricter or looser than another: the managed policy's, when it sets one, wins over the compiled-in one.
     defaultDashboard: parseOrgDashboard(b.defaultDashboard || a.defaultDashboard).layout,
@@ -437,6 +455,7 @@ const KEY_TYPES = {
   allowedProfiles: 'list',
   lockedProfiles: 'list',
   orgSnippets: 'objects',
+  orgFormats: 'objects',
   internalPhrases: 'list',
   defaultDashboard: 'layout',
   priorityAccounts: 'list',
@@ -485,6 +504,23 @@ export function policyProblems(raw, { providers, checkDashboard } = {}) {
     }
     if (type === 'boolean' && typeof value !== 'boolean') {
       error(key, `${key} must be true or false; ${shown(value)} is read as ${key === 'auditExport' || key === 'aiEnabled' ? 'true' : 'false'}.`);
+      continue;
+    }
+    if (key === 'orgFormats') {
+      if (!Array.isArray(value)) {
+        error(key, `orgFormats must be a list of { "feature", ... } objects; ${shown(value)} is ignored.`);
+        continue;
+      }
+      const seen = new Set();
+      value.forEach((item, i) => {
+        const id = isPlainObject(item) && typeof item.feature === 'string' ? item.feature.trim().toLowerCase() : '';
+        if (!id) error(key, `orgFormats[${i}] needs a text "feature" (the id of an AI action); it is ignored.`);
+        else if (!specOf(id)) error(key, `orgFormats[${i}]: "${id}" is not an AI action whose format can be changed; it is ignored.`);
+        else if (seen.has(id)) error(key, `orgFormats[${i}]: "${id}" is already listed above; this one is ignored.`);
+        else if (!normalizeFormat(item, id)) error(key, `orgFormats[${i}]: "${id}" has no sections, style, words or extra that change anything; it is ignored.`);
+        else seen.add(id);
+      });
+      if (value.length > FORMAT_LIMITS.orgCount) note(key, `orgFormats: only the first ${FORMAT_LIMITS.orgCount} are used.`);
       continue;
     }
     if (type === 'objects') {
@@ -699,6 +735,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   aiSkipped: false, // "Skip AI for now": AI Assist halves say how to set AI up instead of offering actions
   halves: {}, // per screen: 'insights' | 'assist', the half last chosen
   followUpDays: 3, // My work: a customer not updated (or not answering) for this many days is a follow-up due
+  formats: {}, // per AI action (by id): how it writes its answer (src/formats/formats.js); {} = every action's own default
 });
 
 /**
@@ -722,6 +759,7 @@ export function effectiveSettings(user, policyInput) {
   if (!['auto', 'en', 'ar'].includes(values.language)) values.language = DEFAULT_SETTINGS.language;
   if (!['ticket', 'panel'].includes(values.answerLanguage)) values.answerLanguage = DEFAULT_SETTINGS.answerLanguage;
   if (!['system', 'light', 'dark'].includes(values.theme)) values.theme = DEFAULT_SETTINGS.theme;
+  values.formats = cleanFormats(values.formats); // only known actions, each part in range; a stored value that is not a format is dropped
 
   if (policy.piiMode) {
     // The policy is a floor: a stricter personal choice is kept.

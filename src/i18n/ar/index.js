@@ -8,5 +8,6 @@ import { AR_LANGUAGE } from './language.js';
 import { AR_POLICY } from './policy.js';
 import { AR_BAR } from './bar.js';
 import { AR_PALETTE } from './palette.js';
+import { AR_FORMATS } from './formats.js';
 
-export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS });
+export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_FORMATS, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS });

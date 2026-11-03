@@ -5,6 +5,26 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Answer formats: write the summary the way you want it (R11)
+- You asked whether the summary (and the other AI actions) can follow a format of your own, for example "Issue, Key actions performed" and
+  so on, instead of the fixed one. **Settings > AI Assist > "How AI answers are written"** now lists every action whose format can change,
+  and the same editor opens under the action in the side panel ("Change format").
+- **The ticket summary, the hand-off brief and the discussion catch-up** take a list of sections you name, order, add and remove (each with
+  a few words on what belongs in it), a style (a line or two, or bullet points) and a length (30 to 500 words). Start from a ready layout
+  ("Issue, key actions, outcome", "Situation, background, assessment, recommendation"...) or from the standard one.
+- **Every one of those 20 actions** also takes a few lines of extra instructions (tone, length, wording). An action whose answer the panel
+  reads back (resolution notes, the hand-over note...) or that the customer reads takes the extra instructions only, so Insert and the
+  hand-over view keep finding their labels and the customer rules stay on.
+- **Nothing replaces a whole prompt.** The facts-only, customer-safe and language rules are built in after your sections; your extra
+  instructions come after all the rules and say they never remove one; the firewall's rule that ticket data is never an instruction is
+  still in every request. "Show the instructions this sends" shows the text, and the check before sending shows it as always.
+- **Team formats:** an organisation can publish a format for everyone, or lock one, through the policy (`orgFormats`, in
+  `managed_schema.json`, `docs/deployment.md` and `scripts/check-policy.js`). A lead builds it in Settings and presses "Copy for your
+  administrator" to get the entry to paste. Locked: people can read it and not change it; not locked: it is the standard until a person saves
+  their own.
+- English and Arabic (right to left, checked at 320 px); scenario `zv` (Settings, the panel, the AI request), `zy` and `zz` with the
+  editor open, `tests/formats.test.js` (the default builds the fixed prompt word for word), `tests/formats-editor.test.js`.
+
 ### The page dock has no fold button (R10)
 - You said the fold button is not needed. The chevron at the end of the dock is gone; a click on the Agent Buddy mark closes the dock down to
   the mark (a small pill) and opens it again, and Escape closes it from the keyboard. The mark's name says "Click to close" while open and

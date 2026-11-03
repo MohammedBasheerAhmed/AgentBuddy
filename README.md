@@ -11,6 +11,9 @@ What it does (the side panel has five sections: This page, My day, Team, Write, 
   choose which actions it holds; an organisation can switch the on-page dock off.
 - **Understand a ticket**: summary, hand-off brief, missing information, sentiment and escalation risk, next-best action, thread
   summary, routing hint, request explainer, resolution check, fulfilment checklist. No AI needed for the checks and lists.
+- **Answer formats**: choose how the summary, the hand-off brief and the discussion catch-up are laid out (the sections you name, a style
+  and a length), and add a few lines of extra instructions to any of 20 AI actions, in Settings or under the action in the panel. An
+  organisation can publish or lock a format by policy. The rules about facts, privacy and customers always stay on.
 - **Domain packs**: major-incident updates, problem statement / RCA, change / CAB brief, account briefing, case-to-engineering
   escalation, HR case brief (Strict privacy mode, policy-gated).
 - **Write**: customer reply drafts, six email types, rewrite (shorter, friendlier, plain, formal, fix spelling, translate, bilingual),
@@ -63,6 +66,7 @@ src/providers    AI provider adapters (only accept firewall-sealed requests)
 src/policy       managed policy rules; the baked-in floor of the enterprise build (baked.js)
 src/features     feature registry and packs (core, itsm, domain, knowledge, compose, reports, checks)
 src/prompts      shared prompt rules (untrusted data, language, customer-safe); each feature keeps its own fixed prompt
+src/formats      answer formats: the sections, style, length and extra instructions a person or the organisation chose, and the editor
 src/itsm src/domain src/knowledge src/chat src/compose src/checks   deterministic parts of each area
 src/reports      report engine (injected deps, cache, limiter), AI hand-over / coaching / insights
 src/dashboard    the full-page dashboard         src/render     safe plain-text renderer for model output

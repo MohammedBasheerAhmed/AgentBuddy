@@ -92,7 +92,7 @@ const LATIN_OK = new Set(
     'JavaScript GET POST sys_id g_form Workspace Workspaces Service Portal Employee Center Now Assist Buddy ' +
     // models and their tiers, Azure's own words, syntax and keys named as they are written on the keyboard or in a command
     'Sonnet Haiku Opus Fable Flash Pro Llama Chat Reasoner Foundry resource deployment Deployment Deployments version preview name code ' +
-    'disabledFeatures ollama pull Ctrl Person ' +
+    'disabledFeatures orgFormats ollama pull Ctrl Person ' +
     'localhost min h d s ms px MB GB http https com').split(/\s+/)
 );
 

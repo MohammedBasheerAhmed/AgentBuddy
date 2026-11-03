@@ -112,6 +112,18 @@ module.exports = {
     await view(settings, 'Settings Basics');
     await settings.click('#ab-settings-tab-ai');
     await view(settings, 'Settings AI Assist');
+    // the answer formats (R11): the editor of the ticket summary and of a customer reply, open, in Arabic and at 320 px
+    for (const [feature, label] of [['record-summary', 'Settings answer format: summary'], ['reply-draft', 'Settings answer format: reply']]) {
+      await settings.click(`details.ab-fmt-item[data-feature="${feature}"] > summary`);
+      await view(settings, label);
+    }
+    const narrow = await settings.createCDPSession();
+    await narrow.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 820, deviceScaleFactor: 1, mobile: false });
+    await settle();
+    const wide = await inspect(settings);
+    t.check('Arabic at 320 px / Settings answer formats open: does not scroll sideways', wide.scroll <= 1, `${wide.scroll} px too wide`);
+    await narrow.send('Emulation.clearDeviceMetricsOverride');
+    await narrow.detach().catch(() => {});
     await settings.close();
 
     // ---- the bar on the ServiceNow page: the worker tells it the language, and the labels of its actions come in it -----------------------

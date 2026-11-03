@@ -1,5 +1,8 @@
 import { useId, useMemo, useState } from 'react';
 import { AiBadge } from '../../../ui/primitives.jsx';
+import FormatEditor from '../../../../formats/FormatEditor.jsx';
+import { resolveFormat, specOf } from '../../../../formats/formats.js';
+import { saveFormat } from '../../../../formats/saveFormat.js';
 import { destinationOf } from '../../../shell/shellParts.jsx';
 import { featureById } from '../../../../features/registry.js';
 import { actionPlan, offeredFeatures } from './plan.js';
@@ -20,7 +23,36 @@ import { t, t as tr } from '../../../../i18n/index.js';
 const CHECKLIST = 'fulfilment-checklist';
 const CHECKLIST_KINDS = ['catalog_task', 'requested_item'];
 
-function ActionButton({ item, primary, off, where, onRun }) {
+// "Change format" under an action whose answer can be laid out (src/formats): the same editor as in Settings, opened in place. It saves to
+// the person's settings at once; the panel follows the change (useEffective listens to storage). Open or shut, it never starts an action.
+function FormatToggle({ feature, eff }) {
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
+  const { format, source } = resolveFormat(feature.id, eff.values.formats, eff.policy?.orgFormats);
+  const mark = { mine: t('Your format'), org: t("Your organisation's format"), locked: t('Set by your organisation') }[source];
+  return (
+    <div className="ab-fmt-open">
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
+        {source === 'locked' ? t('See format') : t('Change format')}
+      </button>
+      {mark && <span className={`ab-fmt-state ab-fmt-state-${source}`}>{mark}</span>}
+      {open && (
+        <div id={bodyId}>
+          <FormatEditor
+            feature={feature}
+            saved={eff.values.formats?.[feature.id] || null}
+            source={source}
+            inherited={source === 'org' || source === 'locked' ? format : null}
+            idBase={`act-fmt-${feature.id}`}
+            onSave={(next) => saveFormat(feature.id, next)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActionButton({ item, primary, off, where, eff, onRun }) {
   const { feature, reason, caution } = item;
   const hover = reason || (where ? t('Sends masked text to {where}. You see it first.', { where }) : t('Sends masked text to your AI. You see it first.'));
   return (
@@ -39,6 +71,7 @@ function ActionButton({ item, primary, off, where, onRun }) {
         <span className={`ab-act-desc${reason ? ' ab-act-reason' : ''}`}>{reason || tr(feature.description)}</span>
       </button>
       {caution && <p className="ab-act-caution">{caution}</p>}
+      {specOf(feature.id) && <FormatToggle feature={feature} eff={eff} />}
     </li>
   );
 }
@@ -79,7 +112,7 @@ export default function ActionGroups({ page, eff, record, header = null, busy = 
           <p className="ab-act-head">{plan.words}</p>
           <ul className="ab-act-list" aria-label={plan.words}>
             {plan.suggested.map((it, i) => (
-              <ActionButton key={it.feature.id} item={it} primary={i === 0 && !off && !quiet} off={off} where={where} onRun={onRun} />
+              <ActionButton key={it.feature.id} item={it} primary={i === 0 && !off && !quiet} off={off} where={where} eff={eff} onRun={onRun} />
             ))}
           </ul>
         </>
@@ -96,7 +129,7 @@ export default function ActionGroups({ page, eff, record, header = null, busy = 
                 <h3 className="ab-act-grouphead" id={`${moreId}-${g.id}`}>{g.label}</h3>
                 <ul className="ab-act-list">
                   {g.items.map((it) => (
-                    <ActionButton key={it.feature.id} item={it} primary={false} off={off} where={where} onRun={onRun} />
+                    <ActionButton key={it.feature.id} item={it} primary={false} off={off} where={where} eff={eff} onRun={onRun} />
                   ))}
                 </ul>
               </div>

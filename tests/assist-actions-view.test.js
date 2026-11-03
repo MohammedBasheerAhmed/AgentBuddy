@@ -23,7 +23,8 @@ const page = { tabId: 7, href: 'https://x.service-now.com/incident.do?sys_id=' +
 const html = (props) => renderToStaticMarkup(<ActionGroups page={page} eff={eff()} record={rec('incident')} header={head('In Progress')} busy={false} aiReady onRun={() => {}} {...props} />);
 
 const shownButtons = (markup) => {
-  const before = markup.split('hidden=""')[0]; // what is folded under "More actions" is not on screen
+  // (what is folded under "More actions" is not on screen; the small "Change format" links under an action are not action buttons)
+  const before = markup.split('hidden=""')[0].replace(/<div class="ab-fmt-open"><button[^>]*>[^<]*<\/button>/g, '');
   return (before.match(/<button/g) || []).length;
 };
 

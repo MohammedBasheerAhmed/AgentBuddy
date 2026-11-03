@@ -62,6 +62,7 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 | `allowedProfiles` | list of text | every profile | Work profiles people may choose: `it`, `req`, `csm`, `hr`, `lead`, `km`, `mpc`. The `hr` profile is only offered when it is named here or `allowHrContent` is `true`. |
 | `lockedProfiles` | list of text | people choose | Work profiles set for everyone (same ids as `allowedProfiles`); people cannot change them. |
 | `orgSnippets` | list of objects | none | Canned replies for everyone, read-only in the panel: `{ "title", "body", "shortcut" }`, plain text, at most 200. |
+| `orgFormats` | list of objects | every action's own format | How some AI actions write their answer, for everyone: `{ "feature", "sections", "style", "words", "extra", "locked" }` (see "Formats for AI answers" below), at most 40. |
 | `internalPhrases` | list of text | the built-in list only | More words and phrases the safe-to-send check flags in customer-visible text (internal team or system names). |
 | `defaultDashboard` | object | the ready-made dashboards only | One Team-screen dashboard for everyone: exactly what "Save layout as a file" writes for one dashboard (see "Organisation dashboard and priority accounts" below). People with no dashboards yet on an instance start with it, first and on show; anyone else gets "Add your organisation's dashboard" in the dashboard's ⋯ menu. Never locked. |
 | `priorityAccounts` | list of text | no account is marked | Customer accounts marked "Priority account" on customer service cases (the Account card and the line at the top of the ticket), written as ServiceNow shows the account's name. At most 500 names of up to 100 characters. |
@@ -80,6 +81,46 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 - Check a policy file before deploying it: `node scripts/check-policy.js <file>` (a `.reg`, `.mobileconfig`, `.plist` or `.json` file)
   lists every key that would be ignored, read differently from how it is written, or that blocks AI calls, and prints the policy as
   Agent Buddy will read it. It exits with code 1 when something would not work as written.
+
+### Formats for AI answers
+
+```json
+{
+  "orgFormats": [
+    {
+      "feature": "record-summary",
+      "sections": [
+        { "name": "Issue", "hint": "what the person reports" },
+        { "name": "Key actions performed", "hint": "what was done so far, in order" },
+        { "name": "Next step" }
+      ],
+      "style": "lines",
+      "words": 100,
+      "locked": false
+    },
+    { "feature": "reply-draft", "extra": "Sign off with: Kind regards, the Service Desk.", "locked": true }
+  ]
+}
+```
+
+- Each entry names one AI action by its id (the ids are in "Feature ids" below) and any of: `sections` (a list of `{ "name", "hint" }`;
+  only the ticket summary `record-summary`, the hand-off brief `handoff-brief` and the discussion catch-up `thread-summary` take
+  them), `style` (`lines` or `bullets`), `words` (30 to 500) and `extra` (extra instructions, up to 600 characters; every listed
+  action takes them). `locked: true` stops people changing that action; without it the format is the standard until a person saves their own.
+- Actions whose answer the panel reads back (resolution notes, the hand-over note, the missing-details questions...) and actions the
+  customer reads (the reply draft...) take `extra` only, so the labels the panel looks for stay as they are. `scripts/check-policy.js`
+  lists every entry that would be ignored (an action that cannot be customised, an entry with nothing in it, the same action twice).
+- **Actions that take `sections`, `style`, `words` and `extra`:** `record-summary`, `handoff-brief`, `thread-summary`.
+  **Actions that take `extra` only:** `chat-summary`, `shift-handover`, `dashboard-insights`, `reply-draft`, `chat-reply`, `request-explain`,
+  `missing-info`, `resolution-notes`, `resolution-improve`, `kb-article-draft`, `major-incident-comms`, `article-optimise`,
+  `account-briefing`, `hr-case-brief`, `case-eng-escalation`, `problem-rca`, `change-cab-brief`.
+- Nothing here can replace a whole prompt. The rules about facts, the customer-safe rules and the language rules are added after the
+  format, and the firewall adds its own rule that the ticket data can never give orders. The text is sent as written (it is not masked,
+  so it should hold no ticket details) and people see it in the check before sending, under "Rules sent with it".
+- A team lead can build the format in Settings > AI Assist > "How AI answers are written" and press "Copy for your administrator": that
+  puts the entry above on the clipboard, ready to paste into the policy.
+- Two policies (a compiled-in one and the managed one): for an action both name, the managed one wins, and the action stays locked if
+  either locks it.
 
 ### Organisation dashboard and priority accounts
 

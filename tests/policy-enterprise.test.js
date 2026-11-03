@@ -128,6 +128,7 @@ test('every policy key but providedApiKey can be compiled in, exactly as written
     allowedProfiles: ['it', 'req'],
     lockedProfiles: ['it'],
     orgSnippets: [{ title: 'Password reset steps', body: 'Open the self-service portal and choose Reset password.', shortcut: 'pw' }],
+    orgFormats: [{ feature: 'record-summary', sections: [{ name: 'Issue', hint: 'what is wrong' }, { name: 'Key actions performed' }], style: 'bullets', words: 90, extra: 'Use plain words.', locked: true }],
     internalPhrases: ['Project Falcon'],
     defaultDashboard: { kind: 'agentbuddy-dashboard-layout', version: 1, dashboard: { name: 'Service desk today', scope: { kind: 'groups', groupIds: [], groupNames: {} }, tables: null, widgets: [{ type: 'section', section: 'overview' }, { type: 'section', section: 'sla' }] } },
     priorityAccounts: ['Boxeo', 'Acme Corporation EMEA'],

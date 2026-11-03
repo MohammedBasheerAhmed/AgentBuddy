@@ -270,7 +270,7 @@ what). The contracts that cross areas:
 - **Work profiles** (`src/profiles/profiles.js`): `shownFor(itemProfiles, eff)` decides what is shown (never what is allowed);
   `profilesOfFeature(feature)` (a feature may carry `profiles`), `screensFor(eff)`, `missingProfileFor(kind, eff)`, `aiAvailable(eff)`,
   `aiOffByPolicy(eff)`. Settings: `profiles`, `profilesConfirmed`, `showEverything`, `aiSkipped`, `halves`, `followUpDays`. Policy:
-  `aiEnabled`, `disabledSections`, `allowedProfiles`, `lockedProfiles`, `orgSnippets`, `internalPhrases`, `defaultDashboard` (a saved
+  `aiEnabled`, `disabledSections`, `allowedProfiles`, `lockedProfiles`, `orgSnippets`, `orgFormats`, `internalPhrases`, `defaultDashboard` (a saved
   layout file; `orgDashboard`, `offerOrgDashboard`, `addOrgDashboard` in `src/reports/dashboards.js`), `priorityAccounts` (account
   names; `isPriorityAccount` in `src/insights/priorityAccount.js`).
 - **Feature fields** (read by the AI Assist action list and answer area): `group` ('understand' | 'reply' | 'work' | 'resolve'),

@@ -18,6 +18,7 @@ import { truncationNote } from '../providers/messages.js';
 import { estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
 import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
 import { answerLanguageRule } from '../prompts/rules.js';
+import { withFormat } from '../formats/formats.js';
 
 // A placeholder of a kind that is never put back (a password, a card, an IBAN, an ID number), as the tokenizer writes it.
 const KEPT_PLACEHOLDER = new RegExp(`\\[(?:${NEVER_REHYDRATE.join('|')})_\\d{1,6}\\]`);
@@ -137,7 +138,10 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey, 
  * `input` is what the firewall was given, kept in memory only so "Mask this too" can have the same firewall build it again.
  * @returns {{ request: object, firewall: object, preview: string, stats: object, input: object, feature: object, pack: object }}
  */
-export function prepareRun({ feature, pack, values, policy, config, hasKey = true, createFirewall, pageTable = '' }) {
+export function prepareRun({ feature: action, pack, values, policy, config, hasKey = true, createFirewall, pageTable = '' }) {
+  // R11: how this action writes its answer. The person's own format, or the organisation's (locked or standard), becomes the action's
+  // system text here, before the size is counted and the preview is built; with none chosen the action is used as it is.
+  const feature = withFormat(action, values?.formats, policy?.orgFormats);
   assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable });
   const sensitive = isSensitivePack(pack, policy) || Boolean(pageTable && isSensitiveByPolicy(pageTable, policy));
   const firewall = createFirewall({

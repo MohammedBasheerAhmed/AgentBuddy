@@ -54,6 +54,7 @@ test('every schema key has a title, a type the parser expects and a description;
     assert.ok(def.title, `${key} has a title`);
     assert.ok(def.description || key === 'allowedModels', `${key} has a description`);
     if (key === 'orgSnippets') assert.deepEqual([def.type, def.items.type, Object.keys(def.items.properties).sort()], ['array', 'object', ['body', 'shortcut', 'title']]);
+    else if (key === 'orgFormats') assert.deepEqual([def.type, def.items.type, Object.keys(def.items.properties).sort()], ['array', 'object', ['extra', 'feature', 'locked', 'sections', 'style', 'words']]);
     // Every part of a saved layout file is declared (tests/policy-org-keys.test.js walks a real export against it).
     else if (key === 'defaultDashboard') assert.deepEqual([def.type, Object.keys(def.properties).sort(), Object.keys(def.properties.dashboard.properties).sort()], ['object', ['dashboard', 'kind', 'version'], ['name', 'scope', 'tables', 'widgets']]);
     else if (lists.includes(key)) assert.deepEqual([def.type, def.items], ['array', { type: 'string' }], key);

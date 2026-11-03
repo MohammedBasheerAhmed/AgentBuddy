@@ -97,6 +97,7 @@ export function diagnosticsText({ manifest = {}, userAgent = '', eff = {}, keyMo
   if (p.coachingEnabled) set.push('coaching on');
   if (p.auditExport === false) set.push('activity log export off');
   if (list(p.orgSnippets).length) set.push(`organisation snippets ${p.orgSnippets.length}`);
+  if (list(p.orgFormats).length) set.push(`organisation formats ${p.orgFormats.length}`);
   if (list(p.internalPhrases).length) set.push(`internal phrases ${p.internalPhrases.length}`);
   if (p.defaultDashboard) set.push('organisation dashboard set');
   if (list(p.priorityAccounts).length) set.push(`priority accounts ${p.priorityAccounts.length}`);
