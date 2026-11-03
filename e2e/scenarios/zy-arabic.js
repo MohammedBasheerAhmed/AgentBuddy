@@ -128,8 +128,7 @@ module.exports = {
     await ctx.waitUntil('the bar to open', async () => (await bar.view()).open, { timeout: 8000 });
     const opened = await bar.view();
     t.check('Arabic / the bar on the page: every action is named in Arabic', opened.actions.length > 0 && opened.actions.every((a) => arabic.test(a)), JSON.stringify(opened.actions));
-    const fold = (await bar.elements()).find((e) => e.tag === 'button' && e.cls.split(/\s+/).includes('fold'));
-    if (fold) await bar.click(fold);
+    await bar.click(handle); // the mark closes the open dock
 
     // ---- changing the language while the panel is open ---------------------------------------------------------------------------------------
     await ctx.configure({ language: 'en' });

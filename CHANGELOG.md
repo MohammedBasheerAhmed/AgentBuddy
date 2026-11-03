@@ -5,6 +5,11 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### The page dock has no fold button (R10)
+- You said the fold button is not needed. The chevron at the end of the dock is gone; a click on the Agent Buddy mark closes the dock down to
+  the mark (a small pill) and opens it again, and Escape closes it from the keyboard. The mark's name says "Click to close" while open and
+  "Click to open" when closed (English and Arabic). The dock is 32 px narrower.
+
 ### Fix: pressing an icon of the page dock after hovering it (R10)
 - Seen on dev364920: hover an icon until its name shows, press it, and the dock said "Nothing was started: something on the page was
   covering the bar". The name's soft drop shadow reached down over the icons, and Chrome's visibility check (the guard against a page
@@ -34,8 +39,8 @@ brackets are the `TRACKER.md` items.
 - **Hover or tab to an icon and its name shows at once** above the dock, with the AI mark and one line saying where text goes ("Uses AI:
   opens the side panel, which shows what will be sent first" or "Stays in ServiceNow"). Escape takes the name away, then folds the dock.
   Light, dark and Arabic (right to left) all follow the setting.
-- The mark folds the dock to a small pill and opens it again (so does the chevron at the end); drag the mark, or press the left and right
-  arrows on it, to move the dock along the bottom. The middle of the dock stays where it was put when it opens and folds, and it is kept
+- A click on the mark closes the dock down to a small pill and opens it again (there is no separate fold button); drag the mark, or press
+  the left and right arrows on it, to move the dock along the bottom. The middle of the dock stays where it was put when it opens and folds, and it is kept
   inside the window. The old "Move to the left / right" button is gone; the place is remembered in the page as before.
 - Nothing about what the dock may do changed: a closed shadow root, only real clicks, the visibility check, a layer below the page's
   dialogs, hidden while a dialog is open, nothing loaded (the icons are drawn with DOM calls), no ticket text.

@@ -180,7 +180,7 @@ test('nothing the dock draws next to an icon reaches over it: small shadow on th
   const reach = Math.abs(Number(shadow[2])) + Number(shadow[3]);
   assert.ok(reach < gap + padding, `the shadow reaches ${reach} px, the icons are ${gap + padding} px away`);
   assert.ok(!/var\(--ab-shadow\)/.test(body('.tip')) && !/var\(--ab-shadow\)/.test(body('.notice')), 'the big shared shadow is not used above the dock');
-  const ring = body('.handle:focus-visible, .act:focus-visible, .fold:focus-visible');
+  const ring = body('.handle:focus-visible, .act:focus-visible');
   assert.ok(ring && !/var\(--ab-ring\)/.test(ring) && /3\.5px/.test(ring), 'the icons focus ring is thinner than the 4 px gap between them');
   assert.match(body('.actions'), /gap: 4px/, 'the gap between icons that the ring has to fit in');
 });

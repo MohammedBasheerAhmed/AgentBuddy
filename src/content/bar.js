@@ -15,7 +15,7 @@
 //     its own to any server
 //   - it holds only a table, a sys_id and a few action ids; no ticket text
 //   - it sits BELOW the page's own dialogs (a lower layer than ServiceNow's modal layers) and hides while one it can see is open
-//   - the Buddy mark folds the dock to a small pill and opens it again; dragging the mark (or the left and right arrow keys on it) moves
+//   - a click on the Buddy mark closes the dock down to a small pill and opens it again; dragging the mark (or the left and right arrow keys on it) moves
 //     the dock along the bottom edge, and the place is remembered in the page
 import { MSG } from '../lib/messages.js';
 import { direction, setLanguage, t } from '../i18n/index.js';
@@ -154,14 +154,12 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
 
   const bar = h(doc, 'div', { class: 'bar', hidden: true });
   const dock = h(doc, 'div', { class: 'dock', role: 'group', 'aria-label': t('Agent Buddy quick actions') });
-  // The mark: click folds the dock to this one button and opens it again; drag (or the arrow keys) moves the dock.
+  // The mark: a click closes the dock down to this one button and opens it again (there is no other button for it); drag, or the arrow keys, move the dock.
   const handle = h(doc, 'button', { type: 'button', class: 'handle', 'aria-expanded': 'false' });
   handle.append(brandMark(doc));
   const sep = h(doc, 'span', { class: 'sep', 'aria-hidden': 'true' });
   const list = h(doc, 'div', { class: 'actions' });
-  const fold = h(doc, 'button', { type: 'button', class: 'fold' });
-  fold.append(glyph(doc, 'chevronDown', 16));
-  dock.append(handle, sep, list, fold);
+  dock.append(handle, sep, list);
   // What a hovered icon is called, and what the person needs to know after a click that started nothing. Both float above the dock.
   const tip = h(doc, 'div', { class: 'tip', role: 'tooltip', hidden: true });
   const tipLine = h(doc, 'span', { class: 'tip-line' });
@@ -267,8 +265,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     });
     button.addEventListener('blur', hideTip);
   }
-  bindTip(handle, () => ({ name: 'Agent Buddy', ai: false, hint: prefs.open ? t('Click to fold. Drag, or use the arrow keys, to move it along the bottom.') : t('Click to open. Drag, or use the arrow keys, to move it along the bottom.') }));
-  bindTip(fold, () => ({ name: t('Fold the bar'), ai: false, hint: '' }));
+  bindTip(handle, () => ({ name: 'Agent Buddy', ai: false, hint: prefs.open ? t('Click to close. Drag, or use the arrow keys, to move it along the bottom.') : t('Click to open. Drag, or use the arrow keys, to move it along the bottom.') }));
 
   // ---- drawing ---------------------------------------------------------------------------------------------------
   // The texts that are written once, when the bar is built, are written again when the language changes (the worker says which it is).
@@ -278,7 +275,6 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     setLanguage(state.language);
     bar.setAttribute('dir', direction());
     dock.setAttribute('aria-label', t('Agent Buddy quick actions'));
-    fold.setAttribute('aria-label', t('Fold the bar'));
     shownActions = ''; // the buttons carry names and hints: draw them again
   }
 
@@ -294,9 +290,8 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     // Open: the mark and the icons. Folded: the mark alone, a small pill.
     list.hidden = !prefs.open;
     sep.hidden = !prefs.open;
-    fold.hidden = !prefs.open;
     handle.setAttribute('aria-expanded', String(prefs.open));
-    handle.setAttribute('aria-label', prefs.open ? t('Fold the bar') : t('Open the Agent Buddy quick actions'));
+    handle.setAttribute('aria-label', prefs.open ? t('Close the Agent Buddy quick actions') : t('Open the Agent Buddy quick actions'));
 
     // Rebuilt only when the actions change, so the focus stays where it is while the page is looked at again.
     const signature = state.actions.map((a) => `${a.id}:${a.label}`).join('|');
@@ -360,7 +355,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     prefsBox.write(serializePrefs(prefs));
     hideTip(); // its hint says what a click does, which just changed
     render();
-    if (focus) (open ? list.firstElementChild || fold : handle).focus();
+    if (focus) (open ? list.firstElementChild || handle : handle).focus();
   }
 
   // ---- the person's clicks ---------------------------------------------------------------------------------------
@@ -456,8 +451,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     }
     if (e.isTrusted) setOpen(!prefs.open, true);
   });
-  fold.addEventListener('click', (e) => e.isTrusted && setOpen(false, true));
-  // Escape: first the tooltip goes, then the dock folds.
+  // Escape: first the tooltip goes, then the dock closes (down to the mark).
   shadow.addEventListener('keydown', (e) => {
     if (!e.isTrusted || e.key !== 'Escape') return;
     if (!tip.hidden) hideTip();

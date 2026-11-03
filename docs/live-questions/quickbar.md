@@ -106,8 +106,8 @@ person with only fulfiller roles, and what to change if it is different.
     circle, Handoff brief a clipboard; an Insights item (no AI) has no spark. Is the small spark in the corner understood as "uses AI"?
 21. **Does the dock fit a narrow window?** With four actions it is about 250 px wide and keeps 8 px from the window's edge on either side.
     Check at a window about 400 px wide and with the page zoomed to 150% or 200%.
-22. **Is clicking the mark to fold and open it found by people?** The chevron at the right end folds it too; the mark both folds and
-    opens, and drags. If people drag when they meant to fold (or the other way round), say which, and the 5 px threshold (`DRAG_PX`) or the
-    chevron can change.23. **Does pressing an icon work after hovering it?** (Fixed 2026-11-03 after it failed on dev364920.) Hover an icon until its name shows,
+22. **Is clicking the mark to close and open the dock found by people?** The mark is the only way (besides Escape): a click closes the dock
+    down to the mark and opens it again, and a drag moves it. If people drag when they meant to click (or the other way round), say which; the
+    5 px threshold (`DRAG_PX`) can change.23. **Does pressing an icon work after hovering it?** (Fixed 2026-11-03 after it failed on dev364920.) Hover an icon until its name shows,
     then press it: the panel opens and the action starts behind its preview. If the dock still says "something on the page was covering
     the bar", note the page type (classic form, Next Experience, Workspace, portal) and what is drawn near the bottom centre.

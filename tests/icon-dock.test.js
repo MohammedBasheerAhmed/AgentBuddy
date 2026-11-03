@@ -37,7 +37,6 @@ test('the icon data is plain strings (the page script draws them with DOM calls:
   assert.match(SPARK, /^[MmLlHhVvCcSsQqTtAaZz0-9\s.,-]+$/);
   assert.deepEqual(Object.keys(MARK), ['tile', 'bubble', 'tick']);
   for (const d of Object.values(MARK)) assert.match(d, /^[MmLlHhVvCcSsQqTtAaZz0-9\s.,-]+$/);
-  assert.ok(PATHS.chevronDown && PATHS.chevronLeft && PATHS.chevronRight, 'the chevrons the docks use');
 });
 
 test('the panel draws its dock from the same table, after the screens, with names that show on hover and keyboard focus', () => {

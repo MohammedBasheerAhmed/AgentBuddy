@@ -2,8 +2,8 @@
 export const AR_BAR = {
   'Open the Agent Buddy quick actions': 'افتح الإجراءات السريعة في Agent Buddy',
   'Agent Buddy quick actions': 'الإجراءات السريعة في Agent Buddy',
-  'Fold the bar': 'اطوِ الشريط',
-  'Click to fold. Drag, or use the arrow keys, to move it along the bottom.': 'انقر للطيّ. اسحبه أو استخدم مفاتيح الأسهم لتحريكه على طول الحافة السفلية.',
+  'Close the Agent Buddy quick actions': 'أغلق الإجراءات السريعة في Agent Buddy',
+  'Click to close. Drag, or use the arrow keys, to move it along the bottom.': 'انقر للإغلاق. اسحبه أو استخدم مفاتيح الأسهم لتحريكه على طول الحافة السفلية.',
   'Click to open. Drag, or use the arrow keys, to move it along the bottom.': 'انقر للفتح. اسحبه أو استخدم مفاتيح الأسهم لتحريكه على طول الحافة السفلية.',
   'Uses AI: opens the side panel, which shows what will be sent first': 'يستخدم الذكاء الاصطناعي: يفتح اللوحة الجانبية التي تعرض ما سيُرسل أولًا',
   'Stays in ServiceNow: opens this in the side panel': 'يبقى في ServiceNow: يفتح هذا في اللوحة الجانبية',

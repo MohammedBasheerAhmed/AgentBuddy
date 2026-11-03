@@ -78,7 +78,7 @@ module.exports = {
     t.check('the same dialog shown: the dock hides', !(await state()).visible);
     await ticket.evaluate(() => document.getElementById('ab-test-lightbox').remove());
     await until('the dock to come back', (x) => x.visible, 8000);
-    t.check('the page can not reach the buttons by searching the document', await ticket.evaluate(() => !document.querySelector('button.handle, .act, .dock, .fold') && ![...document.querySelectorAll('*')].some((e) => /Agent Buddy/.test(e.getAttribute('aria-label') || ''))));
+    t.check('the page can not reach the buttons by searching the document', await ticket.evaluate(() => !document.querySelector('button.handle, .act, .dock') && ![...document.querySelectorAll('*')].some((e) => /Agent Buddy/.test(e.getAttribute('aria-label') || ''))));
 
     // 2c. Drag the folded mark to the right with the mouse: the pill moves by about the pointer's travel, stays folded (a drag is not a
     //     click), and the place is remembered.
@@ -106,7 +106,8 @@ module.exports = {
     t.check('every action has a drawn icon, an AI spark (all three use AI) and no visible words', acts.length === 3 && all.filter((e) => e.tag === 'svg' && e.cls.split(/\s+/).includes('glyph')).length >= 6 && all.filter((e) => e.cls.split(/\s+/).includes('ai-dot')).length === 3, JSON.stringify({ acts: acts.length }));
     const sizes = await Promise.all(acts.map((a) => bar.box(a)));
     t.check('each icon button is a round 36 px target', sizes.every((b) => b && Math.round(b.width) === 36 && Math.round(b.height) === 36), JSON.stringify(sizes.map((b) => b && [b.width, b.height])));
-    t.check('its mark reports that it is expanded, and offers to fold it', v.expanded && /Fold the bar/.test((await bar.find('handle')).attrs['aria-label'] || ''));
+    t.check('its mark reports that it is expanded, and offers to close it', v.expanded && /Close the Agent Buddy/.test((await bar.find('handle')).attrs['aria-label'] || ''));
+    t.check('there is no separate fold button: the dock holds the mark and the icons only', !(await bar.elements()).some((e) => e.cls.split(/\s+/).includes('fold')));
     facts = await hostFacts(ticket);
     t.check('opening kept the middle of the dock where the pill was (the dock grows on both sides)', near(facts.cx, dragged.cx, 3) && near(facts.bottomGap, 16, 2), JSON.stringify({ cx: facts.cx, was: dragged.cx, gap: facts.bottomGap }));
     t.check('opening is remembered in the page (two interface choices, nothing about the ticket)', JSON.stringify(Object.keys(JSON.parse(await prefs(ticket))).sort()) === JSON.stringify(['open', 'x']) && JSON.parse(await prefs(ticket)).open === true, await prefs(ticket));
@@ -136,7 +137,7 @@ module.exports = {
     await until('the dock to fold on the second Escape', (x) => x.folded, 4000);
     t.check('a second Escape folds the dock', (await state()).folded && JSON.parse(await prefs(ticket)).open === false);
 
-    // 4. The keyboard moves it: arrow keys on the mark, 5 % a press. Then the mark opens it, and the chevron folds it.
+    // 4. The keyboard moves it: arrow keys on the mark, 5 % a press. Then a click on the mark opens it, and another closes it.
     const xBefore = JSON.parse(await prefs(ticket)).x;
     await bar.focus(await bar.find('handle'));
     await ticket.keyboard.press('ArrowLeft');
@@ -147,9 +148,9 @@ module.exports = {
     await bar.click(await bar.find('handle'));
     await until('the dock to open from the mark', (x) => x.open);
     t.check('a click on the mark opens the folded dock', (await state()).open && JSON.parse(await prefs(ticket)).open === true);
-    await bar.click(await bar.find('fold'));
-    await until('the dock to fold', (x) => x.folded);
-    t.check('the chevron folds it back to the pill, in the same place', (await state()).folded && JSON.parse(await prefs(ticket)).open === false && near(JSON.parse(await prefs(ticket)).x, xAfter, 0.1));
+    await bar.click(await bar.find('handle'));
+    await until('the dock to close', (x) => x.folded);
+    t.check('a click on the mark closes the open dock down to the mark, in the same place', (await state()).folded && JSON.parse(await prefs(ticket)).open === false && near(JSON.parse(await prefs(ticket)).x, xAfter, 0.1));
 
     // 5. A reload finds it where it was left.
     await ticket.reload({ waitUntil: 'load' });
