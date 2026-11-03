@@ -5,6 +5,21 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### The icon dock on the ServiceNow page (R10, phase 1)
+- The small tab on the right edge of the page, and the 236 px card of text buttons it opened, are replaced by a **dock at the bottom
+  centre** of the window: a white pill with the Buddy mark and one round icon button per main action (the same icons as the panel's
+  quick actions; the main one filled green; AI actions carry a small spark in the corner, Insights ones do not).
+- **Hover or tab to an icon and its name shows at once** above the dock, with the AI mark and one line saying where text goes ("Uses AI:
+  opens the side panel, which shows what will be sent first" or "Stays in ServiceNow"). Escape takes the name away, then folds the dock.
+  Light, dark and Arabic (right to left) all follow the setting.
+- The mark folds the dock to a small pill and opens it again (so does the chevron at the end); drag the mark, or press the left and right
+  arrows on it, to move the dock along the bottom. The middle of the dock stays where it was put when it opens and folds, and it is kept
+  inside the window. The old "Move to the left / right" button is gone; the place is remembered in the page as before.
+- Nothing about what the dock may do changed: a closed shadow root, only real clicks, the visibility check, a layer below the page's
+  dialogs, hidden while a dialog is open, nothing loaded (the icons are drawn with DOM calls), no ticket text.
+- The icon drawing data moved to `src/sidepanel/ui/iconPaths.js` so the page script and the panel use one set. Scenarios `y`, `z`, `zy`
+  and `tests/bar-logic.test.js` follow the new dock; questions for you in `docs/live-questions/quickbar.md` (19 to 22).
+
 ### Look and feel, colours and the command palette (R9)
 - A real header: the product mark, the name, the instance the panel reads (with a green dot), and four buttons: search commands, the
   sun or moon, the privacy shield, Settings. One small icon set (`src/sidepanel/ui/icons.jsx`) for the whole panel.

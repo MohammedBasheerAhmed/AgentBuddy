@@ -123,12 +123,12 @@ module.exports = {
     await ctx.waitUntil('the bar to appear', async () => (await bar.view()).visible, { timeout: 20000 });
     const handle = await bar.find('handle');
     const barRoot = await bar.find('bar');
-    t.check('Arabic / the bar on the page: right to left, and the tab is named in Arabic', barRoot?.attrs.dir === 'rtl' && arabic.test(handle?.attrs['aria-label'] || ''), JSON.stringify({ dir: barRoot?.attrs.dir, label: handle?.attrs['aria-label'] }));
+    t.check('Arabic / the bar on the page: right to left, and the mark is named in Arabic', barRoot?.attrs.dir === 'rtl' && arabic.test(handle?.attrs['aria-label'] || ''), JSON.stringify({ dir: barRoot?.attrs.dir, label: handle?.attrs['aria-label'] }));
     await bar.click(handle);
-    await ctx.waitUntil('the bar to open', async () => (await bar.view()).cardShown, { timeout: 8000 });
+    await ctx.waitUntil('the bar to open', async () => (await bar.view()).open, { timeout: 8000 });
     const opened = await bar.view();
     t.check('Arabic / the bar on the page: every action is named in Arabic', opened.actions.length > 0 && opened.actions.every((a) => arabic.test(a)), JSON.stringify(opened.actions));
-    const fold = (await bar.elements()).find((e) => e.tag === 'button' && e.cls.split(/s+/).includes('icon'));
+    const fold = (await bar.elements()).find((e) => e.tag === 'button' && e.cls.split(/\s+/).includes('fold'));
     if (fold) await bar.click(fold);
 
     // ---- changing the language while the panel is open ---------------------------------------------------------------------------------------

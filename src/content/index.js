@@ -235,5 +235,5 @@ if (decision !== 'skip') {
   // The bar of main actions. It follows the record that is open (the same detection the side panel uses) and hides itself when the
   // service worker says it may not show (switched off in Settings, a blocked table). While it is switched off it does not look at the
   // page at all; when the service worker says the site is no longer turned on, this whole script retires.
-  bar = startBar({ resolveRecord: () => resolveRecord(location.href), onSiteOff: retire, surface: () => surfaceOf(location.href) });
+  bar = startBar({ resolveRecord: () => resolveRecord(location.href), onSiteOff: retire });
 }

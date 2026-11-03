@@ -29,10 +29,10 @@ module.exports = {
 
     const path = `/incident.do?sys_id=${data.INCIDENT_ID}`;
     const ticket = await ctx.openInstancePage(path, 'ticket-pagelaunch');
-    await ticket.evaluate(() => localStorage.setItem('agentbuddy-bar', JSON.stringify({ open: true, side: 'right' })));
+    await ticket.evaluate(() => localStorage.setItem('agentbuddy-bar', JSON.stringify({ open: true })));
     await ticket.reload({ waitUntil: 'load' });
     const bar = await barDriver(ticket);
-    await ctx.waitUntil('the open bar', async () => (await bar.view()).cardShown, { timeout: 12000 });
+    await ctx.waitUntil('the open bar', async () => (await bar.view()).open, { timeout: 12000 });
     const tabId = await ctx.ext(async (u) => (await chrome.tabs.query({})).find((x) => (x.url || '').includes(u))?.id, 'incident.do');
 
     // The panel the test drives (Chrome's own side panel cannot be driven by automation). It is open and showing this ticket, as a

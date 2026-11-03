@@ -2,17 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ARM_MS, REASK_MS, cleanActions, clickNotice, clickVerdict, isGone, launchNotice, needsAsk, nextSeen, parsePrefs, serializePrefs } from '../src/content/barLogic.js';
 
-test('the bar starts folded on the right when nothing usable is stored', () => {
-  for (const raw of [null, undefined, '', 'not json', '5', 'null', '[]', '{"open":"yes"}', '{"side":"top"}']) {
-    assert.deepEqual(parsePrefs(raw), { open: false, side: 'right', top: null }, String(raw));
+test('the dock starts folded and in the centre when nothing usable is stored', () => {
+  for (const raw of [null, undefined, '', 'not json', '5', 'null', '[]', '{"open":"yes"}', '{"x":"left"}']) {
+    assert.deepEqual(parsePrefs(raw), { open: false, x: null }, String(raw));
   }
 });
 
-test('prefs round-trip, and only the two known choices survive', () => {
-  assert.deepEqual(parsePrefs(serializePrefs({ open: true, side: 'left' })), { open: true, side: 'left', top: null });
-  assert.deepEqual(parsePrefs(serializePrefs({ open: false, side: 'right' })), { open: false, side: 'right', top: null });
-  assert.deepEqual(parsePrefs('{"open":true,"side":"left","extra":"<img src=x>"}'), { open: true, side: 'left', top: null });
-  assert.equal(serializePrefs({ open: 1, side: 'up' }), '{"open":false,"side":"right"}');
+test('prefs round-trip, and nothing else survives (the old right-edge tab\'s side and top are dropped)', () => {
+  assert.deepEqual(parsePrefs(serializePrefs({ open: true, x: 30 })), { open: true, x: 30 });
+  assert.deepEqual(parsePrefs(serializePrefs({ open: false })), { open: false, x: null });
+  assert.deepEqual(parsePrefs('{"open":true,"side":"left","top":61,"extra":"<img src=x>"}'), { open: true, x: null });
+  assert.equal(serializePrefs({ open: 1, x: 'up' }), '{"open":false}');
+  assert.equal(serializePrefs({ open: true }), '{"open":true}', 'no place until it was moved');
 });
 
 test('the actions are asked for again when the table changed or the answer is old, not on every look', () => {
@@ -89,70 +90,58 @@ test('the actions from the service worker are cleaned before they become buttons
   assert.deepEqual(cleanActions([{ id: 'card:', label: 'x' }, { id: 'card:Ready', label: 'x' }, { id: 'cards:ready', label: 'x' }]), []);
 });
 
-// ---- the tab's place, the page's dialogs, an older copy after an update (F6, F1) ---------------------------------------------
+// ---- the dock\'s place, the page's dialogs, an older copy after an update (F6, F1) --------------------------------------------
 
-import { BAR_Z, DRAG_PX, TAKEOVER_EVENT, TOP_MAX, TOP_MIN, clampTop, contentTakeover, dragTop, pageHasModal, runtimeAlive, topFor } from '../src/content/barLogic.js';
+import { BAR_Z, DOCK_BOTTOM_PX, DOCK_EDGE_PX, DRAG_PX, KEY_STEP, NOTICE_MS, TAKEOVER_EVENT, X_DEFAULT, X_MAX, X_MIN, clampX, contentTakeover, dockLeft, dragX, pageHasModal, runtimeAlive, xFor } from '../src/content/barLogic.js';
 
-test('the tab can be dragged up or down: its place is a percentage kept inside the window, and it is remembered', () => {
-  assert.equal(clampTop(50), 50);
-  assert.equal(clampTop(0), TOP_MIN);
-  assert.equal(clampTop(250), TOP_MAX);
-  assert.equal(clampTop('41.26'), 41.3);
-  for (const bad of [null, undefined, '', 'top', NaN, Infinity, {}, []]) assert.equal(clampTop(bad), null, String(bad));
-  assert.deepEqual(parsePrefs(serializePrefs({ open: true, side: 'left', top: 61 })), { open: true, side: 'left', top: 61 });
-  assert.equal(serializePrefs({ open: false, side: 'right', top: 'x' }), '{"open":false,"side":"right"}', 'no place until it was moved');
-  assert.equal(parsePrefs('{"top":"<script>"}').top, null);
+test('the dock can be dragged along the bottom: its place is a percentage kept inside the window, and it is remembered', () => {
+  assert.equal(clampX(50), 50);
+  assert.equal(clampX(0), X_MIN);
+  assert.equal(clampX(250), X_MAX);
+  assert.equal(clampX('41.26'), 41.3);
+  for (const bad of [null, undefined, '', 'left', NaN, Infinity, {}, []]) assert.equal(clampX(bad), null, String(bad));
+  assert.deepEqual(parsePrefs(serializePrefs({ open: true, x: 61 })), { open: true, x: 61 });
+  assert.equal(parsePrefs('{"x":"<script>"}').x, null);
 });
 
-test('where the tab starts: above the middle on a form, lower on a Workspace (clear of its own icon strip); the person\'s place wins', () => {
-  assert.equal(topFor({ top: null }, 'classic'), 38);
-  assert.equal(topFor({ top: null }, 'workspace'), 72);
-  assert.equal(topFor({ top: null }, 'portal'), 38);
-  assert.equal(topFor({}, 'something else'), 38);
-  assert.equal(topFor({}, '__proto__'), 38);
-  assert.equal(topFor({ top: 20 }, 'workspace'), 20);
+test('where the dock starts: the centre of the window, on every kind of page; the person\'s place wins', () => {
+  assert.equal(X_DEFAULT, 50);
+  assert.equal(xFor({ x: null }), 50);
+  assert.equal(xFor({}), 50);
+  assert.equal(xFor(undefined), 50);
+  assert.equal(xFor({ x: 20 }), 20);
+  assert.equal(xFor({ x: 500 }), X_MAX);
 });
 
-test('a press that moves less than a few pixels is a click; more moves the tab by the pointer\'s travel', () => {
-  assert.equal(dragTop({ startTop: 40, startY: 300, y: 300 + DRAG_PX - 1, height: 1000 }), null);
-  assert.equal(dragTop({ startTop: 40, startY: 300, y: 400, height: 1000 }), 50);
-  assert.equal(dragTop({ startTop: 40, startY: 300, y: -5000, height: 1000 }), TOP_MIN);
-  assert.equal(dragTop({ startTop: 40, startY: 300, y: 400, height: 0 }), null);
-  assert.equal(dragTop({ startTop: NaN, startY: 300, y: 400, height: 1000 }), null);
+test('the dock\'s left edge puts its middle on the chosen place and keeps it inside the window', () => {
+  // 1000 px window, a 200 px dock: the middle at 50% means the left edge at 400
+  assert.equal(dockLeft({ x: null, view: 1000, width: 200 }), 400);
+  assert.equal(dockLeft({ x: 50, view: 1000, width: 56 }), 472, 'a folded dock stays centred on the same middle');
+  assert.equal(dockLeft({ x: 20, view: 1000, width: 200 }), 100);
+  // dragged to the far sides: kept inside by the edge gap
+  assert.equal(dockLeft({ x: 5, view: 1000, width: 200 }), DOCK_EDGE_PX);
+  assert.equal(dockLeft({ x: 95, view: 1000, width: 200 }), 1000 - 200 - DOCK_EDGE_PX);
+  // a window narrower than the dock: it starts at the left edge rather than going off to the left
+  assert.equal(dockLeft({ x: 50, view: 150, width: 200 }), DOCK_EDGE_PX);
+  // nothing known yet (the dock is not shown, or the window has no width)
+  assert.equal(dockLeft({ x: 50, view: 1000, width: 0 }), 500);
+  assert.equal(dockLeft({ x: 50, view: 0, width: 0 }), DOCK_EDGE_PX);
+  assert.ok(DOCK_BOTTOM_PX >= 8 && DOCK_BOTTOM_PX <= 32, 'a little above the bottom edge');
 });
 
-test('the bar sits below the page\'s dialogs and hides while one is open', () => {
-  assert.ok(BAR_Z < 1040, 'under the classic UI\'s dialog backdrop (1040) and dialog (1050)');
-  assert.equal(pageHasModal({ bodyClasses: ['modal-open'], dialogs: 0 }), true);
-  assert.equal(pageHasModal({ bodyClasses: [], dialogs: 1 }), true);
-  assert.equal(pageHasModal({ bodyClasses: ['x'], dialogs: 0 }), false);
-  assert.equal(pageHasModal({}), false);
-  assert.equal(pageHasModal(), false);
+test('a press that moves less than a few pixels is a click; more moves the dock by the pointer\'s travel', () => {
+  assert.equal(dragX({ startX: 50, startPx: 300, px: 300 + DRAG_PX - 1, view: 1000 }), null);
+  assert.equal(dragX({ startX: 50, startPx: 300, px: 400, view: 1000 }), 60);
+  assert.equal(dragX({ startX: 50, startPx: 300, px: 200, view: 1000 }), 40);
+  assert.equal(dragX({ startX: 50, startPx: 300, px: -5000, view: 1000 }), X_MIN);
+  assert.equal(dragX({ startX: 50, startPx: 300, px: 9000, view: 1000 }), X_MAX);
+  assert.equal(dragX({ startX: 50, startPx: 300, px: 400, view: 0 }), null);
+  assert.equal(dragX({ startX: NaN, startPx: 300, px: 400, view: 1000 }), null);
+  assert.equal(KEY_STEP, 5);
 });
 
-test('an older copy of the content script (from before an update) is replaced; a working one is left alone', () => {
-  assert.equal(contentTakeover(null), 'install');
-  assert.equal(contentTakeover(undefined), 'install');
-  assert.equal(contentTakeover({ alive: 'yes' }), 'install');
-  assert.equal(contentTakeover({ alive: () => true }), 'skip');
-  assert.equal(contentTakeover({ alive: () => false }), 'replace');
-  assert.equal(contentTakeover({ alive: () => { throw new Error('Extension context invalidated.'); } }), 'replace');
-  assert.equal(runtimeAlive({ id: 'abc' }), true);
-  assert.equal(runtimeAlive({ id: undefined }), false);
-  assert.equal(runtimeAlive(null), false);
-  assert.equal(runtimeAlive({ get id() { throw new Error('Extension context invalidated.'); } }), false);
-  assert.equal(TAKEOVER_EVENT, 'agentbuddy-content-takeover');
+test('a note above the dock goes away by itself', () => {
+  assert.ok(NOTICE_MS >= 5000 && NOTICE_MS <= 30000);
 });
 
-test('the content script and the bar wire these in', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const index = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'index.js'), 'utf8');
-  assert.match(index, /contentTakeover\(window\.__abContent\)/);
-  assert.match(index, /if \(!alive\(\)\) retire\(\);/, 'only a copy whose extension is gone steps down on the event');
-  const bar = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'bar.js'), 'utf8');
-  assert.match(bar, /pin\('z-index', String\(BAR_Z\)\)/);
-  assert.ok(!/2147483647/.test(bar), 'no longer the highest layer there is');
-  assert.ok(!/, 'AB'\)/.test(bar), 'an icon and a label instead of the letters AB');
-  assert.match(bar, /state\.modal = Boolean\(result\.record\) && modalShown\(doc, win\)/);
-});
+

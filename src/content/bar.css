@@ -1,48 +1,60 @@
-/* The bar on the ServiceNow page. It lives in a closed shadow root, so the page's styles do not reach it and its styles do not reach the page.
+/* The dock on the ServiceNow page: a pill at the bottom centre of the window, the Agent Buddy mark and one round icon button per main
+   action. It lives in a closed shadow root, so the page's styles do not reach it and its styles do not reach the page.
    The colours are the theme tokens (src/ui/theme.css is put in front of this file at build time, with :root turned into :host). */
 
-.bar { font-family: var(--ab-font); font-size: var(--ab-text-md); line-height: 1.4; color: var(--ab-fg); }
+.bar { position: relative; font-family: var(--ab-font); font-size: var(--ab-text-md); line-height: 1.4; color: var(--ab-fg); }
 .bar * { box-sizing: border-box; font-family: inherit; }
-.bar[hidden] { display: none; }
+.bar [hidden], .bar[hidden] { display: none !important; }
 @media print { .bar { display: none; } }
 
 button { font-size: inherit; color: inherit; cursor: pointer; margin: 0; }
 button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 
-/* the folded bar: a small tab on the edge of the page, an icon over a short label written down the tab. It can be dragged up or down
-   (touch-action: none lets a finger drag it without scrolling the page). */
-.handle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 30px; height: 76px; padding: 6px 0; border: 1px solid var(--ab-accent); background: var(--ab-accent); color: var(--ab-accent-fg); font-weight: 650; font-size: var(--ab-text-xs); letter-spacing: 0.03em; box-shadow: var(--ab-shadow); cursor: grab; touch-action: none; user-select: none; }
-.handle:hover { background: var(--ab-accent-hover); }
-.handle:active { cursor: grabbing; }
+/* the name of an icon button for a screen reader, not drawn */
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* the icons are drawn with DOM calls (nothing is loaded): strokes in the text colour */
 .glyph { flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.label { writing-mode: vertical-rl; transform: rotate(180deg); line-height: 1; white-space: nowrap; }
-.bar[data-side='right'] .handle { border-radius: var(--ab-radius) 0 0 var(--ab-radius); border-right: 0; }
-.bar[data-side='left'] .handle { border-radius: 0 var(--ab-radius) var(--ab-radius) 0; border-left: 0; }
+.glyph-fill { fill: currentColor; stroke: none; }
+.mark-tile { fill: var(--ab-accent); }
+.mark-bubble { fill: var(--ab-accent-fg); }
+.mark-tick { fill: none; stroke: var(--ab-accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* the open bar */
-.card { width: 236px; max-width: calc(100vw - 24px); padding: 8px; border: 1px solid var(--ab-border-strong); background: var(--ab-bg); border-radius: var(--ab-radius-lg); box-shadow: var(--ab-shadow); display: flex; flex-direction: column; gap: 6px; max-height: 80vh; overflow-y: auto; }
-.bar[data-side='right'] .card { margin-right: 8px; }
-.bar[data-side='left'] .card { margin-left: 8px; }
-.card[hidden], .handle[hidden] { display: none; }
-.head { display: flex; align-items: center; gap: 6px; }
-.title { flex: 1; font-weight: 650; font-size: var(--ab-text-lg); }
-.icon { font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px; border: 1px solid transparent; border-radius: var(--ab-radius-sm); background: transparent; color: var(--ab-fg-soft); }
-.icon:hover { background: var(--ab-bg-sunken); }
+/* the dock; folded, only the mark is left in it */
+.dock { display: flex; align-items: center; gap: 4px; padding: 5px; border: 1px solid var(--ab-border-strong); border-radius: 999px; background: var(--ab-bg); box-shadow: var(--ab-shadow); }
 
-.actions { display: flex; flex-direction: column; gap: 4px; }
-.act { width: 100%; padding: 7px 10px; text-align: start; border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius-sm); background: var(--ab-bg-raised); font-weight: 550; }
-.act:hover:not(:disabled) { background: var(--ab-bg-sunken); }
+/* the mark: click folds or opens the dock, drag (or the left and right arrow keys) moves it along the edge.
+   touch-action: none lets a finger drag it without scrolling the page. */
+.handle { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 12px; background: transparent; cursor: grab; touch-action: none; user-select: none; }
+.handle:hover { background: var(--ab-bg-sunken); }
+.handle:active { cursor: grabbing; }
+.sep { flex: none; width: 1px; height: 20px; margin-inline: 2px; background: var(--ab-border-strong); }
+
+.actions { display: flex; align-items: center; gap: 4px; }
+.act { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ab-fg-soft); }
+.act:hover:not(:disabled) { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); color: var(--ab-accent); }
+.act[data-ai='true']:hover:not(:disabled) { background: var(--ab-ai-soft); border-color: var(--ab-ai-line); color: var(--ab-ai); }
+/* The first action is the main one: filled. */
+.act-first { background: var(--ab-accent); border-color: var(--ab-accent); color: var(--ab-accent-fg); }
+.act-first:hover:not(:disabled), .act-first[data-ai='true']:hover:not(:disabled) { background: var(--ab-accent-hover); border-color: var(--ab-accent-hover); color: var(--ab-accent-fg); }
 /* No opacity here: the browser's visibility check (bar.js) counts a see-through button as not in plain view. */
 .act:disabled, .act-first:disabled { cursor: not-allowed; background: var(--ab-bg-sunken); border-color: var(--ab-border); color: var(--ab-fg-muted); }
-.act-first { background: var(--ab-accent); border-color: var(--ab-accent); color: var(--ab-accent-fg); }
-/* The AI mark on an AI action (TRACKER.md 2.3): drawn here, so the button's text is its label alone. */
-.act[data-ai='true'] { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.act[data-ai='true']::after { content: 'AI'; flex: none; padding: 0 5px; border: 1px solid currentColor; border-radius: var(--ab-radius-sm); font-size: var(--ab-text-xs); font-weight: 650; line-height: 1.4; }
-.act-first:hover:not(:disabled) { background: var(--ab-accent-hover); }
+/* The AI mark on an AI action (TRACKER.md 2.3): a small spark in the corner of the icon. Insights actions have none. */
+.ai-dot { position: absolute; top: -2px; inset-inline-end: -2px; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--ab-bg); border: 1px solid var(--ab-ai-line); color: var(--ab-ai); pointer-events: none; }
+.act:disabled .ai-dot { color: var(--ab-fg-muted); border-color: var(--ab-border); }
 
-.notice { margin: 0; padding: 6px 8px; border: 1px solid var(--ab-warn-line); border-radius: var(--ab-radius-sm); background: var(--ab-warn-soft); color: var(--ab-warn); font-size: var(--ab-text-sm); }
-.notice[hidden] { display: none; }
-.foot { display: flex; justify-content: flex-end; }
-.quiet { padding: 2px 6px; border: 0; background: transparent; color: var(--ab-fg-muted); font-size: var(--ab-text-xs); text-decoration: underline; }
+.fold { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ab-fg-muted); }
+.fold:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
+
+/* what a hovered or focused icon is called: above the dock, dark on a light page and light on a dark one. It cannot be clicked. */
+.tip, .notice { position: absolute; bottom: calc(100% + 10px); left: 0; width: max-content; pointer-events: none; }
+.tip { max-width: min(260px, calc(100vw - 16px)); padding: 6px 10px; border-radius: var(--ab-radius); background: var(--ab-fg); color: var(--ab-bg); box-shadow: var(--ab-shadow); font-size: var(--ab-text-sm); line-height: 1.35; animation: tip-in 120ms ease-out; }
+.tip-line { display: flex; align-items: center; gap: 6px; font-weight: 650; }
+.tip-ai { flex: none; padding: 0 5px; border: 1px solid currentColor; border-radius: var(--ab-radius-sm); font-size: var(--ab-text-xs); font-weight: 650; line-height: 1.4; }
+.tip-hint { display: block; margin-top: 2px; font-size: var(--ab-text-xs); color: color-mix(in srgb, var(--ab-bg) 80%, var(--ab-fg)); }
+@keyframes tip-in { from { transform: translateY(3px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* what the person needs to know after a click that started nothing */
+.notice { max-width: min(320px, calc(100vw - 16px)); margin: 0; padding: 6px 10px; border: 1px solid var(--ab-warn-line); border-radius: var(--ab-radius); background: var(--ab-warn-soft); color: var(--ab-warn); box-shadow: var(--ab-shadow); font-size: var(--ab-text-sm); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

@@ -6,9 +6,9 @@ Employee Center, customer service and HR portals).
 
 What it does (the side panel has five sections: This page, My day, Team, Write, Knowledge):
 
-- **Quick actions**: a short bar of the 3 or 4 main actions for the open ticket, at the top of the side panel and as a small tab on the
-  edge of the ServiceNow page itself (a click on the page opens the panel and starts the action there). You choose which actions it
-  holds; an organisation can switch the on-page bar off.
+- **Quick actions**: a short bar of the 3 or 4 main actions for the open ticket, at the top of the side panel and as a small icon dock at the
+  bottom centre of the ServiceNow page itself (hover an icon for its name; a click opens the panel and starts the action there). You
+  choose which actions it holds; an organisation can switch the on-page dock off.
 - **Understand a ticket**: summary, hand-off brief, missing information, sentiment and escalation risk, next-best action, thread
   summary, routing hint, request explainer, resolution check, fulfilment checklist. No AI needed for the checks and lists.
 - **Domain packs**: major-incident updates, problem statement / RCA, change / CAB brief, account briefing, case-to-engineering
@@ -54,7 +54,7 @@ then "Turn on for this site" on your ServiceNow tab and add an AI key in Setting
 
 ```
 src/background   service worker (registers content scripts only on enabled instances)
-src/content      content script: record detection, GET-only reads (ops/), policy guard, fill one field, the small bar on the page (bar.js)
+src/content      content script: record detection, GET-only reads (ops/), policy guard, fill one field, the icon dock on the page (bar.js)
 src/page         page-world bridge (reads form identity/values; fills one field on classic, Workspace and portal pages; no save)
 src/context      what a feature may know about a record (field allowlists, specs per kind, journal, history, similar, KB, related)
 src/pii          the PII firewall: detect, mask, seal, rehydrate (only place that may import the seal)

@@ -62,30 +62,58 @@ async function barDriver(page) {
     await page.mouse.click(b.cx, b.cy);
   }
 
+  /** Move the pointer over an element, as a person's mouse does (no click). */
+  async function hover(el) {
+    const b = await box(el);
+    if (!b) throw new Error(`The bar element "${el?.cls || el?.text}" is not on screen, so it cannot be hovered.`);
+    await page.mouse.move(b.cx, b.cy, { steps: 4 });
+  }
+
+  /** Put the keyboard focus on an element without a click (a script's focus, which is not a key press: Tab then moves on from it). */
+  async function focus(el) {
+    await cdp.send('DOM.focus', { backendNodeId: el.backendNodeId });
+  }
+
   /** What a person sees right now. */
   async function view() {
     const all = await elements();
     const byClass = (cls) => all.filter((e) => e.cls.split(/\s+/).includes(cls));
     const root = byClass('bar')[0] || null;
     const handle = byClass('handle')[0] || null;
-    const card = byClass('card')[0] || null;
+    const dock = byClass('dock')[0] || null;
+    const list = byClass('actions')[0] || null;
     const actions = [];
     for (const el of all.filter((e) => e.tag === 'button' && e.cls.split(/\s+/).includes('act'))) if (await box(el)) actions.push(el.text);
     const notice = byClass('notice')[0] || null;
+    const tip = byClass('tip')[0] || null;
+    const visible = Boolean(root) && Boolean(await box(root));
+    const open = Boolean(await box(list)); // the action icons are on screen (the dock is open); false: only the mark (the small pill)
     return {
       present: Boolean(root),
-      visible: Boolean(root) && Boolean(await box(root)),
+      visible,
       handleShown: Boolean(await box(handle)),
       handleBox: await box(handle),
-      cardShown: Boolean(await box(card)),
+      dockBox: await box(dock),
+      open,
+      folded: visible && !open,
       actions,
       noticeText: notice && (await box(notice)) ? notice.text : '',
-      side: root?.attrs['data-side'] || '',
+      tipShown: Boolean(tip && (await box(tip))),
+      tipText: tip && (await box(tip)) ? tip.text : '',
+      tipBox: tip ? await box(tip) : null,
       expanded: handle?.attrs['aria-expanded'] === 'true',
     };
   }
 
-  return { elements, find, box, click, view, close: () => cdp.detach().catch(() => {}) };
+  /** Run a function with an element of the bar as `this` (in the page; the bar's closed root is reachable only this way) and return its result. */
+  async function callOn(el, fn) {
+    const { object } = await cdp.send('DOM.resolveNode', { backendNodeId: el.backendNodeId });
+    const { result, exceptionDetails } = await cdp.send('Runtime.callFunctionOn', { objectId: object.objectId, functionDeclaration: String(fn), returnByValue: true });
+    if (exceptionDetails) throw new Error(exceptionDetails.text || 'callOn failed');
+    return result.value;
+  }
+
+  return { elements, find, box, click, hover, focus, callOn, view, close: () => cdp.detach().catch(() => {}) };
 }
 
 module.exports = { barDriver };

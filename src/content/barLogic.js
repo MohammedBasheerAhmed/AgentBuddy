@@ -1,4 +1,4 @@
-// The decisions of the bar on the ServiceNow page that need no DOM, so tests can check them (tests/bar-logic.test.js).
+// The decisions of the dock on the ServiceNow page that need no DOM, so tests can check them (tests/bar-logic.test.js).
 import { t } from '../i18n/index.js';
 
 export const PREFS_KEY = 'agentbuddy-bar';
@@ -9,33 +9,47 @@ export const REASK_MS = 20000; // how often the service worker is asked again fo
 export const PROBE_MS = 30000;
 // How long an action button must have been on screen, uncovered, before a click on it starts anything (see clickVerdict).
 export const ARM_MS = 500;
+// How long a note under "nothing was started" stays above the dock before it goes away by itself.
+export const NOTICE_MS = 10000;
 
 // An AI action (a feature id) or, when AI is off, an Insights card ('card:ready').
 const ACTION_ID_RE = /^(?:card:)?[a-z][a-z0-9-]{0,63}$/;
 export const MAX_ACTIONS = 4;
 
-// Where on the edge the tab sits, as a percentage of the window's height from the top. The person can drag it up or down (the place
-// is remembered); it never goes so high or low that it could leave the window.
-export const TOP_MIN = 8;
-export const TOP_MAX = 88;
-// The default place. Classic forms and portals: a little above the middle. A Workspace has its own strip of icons down the right
-// edge (the contextual side panel), from the top: there the tab starts lower so it does not cover them.
-const DEFAULT_TOP = Object.freeze({ classic: 38, workspace: 72, portal: 38, other: 38 });
+// Where the dock sits along the bottom edge: the middle of the dock, as a percentage of the window's width. It starts in the centre; the
+// person can drag it left or right (the place is remembered). It never goes so far to a side that it could leave the window.
+export const X_MIN = 5;
+export const X_MAX = 95;
+export const X_DEFAULT = 50;
+// How far the dock keeps from the bottom edge of the window, and from the sides (px).
+export const DOCK_BOTTOM_PX = 16;
+export const DOCK_EDGE_PX = 8;
 
-/** A place on the edge (a percentage), kept inside the window; null for anything that is not a number (the default then applies). */
-export function clampTop(value) {
+/** A place along the edge (a percentage), kept inside the window; null for anything that is not a number (the centre then applies). */
+export function clampX(value) {
   const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
   if (!Number.isFinite(n)) return null;
-  return Math.round(Math.min(TOP_MAX, Math.max(TOP_MIN, n)) * 10) / 10;
+  return Math.round(Math.min(X_MAX, Math.max(X_MIN, n)) * 10) / 10;
 }
 
-/** Where the tab sits: the person's place, else the default for this kind of page. */
-export const topFor = (prefs, surface) => clampTop(prefs?.top) ?? (Object.prototype.hasOwnProperty.call(DEFAULT_TOP, surface) ? DEFAULT_TOP[surface] : DEFAULT_TOP.other);
+/** Where the middle of the dock is, as a percentage: the person's place, else the centre. */
+export const xFor = (prefs) => clampX(prefs?.x) ?? X_DEFAULT;
 
 /**
- * Open or folded, which edge of the page, and (once dragged) how far down. Kept in the page's own localStorage: three harmless
- * interface choices, nothing about a ticket. Anything unreadable (the page cleared it, or someone wrote something else there) becomes
- * the defaults. `top` is null until the tab was moved.
+ * The dock's left edge in pixels: its middle on the chosen place, kept DOCK_EDGE_PX inside the window (a dock wider than the window
+ * starts at the left edge). `view` is the width the page has; `width` the dock's own (0 while it is not shown).
+ */
+export function dockLeft({ x, view, width }) {
+  const w = Number.isFinite(width) && width > 0 ? width : 0;
+  const v = Number.isFinite(view) && view > 0 ? view : 0;
+  const wanted = (xFor({ x }) / 100) * v - w / 2;
+  return Math.round(Math.max(DOCK_EDGE_PX, Math.min(wanted, v - w - DOCK_EDGE_PX)));
+}
+
+/**
+ * Open or folded, and (once dragged) where along the bottom edge. Kept in the page's own localStorage: two harmless interface
+ * choices, nothing about a ticket. Anything unreadable (the page cleared it, or someone wrote something else there) becomes the
+ * defaults; the `side` and `top` of the older right-edge tab are ignored. `x` is null until the dock was moved.
  */
 export function parsePrefs(raw) {
   let value = null;
@@ -44,25 +58,27 @@ export function parsePrefs(raw) {
   } catch {
     /* not JSON: defaults */
   }
-  return { open: value?.open === true, side: value?.side === 'left' ? 'left' : 'right', top: clampTop(value?.top) };
+  return { open: value?.open === true, x: clampX(value?.x) };
 }
 
 export function serializePrefs(prefs) {
-  const top = clampTop(prefs?.top);
-  return JSON.stringify({ open: prefs?.open === true, side: prefs?.side === 'left' ? 'left' : 'right', ...(top === null ? {} : { top }) });
+  const x = clampX(prefs?.x);
+  return JSON.stringify({ open: prefs?.open === true, ...(x === null ? {} : { x }) });
 }
 
-// A press on the tab that moves the pointer less than this is a click (open the bar); more is a drag (move the tab up or down).
+// A press on the dock's mark that moves the pointer less than this is a click (open or fold); more is a drag (move the dock sideways).
 export const DRAG_PX = 5;
+// One press of an arrow key on the mark moves the dock by this much (a percentage of the window's width).
+export const KEY_STEP = 5;
 
 /**
- * The tab's place while it is dragged: where it was when the drag started, moved by the pointer's travel, as a percentage of the
- * window's height. null while the pointer has not moved far enough to count as a drag.
+ * The dock's place while it is dragged: where it was when the drag started, moved by the pointer's travel, as a percentage of the
+ * window's width. null while the pointer has not moved far enough to count as a drag.
  */
-export function dragTop({ startTop, startY, y, height }) {
-  if (!Number.isFinite(startTop) || !Number.isFinite(startY) || !Number.isFinite(y) || !(height > 0)) return null;
-  if (Math.abs(y - startY) < DRAG_PX) return null;
-  return clampTop(startTop + ((y - startY) / height) * 100);
+export function dragX({ startX, startPx, px, view }) {
+  if (!Number.isFinite(startX) || !Number.isFinite(startPx) || !Number.isFinite(px) || !(view > 0)) return null;
+  if (Math.abs(px - startPx) < DRAG_PX) return null;
+  return clampX(startX + ((px - startPx) / view) * 100);
 }
 
 // ---- Below the page's own dialogs ---------------------------------------------------------------------------------------------
