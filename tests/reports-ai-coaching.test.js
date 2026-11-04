@@ -11,7 +11,7 @@ import {
 import { flagPerPersonScoring } from '../src/reports/ai/scoring.js';
 import { allowedFields } from '../src/context/allowlists.js';
 import { cell } from './reports-fixtures.js';
-import { ABEL, AGENT_COMMENT, CLOSE_NOTES, DANA, GROUP_A, GROUP_SMALL, JOAN, MARCUS, NOW, PRIYA, USER, coachingWorld, id } from './reports-ai-fixtures.js';
+import { ABEL, DANA, GROUP_A, GROUP_SMALL, JOAN, MARCUS, NOW, PRIYA, USER, coachingWorld, id } from './reports-ai-fixtures.js';
 
 const DAY = 86400000;
 const request = (over = {}) => normalizeCoachingRequest({ groupId: GROUP_A, fromMs: NOW - 14 * DAY, toMs: NOW, sample: 4, tables: ['incident'], ...over }, { now: NOW });

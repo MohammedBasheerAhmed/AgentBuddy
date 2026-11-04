@@ -1,7 +1,7 @@
 import { mount, click, type, choose, settle, focused, makeChrome, fakeAiFetch, fakeClipboard, FakeEvent, document, deferred, during } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React, { act } from 'react';
+import { act } from 'react';
 import { WriteAssist, WriteInsights } from '../src/sidepanel/write/index.js';
 import SafeSendCheck from '../src/sidepanel/write/SafeSendCheck.jsx';
 import { stillFromForm } from '../src/sidepanel/compose/RewritePanel.jsx';
@@ -41,11 +41,6 @@ function setup() {
   fake.onFill(async () => ({ ok: true, method: 'g_form' }));
   return { fake, copied };
 }
-
-const openCard = async (ui, title) => {
-  const toggle = ui.$$('.ab-cardx-toggle').find((b) => b.textContent.includes(title));
-  if (toggle.getAttribute('aria-expanded') !== 'true') await click(toggle);
-};
 
 async function rewrite(ui) {
   await type(ui.field('Text to rewrite'), 'thx for waiting, vpn is back now');

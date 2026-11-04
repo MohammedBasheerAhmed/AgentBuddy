@@ -1,7 +1,6 @@
 import { mount, settle, makeChrome, deferred, during } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import TicketView from '../src/sidepanel/ticket/TicketView.jsx';
 import TicketInsights from '../src/sidepanel/ticket/TicketInsights.jsx';
 import { Glance } from '../src/sidepanel/ticket/cards/index.js';

@@ -10,7 +10,7 @@ import { shown } from '../../reports/shown.js';
  * again only when this key, the scope, the tables, the filters or "Refresh" change.
  */
 export function pageIdentity(page) {
-  let origin = '';
+  let origin;
   try {
     origin = new URL(page?.href).origin;
   } catch {
@@ -28,14 +28,14 @@ export function pageIdentity(page) {
  */
 // eslint-disable-next-line no-unused-vars
 export function visibleWidgets(widgets, { policy, customize = false } = {}) {
-  const shown = [];
+  const drawn = [];
   const hidden = [];
   for (const w of Array.isArray(widgets) ? widgets : []) {
     const section = w?.type === 'section' ? sectionById(w.section) : null;
     if (section?.ai && !customize) hidden.push(section.label);
-    else shown.push(w);
+    else drawn.push(w);
   }
-  return { shown, hidden: [...new Set(hidden)] };
+  return { shown: drawn, hidden: [...new Set(hidden)] };
 }
 
 /**

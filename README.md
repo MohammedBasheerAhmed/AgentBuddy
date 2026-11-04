@@ -44,7 +44,8 @@ npm ci               # exactly the versions in package-lock.json (not `npm insta
 npm run build        # writes dist/
 npm test             # unit tests (node tests/run.js <part of a file name> runs only those files)
 npm run check        # compiles every build entry without writing anything; a warning fails it
-npm run verify       # before a commit: unit tests, compile check, traceability check, Arabic check (stops at the first failure)
+npm run lint         # ESLint (eslint.config.mjs says why each rule is on); npm run lint:fix applies the safe fixes
+npm run verify       # before a commit: lint, unit tests, compile check, traceability check, Arabic check (stops at the first failure)
 npm run e2e          # rebuilds dist/, then real Chrome against a fake ServiceNow and a stub AI server (see "End-to-end" below)
 
 npm run watch        # rebuild dist/ on every change (the static files too)

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { nextTabIndex, panelId, tabId } from './tabKeys.js';
 
 /**

@@ -19,7 +19,7 @@ export async function formShowsRecord(form, { table, sysId }, currentRecord) {
   const formTable = typeof form.table === 'string' ? form.table.toLowerCase() : '';
   if (formTable === table) return true;
   if (formTable !== 'task' || typeof currentRecord !== 'function') return false;
-  let open = null;
+  let open;
   try {
     open = await currentRecord();
   } catch {

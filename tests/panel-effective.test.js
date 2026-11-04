@@ -1,7 +1,6 @@
 import { mount, settle, during, deferred, makeChrome } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { useEffective } from '../src/sidepanel/useEffective.js';
 import { SETTINGS_KEY } from '../src/lib/storage.js';
 import { AUDIT_KEY } from '../src/audit/auditLog.js';

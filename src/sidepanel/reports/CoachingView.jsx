@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import ErrorNote from '../ErrorNote.jsx';
 import { useRun } from '../useRun.js';

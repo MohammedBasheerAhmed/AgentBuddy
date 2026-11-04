@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useRef, useEffect, useState } from 'react';
+import { useId, useMemo, useRef, useEffect, useState } from 'react';
 import { describeTarget, reviewInsert } from '../../../insertFlow.js';
 import { isCustomerVisible } from '../../../../lib/fillable.js';
 import ReviewHints from '../../../ReviewHints.jsx';

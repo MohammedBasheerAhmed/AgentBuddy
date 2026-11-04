@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Tile, HorizontalBar, Donut, TrendChart, DataTable } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
 import { useReport } from './useReport.js';

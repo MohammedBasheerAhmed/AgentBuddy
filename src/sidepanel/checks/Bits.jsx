@@ -1,6 +1,5 @@
 // Small presentational pieces shared by the Ticket screen's cards (src/sidepanel/ticket/cards). No state, no reads: they draw what
 // they are given (React escapes every string, so ticket text is never markup).
-import React from 'react';
 
 /** Label and value pairs (question and answer, field and value). A long value wraps; nothing scrolls sideways. */
 export function Facts({ rows, tight = false }) {

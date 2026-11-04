@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { headerPhase } from '../recordHeader.js';

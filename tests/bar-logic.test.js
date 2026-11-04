@@ -144,6 +144,29 @@ test('a note above the dock goes away by itself', () => {
   assert.ok(NOTICE_MS >= 5000 && NOTICE_MS <= 30000);
 });
 
+test('the dock sits below the page\'s dialogs and hides while one is open', () => {
+  assert.ok(BAR_Z < 1040, 'under the classic UI\'s dialog backdrop (1040) and dialog (1050)');
+  assert.equal(pageHasModal({ bodyClasses: ['modal-open'], dialogs: 0 }), true);
+  assert.equal(pageHasModal({ bodyClasses: [], dialogs: 1 }), true);
+  assert.equal(pageHasModal({ bodyClasses: ['x'], dialogs: 0 }), false);
+  assert.equal(pageHasModal({}), false);
+  assert.equal(pageHasModal(), false);
+});
+
+test('an older copy of the content script (from before an update) is replaced; a working one is left alone', () => {
+  assert.equal(contentTakeover(null), 'install');
+  assert.equal(contentTakeover(undefined), 'install');
+  assert.equal(contentTakeover({ alive: 'yes' }), 'install');
+  assert.equal(contentTakeover({ alive: () => true }), 'skip');
+  assert.equal(contentTakeover({ alive: () => false }), 'replace');
+  assert.equal(contentTakeover({ alive: () => { throw new Error('Extension context invalidated.'); } }), 'replace');
+  assert.equal(runtimeAlive({ id: 'abc' }), true);
+  assert.equal(runtimeAlive({ id: undefined }), false);
+  assert.equal(runtimeAlive(null), false);
+  assert.equal(runtimeAlive({ get id() { throw new Error('Extension context invalidated.'); } }), false);
+  assert.equal(TAKEOVER_EVENT, 'agentbuddy-content-takeover');
+});
+
 test('the dock is a pill at the bottom centre with icons, a tooltip, and none of the old right-edge tab', () => {
   const fs = require('node:fs');
   const path = require('node:path');

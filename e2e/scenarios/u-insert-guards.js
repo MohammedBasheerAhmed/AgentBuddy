@@ -6,7 +6,7 @@
 //    - a one-line field is replaced and its line breaks become spaces, even when the panel asks to append
 //    - the knowledge article body is HTML: markup in the text arrives escaped
 //    - a feature that sends other tickets' text as reference material always shows its preview, even in "first time per action" mode
-const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, frameByPath } = require('../common.js');
+const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf } = require('../common.js');
 const { runFeature, waitForVisible, openHalf } = require('../ui.js');
 
 /** Unfold "More actions" in AI Assist (round 3: what does not fit the ticket's state waits there). */
@@ -31,7 +31,7 @@ module.exports = {
   id: 'u',
   title: 'Insert guards: fields off the list, the record a text was written for, one-line and HTML fields; reference-material previews always shown',
   async run(t, ctx) {
-    const { ai, inst, data } = ctx;
+    const { ai, data } = ctx;
     await prepare(ctx);
     ai.setReplier(replier);
     const mark = errorMark(ctx);

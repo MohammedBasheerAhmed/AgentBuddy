@@ -8,7 +8,6 @@
 // Glance props: { page, eff, record, header, headPhase, quickBar, onShowCard? }   (quickBar: the node to draw inside the header)
 //
 // No card carries an AI mark or sends anything anywhere: every read is a GET with the agent's own session, kept in panel memory.
-import React from 'react';
 import { openFor, rankFor } from '../../../insights/order.js';
 import { recordKey } from './useInsight.js';
 import Glance from './Glance.jsx';

@@ -38,10 +38,10 @@ const RIGHT_TO_LEFT = new Set(['ar', 'he', 'fa', 'ur']);
 let current = 'en';
 
 /** The language to use: the person's choice, or for `auto` the browser's language when it is one we have, else English. */
-export function resolveLanguage(setting, browserLanguage = '') {
+export function resolveLanguage(setting, browserLocale = '') {
   const pick = String(setting || 'auto').toLowerCase();
   if (SUPPORTED.includes(pick)) return pick;
-  const base = String(browserLanguage || '').toLowerCase().split(/[-_]/)[0];
+  const base = String(browserLocale || '').toLowerCase().split(/[-_]/)[0];
   return SUPPORTED.includes(base) ? base : 'en';
 }
 

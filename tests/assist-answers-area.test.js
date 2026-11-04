@@ -1,7 +1,7 @@
 import { mount, click, settle, focused, makeChrome, fakeAiFetch, fakeClipboard, deferred, during, type, FakeEvent } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React, { act } from 'react';
+import { act } from 'react';
 import { useAnswers, AnswerArea, AskBox, forgetAnswers } from '../src/sidepanel/ticket/assist/answers/index.js';
 import { featureById } from '../src/features/registry.js';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';

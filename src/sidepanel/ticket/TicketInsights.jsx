@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { CardFrame, EmptyNote } from '../ui/primitives.jsx';
 import { shownFor } from '../../profiles/profiles.js';

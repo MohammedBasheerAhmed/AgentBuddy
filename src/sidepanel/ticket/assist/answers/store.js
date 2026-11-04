@@ -15,7 +15,7 @@ export const RECORDS_KEPT = 10;
 export function keyOf(page, record) {
   const rec = record || page?.record || null;
   if (!rec?.table || !rec?.sysId) return '';
-  let host = '';
+  let host;
   try {
     host = new URL(page?.href || '').host;
   } catch {

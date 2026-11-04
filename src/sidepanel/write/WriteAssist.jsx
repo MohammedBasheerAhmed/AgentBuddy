@@ -1,4 +1,3 @@
-import React from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import AiKeyNote from '../AiKeyNote.jsx';
 import { AiBadge, CardFrame } from '../ui/primitives.jsx';

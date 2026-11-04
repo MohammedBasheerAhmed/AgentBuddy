@@ -28,9 +28,9 @@ const mod = (n, m) => ((Math.floor(Number(n) || 0) % m) + m) % m;
 
 /** part / total as a percentage (0 to 100), rounded; 0 when the total is 0. */
 export function percent(part, total, decimals = 0) {
-  const t = num(total);
-  if (t <= 0) return 0;
-  return round(Math.min(100, (num(part) / t) * 100), decimals);
+  const whole = num(total);
+  if (whole <= 0) return 0;
+  return round(Math.min(100, (num(part) / whole) * 100), decimals);
 }
 
 const group = (digits) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');

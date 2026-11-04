@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { Component } from 'react';
 import { t, tm } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 

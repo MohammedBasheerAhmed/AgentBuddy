@@ -63,15 +63,19 @@ export async function clearAllStored({ local, session, vault } = {}, { keep = []
   const remaining = [];
   const kept = [];
   const ours = (k) => k.startsWith(KEY_PREFIX);
-  for (const [name, area] of [['local', local], ['session', session], ['vault', vault]]) {
-    if (!area) continue;
+  // The areas are separate stores and are cleared together; within one, the second read is what the removal left behind.
+  const clearArea = async ([name, area]) => {
     const all = Object.keys((await area.get(null)) || {}).filter(ours);
-    kept.push(...all.filter((k) => keep.includes(k)).map((k) => `${name}:${k}`));
     const found = all.filter((k) => !keep.includes(k));
     if (found.length) await area.remove(found);
-    removed[name] = found.length;
     const left = Object.keys((await area.get(null)) || {}).filter((k) => ours(k) && !keep.includes(k));
-    remaining.push(...left.map((k) => `${name}:${k}`));
+    return { name, kept: all.filter((k) => keep.includes(k)), removed: found.length, left };
+  };
+  const areas = [['local', local], ['session', session], ['vault', vault]].filter(([, area]) => area);
+  for (const done of await Promise.all(areas.map(clearArea))) {
+    kept.push(...done.kept.map((k) => `${done.name}:${k}`));
+    removed[done.name] = done.removed;
+    remaining.push(...done.left.map((k) => `${done.name}:${k}`));
   }
   if (!vault) delete removed.vault;
   return kept.length ? { removed, remaining, kept } : { removed, remaining };

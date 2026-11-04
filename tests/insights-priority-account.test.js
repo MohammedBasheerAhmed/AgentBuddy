@@ -1,7 +1,6 @@
 import { mount, makeChrome, settle } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { accountKey, isPriorityAccount, PRIORITY_ACCOUNT_MARK } from '../src/insights/priorityAccount.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 import AccountCard from '../src/sidepanel/ticket/cards/AccountCard.jsx';
@@ -93,10 +92,8 @@ test('Account card: an account not on the list, a case with no account, or no li
   for (const [account, policy] of [['Globex', { priorityAccounts: ['Boxeo'] }], ['', { priorityAccounts: ['Boxeo'] }], ['Boxeo', {}]]) {
     const fake = setup(account);
     let summary = '';
-    // eslint-disable-next-line no-await-in-loop
     const ui = await mount(<AccountCard page={pageFor()} eff={eff(policy)} record={record} active setSummary={(s) => (summary = s)} />);
     try {
-      // eslint-disable-next-line no-await-in-loop
       await settle(6);
       assert.equal(ui.$('.ab-glance-vip'), null, `${account || 'no account'}: no mark`);
       assert.ok(!/Priority account/.test(ui.text()));
@@ -105,7 +102,6 @@ test('Account card: an account not on the list, a case with no account, or no li
       else assert.match(ui.text(), /This case has no account/);
       assert.deepEqual(reads(fake), [1, 1, 1]);
     } finally {
-      // eslint-disable-next-line no-await-in-loop
       await ui.unmount();
     }
   }

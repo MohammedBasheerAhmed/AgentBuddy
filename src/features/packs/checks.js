@@ -51,7 +51,7 @@ async function explainTarget(pack, { read, allowSensitive }) {
 export const NO_NOTES_TO_IMPROVE = tm('There are no resolution notes on the form yet. Type a few words first, or use "Write resolution notes".'); // an English text: show it with t()
 
 async function typedNotes(pack, { read }) {
-  let form = null;
+  let form;
   try {
     const facts = await read('resolutionFacts', { table: pack.table, sysId: pack.sysId });
     form = facts && typeof facts === 'object' ? facts.form : null;

@@ -17,7 +17,7 @@ export class QueryError extends Error {
 }
 
 const FIELD_RE = /^[a-z][a-z0-9_]{0,60}(\.[a-z][a-z0-9_]{0,60}){0,2}$/;
-const TOKEN_RE = /^[A-Za-z0-9_.\-]{1,100}$/;
+const TOKEN_RE = /^[A-Za-z0-9_.-]{1,100}$/;
 // eslint-disable-next-line no-control-regex -- the point is to refuse control characters.
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 const MAX_TEXT = 200;

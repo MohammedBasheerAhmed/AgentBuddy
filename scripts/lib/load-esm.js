@@ -21,7 +21,6 @@ function loadEsm(rootDir, entry) {
       jsx: 'automatic',
       absWorkingDir: rootDir,
     });
-    // eslint-disable-next-line import/no-dynamic-require, global-require -- the path is the file esbuild just wrote.
     return require(outfile);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

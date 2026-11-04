@@ -427,7 +427,7 @@ async function readGroupQueue(deps, userId, { profiles, policy, run, limits }) {
     groups: async (table, query, groupBy) => normalizeGroups(await run(() => deps.countByColumn(table, query, groupBy[0]))) || [],
   };
   let groups;
-  let teamNote = '';
+  let teamNote;
   try {
     const team = await readMyTeam(reader, userId, { tables: typeof deps.countByColumn === 'function' ? ['task'] : [] });
     groups = team.groups;

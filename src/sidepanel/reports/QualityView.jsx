@@ -1,4 +1,3 @@
-import React from 'react';
 import { Tile, TrendChart, HorizontalBar, DataTable } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';

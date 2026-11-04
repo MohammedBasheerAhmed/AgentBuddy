@@ -1,7 +1,7 @@
 import { mount, click, type, choose, press, focused, makeChrome, settle } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // The small DOM the view tests run on (tests/fixtures/panel-dom.js) must behave like a browser where the views rely on it: clicks
 // reach React, typed text and choices come back through onChange, a disabled button cannot be pressed, hidden parts are not "shown",

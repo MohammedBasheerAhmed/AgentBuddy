@@ -1,7 +1,6 @@
 import { mount, click, settle, type, makeChrome } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { confirmedProfiles, firstRunSteps, hostLooksLikeServiceNow, profileChoices, siteVerdict } from '../src/sidepanel/firstRun.js';
 import FirstRun from '../src/sidepanel/FirstRun.jsx';
 import SetupView, { REFUSED_TEXT } from '../src/sidepanel/SetupView.jsx';
@@ -16,7 +15,6 @@ import { SETTINGS_KEY } from '../src/lib/storage.js';
 const SN = 'https://acme.service-now.com';
 const off = (origin = '') => ({ status: 'not-enabled', tabId: 3, origin });
 const list = { status: 'no-record', tabId: 3, href: `${SN}/home`, surface: 'classic', user: { name: 'Beth', roles: ['itil'] } };
-const ticket = { status: 'record', tabId: 3, href: `${SN}/incident.do`, record: { table: 'incident', sysId: 'a'.repeat(32) } };
 const states = (r) => r.steps.map((s) => `${s.id}:${s.state}`).join(' ');
 const effOf = (settings = {}, policy = {}, over = {}) => {
   const e = effectiveSettings(settings, policy);

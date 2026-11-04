@@ -1,7 +1,6 @@
 import { mount, settle, makeChrome, deferred, during } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { usePage } from '../src/sidepanel/usePage.js';
 
 // usePage follows the active browser tab. A switch of tab (or a navigation) while the previous look is still waiting for its answer

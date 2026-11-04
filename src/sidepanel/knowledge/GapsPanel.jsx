@@ -21,16 +21,16 @@ const DAYS = [30, 60, 90];
 const n = (v) => formatNumber(Number(v || 0));
 
 /** "Looked at 500 of 12,400 tickets resolved in the last 60 days in your groups." */
-export function lookedAtText(data, scopeWords = '') {
+export function lookedAtText(data, scopePhrase = '') {
   const scanned = Number(data?.scanned) || 0;
   const total = Number.isFinite(data?.total) ? data.total : null;
   const days = data?.days || 60;
   if (total !== null && total > scanned) {
-    const params = { scanned: n(scanned), total: n(total), days, scope: scopeWords };
-    return scopeWords ? t('Looked at {scanned} of {total} tickets resolved in the last {days} days {scope}.', params) : t('Looked at {scanned} of {total} tickets resolved in the last {days} days.', params);
+    const params = { scanned: n(scanned), total: n(total), days, scope: scopePhrase };
+    return scopePhrase ? t('Looked at {scanned} of {total} tickets resolved in the last {days} days {scope}.', params) : t('Looked at {scanned} of {total} tickets resolved in the last {days} days.', params);
   }
-  const params = { n: n(scanned), days, scope: scopeWords };
-  return scopeWords
+  const params = { n: n(scanned), days, scope: scopePhrase };
+  return scopePhrase
     ? tn(scanned, 'Looked at {n} ticket resolved in the last {days} days {scope}.', 'Looked at {n} tickets resolved in the last {days} days {scope}.', params)
     : tn(scanned, 'Looked at {n} ticket resolved in the last {days} days.', 'Looked at {n} tickets resolved in the last {days} days.', params);
 }

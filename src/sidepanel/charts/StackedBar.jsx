@@ -1,4 +1,3 @@
-import React from 'react';
 import ChartFrame, { PatternDefs, Swatch, patternId, useUid } from './ChartFrame.jsx';
 import { clipLabel, formatNumber, stackedLayout, stackedToTable, summarizeStacked, toneClass, toneForIndex } from './geometry.js';
 import { useWidth } from './useWidth.js';

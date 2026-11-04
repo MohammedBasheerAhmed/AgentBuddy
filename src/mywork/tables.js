@@ -104,7 +104,7 @@ export const hasCustomer = (table) => Boolean(KNOWN_TABLES[table]?.customer);
  */
 export function readDecision(table, { isBlocked, sensitivePrefixes, allowSensitive = false, profiles = [] } = {}) {
   if (!TABLE_RE.test(String(table || ''))) return 'invalid';
-  let blocked = false;
+  let blocked;
   try {
     blocked = typeof isBlocked === 'function' && Boolean(isBlocked(table));
   } catch {

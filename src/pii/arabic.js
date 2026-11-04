@@ -174,7 +174,7 @@ export function detectArabic(text, out) {
 export function foldArabicLetters(s) {
   if (!/[\u0600-\u06ff]/.test(s)) return s;
   return s
-    .replace(/[\u0640\u064b-\u065f\u0670]/g, '')
+    .replace(/[\u064b-\u065f\u0670\u0640]/g, '') // the marks, then the tatweel (a mark first in the list would read as one letter)
     .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
     .replace(/[\u0649\u06cc]/g, '\u064a')
     .replace(/\u0629/g, '\u0647')

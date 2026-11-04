@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Tile, DataTable } from '../charts/index.js';
 import DrillLink from '../charts/DrillLink.jsx';
 import SectionShell from './SectionShell.jsx';

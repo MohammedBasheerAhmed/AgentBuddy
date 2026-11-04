@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { isPlainClick, NEW_TAB_HINT } from '../linkClick.js';
 import { t } from '../../i18n/index.js';
 

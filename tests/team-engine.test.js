@@ -107,7 +107,7 @@ test('my groups: only active groups are asked for; under the cap they keep their
 });
 
 test('41 groups: the 25 with the most open work are used, and the scope says "25 of 41"', async () => {
-  const work = (c) => [group('assignment_group', id(41), 'Group 41', 30), group('assignment_group', id(7), 'Group 07', 12), group('assignment_group', id(30), 'Group 30', 5)];
+  const work = () => [group('assignment_group', id(41), 'Group 41', 30), group('assignment_group', id(7), 'Group 07', 12), group('assignment_group', id(30), 'Group 30', 5)];
   const inst = fakeInstance({
     rules: [
       { when: (c) => c.table === 'sys_user_grmember', then: memberships(41) },

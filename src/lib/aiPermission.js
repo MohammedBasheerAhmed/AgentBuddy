@@ -22,7 +22,7 @@ export async function ensureAiPermission(config, permissions = globalThis.chrome
   if (!pattern) return;
   // An enterprise build was given its AI address at install (host_permissions): `contains` is true there and nothing is asked.
   if (await permissions.contains({ origins: [pattern] })) return;
-  let granted = false;
+  let granted;
   try {
     granted = await permissions.request({ origins: [pattern] });
   } catch {

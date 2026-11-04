@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import { useId, useState } from 'react';
 import DataTable from './DataTable.jsx';
 import { patternFor, toneClass } from './geometry.js';
 import { t } from '../../i18n/index.js';

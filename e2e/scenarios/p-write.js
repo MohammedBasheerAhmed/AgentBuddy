@@ -11,7 +11,6 @@
 //             filled; caller, category and group are only suggested (no AI)
 //   Snippets  create, preview against the open record, insert into a field of choice (work note), into the customer comment (a password
 //             is stopped), copy as text, delete, paste back, and add the same set from a FILE (skipped: nothing is overwritten)
-const { findLeaks } = require('../leaks.js');
 const fs = require('fs');
 const path = require('path');
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, checkAiRun, runAfter, captureClipboard, clipboardLog, loadingElements, settleOnRecord, waitPanel } = require('../common.js');
@@ -51,7 +50,6 @@ module.exports = {
     const mark = errorMark(ctx);
     const panel = await ctx.openPanel();
     const p = panel.page;
-    const note = () => p.evaluate(() => document.querySelector('.ab-compose-actions .ab-note, [role="status"].ab-note')?.innerText || '');
     const write = async (half) => {
       await openScreen(p, 'Write');
       await openHalf(p, half);
@@ -154,7 +152,8 @@ module.exports = {
     await captureClipboard(p);
     await clickButton(p, /^Copy short description/);
     await ctx.waitUntil('copy', async () => (await clipboardLog(p)).length >= 1, { timeout: 5000 });
-    t.check('Copy short description copies the (editable) short description', (await clipboardLog(p)).slice(-1)[0] === 'VPN is down for the sales team since this morning');
+    const copied = await clipboardLog(p);
+    t.check('Copy short description copies the (editable) short description', copied.slice(-1)[0] === 'VPN is down for the sales team since this morning', JSON.stringify(copied.map((c) => String(c).slice(0, 60))));
     t.check('no field of the saved incident was touched', (await ticket.evaluate(() => window.__gformCalls.length)) === 0);
 
     // Caller, category and group are only suggested, read without AI

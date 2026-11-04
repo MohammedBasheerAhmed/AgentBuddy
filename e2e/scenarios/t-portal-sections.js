@@ -8,8 +8,8 @@
 //    - Ticket screen: "Ready to resolve?" says it checked the saved ticket only (no readable form); "Request status" on a portal request
 //      page loads; a request (not an item) is offered no resolution notes or routing hint
 //    - a Workspace page (shadow DOM, no g_form): Rewrite's Add below types into the box labelled "Work notes"
-const { prepare, errorMark, errorsSince, describeErrors, clickTab, clickButton, waitForText, textOf, checkAiRun, runAfter, captureClipboard, clipboardLog, waitPanel, settleOnRecord, frameByPath, clickSel } = require('../common.js');
-const { deepTextareaValue, openScreen, openHalf, buttonShown, clearBox } = require('../ui.js');
+const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, checkAiRun, runAfter, captureClipboard, waitPanel, settleOnRecord } = require('../common.js');
+const { deepTextareaValue, openScreen, openHalf, clearBox } = require('../ui.js');
 const { openCard } = require('../insightsUi.js');
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
@@ -36,7 +36,7 @@ module.exports = {
   id: 't',
   title: 'Portal and Workspace pages: Check my comment offers paste, Rewrite types into the page\'s own box, Notes falls back to Copy, Ready to resolve and Request status work without a form',
   async run(t, ctx) {
-    const { ai, inst, data } = ctx;
+    const { ai, data } = ctx;
     const A = data.PORTAL.tickets[0];
     const R = data.PORTAL.tickets[2];
     await prepare(ctx);

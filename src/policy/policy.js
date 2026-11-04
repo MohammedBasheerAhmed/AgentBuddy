@@ -93,6 +93,7 @@ function sensitivePrefixes(value) {
 // Letters, digits and hyphens in dot-separated labels (an international name arrives here in its xn-- form). No "*", no "_",
 // no brackets: a host that could stand for more than one site is never an instance.
 const HOST_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+// eslint-disable-next-line no-control-regex -- the control characters are what it looks for
 const HAS_SPACE_OR_CONTROL = /[\s\u0000-\u001f\u007f]/;
 
 /**
@@ -220,7 +221,7 @@ function parseOrgDashboard(value) {
   if (typeof value === 'string') {
     if (value.length > LAYOUT_MAX_CHARS) return { layout: null, problem: 'too-big' };
     try {
-      parsed = JSON.parse(value.replace(/^﻿/, ''));
+      parsed = JSON.parse(value.replace(/^\uFEFF/, ''));
     } catch {
       return { layout: null, problem: 'not-layout' };
     }

@@ -132,7 +132,7 @@ test('rows that belong to other conversations mean the filter was ignored: an er
   const OTHER = id(0x777);
   const calls = [];
   const deps = {
-    queryTable: async (table, query) => {
+    queryTable: async (table) => {
       calls.push(table);
       if (table === 'sys_cs_conversation') return [{ sys_id: v(CONVERSATION_ID), interaction: v(OTHER) }];
       return [{ sys_id: v(id(0x801)), conversation: v(OTHER), sys_created_on: v('2026-10-26 09:00:00'), direction: v('inbound'), message: v('NOT THIS CHAT') }];

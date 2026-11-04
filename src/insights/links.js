@@ -11,7 +11,7 @@ const PORTAL_SEGMENT = /^\/[a-z][a-z0-9_-]{0,30}$/i;
 /** '' when it cannot be built safely. */
 export function articleShareUrl(page, { number, sysId } = {}) {
   let origin;
-  let first = '';
+  let first;
   try {
     const url = new URL(page?.href);
     if (!/^https?:$/.test(url.protocol)) return '';

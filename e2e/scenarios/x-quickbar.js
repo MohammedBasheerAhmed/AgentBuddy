@@ -78,7 +78,12 @@ module.exports = {
 
     // 4. Fold and open again; the choice is kept.
     await clickButton(p, /^Quick actions$/);
-    await p.waitForFunction(() => window.__vis(document.querySelectorAll('.ab-quick-toggle'))[0]?.getAttribute('aria-expanded') === 'false', { timeout: 5000 });
+    await p.waitForFunction(() => window.__vis(document.querySelectorAll('.ab-quick-toggle'))[0]?.getAttribute('aria-expanded') === 'false', { timeout: 5000 }).catch(async (err) => {
+      // Say what the panel showed and what was saved, so a failure on a CI runner can be understood from its log.
+      const shown = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 300)).catch(() => '');
+      const saved = await ctx.settings().catch(() => ({}));
+      throw new Error(`${err.message}. The panel showed: ${shown} | saved: quickBarOpen=${saved.quickBarOpen} profilesConfirmed=${saved.profilesConfirmed} profiles=${JSON.stringify(saved.profiles)}`);
+    });
     t.check('folded: only the strip is left, no action buttons', (await barButtons(p)).length === 0);
     const savedClosed = await ctx.waitUntil('the folded bar to be saved', async () => (await ctx.settings()).quickBarOpen === false, { timeout: 5000 }).then(() => true, () => false);
     t.check('the choice is saved', savedClosed);

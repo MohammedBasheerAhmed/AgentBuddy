@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import ErrorNote from '../ErrorNote.jsx';
 import { openRecord } from '../openRecord.js';
 import { sharedCis } from '../../mywork/rank.js';

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { buildCheckView } from '../../../checks/resolutionCheck.js';
 import { fixFor } from '../../../insights/fixes.js';
 import { stateBucket } from '../../../insights/order.js';

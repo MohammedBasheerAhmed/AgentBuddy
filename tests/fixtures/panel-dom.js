@@ -29,7 +29,6 @@ export function deferred() {
 /** Let every pending promise and timer of 0 ms run, inside act. */
 export const settle = async (rounds = 3) => {
   for (let i = 0; i < rounds; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });

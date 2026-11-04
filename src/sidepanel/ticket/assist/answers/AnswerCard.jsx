@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SafeText } from '../../../../render/SafeText.jsx';
 import { AiBadge } from '../../../ui/primitives.jsx';
 import { applyFieldStates, choicesOf, createGuard, insertTargets, insertText, readFieldStates, reviewInsert } from '../../../insertFlow.js';
@@ -77,6 +77,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the tab and address, not the page object, so the form is not asked again on every render
   }, [open, wrongRecord, baseTargets, page.tabId, page.href, answer.source]);
 
   const config = resolveProviderConfig(eff.values, eff.apiKey);

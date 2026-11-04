@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { aiNeeds, aiNeedsText } from './aiReady.js';
 import { keyStore } from '../lib/storage.js';
 import { t, tm, t as tr } from '../i18n/index.js';

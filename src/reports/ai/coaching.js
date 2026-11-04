@@ -102,10 +102,10 @@ export function normalizeCoachingRequest(input, { now = Date.now() } = {}) {
   if (toMs <= fromMs) throw new Error(tm('The last day must come after the first day.'));
   if (toMs - fromMs > COACHING_LIMITS.rangeDaysMax * DAY) throw new Error(say(tm('Choose at most {days} days.'), { days: COACHING_LIMITS.rangeDaysMax }));
   if (fromMs < now - COACHING_LIMITS.lookBackDaysMax * DAY) throw new Error(tm('Choose days from the last twelve months.'));
-  const asked = Array.isArray(input?.tables) ? input.tables.map((t) => String(t || '').toLowerCase()) : [];
+  const asked = Array.isArray(input?.tables) ? input.tables.map((table) => String(table || '').toLowerCase()) : [];
   // HR cases are never coached on: not read, not sampled, not an option.
   if (asked.some(isHrTable)) throw new Error(tm('HR case tables are never used for coaching.'));
-  const tables = asked.filter((t, i) => REPORT_TABLE_IDS.includes(t) && asked.indexOf(t) === i);
+  const tables = asked.filter((table, i) => REPORT_TABLE_IDS.includes(table) && asked.indexOf(table) === i);
   const n = Math.floor(Number(input?.sample));
   const sample = Number.isFinite(n) ? Math.min(COACHING_LIMITS.sampleMax, Math.max(1, n)) : COACHING_LIMITS.sampleDefault;
   return { groupId, groupName: oneLine(input?.groupName || '', 80), fromMs, toMs, sample, tables: tables.length ? tables : [...STANDARD_TABLE_IDS] };
@@ -152,8 +152,8 @@ export function buildCoachingPack(result, { blockedFields = [], periodLabel = ''
   // Group members come first, so a member who also raised a ticket is known as a team member.
   const people = [];
   addPeople(people, 'agent', result.agents || []);
-  addPeople(people, 'agent', result.tickets.map((t) => t.assignee).filter(Boolean));
-  addPeople(people, 'requester', result.tickets.flatMap((t) => t.requesters || []));
+  addPeople(people, 'agent', result.tickets.map((ticket) => ticket.assignee).filter(Boolean));
+  addPeople(people, 'requester', result.tickets.flatMap((ticket) => ticket.requesters || []));
 
   return {
     version: 1,
@@ -173,13 +173,13 @@ export function buildCoachingPack(result, { blockedFields = [], periodLabel = ''
       group: line(result.group?.name || 'the group', 80),
       period: line(periodLabel, 60),
       candidates: Number.isFinite(result.candidates) ? result.candidates : null,
-      tickets: result.tickets.map((t) => ({
-        number: t.number,
-        type: t.kind || '',
-        closeCode: blocked.has('close_code') || blocked.has('resolution_code') ? '' : line(t.closeCode, 80),
-        closeNotes: String(t.closeNotes || '').slice(0, COACHING_LIMITS.closeNotesChars),
-        comments: (t.comments || []).slice(-COACHING_LIMITS.commentsPerTicket).map((c) => ({ when: line(c.when, 30), text: String(c.text || '').slice(0, COACHING_LIMITS.commentChars) })),
-        commentsNote: line(t.commentsNote, 160),
+      tickets: result.tickets.map((ticket) => ({
+        number: ticket.number,
+        type: ticket.kind || '',
+        closeCode: blocked.has('close_code') || blocked.has('resolution_code') ? '' : line(ticket.closeCode, 80),
+        closeNotes: String(ticket.closeNotes || '').slice(0, COACHING_LIMITS.closeNotesChars),
+        comments: (ticket.comments || []).slice(-COACHING_LIMITS.commentsPerTicket).map((c) => ({ when: line(c.when, 30), text: String(c.text || '').slice(0, COACHING_LIMITS.commentChars) })),
+        commentsNote: line(ticket.commentsNote, 160),
       })),
       notes: (result.notes || []).map((n) => line(n, 160)).slice(0, 6),
     },
@@ -202,13 +202,13 @@ export function coachingParts(pack) {
     ...(r.notes.length ? ['Things that could not be read or are incomplete:', ...r.notes.map((n) => `- ${n}`)] : []),
   ];
   const parts = [{ label: 'Coaching sample', field: 'coaching_scope', text: head.join('\n') }];
-  for (const t of r.tickets) {
-    const closing = [`Ticket ${t.number}${t.type ? ` (${t.type})` : ''}`, ...(t.closeCode ? [`Close code: ${t.closeCode}`] : []), `Close notes: ${t.closeNotes.trim() || '(empty)'}`];
-    parts.push({ label: `Closed ticket ${t.number}`, field: 'close_notes', text: closing.join('\n') });
-    const comments = t.comments.length
-      ? t.comments.map((c) => `${c.when ? `[${c.when}] ` : ''}${c.text}`)
-      : [`No customer-visible comment written by this group's agents was found${t.commentsNote ? ` (${t.commentsNote})` : ''}.`];
-    parts.push({ label: `Customer comments on ${t.number}`, field: 'comments', text: comments.join('\n') });
+  for (const ticket of r.tickets) {
+    const closing = [`Ticket ${ticket.number}${ticket.type ? ` (${ticket.type})` : ''}`, ...(ticket.closeCode ? [`Close code: ${ticket.closeCode}`] : []), `Close notes: ${ticket.closeNotes.trim() || '(empty)'}`];
+    parts.push({ label: `Closed ticket ${ticket.number}`, field: 'close_notes', text: closing.join('\n') });
+    const comments = ticket.comments.length
+      ? ticket.comments.map((c) => `${c.when ? `[${c.when}] ` : ''}${c.text}`)
+      : [`No customer-visible comment written by this group's agents was found${ticket.commentsNote ? ` (${ticket.commentsNote})` : ''}.`];
+    parts.push({ label: `Customer comments on ${ticket.number}`, field: 'comments', text: comments.join('\n') });
   }
   return parts;
 }

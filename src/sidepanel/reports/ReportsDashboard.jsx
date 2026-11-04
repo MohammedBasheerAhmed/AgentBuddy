@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { isFeatureEnabled } from '../../policy/policy.js';
 import { activeProfiles } from '../../profiles/profiles.js';
 import { read } from '../ask.js';

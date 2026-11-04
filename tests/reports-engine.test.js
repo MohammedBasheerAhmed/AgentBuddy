@@ -8,7 +8,7 @@ import { waitingStates } from '../src/reports/engine/overview.js';
 import { foldByOwner } from '../src/reports/engine/workload.js';
 import { groupSlaByTicket, rankSlaTickets, tallyBy } from '../src/reports/engine/sla.js';
 import { stateClass, topWithOthers, normalizeTables } from '../src/reports/engine/common.js';
-import { fakeInstance, cell, group, group2, count, USER, GROUP_A, GROUP_B, NOW, DAY, HOUR } from './reports-fixtures.js';
+import { fakeInstance, cell, group, group2, count, USER, GROUP_A, GROUP_B, NOW } from './reports-fixtures.js';
 
 const id = (n) => String(n).padStart(32, '0');
 const slaRow = (task, pct, breached, end = '2026-10-28 09:00:00') => ({ task: cell(task), sla: cell('s', 'Resolution'), stage: cell('in_progress', 'In progress'), has_breached: cell(breached ? 'true' : 'false'), percentage: cell(String(pct)), planned_end_time: cell(end) });
@@ -601,7 +601,7 @@ test('quality: only the date column is read for the trend, newest first, in page
 });
 
 test('quality: a read cut at the cap says so and marks the oldest buckets partial; no backlog is invented', async () => {
-  const rows = Array.from({ length: 3000 }, (_, i) => ({ opened_at: '2026-10-27 09:00:00' }));
+  const rows = Array.from({ length: 3000 }, () => ({ opened_at: '2026-10-27 09:00:00' }));
   const inst = fakeInstance({
     rules: [
       { when: (c) => c.kind === 'query' && c.fields.join() === 'opened_at', then: (c) => rows.slice(c.options.offset, c.options.offset + c.options.limit) },

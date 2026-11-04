@@ -19,7 +19,7 @@ const APOSTROPHES = "'" + String.fromCharCode(0x2019);
 // A word is letters, marks and digits with apostrophes inside it (O'Brien). A hyphen separates words: "Abel-Tuter" is two.
 const WORD = new RegExp(`[\\p{L}\\p{M}\\p{N}_]+(?:[${APOSTROPHES}][\\p{L}\\p{M}\\p{N}_]+)*`, 'gu');
 const JOINERS = new RegExp(`[${APOSTROPHES}]`); // apostrophes inside a name token (D'Souza)
-const ASCII_ONLY = /^[\x00-\x7f]*$/;
+const ASCII_ONLY = /^\p{ASCII}*$/u;
 const COMBINING = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
 const CURLY_APOS = String.fromCharCode(0x2019);
 // Scripts written without spaces between words: names in them are matched as substrings.

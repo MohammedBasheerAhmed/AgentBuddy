@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { read, plainError } from '../ask.js';
 import RecordLink from '../RecordLink.jsx';
 import ErrorNote from '../ErrorNote.jsx';

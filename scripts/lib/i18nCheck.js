@@ -28,7 +28,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-function unescapeText(raw, quote) {
+function unescapeText(raw) {
   return raw.replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g, (all, c) => {
     if (c[0] === 'u' && c.length === 5) return String.fromCharCode(parseInt(c.slice(1), 16));
     if (c[0] === 'x' && c.length === 3) return String.fromCharCode(parseInt(c.slice(1), 16));
@@ -45,7 +45,7 @@ const CALL_ONE = new RegExp(`(?<![\\w.$])(t|tr|tm|tx)\\(\\s*${STR}`, 'g');
 const CALL_PLURAL = new RegExp(`(?<![\\w.$])tn\\(\\s*[^,()]+(?:\\([^()]*\\))?[^,()]*,\\s*${STR}\\s*,\\s*${STR}`, 'g');
 // A call that cannot be read: t(`..`), t(a + b), t(f(x)), and a tm() or tx() whose text is not written out. (t(NAME) and t(TABLE[key]) are
 // fine: they show a text that was marked with tm() where it is written.)
-const DYNAMIC = /(?<![\w.$])(?:(?:t|tr|tm|tx)\(\s*(?:`|[A-Za-z_$][\w$.]*\s*[+(]|[0-9({!\[])|(?:tm|tx)\((?!\s*['"]))/g;
+const DYNAMIC = /(?<![\w.$])(?:(?:t|tr|tm|tx)\(\s*(?:`|[A-Za-z_$][\w$.]*\s*[+(]|[0-9({![])|(?:tm|tx)\((?!\s*['"]))/g;
 const DYNAMIC_PLUS = new RegExp(`(?<![\\w.$])(?:t|tr|tm|tx)\\(\\s*${STR}\\s*\\+`, 'g');
 const DYNAMIC_PLURAL = /(?<![\w.$])tn\(\s*[^,()]+(?:\([^()]*\))?[^,()]*,\s*(?!['"])[^\s]/g;
 
@@ -90,7 +90,6 @@ function loadCatalogue(language = 'ar') {
   const entry = path.join(SRC, 'i18n', language, 'index.js');
   const built = esbuild.buildSync({ entryPoints: [entry], bundle: true, format: 'cjs', platform: 'node', write: false, logLevel: 'silent' });
   const module_ = { exports: {} };
-  // eslint-disable-next-line no-new-func -- the bundle is our own source, built a moment ago
   new Function('module', 'exports', built.outputFiles[0].text)(module_, module_.exports);
   const table = module_.exports.AR || module_.exports[language.toUpperCase()] || Object.values(module_.exports)[0] || {};
   return table;
@@ -120,7 +119,7 @@ function checkI18n(options = {}) {
       continue;
     }
     if (where[0].plural) {
-      const [one, other] = key.split('|');
+      const [, other] = key.split('|');
       if (typeof entry !== 'object') {
         badPlural.push({ key, why: 'a text with a count needs an object with the plural forms (zero, one, two, few, many, other)' });
         continue;
@@ -154,7 +153,6 @@ function loadCatalogueFiles(language = 'ar') {
     .map((name) => {
       const built = esbuild.buildSync({ entryPoints: [path.join(dir, name)], bundle: true, format: 'cjs', platform: 'node', write: false, logLevel: 'silent' });
       const module_ = { exports: {} };
-      // eslint-disable-next-line no-new-func -- our own source, built a moment ago
       new Function('module', 'exports', built.outputFiles[0].text)(module_, module_.exports);
       return { file: name, table: Object.values(module_.exports)[0] || {} };
     });

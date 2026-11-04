@@ -4,7 +4,7 @@ import { allowedFields } from '../src/context/allowlists.js';
 import { readContextPack } from '../src/context/pack.js';
 import { RELATED_BY_KIND, readRelated, relatedPlan } from '../src/context/related.js';
 import { accessDeniedError, fakeDeps, v } from './fixtures/sn-fakeDeps.js';
-import { IDS, changeRows, domainTables, incidentRows, sid } from './domain-fixtures.js';
+import { IDS, changeRows, domainTables, sid } from './domain-fixtures.js';
 
 const problem = { table: 'problem', sysId: IDS.problem };
 const change = { table: 'change_request', sysId: IDS.change };

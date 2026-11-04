@@ -6,7 +6,7 @@
 //    - the Insert buttons fill ONE field each (problem: statement, cause, workaround), never save
 //    - the HR case brief: "Needs Strict privacy mode" in Standard mode and a click ends with the Strict-mode message; in Strict mode
 //      with no organisation policy it ends with HR_BLOCKED; in both cases nothing reaches the AI and no HR free text was read
-const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, checkAiRun } = require('../common.js');
+const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun } = require('../common.js');
 const { runFeature, openHalf } = require('../ui.js');
 
 // Round 3: the actions are in the AI Assist half, the ones that do not fit the ticket's state folded under "More actions"; answers
@@ -86,7 +86,7 @@ module.exports = {
     let req = await checkAiRun(t, ctx, p, 'account-briefing', ran, { before, system: /get ready for a call with a customer/, userHas: [/CS0001002/, /CS0000990/, /Gold Support/] });
     const accountReads = readsOf(inst, fromLog, 'sn_customerservice_case').filter((q) => q.includes('account='));
     t.check('account-briefing: the account\'s other cases were read with one GET, by the account id, not the case itself', accountReads.length === 1 && /account=e2e0/.test(accountReads[0]) && /sys_id!=/.test(accountReads[0]), accountReads.join(' || ').slice(0, 200));
-    t.check('account-briefing: the contact (Erin Contact, her email and phone) never reached the AI', req ? !/Erin|erin@acme|555-0177/i.test(req.raw) : false);
+    t.check('account-briefing: the contact (Erin Contact, her email and phone) never reached the AI', req ? !/\bErin\b|erin@acme|555-0177/i.test(req.raw) : false);
     t.check('account-briefing: the answer shows the contact by name again (put back locally)', /Erin Contact/.test(ran.result || ''), (ran.result || '').replace(/\s+/g, ' ').slice(0, 100));
     await close();
 
@@ -94,7 +94,7 @@ module.exports = {
     ran = await runFeature(p, /^Draft an engineering escalation/);
     req = await checkAiRun(t, ctx, p, 'case-eng-escalation', ran, { before, system: /hand a customer case to engineering/, userHas: [/Cloud Gateway/] });
     t.check('case-eng-escalation: it offers work notes only (no customer comment)', await p.evaluate(() => document.body.innerText.includes('Add to work notes') && !document.body.innerText.includes('Insert as customer comment')));
-    t.check('case-eng-escalation: the customer contact is not sent as a field (only masked wherever the text names them)', req ? !/Erin|erin@acme/i.test(req.raw) : false);
+    t.check('case-eng-escalation: the customer contact is not sent as a field (only masked wherever the text names them)', req ? !/\bErin\b|erin@acme/i.test(req.raw) : false);
     await close();
     await ticket.close();
 

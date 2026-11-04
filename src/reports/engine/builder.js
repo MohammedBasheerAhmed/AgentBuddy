@@ -53,6 +53,7 @@ export function normalizeBuilderConfig(input) {
   if (timeGroup && chart === 'donut') chart = 'line';
   // A donut shows the shares of a whole. Averages are not parts of anything: their sum and its percentages mean nothing.
   if (metric !== 'count' && chart === 'donut') chart = 'bar';
+  // eslint-disable-next-line no-control-regex -- control characters are what it takes out
   const title = typeof input?.title === 'string' ? input.title.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 60) : '';
   return { table, presets: normalizePresets(input?.presets), groupBy, metric, chart, title };
 }
@@ -103,8 +104,8 @@ export async function runBuilder(ctx, rawConfig) {
   if (isSensitiveReportTable(config.table, ctx.sensitivePrefixes) && !ctx.allowSensitive) {
     return { id: 'builder', title: meta.label, generatedAt: ctx.generatedAt, readAt: ctx.generatedAt, scope: { kind: 'builder', label: describeFilter(config.presets), groups: [], inferred: false, note: '' }, tables: [], access: [], notes: [], caps: [], data: { available: false, reason: say(tm('{table} are shown only with the HR profile, when your organisation allows HR content.'), { table: meta.label }), status: 'blocked', config } };
   }
-  const [t] = await probeTables(reader, [config.table]);
-  ctx.tables = [t];
+  const [tableInfo] = await probeTables(reader, [config.table]);
+  ctx.tables = [tableInfo];
   const base = {
     id: 'builder',
     title:
@@ -114,13 +115,13 @@ export async function runBuilder(ctx, rawConfig) {
         : say(tm('{table}: {measure} by {groupBy}'), { table: meta.label, measure: byId(METRICS, config.metric).label.toLowerCase(), groupBy: byId(GROUP_BY, config.groupBy).label.toLowerCase() })),
     generatedAt: ctx.generatedAt,
     scope: { kind: 'builder', label: describeFilter(config.presets), groups: [], inferred: false, note: '' },
-    tables: tableAccess([t]),
+    tables: tableAccess([tableInfo]),
     access: ctx.access,
     notes: ctx.notes,
     caps: ctx.caps,
   };
   const fail = (reason, status = 'error') => ({ ...base, readAt: reader.readAt || ctx.generatedAt, data: { available: false, reason, status, config } });
-  if (!t.usable) return fail(tableAccess([t])[0].note || tm('This table is not available to you.'), t.vis.status);
+  if (!tableInfo.usable) return fail(tableAccess([tableInfo])[0].note || tm('This table is not available to you.'), tableInfo.vis.status);
 
   // Filter -> conditions. Presets that need the person's id or groups read them here.
   let groupIds = [];
@@ -178,7 +179,7 @@ export async function runBuilder(ctx, rawConfig) {
   }
 
   // ---- everything else reads a bounded number of rows and works them out here ----
-  const rf = resolvedColumn(t);
+  const rf = resolvedColumn(tableInfo);
   if (group.time?.field === 'resolved' || metric === 'avg_resolve_days') {
     if (!rf) return fail(tm('This table has no resolved date to work from.'));
   }

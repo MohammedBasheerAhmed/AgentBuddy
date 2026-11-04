@@ -22,7 +22,6 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
 const { zipFolder } = require('./package.js');
 
 const root = path.join(__dirname, '..');

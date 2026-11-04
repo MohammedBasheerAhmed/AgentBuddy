@@ -132,13 +132,13 @@ export async function handleBarMessage(message, sender, deps) {
  * @returns {Promise<number>} how many tabs were told
  */
 export async function retireOpenTabs(pattern, { queryTabs, sendToTab }) {
-  let tabs = [];
+  let tabs;
   try {
     tabs = (await queryTabs({ url: pattern })) || [];
   } catch {
     return 0;
   }
-  const ids = tabs.map((t) => t?.id).filter((id) => Number.isInteger(id) && id >= 0);
+  const ids = tabs.map((tab) => tab?.id).filter((id) => Number.isInteger(id) && id >= 0);
   await Promise.all(ids.map((id) => Promise.resolve().then(() => sendToTab(id, { type: MSG.SITE_OFF })).catch(() => {})));
   return ids.length;
 }

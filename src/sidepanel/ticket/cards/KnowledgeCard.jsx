@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { articleShareUrl } from '../../../insights/links.js';
 import { useKnowledge } from './data.js';

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ErrorBoundary, { BOUNDARY_TEXT } from '../src/sidepanel/ErrorBoundary.jsx';
-import { HEADER_DENIED, HEADER_LOADING, HEADER_NO_TITLE, describeHeader, headerPhase } from '../src/sidepanel/recordHeader.js';
+import { HEADER_LOADING, HEADER_NO_TITLE, describeHeader, headerPhase } from '../src/sidepanel/recordHeader.js';
 import { aiNeeds, aiNeedsText, isAiReady } from '../src/sidepanel/aiReady.js';
 import { describeAccess, plainNote, plainSource } from '../src/sidepanel/plainAccess.js';
 import { compareLocked, compareStillCurrent, selectionKey } from '../src/sidepanel/knowledge/duplicatesState.js';

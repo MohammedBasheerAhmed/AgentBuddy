@@ -14,7 +14,9 @@
     "e2e": "node build.js && node e2e/run.js",
     "check": "node scripts/check-compile.js",
     "i18n": "node scripts/i18n-check.js",
-    "verify": "node tests/run.js && node scripts/check-compile.js && node scripts/traceability.js --check && node scripts/i18n-check.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "verify": "eslint . && node tests/run.js && node scripts/check-compile.js && node scripts/traceability.js --check && node scripts/i18n-check.js",
     "sbom": "node scripts/sbom.js",
     "repro": "node scripts/repro-check.js",
     "hashes": "node scripts/hashes.js",
@@ -28,7 +30,11 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "esbuild": "0.23.1",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
     "puppeteer-core": "25.16.0"
   }
 }

@@ -1,4 +1,3 @@
-import React from 'react';
 import { PATHS, SPARK } from './iconPaths.js';
 
 // One small icon set for the whole panel (stroke icons on a 24 px grid, drawn in the text colour so they follow light and dark and

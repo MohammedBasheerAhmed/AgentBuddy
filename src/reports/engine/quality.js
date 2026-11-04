@@ -81,30 +81,30 @@ export function mergeTop(lists, n = 8) {
 
 const namedCounts = (groups) => groups.filter((g) => g.keys[0]?.value).map((g) => ({ id: g.keys[0].value, name: g.keys[0].display || g.keys[0].value, count: g.count })).sort(byCountDesc);
 
-async function readTable(ctx, t, { starts, since, step, windowDays }) {
+async function readTable(ctx, tableInfo, { starts, since, step, windowDays }) {
   const { reader, scope, now } = ctx;
   const q = (...extra) => andQuery(scope.query, ...extra);
   const sinceOpened = buildQuery([{ op: 'since', field: 'opened_at', ms: since }]);
   const newestFirst = (field) => buildQuery([{ op: 'since', field, ms: since }], { orderBy: field, descending: true });
-  const rf = resolvedColumn(t);
-  const qual = t.meta.quality;
-  const has = (col) => col && t.cols.has(col);
+  const rf = resolvedColumn(tableInfo);
+  const qual = tableInfo.meta.quality;
+  const has = (col) => col && tableInfo.cols.has(col);
 
   const [openedRead, resolvedRead, openedCount, activeNow, openStates, reopened, avgReassign, multiReassigned, categories, cis, callers] = await Promise.all([
-    attempt(() => reader.pages(t.table, q(newestFirst('opened_at')), ['opened_at'], { max: LIMITS.dateRowsMax }), t.table),
-    rf ? attempt(() => reader.pages(t.table, q(newestFirst(rf)), [rf, 'opened_at'], { max: LIMITS.dateRowsMax }), t.table) : null,
-    attempt(() => reader.count(t.table, q(sinceOpened)), t.table),
-    attempt(() => reader.count(t.table, q('active=true')), t.table),
+    attempt(() => reader.pages(tableInfo.table, q(newestFirst('opened_at')), ['opened_at'], { max: LIMITS.dateRowsMax }), tableInfo.table),
+    rf ? attempt(() => reader.pages(tableInfo.table, q(newestFirst(rf)), [rf, 'opened_at'], { max: LIMITS.dateRowsMax }), tableInfo.table) : null,
+    attempt(() => reader.count(tableInfo.table, q(sinceOpened)), tableInfo.table),
+    attempt(() => reader.count(tableInfo.table, q('active=true')), tableInfo.table),
     // A ticket resolved but not yet closed is still active. The backlog walks back from "open now" and adds every resolved ticket back,
     // so it must start from the open count the Overview shows (active less those): counted in both, they were there twice.
-    readOpenStates(reader, t.table, q('active=true')),
-    has(qual.reopen) ? attempt(() => reader.count(t.table, q(sinceOpened, buildQuery([{ op: 'gt', field: qual.reopen, value: 0 }]))), t.table) : null,
-    has(qual.reassign) ? attempt(() => reader.averages(t.table, q(sinceOpened), [qual.reassign]), t.table) : null,
-    has(qual.reassign) ? attempt(() => reader.count(t.table, q(sinceOpened, buildQuery([{ op: 'gte', field: qual.reassign, value: LIMITS.pingPongMin }]))), t.table) : null,
-    has(qual.category) ? attempt(() => reader.groups(t.table, q(sinceOpened), [qual.category]), t.table) : null,
-    has(qual.ci) ? attempt(() => reader.groups(t.table, q(sinceOpened), [qual.ci]), t.table) : null,
+    readOpenStates(reader, tableInfo.table, q('active=true')),
+    has(qual.reopen) ? attempt(() => reader.count(tableInfo.table, q(sinceOpened, buildQuery([{ op: 'gt', field: qual.reopen, value: 0 }]))), tableInfo.table) : null,
+    has(qual.reassign) ? attempt(() => reader.averages(tableInfo.table, q(sinceOpened), [qual.reassign]), tableInfo.table) : null,
+    has(qual.reassign) ? attempt(() => reader.count(tableInfo.table, q(sinceOpened, buildQuery([{ op: 'gte', field: qual.reassign, value: LIMITS.pingPongMin }]))), tableInfo.table) : null,
+    has(qual.category) ? attempt(() => reader.groups(tableInfo.table, q(sinceOpened), [qual.category]), tableInfo.table) : null,
+    has(qual.ci) ? attempt(() => reader.groups(tableInfo.table, q(sinceOpened), [qual.ci]), tableInfo.table) : null,
     // One group per caller could be thousands of groups on a big queue: the instance is asked for the repeat callers only.
-    has(qual.caller) ? attempt(() => reader.groups(t.table, q(buildQuery([{ op: 'since', field: 'opened_at', ms: now - LIMITS.repeatCallerDays * DAY }])), [qual.caller], { minCount: LIMITS.repeatCallerMin }), t.table) : null,
+    has(qual.caller) ? attempt(() => reader.groups(tableInfo.table, q(buildQuery([{ op: 'since', field: 'opened_at', ms: now - LIMITS.repeatCallerDays * DAY }])), [qual.caller], { minCount: LIMITS.repeatCallerMin }), tableInfo.table) : null,
   ]);
 
   // Bucket the dates that were read.
@@ -119,7 +119,7 @@ async function readTable(ctx, t, { starts, since, step, windowDays }) {
 
   const durations = resolvedRead?.ok && rf ? durationsHours(resolvedRead.value.rows.filter((r) => timeOf(raw(r[rf])) >= since), rf) : [];
   const openNow = openOf(activeNow, openStates.done);
-  return { t, rf, opened, resolved, openedRead, resolvedRead, openedCount, openNow, reopened, avgReassign, multiReassigned, categories, cis, callers, durations, windowDays };
+  return { tableInfo, rf, opened, resolved, openedRead, resolvedRead, openedCount, openNow, reopened, avgReassign, multiReassigned, categories, cis, callers, durations, windowDays };
 }
 
 export async function qualitySection(ctx) {
@@ -130,18 +130,18 @@ export async function qualitySection(ctx) {
   // The calendar days the trend covers, today included: "Last 14 days" is 14 days at any hour (a rounded difference said 13 before noon).
   const windowDays = localDaysBetween(since, ctx.now, ctx.offsetMin) + 1;
   const tables = usableTables(ctx);
-  const parts = await Promise.all(tables.map((t) => readTable(ctx, t, { starts, since, step, windowDays })));
+  const parts = await Promise.all(tables.map((tableInfo) => readTable(ctx, tableInfo, { starts, since, step, windowDays })));
 
   parts.forEach((p) => {
     const failed = [p.openedRead, p.resolvedRead, p.openedCount, p.openNow].filter((v) => v && !v.ok);
-    if (failed.length) ctx.access.push({ source: p.t.table, status: failed[0].status, note: `${p.t.meta.label}: ${failed[0].note}` });
+    if (failed.length) ctx.access.push({ source: p.tableInfo.table, status: failed[0].status, note: `${p.tableInfo.meta.label}: ${failed[0].note}` });
     [[tm('opened'), p.opened], [tm('resolved'), p.resolved]].forEach(([what, b]) => {
       if (!b?.capped) return;
       const units = trend.unit === 'week' ? tm('weeks') : tm('days');
       const note = b.total
-        ? say(tm('{table}: only the first {fetched} of {total} {what} dates were read, so the oldest {units} are partial.'), { table: p.t.meta.label, fetched: b.fetched, total: b.total, what, units })
-        : say(tm('{table}: only the first {fetched} {what} dates were read, so the oldest {units} are partial.'), { table: p.t.meta.label, fetched: b.fetched, what, units });
-      ctx.caps.push({ source: p.t.table, fetched: b.fetched, total: b.total, note });
+        ? say(tm('{table}: only the first {fetched} of {total} {what} dates were read, so the oldest {units} are partial.'), { table: p.tableInfo.meta.label, fetched: b.fetched, total: b.total, what, units })
+        : say(tm('{table}: only the first {fetched} {what} dates were read, so the oldest {units} are partial.'), { table: p.tableInfo.meta.label, fetched: b.fetched, what, units });
+      ctx.caps.push({ source: p.tableInfo.table, fetched: b.fetched, total: b.total, note });
     });
   });
 
@@ -166,9 +166,9 @@ export async function qualitySection(ctx) {
   const reopenedN = reopenParts.reduce((n, p) => n + p.reopened.value, 0);
   const reopenBase = reopenParts.reduce((n, p) => n + p.openedCount.value, 0);
 
-  const reassignParts = parts.filter((p) => p.avgReassign?.ok && p.avgReassign.value[p.t.meta.quality.reassign] !== null && p.openedCount.ok);
+  const reassignParts = parts.filter((p) => p.avgReassign?.ok && p.avgReassign.value[p.tableInfo.meta.quality.reassign] !== null && p.openedCount.ok);
   const reassignBase = reassignParts.reduce((n, p) => n + p.openedCount.value, 0);
-  const reassignAvg = reassignBase ? reassignParts.reduce((n, p) => n + p.avgReassign.value[p.t.meta.quality.reassign] * p.openedCount.value, 0) / reassignBase : null;
+  const reassignAvg = reassignBase ? reassignParts.reduce((n, p) => n + p.avgReassign.value[p.tableInfo.meta.quality.reassign] * p.openedCount.value, 0) / reassignBase : null;
   const multiN = reassignParts.filter((p) => p.multiReassigned?.ok).reduce((n, p) => n + p.multiReassigned.value, 0);
 
   const callerPart = parts.find((p) => p.callers);
@@ -188,7 +188,7 @@ export async function qualitySection(ctx) {
       resolved: resolvable.length ? resolvedSeries : null,
       backlog,
       partial,
-      tablesCounted: usable.map((p) => p.t.meta.label),
+      tablesCounted: usable.map((p) => p.tableInfo.meta.label),
     },
     windowDays,
     opened: openedExact.length ? { value: openedExact.reduce((n, p) => n + p.openedCount.value, 0), partial: openedExact.length < parts.length } : null,
@@ -201,10 +201,10 @@ export async function qualitySection(ctx) {
     categories: mergeTop(cat, 8),
     cis: mergeTop(ci, 8),
     // How many callers there were in all is not known (the instance sends only the repeat callers), so it is not claimed.
-    repeatCallers: callerPart?.callers?.ok ? { items: repeat.slice(0, 10), total: repeat.length, days: LIMITS.repeatCallerDays, min: LIMITS.repeatCallerMin, table: callerPart.t.meta.label } : null,
+    repeatCallers: callerPart?.callers?.ok ? { items: repeat.slice(0, 10), total: repeat.length, days: LIMITS.repeatCallerDays, min: LIMITS.repeatCallerMin, table: callerPart.tableInfo.meta.label } : null,
     perTable: parts.map((p) => ({
-      table: p.t.table,
-      label: p.t.meta.label,
+      table: p.tableInfo.table,
+      label: p.tableInfo.meta.label,
       opened: p.openedCount.ok ? p.openedCount.value : null,
       resolved: p.resolved ? p.resolved.counts.reduce((a, b) => a + b, 0) : null,
       openNow: p.openNow.ok ? p.openNow.value : null,

@@ -32,7 +32,7 @@ test('defaultDashboard: a saved layout is kept as plain data, its four parts and
   assert.notEqual(p.defaultDashboard.dashboard.widgets, WIDGETS, 'a copy, not the browser\'s object');
   assert.deepEqual(normalizePolicy(p), p, 'reading it twice gives the same policy');
   // The file's text (a Windows registry string) is read as the file; a version written as text is read as the number.
-  const text = normalizePolicy({ defaultDashboard: `﻿${JSON.stringify({ ...layout(), version: '1' })}` });
+  const text = normalizePolicy({ defaultDashboard: `\uFEFF${JSON.stringify({ ...layout(), version: '1' })}` });
   assert.deepEqual(text.defaultDashboard, { kind: LAYOUT_KIND, version: 1, dashboard: layout().dashboard });
   // The sections inside are left for the reports code to clean, like a file a person loads.
   const odd = normalizePolicy({ defaultDashboard: layout({ widgets: [{ type: 'script', src: 'x.js' }] }) });

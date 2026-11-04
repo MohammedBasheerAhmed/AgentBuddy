@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { EMAIL_TYPES, emailFormUrl, recommendEmails } from '../../../compose/emailRecommend.js';
 import { emailAsText, fillEmailTemplate } from '../../../insights/emailTemplates.js';
 import { openInNewTab } from '../../openRecord.js';

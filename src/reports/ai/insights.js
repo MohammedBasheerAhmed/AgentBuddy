@@ -4,7 +4,7 @@
 // WHAT IS SENT: counts, trends, group names, ticket numbers, and the names of assignees (which go into `pack.people`, so the
 // firewall masks them). NOT sent: ticket titles or descriptions, callers' names (repeat callers are only counted), notes. A
 // section that is not on the dashboard is not sent, and the AI is told it is missing so it does not guess.
-import { REPORT_TABLE, addPeople, blockedSet, carriesSensitive, checkAnswer, figure, line, resultNotes, scopeText } from './common.js';
+import { REPORT_TABLE, addPeople, blockedSet, carriesSensitive, checkAnswer, figure, resultNotes, scopeText } from './common.js';
 import { tm } from '../../i18n/core.js';
 
 export const INSIGHT_HEADINGS = Object.freeze(['What stands out:', 'Likely reasons (hypotheses):', 'Suggested actions:']);

@@ -145,7 +145,7 @@ module.exports = {
 
     // sentiment-risk: counted signals + the newest notes; the answer names the customer (rehydrated) and offers work notes only
     let ran = await runFeature(p, new RegExp(`^${T.sentiment}`));
-    let req = await checkAiRun(t, ctx, p, 'sentiment-risk', ran, { before, system: /see early whether a customer is getting upset/, userHas: [/Signals counted by simple rules/i] });
+    await checkAiRun(t, ctx, p, 'sentiment-risk', ran, { before, system: /see early whether a customer is getting upset/, userHas: [/Signals counted by simple rules/i] });
     t.check('sentiment-risk: the answer shows the real caller name (put back locally) and the four lines', Boolean(ran.result) && ran.result.includes(data.SEED.callerName) && /Mood: frustrated/.test(ran.result) && /Escalation risk: High/.test(ran.result), (ran.result || '').replace(/\s+/g, ' ').slice(0, 120));
     const moodButtons = await answerButtons(p);
     t.check('sentiment-risk: Copy only (AI3: the mood is never inserted as "Mood:" into the work notes)', moodButtons.includes('Copy') && !moodButtons.some((b) => /^(Add|Insert)/.test(b)), moodButtons.join(' | '));
@@ -154,7 +154,7 @@ module.exports = {
     // next-best-action: it reads solved look-alikes and articles first (reads through the content script), then the AI is asked
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.nba}`));
-    req = await checkAiRun(t, ctx, p, 'next-best-action', ran, { before, system: /work through a ticket step by step/, userHas: [/REFERENCE MATERIAL/i, /INC0009\d{3}/, /KB00\d{5}/] });
+    const req = await checkAiRun(t, ctx, p, 'next-best-action', ran, { before, system: /work through a ticket step by step/, userHas: [/REFERENCE MATERIAL/i, /INC0009\d{3}/, /KB00\d{5}/] });
     t.check('next-best-action: the look-alike tickets are other people\'s: no other caller name travelled with them', req ? !/Charlie|Whitherspoon|charlie\.w/i.test(req.raw) : false);
     t.check('next-best-action: the checklist is shown as a list', await p.evaluate(() => document.querySelectorAll('.ab-output li').length >= 3));
     await close();
@@ -163,7 +163,7 @@ module.exports = {
     before = ai.requests.length;
     const netBefore = ctx.net.length;
     ran = await runFeature(p, new RegExp(`^${T.thread}`));
-    req = await checkAiRun(t, ctx, p, 'thread-summary', ran, { before, system: /catch up on a long thread/, userHas: [/Customer-visible comment|Internal work note/] });
+    await checkAiRun(t, ctx, p, 'thread-summary', ran, { before, system: /catch up on a long thread/, userHas: [/Customer-visible comment|Internal work note/] });
     await ctx.sleep(500);
     t.check('thread-summary: the hostile answer (image, link) is shown as text, nothing in the panel can load it', (await loadingElements(p)) === 0 && /evil\.example/.test(ran.result || ''), (ran.result || '').replace(/\s+/g, ' ').slice(0, 100));
     t.check('thread-summary: nothing contacted evil.example', !ctx.net.slice(netBefore).some((n) => /evil\.example/.test(n.url)));
@@ -177,7 +177,7 @@ module.exports = {
     // routing-hint: copy only (the agent decides where a ticket goes); the look-alikes carry their group and priority
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.routing}`));
-    req = await checkAiRun(t, ctx, p, 'routing-hint', ran, { before, system: /send a ticket to the right place/, userHas: [/Network Support/, /INC0009\d{3}/] });
+    await checkAiRun(t, ctx, p, 'routing-hint', ran, { before, system: /send a ticket to the right place/, userHas: [/Network Support/, /INC0009\d{3}/] });
     const routingButtons = await answerButtons(p);
     t.check('routing-hint: Copy only: no Insert button of any kind', routingButtons.includes('Copy') && !routingButtons.some((b) => /^(Add|Insert)/.test(b)), routingButtons.join(' | '));
     await close();
@@ -192,7 +192,7 @@ module.exports = {
     t.check('major-incident-comms: offered on a priority 1 incident, among the first suggestions while it is worked', firstThree.includes(T.major), firstThree.join(' | '));
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.major}`));
-    req = await checkAiRun(t, ctx, p, 'major-incident-comms', ran, { before, system: /write stakeholder updates during a major incident/, userHas: [/Email outage for Sales/] });
+    await checkAiRun(t, ctx, p, 'major-incident-comms', ran, { before, system: /write stakeholder updates during a major incident/, userHas: [/Email outage for Sales/] });
     const majorButtons = await answerButtons(p);
     t.check('major-incident-comms: the "[time]" the manager fills in is shown as written, and the answer has Copy only', /Next update: \[time\]/.test(ran.result || '') && !majorButtons.some((b) => /^(Add|Insert)/.test(b)), majorButtons.join(' | '));
     await closeAnswers(p);
@@ -206,7 +206,7 @@ module.exports = {
     // ---- 3. kb-article-draft: Insert refused here; the draft is carried to a blank article form -------------------------------------
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.kb}`));
-    req = await checkAiRun(t, ctx, p, 'kb-article-draft', ran, { placeholders: 'kept', before, system: /turn a solved ticket into a knowledge article/, userHas: [/REFERENCE MATERIAL/i], userLacks: [data.INCIDENT_NUMBER] });
+    await checkAiRun(t, ctx, p, 'kb-article-draft', ran, { placeholders: 'kept', before, system: /turn a solved ticket into a knowledge article/, userHas: [/REFERENCE MATERIAL/i], userLacks: [data.INCIDENT_NUMBER] });
     t.check('kb-article-draft: the draft keeps hidden details hidden: placeholders stay, the caller name and email are NOT put back', /\[PERSON_\d+\]/.test(ran.result || '') && !(ran.result || '').includes(data.SEED.callerName) && !(ran.result || '').includes(data.SEED.callerEmail), (ran.result || '').replace(/\s+/g, ' ').slice(0, 140));
     const buttons = [...(await answerButtons(p)), ...(await answerMenu(p))];
     t.check('kb-article-draft: offers title and body inserts, "Open a new article form" and Copy', ['Insert title into the article form', 'Insert body into the article form', 'Open a new article form', 'Copy'].every((b) => buttons.includes(b)), buttons.join(' | '));

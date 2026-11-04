@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import { useId, useState } from 'react';
 import RecordLink from '../RecordLink.jsx';
 import { slaText, idleText, waitingText } from '../../mywork/time.js';
 import { priorityRank } from '../../mywork/rank.js';

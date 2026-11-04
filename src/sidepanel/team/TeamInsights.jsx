@@ -1,4 +1,3 @@
-import React from 'react';
 import ReportsDashboard from '../reports/ReportsDashboard.jsx';
 import { teamShare } from './teamShare.js';
 

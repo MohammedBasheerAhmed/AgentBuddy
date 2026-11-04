@@ -1,4 +1,3 @@
-import React from 'react';
 import { Tile, StackedBar, HeatStrip } from '../charts/index.js';
 import TicketList from './TicketList.jsx';
 import SectionShell from './SectionShell.jsx';

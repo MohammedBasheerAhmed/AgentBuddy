@@ -148,7 +148,7 @@ export function createPolicyGuard({ getManaged = readManaged, now = Date.now, tt
 
   async function load() {
     let timer;
-    let got = null;
+    let got;
     try {
       got = await Promise.race([
         Promise.resolve().then(() => getManaged()),

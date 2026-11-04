@@ -1,7 +1,6 @@
 import { mount, click, settle, makeChrome, fakeAiFetch, fakeClipboard } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { MAX_AGE_MS, afterInsert, clearPending, emailDraft, emailExpect, emailInserts, getPending, isEmailFeature, pendingFits, setPending, subjectWithNumber } from '../src/sidepanel/pendingDraft.js';
 import PendingDraft from '../src/sidepanel/PendingDraft.jsx';
 import { useAnswers, AnswerArea, forgetAnswers } from '../src/sidepanel/ticket/assist/answers/index.js';

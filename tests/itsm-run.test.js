@@ -116,7 +116,7 @@ for (const id of IDS) {
     const parts = partsFor(feature, pack);
     assert.ok(parts.length > 0);
     for (const p of parts) {
-      assert.match(p.label, /^[A-Za-z0-9_.:\[\] -]+$/, p.label);
+      assert.match(p.label, /^[A-Za-z0-9_.:[\] -]+$/, p.label);
       assert.match(p.field, /^[a-z][a-z_]*$/, p.field);
       assert.equal(typeof p.text, 'string');
       assert.ok(p.text.trim().length > 0);

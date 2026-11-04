@@ -37,7 +37,7 @@ export async function readFormValues(args, call = tryCallPage, { currentRecord =
   const expect = args.expect;
   if (expect !== undefined && expect !== null) {
     if (typeof expect !== 'object' || !TABLE.test(String(expect.table || '')) || !SYS_ID.test(String(expect.sysId || ''))) throw new Error('That is not a valid record.');
-    let meta = null;
+    let meta;
     try {
       meta = await call('getFormMeta');
     } catch {

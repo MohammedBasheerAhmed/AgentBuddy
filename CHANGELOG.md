@@ -5,6 +5,22 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Lint, and the end-to-end run made dependable (audit phase 4, second half)
+- **ESLint** (`npm run lint`, part of `npm run verify` and CI): the recommended rules, the two rules of React hooks, unused names
+  everywhere, and in `src` `no-shadow` and `no-await-in-loop`. Views may not import the AI senders or the seal (build rule 2, now
+  checked as you type). 302 findings fixed: about 110 `React` imports the build no longer needs, 60 inner names that hid an outer one
+  (mostly a loop variable `t` hiding the text function `t()`, the mistake that crashed the custom report editor), about 50 values
+  written and never read, and the reasons written next to the 12 places where a rule is set aside on purpose (retries one after
+  another, regular expressions whose point is control characters).
+- **Found on the way:** two checks in scenario `o` held a literal backspace character where a word boundary was meant, so "Erin never
+  reached the AI" could not fail on the name; two tests of the page bar that an earlier change had dropped are back.
+- **A dependable end-to-end run.** The "every read was seen by the browser log" check failed now and then. The harness took a report
+  with a request id and address it had already seen for a second report of the same request; Chrome starts request ids again in a new
+  renderer process, so later reads of the most-read record were dropped from the log. A report from the same source is now a new
+  request (and counted in the run's notes). The fake ServiceNow also no longer closes idle connections, so a read cannot be silently sent
+  twice; the check says how many reads went unanswered. Scenario `x` sets everything it relies on, and the steps that failed on a
+  runner now say what the panel showed.
+
 ### Audit fixes, phase 3: names, dates and numbers that are right
 - **Names in every script.** Matching a note's author to the customer kept only the letters a to z, so an Arabic, Cyrillic or Chinese
   name became nothing: "Ready to resolve?" said the customer was not waiting when they were, the mood signals and the journey did not

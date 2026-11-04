@@ -1,7 +1,6 @@
 import { mount as mountView, click, makeChrome, deferred, during, choose, fakeClipboard, settle } from './fixtures/panel-dom.js';
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import MyWorkView, { accessLine } from '../src/sidepanel/mywork/MyWorkView.jsx';
 import MyWorkDefault from '../src/sidepanel/mywork/index.js';
 import { queueSummary, emptyQueueText } from '../src/sidepanel/mywork/cards.jsx';

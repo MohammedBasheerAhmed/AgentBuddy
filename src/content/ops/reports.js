@@ -61,7 +61,7 @@ export function readsFor(base, ctx) {
   const isBlocked = (table) => guarded.isBlocked(String(table || '').toLowerCase());
   // If the content script's reads ever carry their own (guarded) Aggregate API call, that one is used underneath.
   const aggregateRead = typeof guarded.aggregate === 'function' ? guarded.aggregate : base.aggregate;
-  const aggregate = async (table, options = {}) => {
+  const guardedAggregate = async (table, options = {}) => {
     // The guard's own check for a read it does not make: the table, every table a dot-walked column passes through (by the table the
     // reference column points at, not by the column's name), in the group-by and average columns and in the query's conditions.
     if (typeof guarded.checkRead === 'function') {
@@ -71,7 +71,7 @@ export function readsFor(base, ctx) {
     }
     return aggregateRead(table, options);
   };
-  return { deps: { queryTable: guarded.queryTable, aggregate }, isBlocked };
+  return { deps: { queryTable: guarded.queryTable, aggregate: guardedAggregate }, isBlocked };
 }
 
 /** Blocked tables from the organisation's policy, as the panel passes them: plain lower-case identifiers. */

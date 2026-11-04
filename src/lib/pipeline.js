@@ -361,7 +361,7 @@ export async function executeRun({ prepared, config, values, host = '', previewS
 export async function assertWithinPolicyBudget({ policy, tokensUsedToday, feature, pack, config, values, logAudit }) {
   const cap = Number(policy?.tokenBudgetPerDay) || 0;
   if (!(cap > 0) || typeof tokensUsedToday !== 'function') return;
-  let used = 0;
+  let used;
   try {
     used = Number(await tokensUsedToday()) || 0;
   } catch {

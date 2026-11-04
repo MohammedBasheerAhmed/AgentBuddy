@@ -30,6 +30,8 @@ jobs:
           cache: npm
       - name: Install (exact versions from the lockfile)
         run: npm ci
+      - name: Lint (eslint.config.mjs; the views' import rule is build rule 2)
+        run: npm run lint
       - name: Unit tests
         run: node tests/run.js
       - name: Compile check (every entry, nothing written; a warning fails it)

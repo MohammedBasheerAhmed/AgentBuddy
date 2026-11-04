@@ -1,4 +1,3 @@
-import React from 'react';
 import { describeMinutes } from '../../../chat/stats.js';
 import { CHAT_WAITING_WARN_MINUTES, chatOverviewOf } from '../../../insights/chat.js';
 import { read } from './data.js';

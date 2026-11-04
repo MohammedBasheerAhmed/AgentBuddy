@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { buildGlance } from '../../../insights/glance.js';
 import { PRIORITY_ACCOUNT_MARK, isPriorityAccount } from '../../../insights/priorityAccount.js';
 import { useTicketFacts } from './data.js';

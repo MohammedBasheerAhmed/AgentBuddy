@@ -88,7 +88,6 @@ test('a class that cannot be looked up stays task, and is not looked up again fo
     assert.deepEqual(await page.resolveRecord('https://acme.service-now.com/task.do'), { table: 'task', sysId: INC, number: 'TASK0010001', kind: 'task' });
     for (let i = 0; i < 14; i += 1) {
       page.later(2000);
-      // eslint-disable-next-line no-await-in-loop
       assert.equal((await page.resolveRecord('https://acme.service-now.com/task.do')).table, 'task');
     }
     assert.equal(page.reads.length, 1, 'one read in 28 seconds, not fifteen');

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { stepsThatWorked } from '../../../insights/steps.js';
 import { useKnowledge, useLookalikes } from './data.js';

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { read } from '../ask.js';
 import { isolate, t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';

@@ -39,8 +39,7 @@ function criticalList(data) {
   return list;
 }
 
-function gapList(data) {
-  const { SEED } = data;
+function gapList() {
   return [
     { ...literal('555-0199'), why: 'short local phone number after "Call me on"' },
     { ...literal('555-0123'), why: 'short local phone number after "please call"' },
@@ -53,7 +52,7 @@ function findLeaks(text, data) {
   const t = String(text);
   return {
     critical: [...new Set(criticalList(data).filter((c) => c.test(t)).map((c) => c.value))],
-    gaps: gapList(data).filter((g) => g.test(t)).map((g) => ({ value: g.value, why: g.why })),
+    gaps: gapList().filter((g) => g.test(t)).map((g) => ({ value: g.value, why: g.why })),
   };
 }
 

@@ -112,7 +112,7 @@ export async function checkInsertTargets(args, { callPage, currentRecord = null 
   if (want === 'invalid') throw new Error('That is not a valid record.');
   const unknown = (form = 'none', match = true) => ({ form, match, fields: Object.fromEntries(names.map((n) => [n, { state: 'unknown' }])) });
 
-  let answer = null;
+  let answer;
   try {
     answer = await callPage('getFieldStates', [names, labels]);
   } catch {

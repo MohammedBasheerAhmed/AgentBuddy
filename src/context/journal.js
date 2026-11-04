@@ -380,7 +380,7 @@ const SIGN_OFF_WITH_NAME = /^(?:thanks|thank you|regards|cheers|best|kind regard
 
 // Lines a signature is made of: a name, a job title or company, contact details.
 const NAME_LINE = /^\p{Lu}[\p{L}'.-]*(?:[ ,]+(?:\p{Lu}[\p{L}'.-]*|van|von|der|den|de|del|da|di|la|le|du|dos|y|e)){0,4}$/u;
-const CONTACT_LINE = /\+?\d[\d ().\/-]{6,}\d|@|\bwww\.|https?:\/\/|\b(?:tel|phone|mobile|mob|fax|cell|direct|office|ext|telefon|handy|téléphone|tél|teléfono|móvil|telefoon|cellulare)\b\.?\s*[:.]?|\s\|\s/i;
+const CONTACT_LINE = /\+?\d[\d ()./-]{6,}\d|@|\bwww\.|https?:\/\/|\b(?:tel|phone|mobile|mob|fax|cell|direct|office|ext|telefon|handy|téléphone|tél|teléfono|móvil|telefoon|cellulare)\b\.?\s*[:.]?|\s\|\s/i;
 const SMALL_WORDS = new Set(['and', 'of', 'for', 'the', 'und', 'für', 'de', 'des', 'du', 'et', 'y', 'e', 'del', 'van', 'der', 'di', 'a', 'à', '&', '|', '-', '–', '/', ',']);
 function titleLine(t) {
   const words = t.split(/\s+/).filter(Boolean);

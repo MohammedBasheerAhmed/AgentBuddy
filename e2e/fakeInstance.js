@@ -330,6 +330,11 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
     if (entry.kind === 'api') return void handleApi(req, res, url, entry);
     return handlePage(req, res, url);
   });
+  // The server never closes an idle connection itself during a run (Node's default is after 5 s). Otherwise a read Chrome sends on a
+  // connection at the moment the server closes it reaches the server (and this log) but gets no answer, and Chrome sends it again on a
+  // new connection, without the page or DevTools seeing a second request: the instance then logs one read more than the browser made,
+  // and the coverage check of scenario e fails now and then. Chrome closes its own idle connections.
+  server.keepAliveTimeout = 0;
 
   return new Promise((resolve, reject) => {
     server.once('error', reject);

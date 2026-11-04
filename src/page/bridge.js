@@ -29,11 +29,11 @@
 (function () {
   // Raise this with every change to this file, or an open page keeps the bridge it had (and answers "Unknown action." to an action
   // added since). tests/page-bridge-version.test.js pins the number to the file's contents.
-  var BRIDGE_VERSION = 2;
+  var BRIDGE_VERSION = 3;
 
   // The first bridge kept only a flag, no handle: it counts as version 1, and its listener cannot be removed (see onRequest).
-  var installed = null;
-  var installedVersion = 0;
+  var installed;
+  var installedVersion;
   try {
     installed = window.__abBridge;
     installedVersion = installed && typeof installed.version === 'number' ? installed.version : window.__abBridgeInstalled ? 1 : 0;
@@ -105,7 +105,7 @@
 
   function firstOf(obj, names, test) {
     for (var i = 0; i < names.length; i++) {
-      var value = null;
+      var value;
       try {
         value = cleanText(obj[names[i]], 200);
       } catch (e) {
@@ -284,7 +284,7 @@
       var tag = el.tagName;
       if (el.shadowRoot) collectControls(el.shadowRoot, out, state, depth + 1, frameEl);
       if (tag === 'IFRAME' || tag === 'FRAME') {
-        var doc = null;
+        var doc;
         try {
           doc = el.contentDocument;
         } catch (e) {
@@ -470,7 +470,7 @@
     var view = viewOf(el);
     var current = el.innerText != null ? el.innerText : el.textContent;
     var piece = append && String(current || '').trim() ? '\n\n' + text : text;
-    var done = false;
+    var done;
     try {
       el.focus();
       var selection = view.getSelection();
@@ -580,7 +580,7 @@
     var el = c.el;
     var best = 0;
     NAME_ATTRS.forEach(function (n) {
-      var a = null;
+      var a;
       try {
         a = el.getAttribute(n);
       } catch (e) {
@@ -704,7 +704,7 @@
       }
       // When the form's document was loaded: Save reloads it (the whole page, or the form's frame on Next Experience), so a new
       // value says "saved", and the panel reads the ticket's header again. A number only.
-      var loadedAt = null;
+      var loadedAt;
       try {
         loadedAt = w.performance && typeof w.performance.timeOrigin === 'number' ? Math.round(w.performance.timeOrigin) : null;
       } catch (e) {
@@ -759,7 +759,7 @@
       var w = resolveFormWindow();
       if (w) {
         var f = w.g_form;
-        var exists = false;
+        var exists;
         try {
           exists = typeof f.hasField === 'function' ? !!f.hasField(name) : f.getValue(name) !== undefined;
         } catch (e) {
@@ -819,7 +819,7 @@
           editable = null;
         }
         list.forEach(function (name) {
-          var exists = false;
+          var exists;
           try {
             exists = typeof f.hasField === 'function' ? !!f.hasField(name) : f.getValue(name) !== undefined;
           } catch (e) {

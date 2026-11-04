@@ -1,4 +1,3 @@
-import React from 'react';
 import { Tile, HorizontalBar } from '../charts/index.js';
 import TicketList from './TicketList.jsx';
 import { ageText } from './format.js';

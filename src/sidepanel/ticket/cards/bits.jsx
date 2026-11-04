@@ -1,5 +1,5 @@
 // Small pieces every Insights card uses. No reads here. React escapes every string, so ticket text is never markup.
-import React, { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import RecordLink from '../../RecordLink.jsx';
 import ErrorNote from '../../ErrorNote.jsx';
 import Notes from '../../knowledge/Notes.jsx';

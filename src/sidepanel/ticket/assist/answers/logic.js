@@ -90,7 +90,7 @@ export { LANGUAGES };
  */
 export function peopleFromScan(scan, text) {
   if (typeof scan !== 'function') return [];
-  let found = [];
+  let found;
   try {
     found = scan(String(text ?? '')) || [];
   } catch {

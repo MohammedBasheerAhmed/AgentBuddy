@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { t } from '../../i18n/index.js';
 
 // Small building blocks every screen uses, so the panel looks and behaves the same everywhere (TRACKER.md 2.3 and 2.4):

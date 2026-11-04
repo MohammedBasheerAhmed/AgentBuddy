@@ -1,7 +1,7 @@
 // i. The Ticket screen's Insights half on an incident: the ticket at a glance and the cards (related tickets, knowledge, steps that
 //    worked, risk, missing details, journey...), all read with the agent's own session, no AI. A table the user cannot read becomes a
 //    plain note instead of an error. Tickets in the cards are real links that open in a NEW tab: the ticket being worked on stays.
-const { clickButton, waitForText, textOf, waitForRecord, openScreen, openHalf } = require('../ui.js');
+const { waitForText, textOf, waitForRecord, openScreen, openHalf } = require('../ui.js');
 const { prepare } = require('../common.js');
 
 /** Open an Insights card by its title (the CardFrame toggle) if it is folded. */

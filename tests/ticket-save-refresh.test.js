@@ -1,7 +1,6 @@
 import { mount, settle, makeChrome } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import TicketView, { SAVE_SETTLE_MS } from '../src/sidepanel/ticket/TicketView.jsx';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
 

@@ -77,12 +77,12 @@ export function rankSlaTickets(tickets) {
 /** Count tickets per owner or per group: [{ id, name, breached, atRisk, dueSoon, count }], busiest first. Pure. */
 export function tallyBy(tickets, idKey, nameKey, emptyName) {
   const map = new Map();
-  tickets.forEach((t) => {
-    const id = t[idKey] || '';
-    const row = map.get(id) || { id, name: t[nameKey] || emptyName, breached: 0, atRisk: 0, dueSoon: 0, count: 0 };
-    if (t.breached) row.breached += 1;
-    else if (t.atRisk) row.atRisk += 1;
-    if (t.dueSoon) row.dueSoon += 1;
+  tickets.forEach((ticket) => {
+    const id = ticket[idKey] || '';
+    const row = map.get(id) || { id, name: ticket[nameKey] || emptyName, breached: 0, atRisk: 0, dueSoon: 0, count: 0 };
+    if (ticket.breached) row.breached += 1;
+    else if (ticket.atRisk) row.atRisk += 1;
+    if (ticket.dueSoon) row.dueSoon += 1;
     row.count += 1;
     map.set(id, row);
   });
@@ -97,7 +97,7 @@ export async function readSlaSnapshot(ctx) {
   if (ctx.slaMemo) return ctx.slaMemo;
   ctx.slaMemo = (async () => {
     const { reader, scope, now } = ctx;
-    const usable = usableTables(ctx).map((t) => t.table);
+    const usable = usableTables(ctx).map((tableInfo) => tableInfo.table);
     if (!usable.length) return { ok: false, status: 'error', note: tm('No ticket table can be read.') };
     const dueUntil = now + LIMITS.dueSoonHours * HOUR;
     const base = andQuery('active=true', `task.sys_class_nameIN${usable.join(',')}`, scope.taskQuery);
@@ -120,9 +120,9 @@ export async function readSlaSnapshot(ctx) {
       cap: capNote('task_sla', read.value),
       tickets,
       counts: {
-        breached: tickets.filter((t) => t.breached).length,
-        atRisk: tickets.filter((t) => t.atRisk).length,
-        dueSoon: tickets.filter((t) => t.dueSoon).length,
+        breached: tickets.filter((ticket) => ticket.breached).length,
+        atRisk: tickets.filter((ticket) => ticket.atRisk).length,
+        dueSoon: tickets.filter((ticket) => ticket.dueSoon).length,
       },
     };
   })();
@@ -136,7 +136,7 @@ async function lookUpTickets(ctx, tickets) {
   const details = new Map();
   let failure = null;
   for (let i = 0; i < wanted.length; i += 50) {
-    const ids = wanted.slice(i, i + 50).map((t) => t.sysId);
+    const ids = wanted.slice(i, i + 50).map((ticket) => ticket.sysId);
     // eslint-disable-next-line no-await-in-loop -- chunks of ids, one request after another.
     const read = await attempt(() => reader.rows('task', buildQuery([{ op: 'in', field: 'sys_id', values: ids }]), TASK_FIELDS, { limit: 50, displayValue: true }), 'task');
     if (!read.ok) {
@@ -159,10 +159,10 @@ export async function slaSection(ctx) {
   if (failure) ctx.access.push({ source: 'task', status: failure.status, note: tm('Ticket details are not available to you, so only the counts are shown.') });
   if (snap.tickets.length > looked) ctx.notes.push(say(tm('Names and owners were looked up for the {looked} most worrying tickets of {total}.'), { looked, total: snap.tickets.length }));
 
-  const tickets = snap.tickets.slice(0, looked).map((t) => {
-    const d = details.get(t.sysId);
+  const tickets = snap.tickets.slice(0, looked).map((ticket) => {
+    const d = details.get(ticket.sysId);
     return {
-      ...t,
+      ...ticket,
       table: d ? raw(d.sys_class_name) : '',
       number: d ? disp(d.number) : '',
       title: d ? disp(d.short_description) : '',
@@ -174,7 +174,7 @@ export async function slaSection(ctx) {
       groupId: d ? raw(d.assignment_group) : '',
     };
   });
-  const known = tickets.filter((t) => t.number);
+  const known = tickets.filter((ticket) => ticket.number);
   const topN = clampInt(ctx.params.top, 1, 25, LIMITS.topN);
 
   return sectionResult('sla', tm('SLA risk radar'), ctx, {

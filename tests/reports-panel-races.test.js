@@ -1,7 +1,6 @@
 import { mount, click, makeChrome, deferred, during, settle, fakeAiFetch } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { AiResult } from '../src/sidepanel/reports/aiShared.jsx';
 import { CoachingTool } from '../src/sidepanel/reports/CoachingView.jsx';
 import { useReport } from '../src/sidepanel/reports/useReport.js';
@@ -46,7 +45,6 @@ const show = async (element) => {
 test.afterEach(async () => {
   while (mounted.length) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       await mounted.pop().unmount();
     } catch {
       /* already unmounted by the test */

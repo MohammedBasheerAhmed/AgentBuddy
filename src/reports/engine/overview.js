@@ -21,26 +21,26 @@ export function waitingStates(groups) {
   };
 }
 
-async function readTable(ctx, t, { staleDays, dayStart }) {
+async function readTable(ctx, tableInfo, { staleDays, dayStart }) {
   const { reader, scope } = ctx;
   const q = (...extra) => andQuery(scope.query, ...extra);
   const open = q('active=true');
-  const resolved = resolvedColumn(t);
+  const resolved = resolvedColumn(tableInfo);
   const staleCut = buildQuery([{ op: 'before', field: 'sys_updated_on', ms: ctx.now - staleDays * DAY }]);
   // The state breakdown comes first: it says which states mean "resolved, waiting to close" on this instance (an incident stays
   // active after Resolved), so Open, Unassigned and Stale leave those out and they are counted on their own. It is the same question
   // the hand-over and the workload ask, so one cached request serves all three.
-  const { states, done, live } = await readOpenStates(reader, t.table, open);
+  const { states, done, live } = await readOpenStates(reader, tableInfo.table, open);
   const [openN, unassigned, stale, openedToday, resolvedToday] = await Promise.all([
-    attempt(() => reader.count(t.table, open), t.table),
-    scope.unassignedMeaningful ? attempt(() => reader.count(t.table, q('active=true', 'assigned_toISEMPTY', live)), t.table) : null,
-    attempt(() => reader.count(t.table, q('active=true', staleCut, live)), t.table),
-    attempt(() => reader.count(t.table, q(buildQuery([{ op: 'since', field: 'opened_at', ms: dayStart }]))), t.table),
-    resolved ? attempt(() => reader.count(t.table, q(buildQuery([{ op: 'since', field: resolved, ms: dayStart }]))), t.table) : null,
+    attempt(() => reader.count(tableInfo.table, open), tableInfo.table),
+    scope.unassignedMeaningful ? attempt(() => reader.count(tableInfo.table, q('active=true', 'assigned_toISEMPTY', live)), tableInfo.table) : null,
+    attempt(() => reader.count(tableInfo.table, q('active=true', staleCut, live)), tableInfo.table),
+    attempt(() => reader.count(tableInfo.table, q(buildQuery([{ op: 'since', field: 'opened_at', ms: dayStart }]))), tableInfo.table),
+    resolved ? attempt(() => reader.count(tableInfo.table, q(buildQuery([{ op: 'since', field: resolved, ms: dayStart }]))), tableInfo.table) : null,
   ]);
   return {
-    table: t.table,
-    label: t.meta.label,
+    table: tableInfo.table,
+    label: tableInfo.meta.label,
     // Active minus resolved-but-active.
     open: openOf(openN, done),
     unassigned,
@@ -72,7 +72,7 @@ export async function overviewSection(ctx) {
   const dayStart = startOfLocalDay(ctx.now, ctx.offsetMin);
   const tables = usableTables(ctx);
 
-  const [rows, sla] = await Promise.all([Promise.all(tables.map((t) => readTable(ctx, t, { staleDays, dayStart }))), tables.length ? readSlaSnapshot(ctx) : { ok: false, status: 'error', note: tm('No ticket table can be read.') }]);
+  const [rows, sla] = await Promise.all([Promise.all(tables.map((tableInfo) => readTable(ctx, tableInfo, { staleDays, dayStart }))), tables.length ? readSlaSnapshot(ctx) : { ok: false, status: 'error', note: tm('No ticket table can be read.') }]);
   if (sla.ok && sla.cap) ctx.caps.push(sla.cap);
 
   const waitLabels = [...new Set(rows.flatMap((r) => (r.waiting.ok ? r.waiting.detail.labels : [])))];
@@ -82,8 +82,8 @@ export async function overviewSection(ctx) {
     rows
       .map((r) => {
         const value = key === 'waiting' ? (r.waiting.ok ? r.waiting.value : null) : r[key]?.ok ? r[key].value : null;
-        const t = tables.find((x) => x.table === r.table);
-        const resolved = resolvedColumn(t);
+        const tableInfo = tables.find((x) => x.table === r.table);
+        const resolved = resolvedColumn(tableInfo);
         const live = notResolved(r.doneValues);
         const queries = {
           open: scopeQ('active=true', live),
@@ -101,7 +101,7 @@ export async function overviewSection(ctx) {
 
   const slaUnavailable = !sla.ok;
   // The SLA tiles open the task_sla list (the SLAs, not the tickets): the ticket is one click further.
-  const slaBase = andQuery('active=true', `task.sys_class_nameIN${tables.map((t) => t.table).join(',')}`, ctx.scope.taskQuery);
+  const slaBase = andQuery('active=true', `task.sys_class_nameIN${tables.map((tableInfo) => tableInfo.table).join(',')}`, ctx.scope.taskQuery);
   const slaDrills = {
     // A paused SLA is not counting down, so it is not "due soon" (sla.js leaves it out of the count the same way).
     dueSoon: andQuery(slaBase, 'has_breached=false', 'stage!=paused', buildQuery([{ op: 'until', field: 'planned_end_time', ms: ctx.now + LIMITS.dueSoonHours * HOUR }])),
@@ -136,9 +136,9 @@ export async function overviewSection(ctx) {
   if (resolvedActive.value > 0) {
     tiles.splice(1, 0, { ...tile('resolvedActive', tm('Resolved, not closed'), resolvedActive), drills: drill('resolvedActive'), hint: doneLabels.length ? say(tm('Waiting to close ({labels}). Not counted as open.'), { labels: doneLabels.join(', ') }) : tm('Waiting to close. Not counted as open.') });
   }
-  tiles.forEach((t) => {
-    if (t.partial) t.hint = say(tm('{hint}. Some tables could not be counted.'), { hint: t.hint });
-    t.drills = t.drills || [];
+  tiles.forEach((entry) => {
+    if (entry.partial) entry.hint = say(tm('{hint}. Some tables could not be counted.'), { hint: entry.hint });
+    entry.drills = entry.drills || [];
   });
 
   // Why a number is missing: the first failure for each table.
@@ -177,7 +177,7 @@ export function overviewTables(result) {
         { key: 'value', label: t('Value') },
         { key: 'note', label: t('Note') },
       ],
-      rows: d.tiles.map((tile) => ({ label: shown(tile.label), value: tile.unavailable ? t('Not available to you') : tile.value, note: shown(tile.hint || '') })),
+      rows: d.tiles.map((measure) => ({ label: shown(measure.label), value: measure.unavailable ? t('Not available to you') : measure.value, note: shown(measure.hint || '') })),
     },
     {
       title: t('Overview by table'),

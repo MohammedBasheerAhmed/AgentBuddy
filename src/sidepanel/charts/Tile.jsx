@@ -1,4 +1,3 @@
-import React from 'react';
 import { describeTile, formatNumber, toneClass } from './geometry.js';
 import DrillLink from './DrillLink.jsx';
 import { t } from '../../i18n/index.js';

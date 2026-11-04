@@ -36,9 +36,9 @@ export function maskTables(tables, { mode = 'standard' } = {}) {
   };
 
   // First pass: every name in a person column, in table order, so numbering does not depend on column order.
-  tables.forEach((t) =>
-    t.rows.forEach((row) =>
-      t.columns.forEach((c) => {
+  tables.forEach((table) =>
+    table.rows.forEach((row) =>
+      table.columns.forEach((c) => {
         if (!c.person) return;
         const value = text(row[c.key]).trim();
         if (value && !KEEP.has(value)) personOf(value);
@@ -59,9 +59,9 @@ export function maskTables(tables, { mode = 'standard' } = {}) {
 
   // Second pass: names written in free-text cells, in table, row and column order.
   const prose = new Map(); // row object -> { column key -> findings }
-  tables.forEach((t) =>
-    t.rows.forEach((row) =>
-      t.columns.forEach((c) => {
+  tables.forEach((table) =>
+    table.rows.forEach((row) =>
+      table.columns.forEach((c) => {
         const value = row[c.key];
         if (c.person || typeof value !== 'string' || !value) return;
         const found = resolveOverlaps(detectProseNames(value, { mode }));
@@ -92,11 +92,11 @@ export function maskTables(tables, { mode = 'standard' } = {}) {
     return out;
   };
 
-  return tables.map((t) => ({
-    ...t,
-    rows: t.rows.map((row) => {
+  return tables.map((table) => ({
+    ...table,
+    rows: table.rows.map((row) => {
       const next = { ...row };
-      t.columns.forEach((c) => {
+      table.columns.forEach((c) => {
         const value = row[c.key];
         if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') return;
         const s = text(value);
@@ -117,9 +117,9 @@ export function tableToCsv(table) {
 
 /** CSV for several tables in one file: the title of each on its own line, a blank line between. A single table is plain CSV. */
 export function tablesToCsv(tables) {
-  const real = tables.filter((t) => t.rows.length || t.columns.length);
+  const real = tables.filter((table) => table.rows.length || table.columns.length);
   if (real.length === 1) return tableToCsv(real[0]);
-  return real.map((t) => `${toCsv([], [t.title])}\r\n${tableToCsv(t)}`).join('\r\n\r\n');
+  return real.map((table) => `${toCsv([], [table.title])}\r\n${tableToCsv(table)}`).join('\r\n\r\n');
 }
 
 // A cell pasted into a spreadsheet must not run as a formula: same rule as the CSV guard.
@@ -132,8 +132,8 @@ const guardCell = (value) => {
 /** Tab-separated text, which pastes as a table into a spreadsheet, a mail or a document. */
 export function tablesToTsv(tables) {
   return tables
-    .filter((t) => t.columns.length)
-    .map((t) => [t.title, t.columns.map((c) => guardCell(c.label)).join('\t'), ...t.rows.map((row) => t.columns.map((c) => guardCell(row[c.key])).join('\t'))].join('\n'))
+    .filter((table) => table.columns.length)
+    .map((table) => [table.title, table.columns.map((c) => guardCell(c.label)).join('\t'), ...table.rows.map((row) => table.columns.map((c) => guardCell(row[c.key])).join('\t'))].join('\n'))
     .join('\n\n');
 }
 

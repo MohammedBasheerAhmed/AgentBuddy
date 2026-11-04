@@ -1,7 +1,6 @@
 import { mount, click, choose, type, settle, makeChrome, fakeAiFetch, fakeClipboard, deferred, during } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { KnowledgeAssist, KnowledgeInsights } from '../src/sidepanel/knowledgeScreen/index.js';
 import { clearShared } from '../src/sidepanel/knowledgeScreen/shared.js';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';

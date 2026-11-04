@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { CardFrame } from '../ui/primitives.jsx';
 import DuplicatesPanel from '../knowledge/DuplicatesPanel.jsx';

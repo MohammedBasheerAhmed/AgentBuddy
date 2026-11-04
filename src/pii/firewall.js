@@ -583,9 +583,9 @@ export function createFirewall(options = {}) {
     buildRequest,
     /**
      * Put real values back into model output. Local only; unknown or look-alike placeholders are left as they are, and so are
-     * the labels in `options.keep` (the pipeline keeps NEVER_REHYDRATE: passwords, cards, ID numbers).
+     * the labels in `rehydrateOptions.keep` (the pipeline keeps NEVER_REHYDRATE: passwords, cards, ID numbers).
      */
-    rehydrate: (text, options) => tokenizer.rehydrate(text, options),
+    rehydrate: (text, rehydrateOptions) => tokenizer.rehydrate(text, rehydrateOptions),
     /** What would be masked in `text`, without replacing anything. Contains real values: keep it local. */
     scan(text) {
       if (!isString(text) || !text) return [];

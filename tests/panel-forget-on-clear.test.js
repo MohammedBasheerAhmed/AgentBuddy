@@ -1,7 +1,6 @@
 import { mount, click, settle, during, deferred, makeChrome, fakeAiFetch, fakeClipboard } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { forgetsPanelMemory, forgetPanelMemory, useForgetOnClear, watchForClears } from '../src/sidepanel/forgetOnClear.js';
 import { useAnswers, AnswerArea, forgetAnswers } from '../src/sidepanel/ticket/assist/answers/index.js';
 import { store as answerStore } from '../src/sidepanel/ticket/assist/answers/session.js';

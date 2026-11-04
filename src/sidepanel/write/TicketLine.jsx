@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { read } from '../ask.js';
 import { ticketLabel } from '../../compose/ticketLabel.js';
 import { t } from '../../i18n/index.js';

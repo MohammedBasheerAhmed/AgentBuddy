@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { errorNextSteps, waitingText } from '../../../runLogic.js';
 import { t } from '../../../../i18n/index.js';
 

@@ -77,7 +77,6 @@ const pack = (journal, extra = {}) => ({
   ...extra,
 });
 const msg = (when, side, by, text) => ({ when, side, by, type: 'comment', text });
-const MIN = 60000;
 const at = (s) => Date.parse(`${s.replace(' ', 'T')}Z`);
 
 test('overview: counts, participants, first response, and a customer who is waiting', () => {

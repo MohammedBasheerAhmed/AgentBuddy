@@ -56,33 +56,33 @@ export function ageBuckets(open, newerThan) {
   return out;
 }
 
-async function readTable(ctx, t) {
+async function readTable(ctx, tableInfo) {
   const { reader, scope, now } = ctx;
   const q = (...extra) => andQuery(scope.query, ...extra);
   const open = q('active=true');
   // Which states mean "resolved, waiting to close" (the Overview asks the same question, so this is a cache hit after it): those
   // tickets are left out of the open, stale, ageing and hand-off numbers, and shown as their own part of the per-person bars.
-  const { states, done, live } = await readOpenStates(reader, t.table, open);
+  const { states, done, live } = await readOpenStates(reader, tableInfo.table, open);
   const staleCut = buildQuery([{ op: 'before', field: 'sys_updated_on', ms: now - clampInt(ctx.params.staleDays, 1, 60, LIMITS.staleDays) * DAY }]);
-  const cumulative = AGE_BUCKETS.filter((b) => b.to !== null).map((b) => attempt(() => reader.count(t.table, q('active=true', buildQuery([{ op: 'after', field: 'opened_at', ms: now - b.to * DAY }]), live)), t.table));
-  const pingPong = t.cols.has('reassignment_count');
+  const cumulative = AGE_BUCKETS.filter((b) => b.to !== null).map((b) => attempt(() => reader.count(tableInfo.table, q('active=true', buildQuery([{ op: 'after', field: 'opened_at', ms: now - b.to * DAY }]), live)), tableInfo.table));
+  const pingPong = tableInfo.cols.has('reassignment_count');
   const [openN, byAssignee, byGroup, unassigned, stale, ageCounts, pingCount, pingRows] = await Promise.all([
-    attempt(() => reader.count(t.table, open), t.table),
-    scope.kind === 'mine' ? null : attempt(() => reader.groups(t.table, open, ['assigned_to', 'state']), t.table),
-    scope.kind === 'mine' ? null : attempt(() => reader.groups(t.table, open, ['assignment_group', 'state']), t.table),
-    scope.unassignedMeaningful ? attempt(() => reader.count(t.table, q('active=true', 'assigned_toISEMPTY', live)), t.table) : null,
-    attempt(() => reader.count(t.table, q('active=true', staleCut, live)), t.table),
+    attempt(() => reader.count(tableInfo.table, open), tableInfo.table),
+    scope.kind === 'mine' ? null : attempt(() => reader.groups(tableInfo.table, open, ['assigned_to', 'state']), tableInfo.table),
+    scope.kind === 'mine' ? null : attempt(() => reader.groups(tableInfo.table, open, ['assignment_group', 'state']), tableInfo.table),
+    scope.unassignedMeaningful ? attempt(() => reader.count(tableInfo.table, q('active=true', 'assigned_toISEMPTY', live)), tableInfo.table) : null,
+    attempt(() => reader.count(tableInfo.table, q('active=true', staleCut, live)), tableInfo.table),
     Promise.all(cumulative),
-    pingPong ? attempt(() => reader.count(t.table, q('active=true', buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }]), live)), t.table) : null,
+    pingPong ? attempt(() => reader.count(tableInfo.table, q('active=true', buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }]), live)), tableInfo.table) : null,
     pingPong
       ? attempt(
           () =>
-            reader.rows(t.table, andQuery(q('active=true', buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }]), live), 'ORDERBYDESCreassignment_count'), ['sys_id', 'number', 'short_description', 'assigned_to', 'assignment_group', 'reassignment_count'], { limit: 5, displayValue: true }),
-          t.table
+            reader.rows(tableInfo.table, andQuery(q('active=true', buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }]), live), 'ORDERBYDESCreassignment_count'), ['sys_id', 'number', 'short_description', 'assigned_to', 'assignment_group', 'reassignment_count'], { limit: 5, displayValue: true }),
+          tableInfo.table
         )
       : null,
   ]);
-  return { t, openN: openOf(openN, done), resolvedActive: states.ok ? done.count : null, doneValues: done.values, byAssignee, byGroup, unassigned, stale, ageCounts, pingCount, pingRows };
+  return { tableInfo, openN: openOf(openN, done), resolvedActive: states.ok ? done.count : null, doneValues: done.values, byAssignee, byGroup, unassigned, stale, ageCounts, pingCount, pingRows };
 }
 
 /**
@@ -102,13 +102,13 @@ function ageQueries({ scope, now }, doneValues = []) {
 
 export async function workloadSection(ctx) {
   const tables = usableTables(ctx);
-  const parts = await Promise.all(tables.map((t) => readTable(ctx, t)));
+  const parts = await Promise.all(tables.map((tableInfo) => readTable(ctx, tableInfo)));
   const { scope } = ctx;
 
   // Why a number is missing, once per table.
   parts.forEach((p) => {
     const failed = [p.openN, p.byAssignee, p.byGroup, p.unassigned, p.stale].filter((v) => v && !v.ok);
-    if (failed.length) ctx.access.push({ source: p.t.table, status: failed[0].status, note: `${p.t.meta.label}: ${failed[0].note}` });
+    if (failed.length) ctx.access.push({ source: p.tableInfo.table, status: failed[0].status, note: `${p.tableInfo.meta.label}: ${failed[0].note}` });
   });
 
   const openSum = sumResults(parts.map((p) => p.openN));
@@ -117,7 +117,7 @@ export async function workloadSection(ctx) {
 
   const fold = (key, emptyName) => {
     const usable = parts.filter((p) => p[key]?.ok);
-    return foldByOwner(usable.map((p) => ({ table: p.t.table, groups: p[key].value })), emptyName);
+    return foldByOwner(usable.map((p) => ({ table: p.tableInfo.table, groups: p[key].value })), emptyName);
   };
   const assigneeRows = scope.kind === 'mine' ? [] : fold('byAssignee', tm('(unassigned)'));
   const groupRows = scope.kind === 'mine' ? [] : fold('byGroup', tm('(no group)'));
@@ -135,7 +135,7 @@ export async function workloadSection(ctx) {
   // Ageing, per table and in total.
   const ageTables = parts
     .filter((p) => p.openN.ok && p.ageCounts.every((c) => c.ok))
-    .map((p) => ({ table: p.t.table, label: p.t.meta.label, open: p.openN.value, buckets: ageBuckets(p.openN.value, p.ageCounts.map((c) => c.value)) }));
+    .map((p) => ({ table: p.tableInfo.table, label: p.tableInfo.meta.label, open: p.openN.value, buckets: ageBuckets(p.openN.value, p.ageCounts.map((c) => c.value)) }));
   const ageTotal = AGE_BUCKETS.map((b, i) => ({ key: b.key, label: b.label, count: ageTables.reduce((n, a) => n + a.buckets[i].count, 0) }));
 
   // Reassignment ping-pong.
@@ -146,7 +146,7 @@ export async function workloadSection(ctx) {
     threshold: LIMITS.pingPongMin,
     count: pingOk.reduce((n, p) => n + p.pingCount.value, 0),
     items: pingOk
-      .flatMap((p) => (p.pingRows?.ok ? p.pingRows.value.map((r) => ({ table: p.t.table, label: p.t.meta.label, sysId: raw(r.sys_id), number: disp(r.number), title: disp(r.short_description), owner: disp(r.assigned_to), group: disp(r.assignment_group), reassignments: Number(raw(r.reassignment_count)) || 0 })) : []))
+      .flatMap((p) => (p.pingRows?.ok ? p.pingRows.value.map((r) => ({ table: p.tableInfo.table, label: p.tableInfo.meta.label, sysId: raw(r.sys_id), number: disp(r.number), title: disp(r.short_description), owner: disp(r.assigned_to), group: disp(r.assignment_group), reassignments: Number(raw(r.reassignment_count)) || 0 })) : []))
       .sort((a, b) => b.reassignments - a.reassignments)
       .slice(0, 5),
   };
@@ -170,7 +170,7 @@ export async function workloadSection(ctx) {
     byGroup: topWithOthers(groupRows, topN, tm('Other groups ({n})')),
     assigneeCount: assigneeRows.length,
     groupCount: groupRows.length,
-    ageing: { buckets: ageTotal, byTable: ageTables, open: ageTables.reduce((n, a) => n + a.open, 0), queries: ageQueries(ctx), queriesByTable: Object.fromEntries(parts.map((p) => [p.t.table, ageQueries(ctx, p.doneValues)])) },
+    ageing: { buckets: ageTotal, byTable: ageTables, open: ageTables.reduce((n, a) => n + a.open, 0), queries: ageQueries(ctx), queriesByTable: Object.fromEntries(parts.map((p) => [p.tableInfo.table, ageQueries(ctx, p.doneValues)])) },
     pingPong,
     detail: { assignees: assigneeRows, groups: groupRows },
   });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRun } from '../useRun.js';
 import RunPanel from '../RunPanel.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';

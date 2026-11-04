@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { outageSignal } from '../../../insights/outage.js';
 import { riskSignals } from '../../../insights/risk.js';

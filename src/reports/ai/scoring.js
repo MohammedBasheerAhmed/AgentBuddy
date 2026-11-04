@@ -44,7 +44,7 @@ function teamMatchers(people) {
   for (const p of Array.isArray(people) ? people : []) {
     const name = oneLine(p?.name || '', 80);
     if (name.length < 2 || NOT_TEAM.has(String(p?.role || '').toLowerCase())) continue;
-    const tokens = name.split(/[\s,.\-]+/).filter((t) => t.length >= 3 && !COMMON_WORDS.has(t.toLowerCase()));
+    const tokens = name.split(/[\s,.-]+/).filter((t) => t.length >= 3 && !COMMON_WORDS.has(t.toLowerCase()));
     out.push([wholeWord(name), ...tokens.map(wholeWord)]);
   }
   return out;

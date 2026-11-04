@@ -42,7 +42,7 @@ export function recordBlock({ record, eff }) {
   if (!isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {table} records with AI. Insights still works.', { table: isolate(table) });
   if (record?.sensitive === true || isSensitiveByPolicy(table, policy)) {
     if (!policy.allowHrContent) return t('HR case content is not sent to an AI unless your organisation allows it. Insights still works.');
-    let local = false;
+    let local;
     try {
       local = Boolean(resolveProviderConfig(eff?.values || {}, eff?.apiKey || '').local);
     } catch {

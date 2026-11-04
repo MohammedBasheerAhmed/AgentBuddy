@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import AiKeyNote from '../AiKeyNote.jsx';
 import { read } from '../ask.js';
 import { useRun } from '../useRun.js';
@@ -226,11 +226,11 @@ const PIECE = 16;
  * Is text read from a form still in the box? Yes while one piece of PIECE characters of what was read (all of it, when shorter) is
  * still there: an edit keeps the text bound to its ticket; typing or pasting over all of it does not. The pieces cover the text from
  * start to end (the last one ends where the text ends), so an edit anywhere leaves the other pieces to find.
- * @param {string} read the text as it was read from the form
+ * @param {string} readText the text as it was read from the form
  * @param {string} value what the box holds now
  */
-export function stillFromForm(read, value) {
-  const source = String(read || '');
+export function stillFromForm(readText, value) {
+  const source = String(readText || '');
   const now = String(value || '');
   if (!source || !now) return false;
   const size = Math.min(PIECE, source.length);

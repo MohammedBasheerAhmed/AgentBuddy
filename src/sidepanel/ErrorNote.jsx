@@ -1,4 +1,3 @@
-import React from 'react';
 import { plainError } from './ask.js';
 import { t } from '../i18n/index.js';
 

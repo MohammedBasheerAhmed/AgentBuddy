@@ -1,7 +1,6 @@
 import { mount, click, makeChrome, fakeClipboard, settle } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { normalizePolicy } from '../src/policy/policy.js';
 import { Glance, INSIGHT_CARDS } from '../src/sidepanel/ticket/cards/index.js';
 import TicketInsights, { cardsFor } from '../src/sidepanel/ticket/TicketInsights.jsx';

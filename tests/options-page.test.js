@@ -34,7 +34,6 @@ async function until(check, what, ms = 5000) {
   const end = Date.now() + ms;
   while (!check()) {
     if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
-    // eslint-disable-next-line no-await-in-loop
     await settle(1);
   }
 }

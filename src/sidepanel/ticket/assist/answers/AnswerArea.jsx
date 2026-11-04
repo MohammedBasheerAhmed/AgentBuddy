@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PreviewDialog, { previewKey } from '../../../PreviewDialog.jsx';
 import { resolveProviderConfig } from '../../../../providers/config.js';
 import { isBusyPhase } from '../../../useRun.js';

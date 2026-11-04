@@ -284,7 +284,7 @@ export function readOrgFormats(value) {
 }
 
 // The format inside a policy entry: the entry without its action and its lock.
-const formatOf = ({ feature, locked, ...format }) => format; // eslint-disable-line no-unused-vars
+const formatOf = ({ feature, locked, ...format }) => format;
 
 /** What a policy entry for this action looks like (what "Copy for your administrator" puts on the clipboard). */
 export const policyEntry = (id, format, locked = false) => ({ feature: id, ...format, ...(locked ? { locked: true } : {}) });

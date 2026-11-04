@@ -1,7 +1,6 @@
 import { mount, click, makeChrome, settle, document, fakeAiFetch } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { TeamInsights, TeamAssist } from '../src/sidepanel/team/index.js';
 import { resetTeamShares, teamShare, shareKey } from '../src/sidepanel/team/teamShare.js';
 import { handoverSource, explainEntries } from '../src/sidepanel/team/TeamAssist.jsx';

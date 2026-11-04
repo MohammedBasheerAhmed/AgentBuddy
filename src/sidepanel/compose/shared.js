@@ -1,5 +1,5 @@
 // Small helpers shared by the Write section's panels.
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { auditInsert } from '../../lib/storage.js';
 import { read } from '../ask.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
@@ -79,7 +79,7 @@ export function useFill({ page, eff, run, feature = '' }) {
     (outcome) => {
       // The record the text went into: the run's own record, or (a pasted text, a snippet) the record that is open.
       const ref = sourceFromPack(run?.lastPack) ? run.lastPack : auditRefFromPage(page);
-      let config = {};
+      let config;
       try {
         config = run?.active ? resolveProviderConfig(eff.values, eff.apiKey) : {};
       } catch {

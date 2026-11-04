@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { read, plainError } from '../ask.js';
 import ReviewHints from '../ReviewHints.jsx';
 import { ShowMore } from '../ui/primitives.jsx';

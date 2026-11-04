@@ -40,7 +40,7 @@ const SYS_ID_RE = /^[0-9a-f]{32}$/i;
  * @param {{ number?: string, sysId?: string }} article
  */
 export function articleShareUrl(page, { number = '', sysId = '' } = {}) {
-  let origin = '';
+  let origin;
   try {
     origin = new URL(page?.href || '').origin;
   } catch {

@@ -120,7 +120,7 @@ export function runtimeAlive(runtime) {
  */
 export function contentTakeover(prior) {
   if (!prior || typeof prior !== 'object' || typeof prior.alive !== 'function') return 'install';
-  let alive = false;
+  let alive;
   try {
     alive = prior.alive() === true;
   } catch {

@@ -85,7 +85,7 @@ if (opts.enterprise) {
   const configPath = path.resolve(process.cwd(), opts.enterprise);
   let raw;
   try {
-    raw = JSON.parse(fs.readFileSync(configPath, 'utf8').replace(/^﻿/, ''));
+    raw = JSON.parse(fs.readFileSync(configPath, 'utf8').replace(/^\uFEFF/, ''));
   } catch (err) {
     fail(`cannot read the enterprise config ${configPath}: ${err.message}`);
   }

@@ -36,6 +36,7 @@ export function instanceKey(href) {
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const cleanName = (value, fallback) => {
+  // eslint-disable-next-line no-control-regex -- control characters are what it takes out
   const text = String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CAPS.name);
   return text || fallback;
 };
@@ -128,7 +129,7 @@ export function sanitizeDashboard(input, makeId = randomId) {
   } catch {
     scope = normalizeScope({ kind: 'mine' });
   }
-  const tables = Array.isArray(input.tables) ? input.tables.filter((t, i, all) => REPORT_TABLE_IDS.includes(t) && all.indexOf(t) === i) : [];
+  const tables = Array.isArray(input.tables) ? input.tables.filter((table, i, all) => REPORT_TABLE_IDS.includes(table) && all.indexOf(table) === i) : [];
   const seen = new Set();
   const widgets = [];
   for (const w of Array.isArray(input.widgets) ? input.widgets : []) {
@@ -277,7 +278,7 @@ function cleanLayoutDashboard(input, makeId) {
  * @returns {{ ok: true, state: object, name: string } | { ok: false, reason: string }}
  */
 export function importLayout(text, state, makeId = randomId) {
-  const body = String(text ?? '').replace(/^﻿/, '');
+  const body = String(text ?? '').replace(/^\uFEFF/, '');
   if (!body.trim()) return { ok: false, reason: t('The file is empty.') };
   if (body.length > CAPS.file) return { ok: false, reason: t('The file is too big to be a dashboard layout.') };
   let parsed;

@@ -115,7 +115,7 @@ export function usePage(policy = null) {
  */
 export function pageMarkers() {
   const w = window;
-  let scripts = false;
+  let scripts;
   try {
     scripts = Array.from(document.scripts || [])
       .slice(0, 400)

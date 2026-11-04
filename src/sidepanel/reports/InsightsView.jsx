@@ -1,4 +1,4 @@
-import React, { useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 import { useRun } from '../useRun.js';
 import { buildInsightsPack, checkInsightsNote, describeInputs, INSIGHT_MAX_WORDS } from '../../reports/ai/insights.js';
 import { AiBlocked, AiButton, AiResult, AiShell, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';

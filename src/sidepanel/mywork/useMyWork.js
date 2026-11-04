@@ -55,7 +55,7 @@ export function useMyWork({ page, eff, active }) {
   const profiles = activeProfiles(eff);
   const allowSensitive = Boolean(eff?.policy?.allowHrContent);
   // Another tab, another instance in the same tab, other profiles or another HR rule: what is on screen is not this person's view.
-  let origin = '';
+  let origin;
   try {
     origin = new URL(page?.href || '').origin;
   } catch {

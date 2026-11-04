@@ -294,7 +294,7 @@ test('every part has a plain label and a plain field name, so the firewall does 
     const parts = partsFor(featureById(id), pack);
     assert.ok(parts.length > 0, id);
     for (const p of parts) {
-      assert.match(p.label, /^[A-Za-z0-9_.:\[\] -]+$/, `${id}: ${p.label}`);
+      assert.match(p.label, /^[A-Za-z0-9_.:[\] -]+$/, `${id}: ${p.label}`);
       assert.match(p.field, /^[a-z][a-z_]*$/, p.field);
       assert.ok(p.text.trim().length > 0 && p.text.length <= 6000, `${id}/${p.label} is capped`);
     }

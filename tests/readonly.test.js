@@ -99,9 +99,7 @@ test('a table name that is not a plain identifier never becomes part of a reques
     return { ok: true, status: 200, headers: { get: () => null }, redirected: false, url: String(url), text: async () => JSON.stringify({ result: [] }) };
   };
   for (const table of ['..', '.', 'a/../b', 'incident?x=1', 'Incident', '', 'x'.repeat(81), null, 5]) {
-    // eslint-disable-next-line no-await-in-loop
     await assert.rejects(() => queryTable(table, 'active=true', ['number']), /valid table/, String(table));
-    // eslint-disable-next-line no-await-in-loop
     await assert.rejects(() => countRecords(table, 'active=true'), /valid table/, String(table));
   }
   assert.deepEqual(calls, []);

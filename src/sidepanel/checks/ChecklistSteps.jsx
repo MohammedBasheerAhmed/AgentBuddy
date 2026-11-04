@@ -1,5 +1,4 @@
 // The tick list of the fulfilment checklist. Pure drawing: the view owns the state and passes `onToggle`.
-import React from 'react';
 import { t } from '../../i18n/index.js';
 
 export function ProgressBar({ progress }) {

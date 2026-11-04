@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Tile, DataTable } from '../charts/index.js';
 import TicketList from './TicketList.jsx';
 import { useMinuteClock } from './hooks.js';

@@ -7,7 +7,6 @@ const ticket = (title, extra = {}) => {
   n += 1;
   return { table: 'incident', sysId: `s${n}`, number: `INC${String(n).padStart(4, '0')}`, title, category: '', ci: '', fixLength: 0, ...extra };
 };
-const FIX = 'x'.repeat(MIN_FIX_CHARS);
 
 test('tickets about the same thing group together, biggest first, with a label made of their own words', () => {
   const clusters = clusterTickets([

@@ -9,9 +9,8 @@
 //    Fulfilment checklist  steps from the written instructions; ticks survive a reload of the panel; only salted hashes are kept, in
 //                          session storage, never a step's text or the record id
 //    The AI parts run when AI Assist offers the action (Actions agent); otherwise they are reported as a warning.
-const { findLeaks } = require('../leaks.js');
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun, runAfter, waitPanel, settleOnRecord } = require('../common.js');
-const { openHalf, buttonShown, showAction, deepTextareaValue } = require('../ui.js');
+const { showAction, deepTextareaValue } = require('../ui.js');
 const { openCard, cardText, showAllIn } = require('../insightsUi.js');
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];

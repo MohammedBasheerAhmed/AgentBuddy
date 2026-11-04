@@ -49,8 +49,8 @@ export function oldestItems(rowsByTable, { now, tz, n = LIMITS.topN }) {
 
 export async function fulfilmentSection(ctx) {
   const { reader, scope } = ctx;
-  const tables = usableTables(ctx).filter((t) => FULFILMENT_TABLES.includes(t.table));
-  const asked = ctx.tables.filter((t) => FULFILMENT_TABLES.includes(t.table));
+  const tables = usableTables(ctx).filter((tableInfo) => FULFILMENT_TABLES.includes(tableInfo.table));
+  const asked = ctx.tables.filter((tableInfo) => FULFILMENT_TABLES.includes(tableInfo.table));
   if (!asked.length) {
     return sectionResult('fulfilment', tm('Request fulfilment'), ctx, { available: false, reason: tm('Turn on Requested items or Catalog tasks in the table list to see request fulfilment.') });
   }
@@ -58,18 +58,18 @@ export async function fulfilmentSection(ctx) {
   const open = q('active=true');
 
   const parts = await Promise.all(
-    tables.map(async (t) => {
+    tables.map(async (tableInfo) => {
       const [states, oldest, openN] = await Promise.all([
-        attempt(() => reader.groups(t.table, open, ['state']), t.table),
-        attempt(() => reader.rows(t.table, q('active=true', buildQuery([], { orderBy: 'opened_at' })), TICKET_FIELDS, { limit: LIMITS.topN, displayValue: true }), t.table),
-        attempt(() => reader.count(t.table, open), t.table),
+        attempt(() => reader.groups(tableInfo.table, open, ['state']), tableInfo.table),
+        attempt(() => reader.rows(tableInfo.table, q('active=true', buildQuery([], { orderBy: 'opened_at' })), TICKET_FIELDS, { limit: LIMITS.topN, displayValue: true }), tableInfo.table),
+        attempt(() => reader.count(tableInfo.table, open), tableInfo.table),
       ]);
-      return { t, states, oldest, openN };
+      return { tableInfo, states, oldest, openN };
     })
   );
   parts.forEach((p) => {
     const failed = [p.states, p.oldest, p.openN].filter((v) => !v.ok);
-    if (failed.length) ctx.access.push({ source: p.t.table, status: failed[0].status, note: `${p.t.meta.label}: ${failed[0].note}` });
+    if (failed.length) ctx.access.push({ source: p.tableInfo.table, status: failed[0].status, note: `${p.tableInfo.meta.label}: ${failed[0].note}` });
   });
 
   // Approvals: the ones waiting for me, and (for a team) the ones holding up the team's requested items.
@@ -82,8 +82,8 @@ export async function fulfilmentSection(ctx) {
   return sectionResult('fulfilment', tm('Request fulfilment'), ctx, {
     available: true,
     byTable: parts.map((p) => ({
-      table: p.t.table,
-      label: p.t.meta.label,
+      table: p.tableInfo.table,
+      label: p.tableInfo.meta.label,
       open: p.openN.ok ? p.openN.value : null,
       states: p.states.ok ? stateRows(p.states.value) : null,
       stateQuery: p.states.ok ? Object.fromEntries(stateRows(p.states.value).filter((s) => s.key !== '').map((s) => [s.key, andQuery(open, buildQuery([{ op: 'eq', field: 'state', value: s.key }]))])) : {},
@@ -95,7 +95,7 @@ export async function fulfilmentSection(ctx) {
       teamNote: team && !team.ok ? team.note : '',
     },
     oldest: oldestItems(
-      parts.filter((p) => p.oldest.ok).map((p) => ({ table: p.t.table, label: p.t.meta.label, rows: p.oldest.value })),
+      parts.filter((p) => p.oldest.ok).map((p) => ({ table: p.tableInfo.table, label: p.tableInfo.meta.label, rows: p.oldest.value })),
       { now: ctx.now, tz: ctx.offsetMin }
     ),
     // A table whose count failed is not added as 0: the total is then flagged as partial (the tile says so).
@@ -115,7 +115,7 @@ export async function readApprovals(ctx, tables) {
   const { reader, scope } = ctx;
   const mine = await verifiedCount(reader, 'sysapproval_approver', `approver=${scope.userId}^state=requested`, { unseen: APPROVALS_UNSEEN });
   const team =
-    scope.kind !== 'mine' && !scope.empty && tables.some((t) => t.table === 'sc_req_item')
+    scope.kind !== 'mine' && !scope.empty && tables.some((tableInfo) => tableInfo.table === 'sc_req_item')
       ? await verifiedCount(reader, 'sysapproval_approver', andQuery('state=requested', 'sysapproval.sys_class_name=sc_req_item', `sysapproval.${scope.query}`), { unseen: APPROVALS_UNSEEN })
       : null;
   return { mine, team };

@@ -154,7 +154,7 @@ export async function resolveScope(input, { reader, userId, tables = [] }) {
     return { kind: 'mine', label: 'Mine', userId, groups: [], inferred: false, empty: false, note: '', query: `assigned_to=${userId}`, taskQuery: `task.assigned_to=${userId}`, unassignedMeaningful: false };
   }
 
-  let groups = [];
+  let groups;
   let inferred = false;
   let note = '';
   let of = 0; // the number of groups there were when not all of them fit

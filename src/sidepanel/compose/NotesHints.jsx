@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { read, plainError } from '../ask.js';
 import { peopleFromNames } from '../../compose/rewrite.js';
 import { isolate, t, tn } from '../../i18n/index.js';

@@ -6,6 +6,7 @@ import { Icon, featureIcon } from './ui/icons.jsx';
 import { t, t as tr } from '../i18n/index.js';
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const NO_PINS = {}; // (one object, so the catch-up check below does not run again on every render)
 
 /**
  * The few actions worth one click, in the ticket at a glance. It holds items from both halves of the Ticket screen, each marked:
@@ -29,7 +30,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
   const [mine, setMine] = useState(null); // { open?, pins? } changed here and not saved back yet
   const [problem, setProblem] = useState('');
   const savedOpen = eff.values.quickBarOpen !== false;
-  const savedPins = eff.values.quickPins || {};
+  const savedPins = eff.values.quickPins || NO_PINS;
   const open = mine && 'open' in mine ? mine.open : savedOpen;
   const pins = mine && 'pins' in mine ? mine.pins : savedPins;
 

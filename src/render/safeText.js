@@ -188,7 +188,7 @@ const skipSpaces = (s, k, max) => {
 // Returns { url, end } (end is past the closing parenthesis) or null. Every scan is bounded.
 function scanDestination(s, p) {
   let k = skipSpaces(s, p, 32);
-  let url = '';
+  let url;
   if (s.charCodeAt(k) === 60) {
     const start = k + 1;
     let e = start;

@@ -126,7 +126,7 @@ test('a layout file holds the configuration and nothing else, and loads back as 
   assert.ok(file.dashboard.widgets.every((w) => !('id' in w)), 'ids are made on import');
   assert.equal(layoutFileName('Team overview / night!'), 'agent-buddy-dashboard-team-overview-night.json');
 
-  const text = `﻿${JSON.stringify(file, null, 2)}`; // the download helper writes a byte-order mark
+  const text = `\uFEFF${JSON.stringify(file, null, 2)}`; // the download helper writes a byte-order mark
   const loaded = importLayout(text, state, makeId);
   assert.equal(loaded.ok, true);
   assert.equal(loaded.name, 'Team overview (imported)', 'a name that is taken is told apart');

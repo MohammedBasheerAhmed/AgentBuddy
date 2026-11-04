@@ -1,4 +1,4 @@
-import { mount, press, settle, during, document } from './fixtures/panel-dom.js';
+import { mount, press, during, document } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';

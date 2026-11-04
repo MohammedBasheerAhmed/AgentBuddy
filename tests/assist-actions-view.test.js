@@ -1,7 +1,6 @@
 import { mount, click, makeChrome, settle } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ActionGroups, QuickBar } from '../src/sidepanel/ticket/assist/actions/index.js';
 import { normalizePolicy } from '../src/policy/policy.js';

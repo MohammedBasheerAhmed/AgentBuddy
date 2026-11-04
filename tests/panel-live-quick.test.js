@@ -1,7 +1,6 @@
 import { mount, click, makeChrome } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import QuickBar from '../src/sidepanel/QuickBar.jsx';
 import { featuresFor } from '../src/features/registry.js';
 import { normalizePolicy } from '../src/policy/policy.js';

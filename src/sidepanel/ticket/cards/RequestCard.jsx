@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { buildRequestView } from '../../../checks/requestView.js';
 import { chaseLine } from '../../../insights/fixes.js';
 import { Facts, Hints, Tag } from '../../checks/Bits.jsx';

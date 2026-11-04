@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { Component } from 'react';
 import { t, tm, t as tr } from '../i18n/index.js';
 
 export const BOUNDARY_TEXT = tm('Something went wrong in this part of Agent Buddy. Try again, or reload the panel.');

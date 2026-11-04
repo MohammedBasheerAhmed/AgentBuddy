@@ -88,6 +88,9 @@ module.exports = {
     const netApi = ctx.net.filter((n) => n.url.startsWith(`${inst.origin}/api/now/`)).length;
     const netAi = ctx.net.filter((n) => n.url.startsWith(`http://localhost:${ai.port}/`) && n.method === 'POST').length;
     const matched = matchBrowserLog(ctx, inst, api);
+    // A read the instance logged but never answered is the mark of a read Chrome sent again on a new connection without telling anyone
+    // (the fake instance keeps its connections open to prevent that: e2e/fakeInstance.js keepAliveTimeout). Said with the result below.
+    const unanswered = api.filter((r) => !r.status).length;
     // No read may be missing: not one from a NEW tab (a record link the panel opens), nor one a page makes as it is closed or navigates
     // away. The harness logs every page through its own DevTools session: Network on from the page's start, and every request of a
     // page held in the browser until the harness has seen it (e2e/harness.js, the network log). TRACKER R7 removed the earlier
@@ -95,13 +98,13 @@ module.exports = {
     t.check(
       'coverage: the browser-side log saw every API read the instance saw (so it covers the content scripts, new tabs and closing tabs included)',
       matched.missing.length === 0 && netApi >= api.length,
-      `browser log ${netApi}, instance log ${api.length}${matched.missing.length ? `; ${matched.missing.length} not seen by the browser log: ${matched.missing.slice(0, 3).join(' | ')}` : ''}`,
+      `browser log ${netApi}, instance log ${api.length}, logged but never answered ${unanswered}${matched.missing.length ? `; ${matched.missing.length} not seen by the browser log: ${matched.missing.slice(0, 3).join(' | ')}` : ''}`,
     );
     // Every page the browser reported was in that log (one that was not would be a blind spot for "nothing outside" above).
     const unwatched = ctx.targets.filter((x) => x.type === 'page' && !ctx.watchedPages.has(x.id));
     t.check('coverage: the network log watched every page the browser opened', unwatched.length === 0, unwatched.map((x) => x.url || '(no address)').slice(0, 3).join(' | '));
     const paused = [...ctx.watchedPages.values()].filter(Boolean).length;
-    t.info(`network log: ${ctx.watchedPages.size} pages watched, ${paused} of them paused by Chrome at their start until the log was on (the others were already open, or tabs the browser made itself, joined as they were created); ${ctx.notelessRequests()} request(s) known only from the browser side, their page's own note lost as it closed or navigated`);
+    t.info(`network log: ${ctx.watchedPages.size} pages watched, ${paused} of them paused by Chrome at their start until the log was on (the others were already open, or tabs the browser made itself, joined as they were created); ${ctx.notelessRequests()} request(s) known only from the browser side, their page's own note lost as it closed or navigated; ${ctx.idsUsedAgain()} request id(s) Chrome used again for a new request (logged as new)`);
     // A request the browser sent that never reached the instance (cancelled in flight). Not a failure, but the log should say so.
     if (matched.extra.length) t.info(`${matched.extra.length} request(s) the browser sent never reached the instance (cancelled in flight): ${matched.extra.slice(0, 3).join(' | ')}`);
     t.check('coverage: the browser-side log saw every request the AI server saw (so it covers the panel)', netAi === ai.all.length, `browser log ${netAi}, AI log ${ai.all.length}`);

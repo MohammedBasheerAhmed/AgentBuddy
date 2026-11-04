@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { missingDetails } from '../../../insights/missing.js';
 import { stateBucket } from '../../../insights/order.js';

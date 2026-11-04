@@ -63,7 +63,7 @@ function echoes(text, sent) {
 
 /** The pieces of an error body worth knowing: { message, code, type, param }; '' for what is missing or not JSON. */
 export function readErrorBody(text) {
-  let data = null;
+  let data;
   try {
     data = JSON.parse(text);
   } catch {
@@ -247,6 +247,7 @@ export async function requestJson({ url, init, who, host, secrets = [], sent = '
         //  - credentials 'omit': no cookies or HTTP auth of the browser profile go to the AI address;
         //  - referrerPolicy 'no-referrer': the extension page's address is not sent;
         //  - cache 'no-store': neither the request nor the answer (masked ticket text) is kept in the HTTP cache.
+        // eslint-disable-next-line no-await-in-loop -- one try after another: a retry depends on the answer to the try before.
         response = await doFetch(url, { ...init, signal: controller.signal, redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' });
       } catch {
         // fetch only throws when nothing came back at all: offline, blocked by a firewall, VPN or proxy, no browser permission, or
@@ -255,6 +256,7 @@ export async function requestJson({ url, init, who, host, secrets = [], sent = '
       }
       if (response.ok) {
         try {
+          // eslint-disable-next-line no-await-in-loop -- the answer of this try; the loop ends here
           return await response.json();
         } catch {
           throw stopped() || new AiError(t('{who} sent an answer Agent Buddy could not read. Check the address in Settings.', { who }), 'BAD_ANSWER');
@@ -262,6 +264,7 @@ export async function requestJson({ url, init, who, host, secrets = [], sent = '
       }
       let text = '';
       try {
+        // eslint-disable-next-line no-await-in-loop -- the error of this try decides whether there is another
         text = await response.text();
       } catch {
         if (stopped()) throw stopped();
@@ -274,8 +277,9 @@ export async function requestJson({ url, init, who, host, secrets = [], sent = '
         const wait = retryDelay(response.headers, attempt, random);
         if (wait >= 0) {
           clearTimeout(timer); // the pause is not part of this try's time limit; the next try gets its own
+          // eslint-disable-next-line no-await-in-loop -- the pause the provider asked for, before the next try
           await sleep(wait, signal);
-          continue; // eslint-disable-line no-continue -- the retry loop
+          continue;
         }
       }
       // Which of the optional fields we sent the provider complained about, from a fixed list only (the adapter can leave them out

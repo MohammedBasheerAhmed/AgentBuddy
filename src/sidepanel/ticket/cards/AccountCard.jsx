@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { Facts } from '../../checks/Bits.jsx';
 import { arrangeChanges } from '../../../insights/changes.js';

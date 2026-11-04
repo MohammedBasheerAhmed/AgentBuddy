@@ -47,6 +47,7 @@ export async function sendAnthropic({ apiKey, model, messages, maxTokens = MAX_O
 
   for (let effortDropped = false; ; ) {
     try {
+      // eslint-disable-next-line no-await-in-loop -- sent once more only when the first answer refused the effort setting
       const data = await requestJson({
         url,
         init: {

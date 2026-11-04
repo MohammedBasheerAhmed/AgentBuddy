@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { buildJourney, journeySummary } from '../../../insights/journey.js';
 import { relativeText } from '../../../insights/time.js';

@@ -99,9 +99,11 @@ test('an action that only takes extra instructions ignores sections, style and l
 });
 
 test('control characters and invisible text are removed from what the agent types', () => {
-  const out = normalizeFormat({ extra: 'Be brief.\u0000​‮ Thanks.' }, 'reply-draft');
-  assert.ok(!/[\u0000​‮]/.test(out.extra), out.extra);
-  assert.ok(!/[\u0000​]/.test(cleanSections([{ name: 'Is​sue' }])[0].name));
+  const out = normalizeFormat({ extra: 'Be brief.\u0000\u200B\u202E Thanks.' }, 'reply-draft');
+  // eslint-disable-next-line no-control-regex -- the NUL character is what this test checks is removed
+  assert.ok(!/[\u0000\u200B\u202E]/.test(out.extra), out.extra);
+  // eslint-disable-next-line no-control-regex -- the NUL character is what this test checks is removed
+  assert.ok(!/[\u0000\u200B]/.test(cleanSections([{ name: 'Is\u200Bsue' }])[0].name));
 });
 
 test('cleanFormats keeps known actions and drops everything else, whatever was stored', () => {

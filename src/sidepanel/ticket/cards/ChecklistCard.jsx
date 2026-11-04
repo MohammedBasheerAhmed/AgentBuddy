@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { checklistProgress, stepsFromPack } from '../../../checks/checklist.js';
 import { answersModel } from '../../../checks/requestView.js';
 import { Facts, Hints } from '../../checks/Bits.jsx';

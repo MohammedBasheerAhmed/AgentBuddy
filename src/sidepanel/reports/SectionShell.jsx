@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import ErrorNote from '../ErrorNote.jsx';
 import { t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';

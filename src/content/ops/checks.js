@@ -63,7 +63,7 @@ function keepText(values, names) {
  *   page (its form, else its address). Without it a page with no g_form gives null, and a form opened through task.do is not used.
  */
 export async function readFormValues({ table, sysId }, callPage = tryCallPage, { currentRecord = null } = {}) {
-  let meta = null;
+  let meta;
   try {
     meta = await callPage('getFormMeta');
   } catch {
@@ -74,7 +74,7 @@ export async function readFormValues({ table, sysId }, callPage = tryCallPage, {
   // The bridge answers for whatever form is open now: make sure it is the record the panel is showing (a form opened through task.do
   // says 'task': src/content/formRecord.js).
   if (!(await formShowsRecord(meta, { table, sysId }, currentRecord))) return null;
-  let values = null;
+  let values;
   try {
     values = await callPage('getFormValues', [[...FORM_FIELDS]]);
   } catch {
@@ -89,14 +89,14 @@ export async function readFormValues({ table, sysId }, callPage = tryCallPage, {
 // record, reads nothing. The bridge itself refuses on a page with g_form and on a portal page.
 async function readBoxValues({ table, sysId }, callPage, currentRecord) {
   if (typeof currentRecord !== 'function') return null;
-  let open = null;
+  let open;
   try {
     open = await currentRecord();
   } catch {
     open = null;
   }
   if (!isPlainObject(open) || open.table !== table || !sameId(open.sysId, sysId)) return null;
-  let values = null;
+  let values;
   try {
     values = await callPage('getBoxValues', [[...BOX_FIELDS], boxLabelsFor(table)]);
   } catch {

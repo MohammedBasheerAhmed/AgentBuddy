@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { AiBadge } from '../../../ui/primitives.jsx';
 import { featureById, isFeatureAvailable } from '../../../../features/registry.js';
 import { profilesOfFeature, shownFor } from '../../../../profiles/profiles.js';

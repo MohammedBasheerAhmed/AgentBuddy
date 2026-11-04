@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffective } from '../sidepanel/useEffective.js';
 import ReportsDashboard from '../sidepanel/reports/ReportsDashboard.jsx';
 import { checkSourceTab, nextSource, parseTabId } from './sourceTab.js';

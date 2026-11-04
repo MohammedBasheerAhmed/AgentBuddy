@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/icons.jsx';
 import { PROVIDERS, endpointHost, providerName, resolveProviderConfig } from '../../providers/config.js';
 import { modelChoices } from '../../lib/modelChoices.js';
@@ -13,7 +13,7 @@ export function destinationOf(eff) {
   if (!eff?.values) return '';
   const config = resolveProviderConfig(eff.values, eff.apiKey);
   const name = providerName(config);
-  let host = '';
+  let host;
   try {
     const def = PROVIDERS[config.provider] || {};
     const url = config.baseUrl || def.baseUrl || def.apiUrl || '';

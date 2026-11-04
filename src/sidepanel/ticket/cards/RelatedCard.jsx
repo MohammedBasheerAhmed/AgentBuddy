@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { outageSignal } from '../../../insights/outage.js';
 import { historyLine, relatedSummary } from '../../../insights/related.js';

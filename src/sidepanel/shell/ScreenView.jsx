@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { t } from '../../i18n/index.js';
 import { HalfPanel, HalfRule, HalfSwitch } from '../ui/primitives.jsx';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { arrangeChanges } from '../../../insights/changes.js';
 import { useRecordRead } from './data.js';

@@ -17,7 +17,6 @@ import { v } from '../tests/fixtures/sn-fakeDeps.js';
 import { ABEL, BETH, CHARLIE, DAVE, ERIN, MARIA } from '../tests/fixtures/sn-users.js';
 
 const HOUR = 3600000;
-const DAY = 24 * HOUR;
 const RUN_START = Date.now();
 const utc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 /** UTC time `hours` before the run started. */

@@ -191,7 +191,6 @@ test('aggregate sends a count-only group filter (sysparm_having) and refuses any
   await aggregate('incident', { groupBy: ['caller_id'], having: 'count^caller_id^>^2' });
   assert.equal(new URL(calls[0].url, 'https://x.example').searchParams.get('sysparm_having'), 'count^caller_id^>^2');
   for (const bad of ['count^caller_id^>^2^active=false', 'avg^caller_id^>^2', 'count^caller_id^!=^2', 'count^caller_id^>^x', 'count^a b^>^2', 'count^caller_id^>^2\n']) {
-    // eslint-disable-next-line no-await-in-loop -- one at a time, so the count below is exact.
     await assert.rejects(() => aggregate('incident', { groupBy: ['caller_id'], having: bad }), /valid group filter/, bad);
   }
   assert.equal(calls.length, 1);
@@ -233,7 +232,6 @@ test('who is signed in comes from the shared reading of the page: the answer is 
   for (const odd of [{ userId: { toString: () => USER } }, { userId: [USER] }, { userId: 'x'.repeat(32) }, 'text', null]) {
     resetSessionUser();
     pageSays(odd);
-    // eslint-disable-next-line no-await-in-loop
     await assert.rejects(() => ops.reportContext({}), /who is signed in/, JSON.stringify(odd));
   }
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { STEP_WORD, firstRunSteps } from './firstRun.js';
 import { TurnOnSite } from './SetupView.jsx';
 import { useActiveInstances } from './usePage.js';

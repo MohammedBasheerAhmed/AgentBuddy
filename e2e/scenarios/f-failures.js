@@ -4,7 +4,7 @@ const { findLeaks } = require('../leaks.js');
 const { clickButton, waitForText, textOf, runFeature, waitForRecord, openHalf } = require('../ui.js');
 
 // Text that must never be shown to a person: stack traces, internals, "undefined".
-const UGLY = /TypeError|ReferenceError|undefined|\[object|    at |Error:/;
+const UGLY = /TypeError|ReferenceError|undefined|\[object| {4}at |Error:/;
 
 module.exports = {
   id: 'f',

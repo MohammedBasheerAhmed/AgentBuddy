@@ -110,12 +110,12 @@ async function readList(reader, table, filter, ordered, fields, limit) {
   return { ok: true, value: { rows: rows.value, total, capped } };
 }
 
-async function readTable(ctx, t, since) {
+async function readTable(ctx, tableInfo, since) {
   const { reader, scope } = ctx;
   const q = (...extra) => andQuery(scope.query, ...extra);
   const open = q('active=true');
-  const resolved = resolvedColumn(t);
-  const fields = [...LOOKUP_FIELDS, ...(t.cols.has('caller_id') ? ['caller_id'] : [])];
+  const resolved = resolvedColumn(tableInfo);
+  const fields = [...LOOKUP_FIELDS, ...(tableInfo.cols.has('caller_id') ? ['caller_id'] : [])];
   const urgent = { op: 'in', field: 'priority', values: URGENT };
   const list = (filterParts, order) => {
     const filter = q(...filterParts);
@@ -124,27 +124,27 @@ async function readTable(ctx, t, since) {
 
   const [openedF, openedO] = list([buildQuery([{ op: 'since', field: 'opened_at', ms: since }, urgent])], { orderBy: 'opened_at', descending: true });
   const [resolvedF, resolvedO] = resolved ? list([buildQuery([{ op: 'since', field: resolved, ms: since }, urgent])], { orderBy: resolved, descending: true }) : ['', ''];
-  const canReassign = t.cols.has('reassignment_count');
+  const canReassign = tableInfo.cols.has('reassignment_count');
   const [reassignedF, reassignedO] = canReassign
     ? list(['active=true', buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }, { op: 'since', field: 'sys_updated_on', ms: since }])], { orderBy: 'reassignment_count', descending: true })
     : ['', ''];
 
   // The state breakdown has the same query as the Overview's, so it is a cache hit when Overview ran first. It also says which
   // states mean 'resolved, waiting to close': those tickets are not 'oldest open'.
-  const { states, live } = await readOpenStates(reader, t.table, open);
+  const { states, live } = await readOpenStates(reader, tableInfo.table, open);
   const waiting = states.ok ? waitingStates(states.value) : null;
-  const [oldestF, oldestO] = list(['active=true', live], { orderBy: 'opened_at' });
+  const [, oldestO] = list(['active=true', live], { orderBy: 'opened_at' }); // a plain list: no total is counted
 
   const [openedUrgent, resolvedUrgent, reassigned, waitingRows, oldest] = await Promise.all([
-    readList(reader, t.table, openedF, openedO, fields, HANDOVER_LIMITS.list),
-    resolved ? readList(reader, t.table, resolvedF, resolvedO, fields, HANDOVER_LIMITS.list) : null,
-    canReassign ? readList(reader, t.table, reassignedF, reassignedO, [...fields, 'reassignment_count'], HANDOVER_LIMITS.reassigned) : null,
+    readList(reader, tableInfo.table, openedF, openedO, fields, HANDOVER_LIMITS.list),
+    resolved ? readList(reader, tableInfo.table, resolvedF, resolvedO, fields, HANDOVER_LIMITS.list) : null,
+    canReassign ? readList(reader, tableInfo.table, reassignedF, reassignedO, [...fields, 'reassignment_count'], HANDOVER_LIMITS.reassigned) : null,
     waiting?.values.length
-      ? attempt(() => reader.rows(t.table, q('active=true', buildQuery([{ op: 'in', field: 'state', values: waiting.values }], { orderBy: 'opened_at' })), fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), t.table)
+      ? attempt(() => reader.rows(tableInfo.table, q('active=true', buildQuery([{ op: 'in', field: 'state', values: waiting.values }], { orderBy: 'opened_at' })), fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), tableInfo.table)
       : null,
-    attempt(() => reader.rows(t.table, oldestO, fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), t.table),
+    attempt(() => reader.rows(tableInfo.table, oldestO, fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), tableInfo.table),
   ]);
-  return { t, states, openedUrgent, resolvedUrgent, reassigned, waitingRows, oldest, hasResolved: Boolean(resolved), canReassign };
+  return { tableInfo, states, openedUrgent, resolvedUrgent, reassigned, waitingRows, oldest, hasResolved: Boolean(resolved), canReassign };
 }
 
 /** Tickets by sys_id from the task table (display values): { details: Map, failure }. Chunks of 50, bounded. */
@@ -168,7 +168,7 @@ async function lookUp(ctx, sysIds) {
 /** SLAs that breached with their planned end inside the period: a count, and the tickets behind the first rows. */
 async function readBreaches(ctx, tables, since) {
   const { reader, scope, now } = ctx;
-  const base = andQuery('has_breached=true', `task.sys_class_nameIN${tables.map((t) => t.table).join(',')}`, scope.taskQuery, buildQuery([{ op: 'since', field: 'planned_end_time', ms: since }, { op: 'until', field: 'planned_end_time', ms: now }]));
+  const base = andQuery('has_breached=true', `task.sys_class_nameIN${tables.map((tableInfo) => tableInfo.table).join(',')}`, scope.taskQuery, buildQuery([{ op: 'since', field: 'planned_end_time', ms: since }, { op: 'until', field: 'planned_end_time', ms: now }]));
   const total = await verifiedCount(reader, 'task_sla', base, { unseen: SLA_UNSEEN });
   if (!total.ok) return { ok: false, status: total.status, note: total.status === 'denied' ? tm('SLA information is not available to you, so breaches in this period are not shown.') : total.note };
   if (!total.value) return { ok: true, total: 0, tickets: [] };
@@ -177,14 +177,14 @@ async function readBreaches(ctx, tables, since) {
   return { ok: true, total: total.value, tickets: rankSlaTickets(groupSlaByTicket(rows.value, { now })).slice(0, HANDOVER_LIMITS.list) };
 }
 
-const kindOf = (t) => ({ table: t.table, kind: t.meta.singular });
+const kindOf = (tableInfo) => ({ table: tableInfo.table, kind: tableInfo.meta.singular });
 
 /** Merge per-table list reads into one: items (as ticket items), the summed total, and whether any table could not be read. */
 function mergeLists(parts, pick, ctx, sorter, max) {
   const reads = parts.map((p) => ({ p, read: pick(p) })).filter((x) => x.read);
   const ok = reads.filter((x) => x.read.ok);
   if (!ok.length) return { available: false, total: null, items: [], partial: false, capped: false };
-  const items = ok.flatMap(({ p, read }) => read.value.rows.map((row) => ({ ...ticketItem(row, kindOf(p.t), ctx), ...(row.reassignment_count !== undefined ? { reassignments: Number(raw(row.reassignment_count)) || 0 } : {}) })));
+  const items = ok.flatMap(({ p, read }) => read.value.rows.map((row) => ({ ...ticketItem(row, kindOf(p.tableInfo), ctx), ...(row.reassignment_count !== undefined ? { reassignments: Number(raw(row.reassignment_count)) || 0 } : {}) })));
   const unknown = ok.some(({ read }) => read.value.total === null);
   return {
     available: true,
@@ -206,7 +206,7 @@ export async function handoverSection(ctx) {
   const [overview, sla, parts, breaches, approvals] = await Promise.all([
     overviewSection(ctx),
     readSlaSnapshot(ctx),
-    Promise.all(tables.map((t) => readTable(ctx, t, since))),
+    Promise.all(tables.map((tableInfo) => readTable(ctx, tableInfo, since))),
     readBreaches(ctx, tables, since),
     readApprovals(ctx, tables),
   ]);
@@ -215,7 +215,7 @@ export async function handoverSection(ctx) {
   // Why a number is missing, once per table (the Overview section reports its own).
   parts.forEach((p) => {
     const failed = [p.states, p.openedUrgent, p.resolvedUrgent, p.reassigned, p.waitingRows, p.oldest].filter((v) => v && !v.ok);
-    if (failed.length) ctx.access.push({ source: p.t.table, status: failed[0].status, note: `${p.t.meta.label}: ${failed[0].note}` });
+    if (failed.length) ctx.access.push({ source: p.tableInfo.table, status: failed[0].status, note: `${p.tableInfo.meta.label}: ${failed[0].note}` });
   });
   if (!sla.ok) ctx.access.push({ source: 'task_sla', status: sla.status, note: sla.note });
   if (!breaches.ok && breaches.status !== sla.status) ctx.access.push({ source: 'task_sla', status: breaches.status, note: breaches.note });
@@ -228,15 +228,15 @@ export async function handoverSection(ctx) {
   // The tickets behind the most worrying SLAs and the breaches of the period, looked up together.
   const slaTop = sla.ok ? sla.tickets.slice(0, HANDOVER_LIMITS.slaTop) : [];
   const breachTop = breaches.ok ? breaches.tickets : [];
-  const { details, failure } = await lookUp(ctx, [...slaTop, ...breachTop].map((t) => t.sysId));
+  const { details, failure } = await lookUp(ctx, [...slaTop, ...breachTop].map((ticket) => ticket.sysId));
   if (failure) ctx.access.push({ source: 'task', status: failure.status, note: tm('Ticket details are not available to you, so SLA lists show counts only.') });
-  const tableOf = (row) => tables.find((t) => t.table === raw(row.sys_class_name));
+  const tableOf = (row) => tables.find((tableInfo) => tableInfo.table === raw(row.sys_class_name));
   const withDetails = (entries, extra) =>
     entries
       .map((e) => {
         const row = details.get(e.sysId);
-        const t = row && tableOf(row);
-        return t ? { ...strip(ticketItem(row, kindOf(t), ctx)), ...extra(e) } : null;
+        const tableInfo = row && tableOf(row);
+        return tableInfo ? { ...strip(ticketItem(row, kindOf(tableInfo), ctx)), ...extra(e) } : null;
       })
       .filter(Boolean);
 
@@ -255,13 +255,13 @@ export async function handoverSection(ctx) {
   const sumKind = (kind) => byState.filter((s) => s.kind === kind).reduce((n, s) => n + s.count, 0);
   const waitingOldest = parts
     .filter((p) => p.waitingRows?.ok)
-    .flatMap((p) => p.waitingRows.value.map((row) => ticketItem(row, kindOf(p.t), ctx)))
+    .flatMap((p) => p.waitingRows.value.map((row) => ticketItem(row, kindOf(p.tableInfo), ctx)))
     .sort(byAge)
     .slice(0, HANDOVER_LIMITS.waitingOldest)
     .map(strip);
   const oldest = parts
     .filter((p) => p.oldest.ok)
-    .flatMap((p) => p.oldest.value.map((row) => ticketItem(row, kindOf(p.t), ctx)))
+    .flatMap((p) => p.oldest.value.map((row) => ticketItem(row, kindOf(p.tableInfo), ctx)))
     .sort(byAge)
     .slice(0, HANDOVER_LIMITS.oldest)
     .map(strip);

@@ -1292,7 +1292,7 @@ export function DiagnosticsSection({ eff }) {
         .catch(() => null),
       readAudit().catch(() => []),
     ]);
-    let manifest = {};
+    let manifest;
     try {
       manifest = chrome.runtime.getManifest();
     } catch {

@@ -280,7 +280,7 @@ test('runtime scan: the parts every feature really builds, for every kind, are c
   let built = 0;
   for (const feature of FEATURES) {
     for (const kind of Object.keys(FIELDS_BY_KIND)) {
-      let parts = [];
+      let parts;
       try {
         parts = partsFor(feature, maximalPack(kind));
       } catch {

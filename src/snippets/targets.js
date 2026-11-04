@@ -55,4 +55,4 @@ export function snippetTargets(page) {
 }
 
 /** One target by field name, among those offered for the page; null when that field is not offered here. */
-export const snippetTargetFor = (page, field) => snippetTargets(page).find((target) => target.field === field) || null;
+export const snippetTargetFor = (page, field) => snippetTargets(page).find((offered) => offered.field === field) || null;

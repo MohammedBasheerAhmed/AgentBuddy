@@ -1,7 +1,6 @@
 import { mount, click, makeChrome, settle } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import {
   CAPS, DASHBOARDS_KEY, PRESETS, STORE_VERSION, LAYOUT_KIND, addDashboard, addOrgDashboard, createDashboardStore, defaultState, importLayout,
   offerOrgDashboard, orgDashboard, removeDashboard, renameDashboard, removeWidget,

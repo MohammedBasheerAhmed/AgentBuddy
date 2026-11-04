@@ -25,7 +25,6 @@ if (argv.length && !out) {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const inputs = new Set();
   for (const { entry } of ENTRIES) {
-    // eslint-disable-next-line no-await-in-loop
     const result = await esbuild.build({ ...bundleOptions(root), entryPoints: [path.join(root, entry)], write: false, metafile: true, logLevel: 'silent' });
     Object.keys(result.metafile.inputs).forEach((p) => inputs.add(p));
   }

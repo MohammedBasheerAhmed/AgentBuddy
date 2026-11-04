@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import RecordLink from '../RecordLink.jsx';
 import { CardFrame, ShowMore, EmptyNote } from '../ui/primitives.jsx';
 import { groupQueue, filterChips, passes } from '../../mywork/rank.js';
@@ -11,6 +11,8 @@ import { isolate, t, tn } from '../../i18n/index.js';
 
 // The four cards of the My work screen (N13 My queue, approvals waiting on me, N27 Follow-ups due, N14 Unassigned in my groups).
 // Every one is Insights: facts read with the person's own session, nothing sent anywhere, no AI.
+
+const NO_ITEMS = []; // (one array, so the queue's filtered list and chips are not worked out again on every render)
 
 /** The queue card's one-line summary: "12 open · 2 SLA breached · 3 replied". Pure. */
 export function queueSummary(queue, items) {
@@ -48,7 +50,7 @@ function FullList({ page, table, query, children = t('Open the full list') }) {
 
 export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
   const { queue, groups } = data;
-  const items = queue.items || [];
+  const items = queue.items || NO_ITEMS;
   const shown = useMemo(() => items.filter((i) => passes(i, filter)), [items, filter]);
   const g = useMemo(() => groupQueue(shown, now), [shown, now]);
   const chips = useMemo(() => {
@@ -135,7 +137,7 @@ export function ApprovalsCard({ page, approvals, now }) {
 
 // ---- N27 Follow-ups due -------------------------------------------------------------------------------------------------------
 
-function FollowUpRow({ page, entry, now, onOpen }) {
+function FollowUpRow({ page, entry, onOpen }) {
   const [note, setNote] = useState('');
   const action = followUpAction(entry);
   const copy = async () => {
@@ -195,7 +197,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
       }
     >
       {list.length > 0 ? (
-        <ShowMore items={list} limit={3} render={(entry) => <FollowUpRow key={`${entry.kind}:${entry.item.sysId}`} page={page} entry={entry} now={now} onOpen={onOpen} />} className="ab-list ab-mw-list" />
+        <ShowMore items={list} limit={3} render={(entry) => <FollowUpRow key={`${entry.kind}:${entry.item.sysId}`} page={page} entry={entry} onOpen={onOpen} />} className="ab-list ab-mw-list" />
       ) : (
         <EmptyNote>{known || !data.queue.items.length ? tn(days, 'No customer has waited {n} day for a word from you.', 'No customer has waited {n} days for a word from you.') : t('Follow-ups need the comments on your tickets, which are not visible to you.')}</EmptyNote>
       )}

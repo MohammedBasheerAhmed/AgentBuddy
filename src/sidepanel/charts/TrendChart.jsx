@@ -1,4 +1,3 @@
-import React from 'react';
 import ChartFrame from './ChartFrame.jsx';
 import { markerIsLine, markerPath, seriesToTable, summarizeSeries, toneClass, toneForIndex, trendLayout } from './geometry.js';
 import { useWidth } from './useWidth.js';

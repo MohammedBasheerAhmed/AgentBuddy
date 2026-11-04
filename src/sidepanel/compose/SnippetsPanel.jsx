@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import { SNIPPETS_KEY } from '../../lib/storage.js';
 import { LIMITS, addSnippet, exportSnippets, importSnippets, removeSnippet, searchSnippets, updateSnippet } from '../../snippets/store.js';
@@ -249,7 +249,7 @@ export default function SnippetsPanel({ page, eff, active, onSummary = () => {} 
       setMsg({ kind: 'warn', text: problem });
       return;
     }
-    let text = '';
+    let text;
     try {
       text = await file.text();
     } catch {

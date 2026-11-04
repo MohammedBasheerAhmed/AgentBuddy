@@ -170,8 +170,8 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
     else if (action.type === 'theme') saveSettings({ theme: action.value }).catch(() => {});
     else if (action.type === 'language') saveSettings({ language: action.value }).catch(() => {});
     else if (action.type === 'run' && paletteRecord?.record) {
-      const { record, tabId } = paletteRecord;
-      const request = makeLaunch({ tabId, table: record.table, sysId: record.sysId, featureId: action.featureId, now: Date.now() });
+      const { record, tabId: recordTabId } = paletteRecord;
+      const request = makeLaunch({ tabId: recordTabId, table: record.table, sysId: record.sysId, featureId: action.featureId, now: Date.now() });
       if (!request) return;
       onChoose('ticket');
       onOwnLaunch(request);
@@ -322,7 +322,6 @@ function Panel() {
   useEffect(() => {
     if (launch) choose('ticket');
     // choose only sets state and a per-tab convenience; it does not need to be a dependency
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launch]);
 
   if (!eff.ready) {

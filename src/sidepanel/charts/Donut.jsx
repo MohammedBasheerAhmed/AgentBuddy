@@ -1,4 +1,3 @@
-import React from 'react';
 import ChartFrame, { PatternDefs, Swatch, patternId, useUid } from './ChartFrame.jsx';
 import { donutArcs, formatNumber, itemsToTable, percent, summarizeItems, toneClass, toneForIndex } from './geometry.js';
 import DrillLink, { hrefOf } from './DrillLink.jsx';

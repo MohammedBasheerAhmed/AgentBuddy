@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { resultTables } from '../../reports/engine/index.js';
 import { exportFileName, maskTables, tablesToCsv, tablesToTsv } from '../../reports/exportTables.js';
 import { copyText, downloadText } from './download.js';

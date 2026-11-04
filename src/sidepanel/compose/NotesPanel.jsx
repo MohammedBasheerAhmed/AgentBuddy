@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AiKeyNote from '../AiKeyNote.jsx';
 import { read } from '../ask.js';
 import { useRun } from '../useRun.js';

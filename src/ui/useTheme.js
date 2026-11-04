@@ -9,8 +9,8 @@ export function themeAttribute(setting) {
 }
 
 /** The theme a click on the header's sun/moon button leads to: the opposite of what is on screen now, whatever the setting was. */
-export function nextTheme(setting, systemIsDark) {
-  const showing = themeAttribute(setting) || (systemIsDark ? 'dark' : 'light');
+export function nextTheme(setting, systemDark) {
+  const showing = themeAttribute(setting) || (systemDark ? 'dark' : 'light');
   return showing === 'dark' ? 'light' : 'dark';
 }
 

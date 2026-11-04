@@ -56,7 +56,7 @@ function freshId(used, options) {
   return `s${n}`;
 }
 
-const oneLine = (t) => t.replace(/\s+/g, ' ').trim();
+const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
 
 /**
  * Cleans one snippet-like value. Returns { snippet, errors }; snippet is null when there are errors.
@@ -146,7 +146,7 @@ export function removeSnippet(list, id) {
 
 // ---- Search --------------------------------------------------------------------------------------------------------
 
-const bare = (t) => t.replace(/^\/+/, '');
+const bare = (text) => text.replace(/^\/+/, '');
 
 // Score of one search word against one snippet: shortcut matches beat title matches beat body matches.
 function scoreTerm(term, title, shortcut, body) {
@@ -177,7 +177,7 @@ export function searchSnippets(list, query, options) {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 8)
-    .map((t) => t.slice(0, 60));
+    .map((term) => term.slice(0, 60));
   const limit = options && Number.isFinite(options.limit) ? Math.max(0, options.limit) : Infinity;
   const byTitle = (a, b) => a.snippet.title.toLowerCase().localeCompare(b.snippet.title.toLowerCase()) || a.at - b.at;
   const rows = [];

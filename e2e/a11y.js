@@ -17,7 +17,6 @@
 //
 // `auditPage` is sent to the page as source: it must not use anything from this file.
 
-/* eslint-disable no-undef -- runs in the page */
 function auditPage(options) {
   const opts = Object.assign({ rules: null, focusLimit: 60, root: null, narrow: false }, options || {});
   // With a dialog open, the page behind it is shut off (inert) and dimmed: only the dialog is looked at.

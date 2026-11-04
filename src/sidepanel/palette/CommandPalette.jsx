@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { focusToRestore, inertOutside } from '../dialogKeys.js';
 import { Icon } from '../ui/icons.jsx';
 import { groupLabel } from './commands.js';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { articleFromPack, checkArticle } from '../../../knowledge/articleChecks.js';
 import { checkOutgoing } from '../../../safeSend/index.js';
 import { ShowMore } from '../../ui/primitives.jsx';

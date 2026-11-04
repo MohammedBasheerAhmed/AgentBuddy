@@ -186,15 +186,24 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
   const watchedPages = new Map();
   /** frameId -> label of the page it belongs to (a page's main frame has the page's target id). */
   const frameLabels = new Map();
-  /** `${requestId} ${url}` -> which source told first ('network', 'fetch'), or 'both' once the note followed a Fetch report. */
+  /** `${requestId} ${url}` -> which source told first ('network', 'fetch'), or 'both' once the other one told of it too. */
   const toldBy = new Map();
   let fetchOnlyWithoutId = 0;
+  let idsUsedAgain = 0;
   const logRequest = (source, key, entry) => {
     if (!key) fetchOnlyWithoutId += 1;
-    else if (toldBy.has(key)) {
-      if (toldBy.get(key) === 'fetch' && source === 'network') toldBy.set(key, 'both');
-      return; // the other source told first
-    } else toldBy.set(key, source);
+    else {
+      const told = toldBy.get(key);
+      // The other source's report of a request already logged: the same request, once. Anything else with a key already seen is a NEW
+      // request: Chrome starts request ids again in a new renderer process, so the same id and address (the most-read record's reads)
+      // come back later in a run. Treating that as "already logged" dropped real reads now and then, and the coverage check failed.
+      if (told && told !== 'both' && told !== source) {
+        toldBy.set(key, 'both');
+        return;
+      }
+      if (told) idsUsedAgain += 1;
+      toldBy.set(key, source);
+    }
     net.push(entry);
   };
   /** Requests known only from the browser side (Fetch): the page's own note never came, as it closed or navigated. */
@@ -267,6 +276,7 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
 
   const ctx = {
     TMP, data, inst, ai, extension: ext, browser, extId, extUrl, net, errors, consoleLog, targets, watchedPages, notelessRequests, swTarget, sleep, KEYS,
+    idsUsedAgain: () => idsUsedAgain,
     origin: inst.origin,
     shots: [],
 

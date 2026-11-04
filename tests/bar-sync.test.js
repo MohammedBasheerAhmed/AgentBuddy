@@ -58,7 +58,6 @@ test('the next looks reuse the answer; the actions are asked again after REASK_M
 test('with the bar switched off (person or policy) the page is never looked at: only the worker is asked, every PROBE_MS', async () => {
   const { sync, calls, advance } = setup({ worker: barOff });
   for (let i = 0; i < 20; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
     const result = await sync.tick();
     assert.equal(result.status, 'hidden');
     advance(2000);
@@ -79,7 +78,6 @@ test('the bar switched off while a record is shown: it disappears at the next an
   const looked = calls.looked;
   for (let i = 0; i < 5; i += 1) {
     advance(2000);
-    // eslint-disable-next-line no-await-in-loop
     await sync.tick();
   }
   assert.equal(calls.looked, looked);
@@ -101,7 +99,6 @@ test('SITE_OFF at the first question: onSiteOff once, the page never looked at, 
   assert.equal((await sync.tick()).status, 'off');
   for (let i = 0; i < 5; i += 1) {
     advance(PROBE_MS);
-    // eslint-disable-next-line no-await-in-loop
     assert.equal((await sync.tick()).status, 'off');
   }
   assert.equal(calls.off, 1);

@@ -12,8 +12,8 @@
 //    Chat facts       (Ticket screen, Insights card) facts about a chat with no AI (who, how many, how long the customer waits); summary
 //                     and replies from AI Assist through the firewall, a chat that lives only in Connect Support tables, a chat with nothing readable and a denied table
 const { findLeaks } = require('../leaks.js');
-const { prepare, errorMark, errorsSince, describeErrors, clickTab, clickButton, waitForText, textOf, checkAiRun, runAfter, waitPanel, settleOnRecord, loadingElements, captureClipboard, clipboardLog } = require('../common.js');
-const { runFeature, openHalf, openScreen, buttonShown, showAction } = require('../ui.js');
+const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun, runAfter, waitPanel, captureClipboard, clipboardLog } = require('../common.js');
+const { openHalf, openScreen, buttonShown, showAction } = require('../ui.js');
 const { openCard, showAllIn } = require('../insightsUi.js');
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];

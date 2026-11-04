@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { OUTAGE_RULE, outageSignal } from '../../../insights/outage.js';
 import { useTicketFacts } from './data.js';

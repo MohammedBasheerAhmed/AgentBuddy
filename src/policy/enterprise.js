@@ -97,7 +97,7 @@ export function aiEndpointFor(provider, aiBaseUrl) {
   const def = PROVIDERS[provider];
   const fail = (error) => ({ baseUrl: '', origin: '', pattern: '', local: false, error });
   if (!def) return fail(`aiProvider must be one of ${Object.keys(PROVIDERS).join(', ')}.`);
-  let address = '';
+  let address;
   if (def.baseUrl) {
     // A preset (Gemini, Mistral, Ollama...) always calls its own fixed address; a different aiBaseUrl could never be used.
     if (aiBaseUrl !== undefined && aiBaseUrl !== def.baseUrl) return fail(`the ${provider} provider always calls ${def.baseUrl}; leave aiBaseUrl out or write exactly that.`);
@@ -194,8 +194,8 @@ export function validateEnterpriseConfig(raw) {
     });
   }
 
-  const wordList = (key, known) => {
-    if (has(key)) policy[key] = checkStringList(key, raw[key], errors, { each: (item) => (known.includes(item) ? '' : `not one of ${known.join(', ')} (lower case).`) });
+  const wordList = (key, allowed) => {
+    if (has(key)) policy[key] = checkStringList(key, raw[key], errors, { each: (item) => (allowed.includes(item) ? '' : `not one of ${allowed.join(', ')} (lower case).`) });
   };
   wordList('disabledSections', HIDEABLE_SCREENS);
   wordList('allowedProfiles', PROFILE_IDS);
@@ -257,7 +257,7 @@ export function validateEnterpriseConfig(raw) {
   }
   let updateUrl = '';
   if (has('updateUrl')) {
-    let url = null;
+    let url;
     try {
       url = typeof raw.updateUrl === 'string' && !/\s/.test(raw.updateUrl) ? new URL(raw.updateUrl) : null;
     } catch {

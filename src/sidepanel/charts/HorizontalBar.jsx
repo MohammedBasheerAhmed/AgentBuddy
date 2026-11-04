@@ -1,4 +1,3 @@
-import React from 'react';
 import ChartFrame from './ChartFrame.jsx';
 import { barLayout, clipLabel, formatNumber, itemsToTable, percent, summarizeItems, toneClass, withUnit } from './geometry.js';
 import DrillLink, { hrefOf } from './DrillLink.jsx';

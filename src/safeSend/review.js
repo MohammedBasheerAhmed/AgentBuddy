@@ -95,7 +95,7 @@ export function linkFindings(text) {
   LINK.lastIndex = 0;
   let m;
   while ((m = LINK.exec(plain)) !== null && out.length < 3) {
-    let host = '';
+    let host;
     try {
       // (the URL parser writes an international name in its xn-- form, so a look-alike name shows as what it is)
       host = new URL(/^www\./i.test(m[0]) ? `https://${m[0]}` : m[0]).hostname;
@@ -103,7 +103,7 @@ export function linkFindings(text) {
       host = '';
     }
     host = host.slice(0, 80) || 'an address that could not be read';
-    if (hosts.has(host)) continue; // eslint-disable-line no-continue
+    if (hosts.has(host)) continue;
     hosts.add(host);
     out.push({ kind: 'LINK', severity: 'low', start: m.index, end: m.index + m[0].length, excerpt: host, advice: tr(LINK_ADVICE) });
   }

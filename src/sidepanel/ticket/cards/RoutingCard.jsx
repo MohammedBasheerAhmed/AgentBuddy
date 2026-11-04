@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { routingVote } from '../../../insights/routing.js';
 import { useLookalikes, useTicketFacts } from './data.js';

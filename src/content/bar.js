@@ -74,7 +74,7 @@ function isShown(el) {
 function modalShown(doc, win) {
   const look = (d) => {
     if (!d) return {};
-    let dialogs = 0;
+    let dialogs;
     try {
       // Only a dialog that is on screen counts: a classic form keeps a hidden light box (display: none, aria-modal="true") in the page
       // all the time, which must not hide the dock.
@@ -255,7 +255,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
     });
     button.addEventListener('pointerleave', hideTip);
     button.addEventListener('focus', () => {
-      let visible = false;
+      let visible;
       try {
         visible = button.matches(':focus-visible');
       } catch {
@@ -466,7 +466,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
   async function refresh() {
     if (stopped || refreshing || doc.hidden) return;
     refreshing = true;
-    let result = null;
+    let result;
     try {
       // A page that rebuilt its document takes the bar with it, and a page script may have moved it: put it back.
       if (host.parentNode !== doc.documentElement) doc.documentElement.append(host);

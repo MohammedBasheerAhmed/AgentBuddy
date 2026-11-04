@@ -85,6 +85,7 @@ export async function sendOpenAI({ apiKey, model = OPENAI_MODEL, messages, baseU
   const dropped = new Set();
   for (;;) {
     try {
+      // eslint-disable-next-line no-await-in-loop -- sent again only after an answer that named a field to leave out
       const data = await requestJson({
         url,
         init: { method: 'POST', headers: { 'Content-Type': 'application/json', ...keyHeaders(keyHeader, apiKey) }, body: JSON.stringify(body) },
