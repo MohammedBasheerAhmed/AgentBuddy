@@ -7,6 +7,7 @@ import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import Notes from './Notes.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { TOPIC_COLUMNS, exportFileName, topicRows } from '../knowledgeScreen/articleInfo.js';
+import { placeOf } from '../knowledgeScreen/shared.js';
 import { shown as shownText } from '../../reports/shown.js';
 import { formatNumber, isolate, t, tn } from '../../i18n/index.js';
 
@@ -41,7 +42,15 @@ export function scopeWords(scope, categories = []) {
   return '';
 }
 
-export default function GapsPanel({ page, active = true, onFound = () => {} }) {
+/**
+ * The radar for the tab and instance `page` is on. Another tab or instance starts it over (placeOf): the categories, topics and
+ * example tickets on screen are the old instance's, and a read still on its way for it is dropped as the old radar goes away.
+ */
+export default function GapsPanel(props) {
+  return <GapsRadar key={placeOf(props.page)} {...props} />;
+}
+
+function GapsRadar({ page, active = true, onFound = () => {} }) {
   const [days, setDays] = useState(60);
   const [incidents, setIncidents] = useState(true);
   const [cases, setCases] = useState(false);

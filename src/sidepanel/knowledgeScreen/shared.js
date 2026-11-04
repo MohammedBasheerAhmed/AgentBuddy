@@ -22,6 +22,12 @@ export function instanceOf(page) {
   }
 }
 
+/**
+ * Where what a knowledge tool read belongs: the tab it was read through and the instance ('7|https://acme.service-now.com'). The
+ * tools start over when it changes: their links, knowledge base ids and categories are the old instance's.
+ */
+export const placeOf = (page) => `${page?.tabId ?? ''}|${instanceOf(page)}`;
+
 const keyOf = (page, name) => `${instanceOf(page)}|${name}`;
 
 export const getShared = (page, name) => values.get(keyOf(page, name)) ?? null;

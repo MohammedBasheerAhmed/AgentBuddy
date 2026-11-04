@@ -19,10 +19,34 @@
 //    meant, and it never presses a button of the page: the person reads the text and presses the portal's own Send.
 //  - A page script can see these events and could answer them. The content script therefore treats every answer as data to
 //    check, never as authority. Do not add an "eval" style action.
+//
+// One bridge per page, the newest. After an extension update the bridge already on an open page keeps running (a page world
+// script cannot be unloaded), and the service worker injects the new one (service-worker.js injectIntoOpenTabs). A bridge of a
+// HIGHER version takes over: it removes the older one's listener (window.__abBridge.stop) and answers from then on. The same or a
+// lower version does nothing. The window keeps only { version, stop }, never the actions. A page script can write that property
+// too; the most it can do with it is keep a bridge from starting, which it could already do by answering the requests itself.
 
 (function () {
-  if (window.__abBridgeInstalled) return;
-  window.__abBridgeInstalled = true;
+  // Raise this with every change to this file, or an open page keeps the bridge it had (and answers "Unknown action." to an action
+  // added since). tests/page-bridge-version.test.js pins the number to the file's contents.
+  var BRIDGE_VERSION = 2;
+
+  // The first bridge kept only a flag, no handle: it counts as version 1, and its listener cannot be removed (see onRequest).
+  var installed = null;
+  var installedVersion = 0;
+  try {
+    installed = window.__abBridge;
+    installedVersion = installed && typeof installed.version === 'number' ? installed.version : window.__abBridgeInstalled ? 1 : 0;
+  } catch (e) {
+    installed = null;
+    installedVersion = 0;
+  }
+  if (installedVersion >= BRIDGE_VERSION) return;
+  try {
+    if (installed && typeof installed.stop === 'function') installed.stop();
+  } catch (e) {
+    /* the older bridge is gone already */
+  }
 
   var REQUEST_EVENT = 'ab-page-request';
   var RESPONSE_EVENT = 'ab-page-response';
@@ -843,9 +867,12 @@
     },
   };
 
-  document.addEventListener(REQUEST_EVENT, function (event) {
+  function onRequest(event) {
     var detail = event && event.detail;
     if (!detail || typeof detail !== 'object' || typeof detail.id !== 'string' || typeof detail.action !== 'string') return;
+    // Only this bridge acts on the request. The first bridge cannot be removed, but its listener is an ordinary one, and a capture
+    // listener on the target runs before those: stopped here, it never answers "Unknown action." first, nor fills a field twice.
+    if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
     var respond = function (payload) {
       document.dispatchEvent(new CustomEvent(RESPONSE_EVENT, { detail: Object.assign({ id: detail.id }, payload) }));
     };
@@ -859,5 +886,14 @@
     } catch (err) {
       respond({ ok: false, error: String((err && err.message) || err) });
     }
-  });
+  }
+
+  document.addEventListener(REQUEST_EVENT, onRequest, true);
+  window.__abBridge = {
+    version: BRIDGE_VERSION,
+    // Called by a newer bridge when it takes over (above).
+    stop: function () {
+      document.removeEventListener(REQUEST_EVENT, onRequest, true);
+    },
+  };
 })();

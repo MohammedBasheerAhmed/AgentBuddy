@@ -51,12 +51,14 @@ export function useReportContext({ tabId, blocked, refreshKey, allowSensitive = 
 export function useDashboards({ instance = '', lead = false, org = null } = {}) {
   const storeRef = useRef(null);
   const stateRef = useRef(null);
+  const saves = useRef(0); // the newest save: only its outcome says whether what is on screen is saved
   const [info, setInfo] = useState({ ready: false, state: null, status: 'empty', saveFailed: false });
   // Compared by value: the policy is read again from time to time, and a new object with the same dashboard changes nothing.
   const orgKey = org ? JSON.stringify(org) : '';
 
   useEffect(() => {
     let alive = true;
+    saves.current += 1; // a save of the previous instance's dashboards says nothing about these
     const store = createDashboardStore({ storage: chromeLocalStorage(), instance, lead, org: orgKey ? JSON.parse(orgKey) : null });
     storeRef.current = store;
     store.load().then(({ state, status }) => {
@@ -89,8 +91,11 @@ export function useDashboards({ instance = '', lead = false, org = null } = {}) 
     if (next === current) return;
     stateRef.current = next;
     setInfo((i) => ({ ...i, state: next }));
+    saves.current += 1;
+    const mine = saves.current;
+    // The warning follows the newest save: a change that saves after one that did not clears it (each save writes the whole state).
     storeRef.current?.save(next).then((saved) => {
-      if (!saved) setInfo((i) => ({ ...i, saveFailed: true }));
+      if (mine === saves.current) setInfo((i) => (i.saveFailed === !saved ? i : { ...i, saveFailed: !saved }));
     });
   }, []);
 

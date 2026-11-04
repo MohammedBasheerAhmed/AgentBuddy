@@ -10,6 +10,9 @@ import { activeProfiles } from '../../profiles/profiles.js';
 //   - optional refresh every STALE_MS while the screen is on show (the person switches it on; remembered for the browser session)
 //   - a read that takes longer than SLOW_MS says what it waits for, and can be stopped; "Try again" starts it over. A stopped or
 //     replaced read's late answer is dropped. While a new read runs, the last answer stays on screen.
+//   - an answer is kept with what it was read for (the tab, the instance, the profiles, the HR rule) and shown only while that is
+//     still so: after the tab moves to another instance, the other instance's tickets are never listed (a click would open their
+//     sys_id here), not while the new read runs, nor after it fails or is stopped.
 //   - nothing is stored: the answer lives in this hook's state and goes when the panel closes.
 
 export const STALE_MS = 5 * 60 * 1000;
@@ -40,7 +43,8 @@ function remember(key, on) {
  *   load(), stop(), setAuto(on) }}
  */
 export function useMyWork({ page, eff, active }) {
-  const [state, setState] = useState({ phase: 'idle', data: null, error: null, readAt: 0, slow: false, stopped: false });
+  // `key`: the argsKey the data was read for.
+  const [state, setState] = useState({ phase: 'idle', data: null, key: '', error: null, readAt: 0, slow: false, stopped: false });
   const [auto, setAutoState] = useState(() => remembered(AUTO_KEY));
   const [now, setNow] = useState(() => Date.now());
   const run = useRef(0);
@@ -74,7 +78,7 @@ export function useMyWork({ page, eff, active }) {
           if (mine === run.current) {
             const at = Date.now();
             setNow(at);
-            setState({ phase: 'ready', data: answer, error: null, readAt: at, slow: false, stopped: false });
+            setState({ phase: 'ready', data: answer, key: argsKey, error: null, readAt: at, slow: false, stopped: false });
           }
           return;
         } catch (err) {
@@ -147,5 +151,7 @@ export function useMyWork({ page, eff, active }) {
     setAutoState(Boolean(on));
   }, []);
 
-  return { ...state, auto, now, load, stop, setAuto };
+  // Data read for another tab, instance, profiles or HR rule is not this view: it is not shown (see the top of this file).
+  const own = state.key === argsKey;
+  return { ...state, data: own ? state.data : null, readAt: own ? state.readAt : 0, phase: !own && state.phase === 'ready' ? 'idle' : state.phase, auto, now, load, stop, setAuto };
 }

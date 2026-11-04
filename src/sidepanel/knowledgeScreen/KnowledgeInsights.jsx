@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { CardFrame } from '../ui/primitives.jsx';
 import DuplicatesPanel from '../knowledge/DuplicatesPanel.jsx';
 import GapsPanel from '../knowledge/GapsPanel.jsx';
 import { shownFor } from '../../profiles/profiles.js';
 import SearchCard from './SearchCard.jsx';
-import { useShared } from './shared.js';
+import { placeOf, useShared } from './shared.js';
 import { KM_PROFILES } from './KnowledgeAssist.jsx';
 import { t } from '../../i18n/index.js';
 
@@ -16,6 +16,11 @@ export default function KnowledgeInsights({ page, eff, active }) {
   const km = shownFor(KM_PROFILES, eff);
   const [open, setOpen] = useState({ duplicates: false, gaps: false });
   const [searchSummary, setSearchSummary] = useState('');
+  // The tools start over on another tab or instance (placeOf); the search's line in the card's title goes with its results.
+  const place = placeOf(page);
+  useEffect(() => {
+    setSearchSummary('');
+  }, [place]);
   const [, setMerge] = useShared(page, 'merge');
   const [, setGaps] = useShared(page, 'gaps');
   const toggle = (id) => (next) => setOpen((o) => ({ ...o, [id]: next }));

@@ -163,6 +163,39 @@ test('the gap radar says how many of how many tickets it looked at, and hands it
   await assist.unmount();
 });
 
+test('another instance in the tab: search results, duplicate groups and topics of the first one are gone, and so are its late answers', async () => {
+  const { fake } = setup();
+  const topic = { id: 'g1', label: 'VPN + disconnect', count: 3, withFix: 2, category: 'Network', ci: '', examples: [{ table: 'incident', sysId: sys('f'), number: 'INC0000001', title: 'VPN drops' }], keywords: ['VPN'] };
+  fake.onRead('kbGaps', () => ({ scanned: 3, total: 3, days: 60, withArticle: 0, link: { known: true }, clusters: [topic], access: [], truncated: false, note: '' }));
+  const ui = await mount(<KnowledgeInsights page={page} eff={eff()} active />);
+  await type(ui.field('Search knowledge'), 'vpn');
+  await click(ui.button('Search'));
+  await openCard(ui, 'Duplicate articles');
+  await choose(ui.field('Knowledge base'), 'kb1');
+  await click(ui.button('Find duplicates'));
+  await openCard(ui, 'Articles to write');
+  await click(ui.button('Find topics'));
+  let text = ui.text();
+  assert.match(text, /KB0000001 Reset your VPN password IT · Network/);
+  assert.match(text, /Compared 2 of 4 titles/);
+  assert.match(text, /Looked at 3 tickets/);
+  assert.match(text, /Knowledge search 1 for "vpn"/);
+  // A search on its way when the tab moves on is dropped too.
+  const held = deferred();
+  fake.onRead('kbSearch', () => held.promise);
+  await click(ui.button('Search'));
+  const other = { ...page, href: 'https://other-company.service-now.com/home' };
+  await ui.rerender(<KnowledgeInsights page={other} eff={eff()} active />);
+  await during(() => held.resolve({ hits: [{ sysId: sys('e'), number: 'KB0000009', title: 'Late answer', excerpt: '', access: [] }], more: false, access: [] }));
+  text = ui.text();
+  for (const old of ['KB0000001', 'KB0000009', 'Compared 2 of 4', 'Looked at 3', 'INC0000001', '1 for "vpn"']) assert.ok(!text.includes(old), `not on the other instance: ${old}`);
+  assert.equal(ui.field('Search knowledge').value, '', 'the search starts over');
+  assert.equal(ui.field('Knowledge base').value, '', 'no knowledge base of the first instance is chosen');
+  assert.equal(fake.readsOf('kbScopes').filter((a) => !a.knowledgeBase).length, 2, 'the other instance\'s knowledge bases are listed');
+  assert.equal(ui.$$('a').filter((a) => (a.getAttribute('href') || '').includes(sys('a'))).length, 0, 'no link to an article of the first instance');
+  await ui.unmount();
+});
+
 test('a read that fails says so in plain words and offers to try again', async () => {
   const { fake } = setup();
   let calls = 0;

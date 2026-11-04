@@ -5,9 +5,13 @@
 //   const store = createInsightStore({ now: Date.now });
 //   store.get(key, load, { maxAgeMs, force }) -> Promise<value>   a fresh value is reused, a read on its way is joined
 //   store.peek(key) -> { value, at, error } | null                 what is there now (a folded card draws its summary from it)
-//   store.subscribe(key, fn) -> unsubscribe                       fn(entry) when the key settles
+//   store.subscribe(key, fn) -> unsubscribe                       fn(entry) when a read of the key starts or settles, and
+//                                                                 fn(null) when clear() drops it
+//   store.clear(prefix?)                                          drop every entry (or those whose key starts with prefix)
 //
-// Entries are dropped oldest first beyond `max`, and on clear() (a new page, the panel's Refresh).
+// Entries are dropped oldest first beyond `max`, and on clear(): Settings' "Clear everything" or a site turned off
+// (src/sidepanel/forgetOnClear.js). clear() tells the subscribers of every key it drops, so a card on screen lets go of what it
+// showed then and there.
 
 export function createInsightStore({ now = Date.now, max = 120 } = {}) {
   const entries = new Map(); // key -> { value, error, at, pending }
@@ -74,7 +78,11 @@ export function createInsightStore({ now = Date.now, max = 120 } = {}) {
   }
 
   function clear(prefix = '') {
-    for (const key of [...entries.keys()]) if (!prefix || key.startsWith(prefix)) entries.delete(key);
+    const dropped = [...entries.keys()].filter((key) => !prefix || key.startsWith(prefix));
+    for (const key of dropped) entries.delete(key);
+    // After every entry is gone, so a listener that peeks at another key finds that one gone too. (A read still on its way finds
+    // its entry gone when it answers and stores nothing: see get.)
+    for (const key of dropped) notify(key);
   }
 
   return { get, peek, subscribe, clear, size: () => entries.size };

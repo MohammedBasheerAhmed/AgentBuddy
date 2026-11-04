@@ -54,7 +54,8 @@ export function FormatsSection({ eff, reload }) {
                   idBase={`fmt-${feature.id}`}
                   onSave={async (next) => {
                     await saveFormat(feature.id, next);
-                    reload();
+                    // Read back before the editor says "Saved.", so the mark next to the title ("Your format") already agrees with it.
+                    await reload();
                   }}
                 />
               </details>

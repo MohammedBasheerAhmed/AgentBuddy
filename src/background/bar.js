@@ -17,7 +17,7 @@ import { contentScriptOrigin } from '../lib/senderCheck.js';
 import { kindForTable } from '../context/kinds.js';
 import { TABLE_RE } from '../context/util.js';
 import { effectiveSettings, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
-import { quickActions, quickItems } from '../features/quick.js';
+import { QUICK_CARDS, quickActions, quickItems } from '../features/quick.js';
 import { FEATURE_ID_RE, makeLaunch } from '../lib/launch.js';
 import { aiAvailable } from '../profiles/profiles.js';
 import { resolveProviderConfig } from '../providers/config.js';
@@ -65,7 +65,8 @@ export async function barActions({ table, settings, policy, deps }) {
   const kind = kindForTable(table);
   const aiOn = deps.aiOn ? await Promise.resolve(deps.aiOn(settings, policy)).catch(() => true) : true;
   if (aiOn) return quickActions({ kind, pins: settings.quickPins, policy, aiOn: true }).map((a) => ({ id: a.id, label: t(a.label), ai: true }));
-  const cards = CARD_KINDS.has(kind) ? ['ready', 'related'] : [];
+  // The ids of the cards those items open, from QUICK_CARDS itself ('resolve', 'related'), so the two cannot drift apart again.
+  const cards = CARD_KINDS.has(kind) ? Object.values(QUICK_CARDS).map((c) => c.card) : [];
   return quickItems({ kind, pins: settings.quickPins, policy, ai: false, cards })
     .filter((item) => item.ai === false)
     .map((item) => ({ id: item.id, label: t(item.label), ai: false }));

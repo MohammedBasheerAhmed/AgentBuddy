@@ -5,8 +5,10 @@ import { OPS } from '../src/content/ops/index.js';
 import { createRuntime } from '../src/reports/engine/index.js';
 import { aggregate, ReadOnlyViolation } from '../src/content/tableApi.js';
 import { fakeInstance, cell, group, count, USER, GROUP_A } from './reports-fixtures.js';
+import { resetSessionUser } from '../src/content/sessionToken.js';
 
-const session = { userId: USER, firstName: 'Ann', lastName: 'Lee' };
+// What src/content/sessionToken.js getSessionUser answers (the operations use it, as every other operation does).
+const session = { userId: USER, userName: 'ann.lee', name: 'Ann Lee', roles: [] };
 const make = (instance, getSession = async () => session) => createReportOps({ deps: instance.deps, getSession, runtime: createRuntime() });
 
 test('the operations are registered where the content script looks for them', () => {
@@ -195,4 +197,59 @@ test('aggregate sends a count-only group filter (sysparm_having) and refuses any
   assert.equal(calls.length, 1);
   await aggregate('incident', { groupBy: ['caller_id'] });
   assert.equal(new URL(calls[1].url, 'https://x.example').searchParams.has('sysparm_having'), false);
+});
+
+// ---- who is signed in: the shared reading (audit P2.27) ----------------------------------------------------------------------
+
+// The page bridge, as the content script reaches it: CustomEvents on `document`. It answers getSessionInfo with `info`.
+function pageSays(info) {
+  const listeners = [];
+  globalThis.document = {
+    addEventListener: (type, fn) => listeners.push({ type, fn }),
+    removeEventListener: (type, fn) => {
+      const at = listeners.findIndex((l) => l.type === type && l.fn === fn);
+      if (at !== -1) listeners.splice(at, 1);
+    },
+    dispatchEvent: (event) => {
+      const answer = event.detail.action === 'getSessionInfo' ? { ok: true, result: info } : { ok: false, error: 'Unknown action.' };
+      listeners.filter((l) => l.type === 'ab-page-response').forEach((l) => l.fn({ detail: { id: event.detail.id, ...answer } }));
+      return true;
+    },
+  };
+  globalThis.CustomEvent = class CustomEvent {
+    constructor(type, init) {
+      this.type = type;
+      this.detail = init.detail;
+    }
+  };
+}
+
+test('who is signed in comes from the shared reading of the page: the answer is checked and cut to size', async () => {
+  resetSessionUser();
+  pageSays({ userId: USER.toUpperCase(), userName: 'ann.lee', firstName: 'A'.repeat(5000), lastName: ['Lee'], roles: 'admin' });
+  const ops = createReportOps({ deps: fakeInstance().deps, runtime: createRuntime() });
+  const out = await ops.reportContext({});
+  assert.equal(out.user.name, 'A'.repeat(60), 'a name the page made far too long is cut; a value that is not text is dropped');
+  for (const odd of [{ userId: { toString: () => USER } }, { userId: [USER] }, { userId: 'x'.repeat(32) }, 'text', null]) {
+    resetSessionUser();
+    pageSays(odd);
+    // eslint-disable-next-line no-await-in-loop
+    await assert.rejects(() => ops.reportContext({}), /who is signed in/, JSON.stringify(odd));
+  }
+});
+
+test('a page that names no user id (a portal): one "Me" read through the operation\'s own reads finds the person', async () => {
+  resetSessionUser();
+  pageSays({ userName: 'ann.lee', displayName: 'Ann Lee' });
+  const inst = fakeInstance({
+    rules: [
+      { when: (c) => c.table === 'sys_user' && c.query.startsWith('sys_idDYNAMIC'), then: [{ sys_id: USER, user_name: 'ann.lee', name: 'Ann Lee' }] },
+      { when: (c) => c.table === 'sys_user_group', then: [{ sys_id: GROUP_A, name: 'Service Desk' }] },
+    ],
+  });
+  const ops = createReportOps({ deps: fakeInstance().deps, runtime: createRuntime() });
+  // (the reads handed to the operation by the content script, src/content/reads.js: guarded by the policy)
+  const out = await ops.reportGroups({ search: 'desk' }, { deps: { ...inst.deps, isBlocked: () => false } });
+  assert.deepEqual(out.groups, [{ id: GROUP_A, name: 'Service Desk' }]);
+  assert.equal(inst.callsTo('sys_user', 'sys_idDYNAMIC').length, 1, 'the person was found with one read, through the reads the operation was given');
 });

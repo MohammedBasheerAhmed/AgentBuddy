@@ -6,6 +6,7 @@ import Notes from '../knowledge/Notes.jsx';
 import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
 import { copyText } from '../reports/download.js';
 import { articleShareUrl, freshnessOf } from './articleInfo.js';
+import { placeOf } from './shared.js';
 import { isolate, t } from '../../i18n/index.js';
 
 // N23 Knowledge search, for everyone: a search box over the published articles the person can read, ranked like the ticket's
@@ -36,7 +37,15 @@ function Hit({ page, hit, copied, onCopy }) {
   );
 }
 
-export default function SearchCard({ page, active, onSummary = () => {} }) {
+/**
+ * The search for the tab and instance `page` is on. Another tab or instance starts it over (placeOf): the results on screen are
+ * the old instance's articles, and a search still on its way for it is dropped as the old card goes away.
+ */
+export default function SearchCard(props) {
+  return <Search key={placeOf(props.page)} {...props} />;
+}
+
+function Search({ page, active, onSummary = () => {} }) {
   const [query, setQuery] = useState('');
   const [state, setState] = useState(null); // { phase: 'reading' | 'ready' | 'error', data, error, asked, slow }
   const [copied, setCopied] = useState('');

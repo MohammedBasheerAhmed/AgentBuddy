@@ -73,10 +73,18 @@ const kindText = (kind) => {
  *   withhold  { note, findings } holds the text back behind a warning until the person chooses to see it (the coaching snapshot,
  *             when its answer seems to rate individuals)
  */
-export function AiResult({ run, eff, featureId, heading, notice = [], withhold = null }) {
+export function AiResult(props) {
+  const { run, featureId } = props;
+  if (run.phase !== 'done' || run.result === null || run.active?.id !== featureId) return null;
+  // One card per answer: it goes away while the next answer is made, and a new answer is a new card even when no render came in
+  // between. "Show the answer anyway" (and the Copy note) belong to the answer they were pressed on; the next answer, which may rate
+  // people too, is held back again.
+  return <AiAnswer key={run.result} {...props} />;
+}
+
+function AiAnswer({ run, eff, featureId, heading, notice = [], withhold = null }) {
   const [note, setNote] = useState('');
   const [shown, setShown] = useState(false);
-  if (run.phase !== 'done' || run.result === null || run.active?.id !== featureId) return null;
 
   const held = Boolean(withhold) && !shown;
   const config = resolveProviderConfig(eff.values, eff.apiKey);

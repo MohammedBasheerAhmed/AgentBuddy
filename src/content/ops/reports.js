@@ -12,7 +12,7 @@
 // The one cache and the one limit on parallel requests live here, so every widget on every open dashboard shares them.
 import { SYS_ID_RE, TABLE_RE, oneLine } from '../../context/util.js';
 import { queryTable, aggregate } from '../tableApi.js';
-import { tryCallPage } from '../pageBridge.js';
+import { getSessionUser } from '../sessionToken.js';
 import { blockedError } from '../policyGuard.js';
 import { createRuntime, runReport } from '../../reports/engine/index.js';
 import { createReader, attempt } from '../../reports/engine/reader.js';
@@ -83,7 +83,7 @@ export function cleanBlocked(input) {
 }
 
 /**
- * @param {{ deps?: object, getSession?: () => Promise<{userId?: string, firstName?: string, lastName?: string}|null>, runtime?: object }} [injected]
+ * @param {{ deps?: object, getSession?: (deps?: object) => Promise<{userId: string, name: string}|null>, runtime?: object }} [injected]
  *   Replaced by fakes in tests/reports-ops.test.js.
  */
 /**
@@ -108,12 +108,14 @@ const zoneJson = (zone) => ({ id: zone.id, source: zone.source, note: zone.note 
  */
 const sensitiveFor = (ctx) => ({ allowSensitive: ctx?.allowSensitive === true, sensitivePrefixes: Array.isArray(ctx?.deps?.sensitivePrefixes) ? ctx.deps.sensitivePrefixes : [] });
 
-export function createReportOps({ deps = { queryTable, aggregate }, getSession = () => tryCallPage('getSessionInfo'), runtime = createRuntime() } = {}) {
-  async function whoAmI() {
-    const session = await getSession();
-    const userId = String(session?.userId || '');
+export function createReportOps({ deps = { queryTable, aggregate }, getSession = getSessionUser, runtime = createRuntime() } = {}) {
+  // Who is signed in, the way every other operation finds out (src/content/sessionToken.js getSessionUser): the page's answer checked
+  // and cut to size, and on a page that names no user id (a portal) one "Me" read through the guarded reads the operation was given.
+  async function whoAmI(ctx) {
+    const session = await getSession(ctx?.deps);
+    const userId = typeof session?.userId === 'string' ? session.userId : '';
     if (!SYS_ID_RE.test(userId)) throw new Error('Agent Buddy could not tell who is signed in. Reload the page and try again.');
-    return { userId, name: [session.firstName, session.lastName].filter(Boolean).join(' ') };
+    return { userId, name: typeof session.name === 'string' ? session.name : '' };
   }
 
   const readerFor = (userId, blocked, ctx) => {
@@ -123,7 +125,7 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
 
   return {
     async reportContext(args = {}, ctx) {
-      const { userId, name } = await whoAmI();
+      const { userId, name } = await whoAmI(ctx);
       const reader = readerFor(userId, args.blocked, ctx);
       const sensitive = sensitiveFor(ctx);
       const [tables, snZone] = await Promise.all([probeTables(reader, normalizeTables([], sensitive)), readUserZone(reader, userId)]);
@@ -142,7 +144,7 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
     },
 
     async reportGroups(args = {}, ctx) {
-      const { userId } = await whoAmI();
+      const { userId } = await whoAmI(ctx);
       const search = oneLine(args.search || '', 60);
       if (search.length < 2) return { groups: [], note: 'Type at least two letters of the group name.' };
       const reader = readerFor(userId, args.blocked, ctx);
@@ -153,7 +155,7 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
     },
 
     async reportRun(args = {}, ctx) {
-      const { userId } = await whoAmI();
+      const { userId } = await whoAmI(ctx);
       const kind = args.kind === 'builder' ? 'builder' : 'section';
       if (kind === 'section' && !SECTION_IDS.includes(args.section)) throw new Error('That report does not exist.');
       const request = {
@@ -178,7 +180,7 @@ export function createReportOps({ deps = { queryTable, aggregate }, getSession =
     // Every argument is checked by normalizeCoachingRequest (one group id, a date range of at most 92 days, a sample of 1 to 10,
     // known non-HR tables). The answer is plain JSON; nothing is kept here (the read uses a cache of its own that is dropped).
     async coachingSample(args = {}, ctx) {
-      const { userId } = await whoAmI();
+      const { userId } = await whoAmI(ctx);
       const now = Date.now();
       const request = normalizeCoachingRequest(args, { now });
       const reads = readsFor(deps, ctx);

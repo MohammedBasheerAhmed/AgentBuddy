@@ -8,6 +8,8 @@ import { queueSummary, emptyQueueText } from '../src/sidepanel/mywork/cards.jsx'
 import { statusChip } from '../src/sidepanel/mywork/parts.jsx';
 import { normalizePolicy } from '../src/policy/policy.js';
 import { HOUR, DAY, MINUTE } from '../src/mywork/time.js';
+import { SETTINGS_KEY } from '../src/lib/storage.js';
+import { useEffective } from '../src/sidepanel/useEffective.js';
 
 // The My work screen, driven: what it reads, what it shows, what a click does.
 
@@ -141,7 +143,7 @@ test('follow-ups: a reminder and a status update to copy, the customer\'s answer
   const waiting = item({ title: 'Need logs', work: 'waiting-customer', marker: { ...M, lastMineAt: now - 4 * DAY, lastAt: now - 4 * DAY } });
   const stale = item({ title: 'Slow VPN', marker: { ...M, lastMineAt: now - 6 * DAY, lastAt: now - 6 * DAY } });
   const answered = item({ title: 'Got the logs', work: 'waiting-customer', marker: { ...M, lastMineAt: now - 4 * DAY, lastCustomerAt: now - HOUR, lastAt: now - HOUR, replied: 'customer' } });
-  setup(answer({ items: [waiting, stale, answered] }));
+  const fake = setup(answer({ items: [waiting, stale, answered] }));
   const copied = fakeClipboard();
   const ui = await mount(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => {}} />);
   assert.match(ui.text(), /Follow-ups due 2 due · 1 replied/);
@@ -154,8 +156,37 @@ test('follow-ups: a reminder and a status update to copy, the customer\'s answer
   await click(ui.button('Copy status update'));
   assert.match(copied[1], /A quick update on .* \(Slow VPN\)/);
   assert.equal(ui.$('label.ab-mw-sr').textContent.trim(), 'Follow up after');
+  // The period is the setting: choosing it here saves the setting, and the screen shows what the setting says.
   await choose(ui.$('select'), '5');
+  assert.equal((await fake.chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY].followUpDays, 5);
+  await ui.rerender(<MyWorkView page={page} eff={eff({ followUpDays: 5 })} active onOpenTicket={() => {}} />);
   assert.match(ui.text(), /Follow-ups due 1 due · 1 replied/);
+  await ui.unmount();
+});
+
+test('follow-ups: the period follows the setting, also when it changes in Settings while the screen is open', async () => {
+  const now = Date.now();
+  const four = item({ title: 'Four days', marker: { ...M, lastMineAt: now - 4 * DAY, lastAt: now - 4 * DAY } });
+  const fake = setup(answer({ items: [four] }));
+  // The panel's own settings, as App passes them: read from storage and read again when storage changes.
+  function Panel() {
+    const live = useEffective();
+    return live.ready ? <MyWorkView page={page} eff={live} active onOpenTicket={() => {}} /> : null;
+  }
+  await fake.chrome.storage.local.set({ [SETTINGS_KEY]: { followUpDays: 5 } });
+  const ui = await mount(<Panel />);
+  assert.equal(ui.$('select').value, '5');
+  assert.match(ui.text(), /No customer has waited 5 days for a word from you\./);
+  // Changed on the Settings page while the panel is open.
+  await during(() => fake.chrome.storage.local.set({ [SETTINGS_KEY]: { followUpDays: 3 } }));
+  assert.equal(ui.$('select').value, '3');
+  assert.match(ui.text(), /Follow-ups due 1 due/);
+  // Changed here: the setting is saved, and the screen follows it.
+  await choose(ui.$('select'), '7');
+  await settle();
+  assert.equal((await fake.chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY].followUpDays, 7);
+  assert.equal(ui.$('select').value, '7');
+  assert.match(ui.text(), /No customer has waited 7 days for a word from you\./);
   await ui.unmount();
 });
 
@@ -254,6 +285,37 @@ test('a failed read is a plain sentence with "Try again"', async () => {
   const ui = await mount(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => {}} />);
   assert.match(ui.$('.ab-note-danger').textContent, /session has expired/);
   assert.ok(ui.hasButton('Try again'));
+  await ui.unmount();
+});
+
+test('another instance in the tab: the first instance\'s tickets are not listed while it reads, after it fails, or after Stop', async () => {
+  const pageB = { ...page, href: 'https://other-company.service-now.com/now/nav/ui/home' };
+  const mineOnA = item({ title: 'Instance A ticket' });
+  let onB = deferred();
+  let calls = 0;
+  setup(() => {
+    calls += 1;
+    return calls === 1 ? answer({ items: [mineOnA] }) : onB.promise;
+  });
+  let opened = 0;
+  const ui = await mount(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => { opened += 1; }} />);
+  assert.match(ui.text(), /Instance A ticket/);
+  await ui.rerender(<MyWorkView page={pageB} eff={eff()} active onOpenTicket={() => { opened += 1; }} />);
+  assert.match(ui.text(), /Reading your work/);
+  assert.ok(!/Instance A ticket/.test(ui.text()), 'not while the other instance is read');
+  assert.equal(linkOf(ui, mineOnA.number), undefined, 'nothing to click that would open A\'s sys_id here');
+  await during(() => onB.reject(Object.assign(new Error('You cannot read the task table.'), { code: 'DENIED' })));
+  assert.match(ui.text(), /You cannot read the task table\./);
+  assert.ok(!/Instance A ticket/.test(ui.text()), 'not after the read failed');
+  onB = deferred();
+  await click(ui.button('Try again'));
+  await click(ui.button('Stop'));
+  assert.match(ui.text(), /Stopped before anything was read\./);
+  assert.ok(!/Instance A ticket/.test(ui.text()), 'not after Stop');
+  // Back on the first instance, its own answer is its own again.
+  await ui.rerender(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => { opened += 1; }} />);
+  assert.match(ui.text(), /Instance A ticket/);
+  assert.equal(opened, 0);
   await ui.unmount();
 });
 

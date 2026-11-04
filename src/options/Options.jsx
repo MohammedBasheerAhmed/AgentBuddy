@@ -13,6 +13,7 @@ import { clearAllStored, summarizeStored } from '../lib/storedData.js';
 import { instancePattern, normalizeInstance, isInstanceAllowed, PII_MODES, PREVIEW_MODES, KEY_STORAGE_MODES } from '../policy/policy.js';
 import { allowedProviderIds, dailyTokenLimit, hostAccessMode, looserThanFloor, parseDeployments, parseLimit, unknownDisabledFeatures } from './policyNotes.js';
 import { diagnosticsText } from './diagnostics.js';
+import { settingsChangeMatters } from '../lib/settingsChanges.js';
 import ProfilePicker from './ProfilePicker.jsx';
 import { FormatsSection } from './FormatsSection.jsx';
 import Tabs from '../sidepanel/Tabs.jsx';
@@ -276,28 +277,16 @@ export function ProviderSection({ eff, reload }) {
   const [passphrase, setPassphrase] = useState('');
   const [unlockPass, setUnlockPass] = useState('');
   const [status, setStatus] = useState(null);
-  const [keyMode, setKeyMode] = useState('none');
-  const [needsEncryption, setNeedsEncryption] = useState(false);
   const [busy, setBusy] = useState(''); // '' | 'test' | 'models' | 'key'
   const [showTyped, setShowTyped] = useState(false); // the box shows what was typed instead of dots
   const [showSaved, setShowSaved] = useState(false); // the saved key is shown in full (hides itself again)
   const running = useRef(null); // the AbortController of a test or a list that is running
   const store = () => keyStore(); // made when used, never while drawing
-
-  useEffect(() => {
-    let live = true;
-    const s = store();
-    Promise.all([s.mode(v.provider), s.needsEncryption(v.provider)])
-      .then(([mode, enc]) => {
-        if (!live) return;
-        setKeyMode(mode);
-        setNeedsEncryption(enc);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [v.provider, eff.apiKey, eff.keyLocked]);
+  // Where the saved key is kept comes with the settings (Options' reload reads it with the key), so every action below that moves,
+  // saves, unlocks or removes the key shows its new place as soon as it calls reload(). Read here, from the key string alone, it went
+  // stale: moving a key into memory or encrypting it leaves the key itself unchanged.
+  const keyMode = eff.keyMode || 'none';
+  const needsEncryption = eff.needsEncryption === true;
 
   // The saved key is shown only on request, only for a moment, and never for another provider's key.
   useEffect(() => {
@@ -502,14 +491,15 @@ export function ProviderSection({ eff, reload }) {
               </p>
             </details>
           )}
+          {/* A provider whose address the person may give (a provider has either this or its own fixed address, never both). */}
           {def.userBaseUrl && (
             <div className="ab-field">
               <label className="ab-label" htmlFor="baseurl">{needsAddress ? t('Address (required)') : t('Address (optional)')}</label>
               <DraftInput
                 id="baseurl"
                 className="ab-input ab-mono"
-                value={def.baseUrl || baseUrlTyped}
-                readOnly={!def.userBaseUrl || Boolean(eff.locked.baseUrl)}
+                value={baseUrlTyped}
+                readOnly={Boolean(eff.locked.baseUrl)}
                 placeholder={t('https://your-gateway.example.com/v1')}
                 aria-invalid={!baseCheck.ok ? true : undefined}
                 aria-describedby={describedBy('baseurl-hint', !baseCheck.ok && 'baseurl-error')}
@@ -517,11 +507,9 @@ export function ProviderSection({ eff, reload }) {
               />
               <FieldError id="baseurl-error" text={baseCheck.ok ? '' : baseCheck.error} />
               <span className="ab-hint" id="baseurl-hint">
-                {!def.userBaseUrl
-                  ? t("This provider's own address.")
-                  : needsAddress
-                    ? t('The address of your OpenAI-compatible server, for example http://localhost:1234/v1.')
-                    : t("Leave empty to use the provider's own API. A company gateway goes here (the address it gave out, usually ending in /v1).")}
+                {needsAddress
+                  ? t('The address of your OpenAI-compatible server, for example http://localhost:1234/v1.')
+                  : t("Leave empty to use the provider's own API. A company gateway goes here (the address it gave out, usually ending in /v1).")}
                 {v.provider === 'openai' && isAzureHost(typedHost) ? ` ${t('This looks like an Azure OpenAI address: choose the provider "Azure OpenAI" so the key is sent the way Azure expects.')}` : ''}
               </span>
               <Locked why={eff.locked.baseUrl} />
@@ -712,7 +700,8 @@ export function UsageSection({ eff }) {
 }
 
 // The organisation's piiMode and previewMode are floors: the person may choose anything at or above them, never below. The select
-// stays usable and only the looser choices are switched off, with a note saying what the minimum is.
+// stays usable and only the looser choices are switched off, with a note saying what the minimum is. (The policy marks these two
+// settings locked only together with a floor, src/policy/policy.js effectiveSettings, so the floor is all there is to show.)
 export function PrivacySection({ eff, reload }) {
   const v = eff.values;
   const [status, setStatus] = useState(null);
@@ -737,14 +726,13 @@ export function PrivacySection({ eff, reload }) {
           id="pii"
           className="ab-select"
           value={v.piiMode}
-          disabled={Boolean(eff.locked.piiMode) && !piiFloor}
           aria-describedby={describedBy('pii-hint', piiFloor && 'pii-floor')}
           onChange={(e) => !looserThanFloor('piiMode', e.target.value, piiFloor) && change({ piiMode: e.target.value })}
         >
           {PII_MODES.map((m) => <option key={m} value={m} disabled={looserThanFloor('piiMode', m, piiFloor)}>{tr(PII_LABEL[m])}</option>)}
         </select>
         <span className="ab-hint" id="pii-hint">{tr(PII_TEXT[v.piiMode])}</span>
-        {piiFloor ? <span className="ab-locked" id="pii-floor">{t('Your organisation requires at least {level}.', { level: tr(PII_LABEL[piiFloor]) })}</span> : <Locked why={eff.locked.piiMode} />}
+        {piiFloor ? <span className="ab-locked" id="pii-floor">{t('Your organisation requires at least {level}.', { level: tr(PII_LABEL[piiFloor]) })}</span> : null}
       </div>
       <div className="ab-field">
         <label className="ab-label" htmlFor="preview">{t('Check what is sent')}</label>
@@ -752,13 +740,12 @@ export function PrivacySection({ eff, reload }) {
           id="preview"
           className="ab-select"
           value={v.previewMode}
-          disabled={Boolean(eff.locked.previewMode) && !previewFloor}
           aria-describedby={previewFloor ? 'preview-floor' : undefined}
           onChange={(e) => !looserThanFloor('previewMode', e.target.value, previewFloor) && change({ previewMode: e.target.value, previewSeen: [] })}
         >
           {PREVIEW_MODES.map((m) => <option key={m} value={m} disabled={looserThanFloor('previewMode', m, previewFloor)}>{tr(PREVIEW_TEXT[m])}</option>)}
         </select>
-        {previewFloor ? <span className="ab-locked" id="preview-floor">{t('Your organisation requires at least: {level}.', { level: tr(PREVIEW_TEXT[previewFloor]) })}</span> : <Locked why={eff.locked.previewMode} />}
+        {previewFloor ? <span className="ab-locked" id="preview-floor">{t('Your organisation requires at least: {level}.', { level: tr(PREVIEW_TEXT[previewFloor]) })}</span> : null}
       </div>
       <Status status={status} />
     </section>
@@ -1022,8 +1009,12 @@ function StoredDataSection({ eff, onCleared }) {
     setBusy(true);
     setResult(null);
     try {
-      // The sites you turned on are turned off first, so the browser permission and the page scripts go with the setting.
-      for (const origin of eff.values.instances || []) {
+      // The sites you turned on are turned off first, so the browser permission and the page scripts go with the setting. All of
+      // them, as saved: eff.values.instances leaves out a site the organisation's allowedInstances does not list (turned on before the
+      // policy came), and its browser permission would stay.
+      const saved = await loadSettings().catch(() => null);
+      const sites = Array.isArray(saved?.instances) ? saved.instances.filter((o) => typeof o === 'string') : eff.values.instances || [];
+      for (const origin of sites) {
         try {
           // eslint-disable-next-line no-await-in-loop -- a handful of sites at most
           await chrome.runtime.sendMessage({ type: MSG.DISABLE_INSTANCE, origin });
@@ -1094,11 +1085,16 @@ export function ProfilesSection({ eff, reload }) {
   const v = eff.values;
   const [status, setStatus] = useState(null);
   const aiOffByOrg = eff.policy?.aiEnabled === false;
+  // Throws when the browser did not save: the profile boxes say so themselves (and go back to what is saved), so they never show
+  // "Saved." for a change that was lost.
+  const save = async (patch) => {
+    await saveSettings(patch);
+    setStatus(null);
+    reload();
+  };
   const change = async (patch) => {
     try {
-      await saveSettings(patch);
-      setStatus(null);
-      reload();
+      await save(patch);
     } catch {
       setStatus({ kind: 'danger', text: t('The browser did not save that change. Try again.') });
     }
@@ -1107,7 +1103,7 @@ export function ProfilesSection({ eff, reload }) {
     <section className="ab-section" aria-labelledby="h-profiles">
       <h2 className="ab-h" id="h-profiles">{t('What you work on')}</h2>
       <p className="ab-sub">{t('Agent Buddy shows the tools for this work first. Tick everything that applies.')}</p>
-      <ProfilePicker eff={eff} onSave={change} instant idBase="profile" />
+      <ProfilePicker eff={eff} onSave={save} instant idBase="profile" />
       <label className="ab-check" htmlFor="show-everything">
         <input id="show-everything" type="checkbox" checked={v.showEverything === true} onChange={(e) => change({ showEverything: e.target.checked })} />
         <span>{t('Show everything: every card and action, whatever you work on.')}</span>
@@ -1378,23 +1374,38 @@ export default function Options() {
   }, [lang]);
   const [failed, setFailed] = useState('');
   const [epoch, setEpoch] = useState(0); // bumped after "clear everything" so every section shows what is left
+  // Reads overlap (a save, its storage event and a key move each ask for one) and can finish in any order: only the newest is shown.
+  const newest = useRef(0);
   const reload = useCallback(async () => {
+    newest.current += 1;
+    const mine = newest.current;
     try {
       const [e, raw] = await Promise.all([loadEffective(), loadSettings()]);
       const store = keyStore();
-      const apiKey = e.values.providedApiKey || (await store.load(e.values.provider));
-      const keyLocked = !apiKey && (await store.isLocked(e.values.provider));
+      const provider = e.values.provider;
+      const provided = e.values.providedApiKey;
+      const apiKey = provided || (await store.load(provider));
+      const keyLocked = !apiKey && (await store.isLocked(provider));
+      // Where the saved key is kept, read with the key itself: the line under the key box follows every save, move, unlock and
+      // removal, here or in another page. (A key the organisation supplies has no key box.)
+      const keyMode = provided ? 'none' : await store.mode(provider);
+      const needsEncryption = !provided && (await store.needsEncryption(provider));
+      if (mine !== newest.current) return; // a newer read started meanwhile: what it finds is the one to show
       setFailed('');
       // floors: the policy's minimum for a setting the person may still raise; savedProvider: the person's own choice, before policy.
-      setEff({ values: e.values, locked: e.locked, floors: e.floors || {}, policy: e.policy, apiKey, keyLocked, savedProvider: String(raw?.provider || '') });
+      setEff({ values: e.values, locked: e.locked, floors: e.floors || {}, policy: e.policy, apiKey, keyLocked, keyMode, needsEncryption, savedProvider: String(raw?.provider || '') });
     } catch (err) {
+      if (mine !== newest.current) return;
       setFailed(err?.message || t('The settings could not be read.'));
     }
   }, []);
   useEffect(() => { reload(); }, [reload]);
-  // Another page (the side panel, a second settings tab) changed something: show it.
+  // Another page (the side panel, a second settings tab) changed the settings, the policy or the key: show it. Only those
+  // (src/lib/settingsChanges.js): the logs written on every AI call change nothing here.
   useEffect(() => {
-    const onChange = () => reload();
+    const onChange = (changes, areaName) => {
+      if (settingsChangeMatters(changes, areaName)) reload();
+    };
     try {
       chrome.storage.onChanged.addListener(onChange);
       return () => chrome.storage.onChanged.removeListener(onChange);
@@ -1455,7 +1466,8 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
         <PrivacySection eff={eff} reload={reload} />
         <PolicySection eff={eff} />
         <AuditSection key={`audit-${epoch}`} eff={eff} />
-        <StoredDataSection key={`stored-${epoch}`} eff={eff} onCleared={onCleared} />
+        {/* Not keyed by epoch like its neighbours: it reads what is left itself after clearing, and a new one would lose the outcome. */}
+        <StoredDataSection eff={eff} onCleared={onCleared} />
         <DiagnosticsSection eff={eff} />
         <section className="ab-section" aria-labelledby="h-leaves">
           <h2 className="ab-h" id="h-leaves">{t('What leaves your computer')}</h2>

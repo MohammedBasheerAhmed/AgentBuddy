@@ -22,20 +22,23 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * Run one report through the content script of the ServiceNow tab and keep its result. The request is plain JSON
  * ({ kind, section, scope, tables, params, config, blocked }); the answer is the JSON the engine returns. A newer request
  * (or a new refreshKey) replaces an older one, and an answer that arrives late for an old request is ignored. While a new
- * answer is on its way the old one stays on screen, marked busy.
+ * answer is on its way the old one stays on screen, marked busy. When the read fails, the old answer stays (with its error) only
+ * if it answered the same request (a refresh): numbers of another scope or other tables never sit under the new choice, where
+ * Export and "Explain this dashboard" would take them for it.
  *
  * request === null means "nothing to read yet" (for example no table is available).
  * limiter (optional) lets the dashboard start only a couple of widgets at a time, in order, so a widget's time limit is not
  * spent waiting behind the others; a widget that was closed or replaced while it waited never starts.
  */
 export function useReport({ tabId, request, refreshKey = 0, limiter }) {
-  const [state, setState] = useState({ phase: request ? 'loading' : 'idle', result: null, error: '', code: '' });
+  // `answered`: the request (its key) the result is the answer to.
+  const [state, setState] = useState({ phase: request ? 'loading' : 'idle', result: null, answered: '', error: '', code: '' });
   const generation = useRef(0);
   const key = request ? JSON.stringify(request) : '';
 
   const load = useCallback(async () => {
     if (!key) {
-      setState({ phase: 'idle', result: null, error: '', code: '' });
+      setState({ phase: 'idle', result: null, answered: '', error: '', code: '' });
       return;
     }
     generation.current += 1;
@@ -46,7 +49,7 @@ export function useReport({ tabId, request, refreshKey = 0, limiter }) {
       try {
         // eslint-disable-next-line no-await-in-loop -- a retry waits for the page to come back, one try at a time.
         const result = await (limiter ? limiter.run(go) : go());
-        if (result !== STALE && mine === generation.current) setState({ phase: 'ready', result, error: '', code: '' });
+        if (result !== STALE && mine === generation.current) setState({ phase: 'ready', result, answered: key, error: '', code: '' });
         return;
       } catch (err) {
         if (mine !== generation.current) return;
@@ -58,7 +61,10 @@ export function useReport({ tabId, request, refreshKey = 0, limiter }) {
           continue;
         }
         const expired = err.code === 'SESSION_EXPIRED';
-        setState((s) => ({ phase: 'error', result: expired ? null : s.result, error: expired ? SESSION_TEXT : err.message || tm('This report could not be read.'), code: err.code || '' }));
+        setState((s) => {
+          const kept = !expired && s.answered === key; // "the last read that worked" only for this same request
+          return { phase: 'error', result: kept ? s.result : null, answered: kept ? s.answered : '', error: expired ? SESSION_TEXT : err.message || tm('This report could not be read.'), code: err.code || '' };
+        });
         return;
       }
     }

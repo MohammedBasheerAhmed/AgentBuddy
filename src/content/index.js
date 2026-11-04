@@ -15,9 +15,9 @@ import { MSG, toWireError } from '../lib/messages.js';
 import { tryCallPage, callPage } from './pageBridge.js';
 import { getSessionUser } from './sessionToken.js';
 import { queryTable } from './tableApi.js';
-import { parseNewRecordRef, parseRecordRef, kindForTable } from '../context/kinds.js';
-import { resolveRealClass } from '../context/pack.js';
-import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
+import { parseNewRecordRef, kindForTable } from '../context/kinds.js';
+import { TABLE_RE } from '../context/util.js';
+import { makeRecordResolver } from './recordResolver.js';
 import { handleRead } from './reads.js';
 import { readHeader } from './header.js';
 import { portalInfo, surfaceOf } from '../context/surface.js';
@@ -47,18 +47,12 @@ if (decision !== 'skip') {
   // (a copy that lives in another isolated world cannot be reached through window: it hears this and checks its own context)
   document.dispatchEvent(new CustomEvent(TAKEOVER_EVENT));
 
-  // number -> sys_id cache, so an address that carries only a number (Workspace, portal) is looked up once. A number is the same
-  // record whatever page it is on, so this is the one thing remembered between requests. A number that found nothing is not
-  // asked again for 30 seconds (the panel asks every few seconds).
-  const numberCache = new Map();
-  const numberMisses = new Map();
-  const MISS_MS = 30000;
-  const MAX_REMEMBERED = 200; // a portal tab open all week does not grow the cache without end
-
-  const remember = (map, key, value) => {
-    if (map.size >= MAX_REMEMBERED) map.delete(map.keys().next().value);
-    map.set(key, value);
-  };
+  // Which record the page shows (src/content/recordResolver.js): the form, or the address. A number's sys_id and a `task` record's real
+  // class are looked up through the policy guard and remembered; a lookup that found nothing is not repeated for 30 seconds.
+  // resolveRecord(href, known, policy): `known` is the form's description when the caller has asked the page already; `policy` the
+  // panel's, sent with PAGE_STATE and READ (the bar and Insert send none: the managed policy applies on its own).
+  const records = makeRecordResolver({ guardedDeps: (policy) => policyGuard.deps({ queryTable }, policy), formMeta: () => tryCallPage('getFormMeta') });
+  const { resolveRecord } = records;
 
   // Once the site is turned off (the service worker says so) this script does nothing more until the page is reloaded: the bar goes,
   // the panel gets no answers, nothing is read. Turning the site on again injects a fresh script.
@@ -71,9 +65,7 @@ if (decision !== 'skip') {
     document.removeEventListener(TAKEOVER_EVENT, onTakeover);
     document.removeEventListener('click', onPress, true);
     document.removeEventListener('keydown', onKey, true);
-    numberCache.clear();
-    numberMisses.clear();
-    realClasses.clear();
+    records.clear();
     bar?.stop();
   }
   // A newer copy arrived. Only a copy whose extension context is gone steps down: a page script can send the same event, and must not
@@ -82,50 +74,6 @@ if (decision !== 'skip') {
     if (!alive()) retire();
   }
   document.addEventListener(TAKEOVER_EVENT, onTakeover);
-
-  // A record opened through the base class (/task.do?sys_id=..., a Workspace /record/task/<id>) is really an incident, a case, an HR
-  // case...: its real class is looked up once (one small read through the policy guard), so the panel's header, the bar's actions and
-  // the record's kind are those of the real type. A class that cannot be looked up stays 'task' (the pack read then treats the record
-  // as sensitive). sys_id -> class, bounded like the number cache. `policy`: the panel's, when it sent one (the guard merges it).
-  const realClasses = new Map();
-  async function realClassOf(table, sysId, policy) {
-    if (table !== 'task') return table;
-    if (realClasses.has(sysId)) return realClasses.get(sysId);
-    const guarded = await policyGuard.deps({ queryTable }, policy);
-    const found = await resolveRealClass({ table, sysId }, guarded).catch(() => ({ table, unresolved: true }));
-    if (found.unresolved || !TABLE_RE.test(found.table)) return table;
-    remember(realClasses, sysId, found.table);
-    return found.table;
-  }
-
-  // `known`: the form's description when the caller has already asked the page for it (pageState asks once for everything).
-  // `policy`: the panel's, sent with PAGE_STATE and READ; the bar and Insert send none (the managed policy applies on its own).
-  async function resolveRecord(href, known, policy) {
-    // 1) The classic form knows exactly which record it shows.
-    const meta = known === undefined ? await tryCallPage('getFormMeta') : known;
-    if (meta?.table && SYS_ID_RE.test(meta.sysId || '') && !meta.isNewRecord && TABLE_RE.test(meta.table)) {
-      const table = await realClassOf(meta.table, meta.sysId, policy);
-      return { table, sysId: meta.sysId, number: meta.number || '', kind: kindForTable(table) };
-    }
-    // 2) Workspaces, Next Experience and portals: the address (read afresh on every request).
-    const ref = parseRecordRef(href);
-    if (!ref || !TABLE_RE.test(ref.table || '')) return null;
-    let { sysId, number } = ref;
-    if (!sysId && number) {
-      const cacheKey = `${ref.table}:${number}`;
-      if (!numberCache.has(cacheKey) && Date.now() - (numberMisses.get(cacheKey) || 0) > MISS_MS) {
-        // (through the policy guard: a blocked table is not looked up)
-        const guarded = await policyGuard.deps({ queryTable }, policy);
-        const rows = await guarded.queryTable(ref.table, `number=${number}`, ['sys_id', 'number'], { limit: 1 }).catch(() => []);
-        if (rows[0]?.sys_id) remember(numberCache, cacheKey, rows[0].sys_id);
-        else remember(numberMisses, cacheKey, Date.now());
-      }
-      sysId = numberCache.get(cacheKey) || '';
-    }
-    if (!SYS_ID_RE.test(sysId || '')) return null;
-    const table = await realClassOf(ref.table, sysId, policy);
-    return { table, sysId, number: number || '', kind: kindForTable(table) };
-  }
 
   // A blank form (new incident, new article...): there is no record yet, but the table is known. The form says so through g_form
   // (classic, and Next Experience where the bridge reaches the form's frame); otherwise the address does (sys_id=-1), which covers a

@@ -155,19 +155,21 @@ test('the quick bar: state-aware, AI items marked, an Insights item opens its ca
   const bar = (props) => <QuickBar page={page} eff={eff()} record={rec('incident')} header={head('Resolved')} busy={false} aiReady onRun={(f) => ran.push(f.id)} onShowCard={(id) => cards.push(id)} {...props} />;
   const ui = await mount(bar({}));
   const labels = () => ui.$$('.ab-quick-actions button').map((b) => b.textContent);
-  // Resolved: wrap up first. ('ready', the Insights agent's "Ready to resolve?" card, leads here once it exists: quick-bar-view tests.)
-  assert.deepEqual(labels(), ['Resolution notes', 'Knowledge article', 'Draft a reply', 'Summarise']);
+  // Resolved: wrap up first, the "Ready to resolve?" card leading (it opens the card 'resolve'; audit P2.4: it was never shown).
+  assert.deepEqual(labels(), ['Ready to resolve?', 'Resolution notes', 'Knowledge article', 'Draft a reply']);
+  await click(ui.button('Ready to resolve?'));
+  assert.deepEqual(cards, ['resolve']);
   await click(ui.button('Resolution notes'));
   assert.deepEqual(ran, ['resolution-notes']);
   // In progress: reply first, and the Related tickets card one click away
   await ui.rerender(bar({ header: head('In Progress') }));
   assert.deepEqual(labels(), ['Draft a reply', 'Summarise', 'Next best action', 'Related tickets']);
   await click(ui.button('Related tickets'));
-  assert.deepEqual(cards, ['related']);
+  assert.deepEqual(cards, ['resolve', 'related']);
   await ui.rerender(bar({ aiReady: false }));
-  assert.deepEqual(labels(), ['Related tickets']);
+  assert.deepEqual(labels(), ['Ready to resolve?', 'Related tickets']);
   await ui.rerender(bar({ eff: eff({ values: { aiSkipped: true } }) }));
-  assert.deepEqual(labels(), ['Related tickets'], '"Skip AI for now": no AI items');
+  assert.deepEqual(labels(), ['Ready to resolve?', 'Related tickets'], '"Skip AI for now": no AI items');
   await ui.unmount();
 });
 
@@ -178,6 +180,7 @@ test('the quick bar holds no action that cannot run on this record (closed ticke
   assert.deepEqual(ui.$$('.ab-quick-actions button').map((b) => b.textContent), ['Summarise']);
   await ui.unmount();
   const ui2 = await mount(<QuickBar page={page} eff={eff({ policy: { blockedTables: ['incident'] } })} record={rec('incident')} header={head('In Progress')} aiReady onRun={() => {}} onShowCard={() => {}} />);
-  assert.deepEqual(ui2.$$('.ab-quick-actions button').map((b) => b.textContent), ['Related tickets']);
+  // (with no AI the cards are all there is: both of them, the one for the stage first)
+  assert.deepEqual(ui2.$$('.ab-quick-actions button').map((b) => b.textContent), ['Related tickets', 'Ready to resolve?']);
   await ui2.unmount();
 });

@@ -17,6 +17,16 @@ export function isPaletteKey(e) {
 }
 
 /**
+ * Is another modal dialog of the panel on screen (the check before anything is sent to the AI)? Then the palette key does nothing:
+ * that dialog holds the keyboard and the rest of the panel, and the palette must not open over it. A preview waiting in a part of
+ * the panel that is hidden does not count (it holds nothing until it is shown).
+ */
+export function modalOnScreen(doc = globalThis.document) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return false;
+  return Array.from(doc.querySelectorAll('[role="dialog"][aria-modal="true"]')).some((el) => !el.closest('.ab-palette') && el.getClientRects().length > 0);
+}
+
+/**
  * The command palette: a box over the panel where the person types what they want ("reply", "team", "dark") and presses Enter.
  * It is a combobox over a listbox: the focus stays in the box and the highlighted command is named by aria-activedescendant, so a screen
  * reader says each command as the arrow keys move over it. The rest of the panel is inert while it is open and gets the focus back after.

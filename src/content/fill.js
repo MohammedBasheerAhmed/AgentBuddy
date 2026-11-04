@@ -14,6 +14,7 @@
 
 import { FILL_REASONS, emailClientTarget, fieldMeta, isFillable, matchesExpect, parseExpect, toOneLine, toSafeHtml } from '../lib/fillable.js';
 import { tryCallPage } from './pageBridge.js';
+import { formShowsRecord } from './formRecord.js';
 
 const FIELD_RE = /^[a-z][a-z0-9_]{0,79}$/;
 export const MAX_INSERT_CHARS = 20000;
@@ -92,9 +93,10 @@ const FORMS = new Set(['gform', 'workspace', 'portal']);
 
 /**
  * @param {{ fields?: { name: string, label?: string }[], expect?: object }} args from the side panel
- * @param {{ callPage: (action: string, args: any[]) => Promise<any> }} deps
+ * @param {{ callPage: (action: string, args: any[]) => Promise<any>, currentRecord?: () => Promise<{table: string, sysId: string}|null> }} deps
+ *   currentRecord: the record the content script finds on the page (as FILL_FIELD checks it), which settles a form of `task`
  */
-export async function checkInsertTargets(args, { callPage }) {
+export async function checkInsertTargets(args, { callPage, currentRecord = null }) {
   const asked = Array.isArray(args?.fields) ? args.fields : null;
   if (!asked || !asked.length || asked.length > MAX_CHECK_FIELDS) throw new Error('Say which fields to check.');
   const names = [];
@@ -118,10 +120,11 @@ export async function checkInsertTargets(args, { callPage }) {
   }
   if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return unknown();
   const form = FORMS.has(answer.form) ? answer.form : 'none';
-  // A classic form says which record it is: a check for another record is no answer at all.
+  // A classic form says which record it is: a check for another record is no answer at all. (A form opened through task.do says
+  // 'task' for an incident: src/content/formRecord.js.)
   let match = true;
   if (form === 'gform' && want && want.kind === 'record') {
-    match = String(answer.table || '').toLowerCase() === want.table && String(answer.sysId || '').toLowerCase() === want.sysId;
+    match = await formShowsRecord({ table: answer.table, sysId: answer.sysId }, want, currentRecord);
   }
   if (!match) return unknown(form, false);
   const fields = {};
@@ -137,8 +140,11 @@ export async function checkInsertTargets(args, { callPage }) {
   return { form, match, fields };
 }
 
-/** The READ operation for src/content/ops/index.js (the lead wires it in: `...FILL_OPS`). No network: it only asks the page bridge. */
+/**
+ * The READ operation for src/content/ops/index.js (`...FILL_OPS`). It only asks the page bridge, and on a form of `task` the content
+ * script's own reading of the page (its real class is looked up once and remembered).
+ */
 export const FILL_OPS = Object.freeze({
-  insertTargets: (args) => checkInsertTargets(args || {}, { callPage: tryCallPage }),
+  insertTargets: (args, ctx) => checkInsertTargets(args || {}, { callPage: tryCallPage, currentRecord: ctx?.currentRecord }),
 });
 

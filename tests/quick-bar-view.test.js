@@ -29,8 +29,10 @@ test('open: the three main actions of an incident, each with the AI mark, none f
   assert.match(markup, />Choose</);
 });
 
+// `cards` are INSIGHT_CARDS ids: "Ready to resolve?" is the card 'resolve' (audit P2.4: these tests used to pass 'ready', a card that
+// does not exist, so they passed while the real bar never showed the item).
 test('state-aware: a resolved incident offers "Ready to resolve?" (Insights, no AI mark) first, then the resolution notes', () => {
-  const markup = html({ over: { stage: 'resolve', cards: ['ready', 'related'], onShowCard: () => {} } });
+  const markup = html({ over: { stage: 'resolve', cards: ['resolve', 'related'], onShowCard: () => {} } });
   assert.deepEqual(labels(markup), ['Ready to resolve?', 'Resolution notes', 'Knowledge article', 'Draft a reply']);
   assert.match(markup, /data-quick="card:ready" class="ab-btn ab-quick-tile ab-quick-insight"/);
   assert.equal((markup.match(/class="ab-ai-badge"/g) || []).length, 3, 'only the AI items carry the mark');
@@ -43,14 +45,14 @@ test('a new incident: understand it and route it; a card the screen does not hav
 });
 
 test('AI not usable now: only the Insights items stay, and they stay usable while an answer is on its way', () => {
-  const markup = html({ over: { stage: 'resolve', cards: ['ready', 'related'], onShowCard: () => {}, aiReady: false, disabled: true } });
+  const markup = html({ over: { stage: 'resolve', cards: ['resolve', 'related'], onShowCard: () => {}, aiReady: false, disabled: true } });
   assert.deepEqual(labels(markup), ['Ready to resolve?', 'Related tickets']);
   assert.ok(!/ab-ai-badge/.test(markup));
   assert.ok(!/disabled=""/.test(markup));
 });
 
 test('Insights items need the shell to open a card: without onShowCard there are none', () => {
-  const markup = html({ over: { stage: 'resolve', cards: ['ready'] } });
+  const markup = html({ over: { stage: 'resolve', cards: ['resolve'] } });
   assert.ok(!markup.includes('Ready to resolve?'));
 });
 

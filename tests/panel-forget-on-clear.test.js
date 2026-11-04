@@ -1,12 +1,14 @@
-import { mount, click, settle, during, makeChrome, fakeAiFetch, fakeClipboard } from './fixtures/panel-dom.js';
+import { mount, click, settle, during, deferred, makeChrome, fakeAiFetch, fakeClipboard } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { forgetsPanelMemory, forgetPanelMemory, useForgetOnClear, watchForClears } from '../src/sidepanel/forgetOnClear.js';
 import { useAnswers, AnswerArea, forgetAnswers } from '../src/sidepanel/ticket/assist/answers/index.js';
 import { store as answerStore } from '../src/sidepanel/ticket/assist/answers/session.js';
-import { insightStore } from '../src/sidepanel/ticket/cards/useInsight.js';
+import { insightStore, useInsight } from '../src/sidepanel/ticket/cards/useInsight.js';
+import { createInsightStore } from '../src/insights/cache.js';
 import { forgetInserts, insertTargets, insertText } from '../src/sidepanel/insertFlow.js';
+import { clearPending, getPending, setPending } from '../src/sidepanel/pendingDraft.js';
 import { featureById } from '../src/features/registry.js';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
 import { SETTINGS_KEY } from '../src/lib/storage.js';
@@ -96,6 +98,65 @@ test('forgetPanelMemory empties the answers, the cards\' reads and what was inse
   assert.equal(insightStore.peek('7|incident:aaa|glance'), null);
   await insertText({ page, target, text: 'Brief three', source, send });
   assert.equal(sent[2].replacing, undefined, 'nothing remembered: the earlier text is not swapped out');
+});
+
+test('forgetPanelMemory drops a draft carried to another form (an article form, or a ticket\'s email form: kept 15 minutes)', () => {
+  clearPending();
+  const feature = featureById('kb-article-draft');
+  assert.equal(setPending({ feature, text: 'How Abel Tuter fixed the VPN', people: [{ name: 'Abel Tuter' }], scan: null, origin: ACME }), true);
+  assert.ok(getPending());
+  forgetPanelMemory();
+  assert.equal(getPending(), null);
+  assert.equal(setPending({ feature: featureById('email-resolution'), text: 'Subject: Fixed\n\nDear Abel Tuter, it works again.', origin: ACME, email: { table: 'incident', sysId: SYS } }), true);
+  forgetPanelMemory();
+  assert.equal(getPending(), null, 'an email draft too');
+});
+
+test('the cards\' store tells its subscribers when clear() drops their key (with a prefix: only those keys)', async () => {
+  const store = createInsightStore();
+  await store.get('7|incident:a|glance', async () => ({ caller: 'Abel Tuter' }));
+  await store.get('8|incident:b|glance', async () => ({ caller: 'Beth Anglin' }));
+  const seen = { a: [], b: [] };
+  store.subscribe('7|incident:a|glance', (entry) => seen.a.push(entry));
+  store.subscribe('8|incident:b|glance', (entry) => seen.b.push(entry));
+  store.clear('7|');
+  assert.deepEqual(seen.a, [null]);
+  assert.deepEqual(seen.b, [], 'another key is left alone');
+  assert.ok(store.peek('8|incident:b|glance'));
+  // a read on its way when everything is cleared: its subscriber hears null, and the late answer is not kept
+  const slow = deferred();
+  const late = store.get('9|incident:c|glance', () => slow.promise);
+  const seenC = [];
+  store.subscribe('9|incident:c|glance', (entry) => seenC.push(entry));
+  store.clear();
+  assert.deepEqual(seen.b, [null]);
+  assert.deepEqual(seenC, [null]);
+  slow.resolve({ caller: 'Abel Tuter' });
+  await late;
+  assert.equal(store.peek('9|incident:c|glance'), null);
+  assert.equal(store.size(), 0);
+});
+
+function Card() {
+  useForgetOnClear();
+  const read = useInsight({ key: '7|incident:aaa|glance', load: async () => ({ caller: 'Abel Tuter' }), active: true });
+  return <p>{read.data?.caller || 'nothing to show'}</p>;
+}
+
+test('in the panel: a card on screen lets go of what it read after "Clear everything"', async () => {
+  insightStore.clear();
+  const fake = makeChrome();
+  globalThis.chrome = fake.chrome;
+  await fake.chrome.storage.local.set({ [SETTINGS_KEY]: { instances: [ACME] } });
+  const ui = await mount(<Card />);
+  try {
+    assert.match(ui.text(), /Abel Tuter/);
+    await during(() => fake.chrome.storage.local.remove(Object.keys(fake.chrome.storage.local.data)));
+    assert.ok(!/Abel Tuter/.test(ui.text()), 'gone from the screen');
+    assert.match(ui.text(), /nothing to show/);
+  } finally {
+    await ui.unmount();
+  }
 });
 
 function Screen({ page, eff }) {

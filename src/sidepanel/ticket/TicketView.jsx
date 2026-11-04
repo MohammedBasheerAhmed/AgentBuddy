@@ -32,7 +32,11 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   const { record } = page;
   const key = `${record.table}:${record.sysId}`;
   const kind = record.kind || 'other';
-  const [head, setHead] = useState({ phase: 'loading', header: null });
+  // The header with the record it was read for. What the screen uses is always this record's: on the first draw after the record
+  // changed (before its own read has even started) there is no header yet, never the last record's, and a read of another record
+  // that answers late (below) is dropped.
+  const [head, setHead] = useState(() => ({ key, phase: 'loading', header: null }));
+  const { phase, header } = head.key === key ? head : { phase: 'loading', header: null };
   const assist = useAnswers({ page, eff, record });
   const aiOn = !aiOffByPolicy(eff);
   const [half, setHalf] = useHalf('ticket', eff);
@@ -60,12 +64,15 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   // meantime: new state, priority, owner). The Glance reads its extra facts itself and follows a new header object.
   const lastRead = useRef(0);
   const readHeader = (fresh) => {
-    if (fresh) setHead({ phase: 'loading', header: null });
+    const forKey = key;
+    if (fresh) setHead({ key: forKey, phase: 'loading', header: null });
     lastRead.current = Date.now();
     let cancelled = false;
+    // An answer lands only while the header is still this record's (the tab may have moved on while it was on its way).
+    const land = (next) => !cancelled && setHead((h) => (h.key === forKey ? { key: forKey, ...next } : h));
     read(page.tabId, 'header', { table: record.table, sysId: record.sysId, allowSensitive: Boolean(eff.policy?.allowHrContent) })
-      .then((h) => !cancelled && setHead({ phase: headerPhase(h), header: h }))
-      .catch(() => !cancelled && fresh && setHead({ phase: 'failed', header: null }));
+      .then((h) => land({ phase: headerPhase(h), header: h }))
+      .catch(() => fresh && land({ phase: 'failed', header: null }));
     return () => {
       cancelled = true;
     };
@@ -76,11 +83,12 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // readHeader only reads; the record's identity is what matters
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, page.tabId, record.table, record.sysId]);
+  // (A new record stops a re-read still on its way: the cleanup. The read above has just been made, so none starts here then.)
   useEffect(() => {
     if (active && lastRead.current && Date.now() - lastRead.current > 60000) return readHeader(false);
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, key]);
   // Saved on the page (N1): the form reloaded after Save, or a Workspace's Save was pressed (formStamp, src/content/index.js). The
   // header of the SAME record is read again, after a short wait so a Workspace has finished saving; a new record is read above.
   const stamp = useRef({ key, value: page.formStamp });
@@ -113,8 +121,9 @@ export default function TicketView({ page, eff, active = true, launch = null, on
       return;
     }
     // The same list the AI Assist half offers for this record (kind, policy, state, profiles); a refusal by the pipeline (HR,
-    // privacy mode) still happens in the run itself, with its audit entry.
-    const feature = offeredFeatures({ record, header: head.header, eff }).find((f) => f.id === launch.featureId);
+    // privacy mode) still happens in the run itself, with its audit entry. Right after the record changed its header is not known
+    // yet (null: a state rule hides nothing then), never the last record's.
+    const feature = offeredFeatures({ record, header, eff }).find((f) => f.id === launch.featureId);
     if (!feature) setLaunchNote(t('That action is not available for this record.'));
     else if (!aiOn) setLaunchNote(t('Your organisation has switched AI Assist off.'));
     else if (!ready) setLaunchNote(aiNeedsText(eff, 'this action') || t('Set up AI Assist in Settings to use this action.'));
@@ -127,12 +136,12 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launch, page.tabId, key]);
 
-  const quickBar = <QuickBar page={page} eff={eff} record={record} header={head.header} busy={assist.busy} aiReady={ready} onRun={(f) => runAi(f)} onShowCard={showCard} />;
+  const quickBar = <QuickBar page={page} eff={eff} record={record} header={header} busy={assist.busy} aiReady={ready} onRun={(f) => runAi(f)} onShowCard={showCard} />;
 
   return (
     <div className="ab-pane ab-ticket">
       <ErrorBoundary resetKey={key}>
-        <Glance page={page} eff={eff} record={record} header={head.header} headPhase={head.phase} quickBar={quickBar} active={active} onShowCard={showCard} />
+        <Glance page={page} eff={eff} record={record} header={header} headPhase={phase} quickBar={quickBar} active={active} onShowCard={showCard} />
       </ErrorBoundary>
       <ProfileHint kind={kind} eff={eff} />
       {launchNote && <p className="ab-note ab-note-warn" role="status">{launchNote}</p>}
@@ -147,13 +156,13 @@ export default function TicketView({ page, eff, active = true, launch = null, on
 
       <HalfPanel idBase="ab-ticket-half" half="insights" hidden={shown !== 'insights'} switched={Boolean(aiOn)}>
         {(visited.has('insights') || shown === 'insights') && (
-          <TicketInsights page={page} eff={eff} record={record} header={head.header} active={active && shown === 'insights'} openCard={openCard} onShowCard={showCard} />
+          <TicketInsights page={page} eff={eff} record={record} header={header} active={active && shown === 'insights'} openCard={openCard} onShowCard={showCard} />
         )}
       </HalfPanel>
       {aiOn && (
         <HalfPanel idBase="ab-ticket-half" half="assist" hidden={shown !== 'assist'}>
           {(visited.has('assist') || shown === 'assist') && (
-            <TicketAssist page={page} eff={eff} record={record} header={head.header} assist={assist} ready={ready} active={active && shown === 'assist'} onRun={runAi} />
+            <TicketAssist page={page} eff={eff} record={record} header={header} assist={assist} ready={ready} active={active && shown === 'assist'} onRun={runAi} />
           )}
         </HalfPanel>
       )}

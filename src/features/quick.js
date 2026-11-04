@@ -116,10 +116,12 @@ export const QUICK_LABELS = Object.freeze({
 });
 
 // Insights items: a card of the Ticket screen's Insights half (src/sidepanel/ticket/cards/index.js INSIGHT_CARDS, by its id). The
-// panel offers one only where that card exists for the record and the person's profiles.
+// panel offers one only where that card exists for the record and the person's profiles. The item's id stays as it was ('card:ready'
+// is in people's pins and in a request the bar on the page leaves); `card` is the id of the card it opens, and
+// tests/quick-actions.test.js checks that every one is a real card.
 export const QUICK_CARDS = Object.freeze({
   'card:ready': Object.freeze({
-    card: 'ready',
+    card: 'resolve',
     get label() {
       return t('Ready to resolve?');
     },
@@ -174,6 +176,9 @@ export const isQuickId = (id) => typeof id === 'string' && Object.prototype.hasO
 /** True for an Insights item id ('card:ready'). */
 export const isQuickCard = (id) => typeof id === 'string' && Object.prototype.hasOwnProperty.call(QUICK_CARDS, id);
 
+/** The Insights item that opens this card ('resolve' -> 'card:ready'), or '' when none does. (Not `card:${id}`: see QUICK_CARDS.) */
+export const quickCardItem = (card) => Object.keys(QUICK_CARDS).find((id) => QUICK_CARDS[id].card === card) || '';
+
 const isKnown = (id) => isQuickId(id) || isQuickCard(id);
 
 /** A person's pins for one kind, cleaned: known ids only (AI or Insights), no repeats, at most MAX_QUICK. Anything else becomes []. */
@@ -224,7 +229,7 @@ export function quickActions({ kind, pins, policy, stage = null, aiOn = true } =
  * @param {{
  *   kind: string, stage?: string|null, pins?: object, policy?: object,
  *   offered?: Iterable<string>,  the AI feature ids this record offers right now (kind, profiles, state rules, policy)
- *   cards?: Iterable<string>,    the Insights card ids this record shows ('ready', 'related')
+ *   cards?: Iterable<string>,    the Insights card ids this record shows ('resolve', 'related')
  *   ai?: boolean,                false: no AI items at all (AI switched off, skipped, or not set up yet)
  * }} input
  * @returns {{ id: string, label: string, ai: boolean, card?: string }[]}

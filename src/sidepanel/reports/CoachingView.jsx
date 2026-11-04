@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import ErrorNote from '../ErrorNote.jsx';
 import { useRun } from '../useRun.js';
@@ -148,6 +148,9 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
   const [fromDay, setFromDay] = useState(() => formatDay(Date.now() - 13 * DAY, new Date().getTimezoneOffset()));
   const [size, setSize] = useState(COACHING_LIMITS.sampleDefault);
   const [sample, setSample] = useState({ phase: 'idle', result: null, error: '' });
+  // The sample read still wanted: a new question (another group, other days, another size) or a new read makes an older read's
+  // answer count for nothing, so a late sample of one group never shows (or goes to the AI) under another.
+  const asked = useRef(0);
   const aiReady = isAiReady(eff);
   const { feature } = featureState(FEATURE_ID, eff.policy);
 
@@ -161,20 +164,24 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
 
   // Anything that changes the question makes the sample (and any answer) out of date.
   const invalidate = () => {
+    asked.current += 1;
     setSample({ phase: 'idle', result: null, error: '' });
     run.reset();
   };
 
   async function pick() {
     if (!group || !range || rangeProblem) return;
+    asked.current += 1;
+    const mine = asked.current;
     run.reset();
     setSample({ phase: 'reading', result: null, error: '' });
     try {
       // HR cases are never coached on: they are not even asked for (the page refuses them too).
       const tables = (env.tables || []).filter((table) => !isSensitiveReportTable(table, eff.policy?.sensitiveTablePrefixes));
       const result = await read(env.page.tabId, 'coachingSample', { groupId: group.id, groupName: group.name, fromMs: range.fromMs, toMs: range.toMs, sample: size, tables, blocked: env.blocked });
-      setSample({ phase: 'ready', result, error: '' });
+      if (mine === asked.current) setSample({ phase: 'ready', result, error: '' });
     } catch (err) {
+      if (mine !== asked.current) return;
       setSample({ phase: 'error', result: null, error: err.code === 'SESSION_EXPIRED' ? t('Your ServiceNow session has expired. Log in again, then try again.') : shownText(err.message) || t('The sample could not be read.') });
     }
   }

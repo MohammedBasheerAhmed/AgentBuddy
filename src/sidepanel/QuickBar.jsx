@@ -1,12 +1,11 @@
 import { useEffect, useId, useState } from 'react';
-import { MAX_QUICK, QUICK_CARDS, QUICK_LABELS, isQuickCard, isQuickId, quickItems } from '../features/quick.js';
+import { MAX_QUICK, QUICK_CARDS, QUICK_LABELS, isQuickId, quickCardItem, quickItems } from '../features/quick.js';
 import { saveSettings } from '../lib/storage.js';
 import { AiBadge } from './ui/primitives.jsx';
 import { Icon, featureIcon } from './ui/icons.jsx';
 import { t, t as tr } from '../i18n/index.js';
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-const cardId = (card) => `card:${card}`;
 
 /**
  * The few actions worth one click, in the ticket at a glance. It holds items from both halves of the Ticket screen, each marked:
@@ -19,7 +18,7 @@ const cardId = (card) => `card:${card}`;
  * has caught up with it.
  *
  * props: kind (of the open record), stage (src/features/stages.js; null when unknown), features (the AI actions this record offers
- *        right now: only these can show), cards (the ids of the Insights cards this record shows: 'ready', 'related'), eff,
+ *        right now: only these can show), cards (the ids of the Insights cards this record shows: 'resolve', 'related'), eff,
  *        disabled (an answer is on its way: the AI items wait), aiReady (false: AI cannot be used now, so no AI items at all),
  *        onRun(feature), onShowCard(cardId)
  */
@@ -42,8 +41,9 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
 
   const aiFeatures = aiReady ? features : [];
   const byId = new Map(aiFeatures.map((f) => [f.id, f]));
-  // Insights items only where the shell can open a card.
-  const shownCards = typeof onShowCard === 'function' ? cards.filter((c) => isQuickCard(cardId(c))) : [];
+  // Insights items only where the shell can open a card. (An item's id is not `card:` + the card's id: "Ready to resolve?" is
+  // 'card:ready' and opens the card 'resolve'. QUICK_CARDS says which item opens which card.)
+  const shownCards = typeof onShowCard === 'function' ? cards.filter((c) => quickCardItem(c)) : [];
   // Only what this record really offers. Pins that name nothing it offers (a hand-edited setting, an action renamed in a later
   // version, an AI action while AI is off) must not leave the bar empty: the suggestions stand in.
   const itemsFor = (own) => quickItems({ kind, stage, pins: own, policy: eff.policy, offered: aiFeatures.map((f) => f.id), cards: shownCards, ai: aiReady });
@@ -51,7 +51,7 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
   const shownIds = items.map((a) => a.id);
   const pinnable = [
     ...aiFeatures.filter((f) => isQuickId(f.id)).map((f) => ({ id: f.id, label: QUICK_LABELS[f.id], ai: true })),
-    ...shownCards.map((c) => ({ id: cardId(c), label: QUICK_CARDS[cardId(c)].label, ai: false })),
+    ...shownCards.map((c) => ({ id: quickCardItem(c), label: QUICK_CARDS[quickCardItem(c)].label, ai: false })),
   ];
   if (!items.length && !pinnable.length) return null;
 

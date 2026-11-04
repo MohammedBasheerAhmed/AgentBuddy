@@ -12,15 +12,16 @@ import { t } from '../i18n/index.js';
  *   eff         the effective settings
  *   roles       the person's ServiceNow roles (from the page), for the suggestion
  *   hints       { managesGroup, hasCatalogWork } (the profileHints read), for the suggestion
- *   onSave(patch) -> Promise   saves { profiles, profilesConfirmed: true }
- *   instant     true: a tick saves at once (Settings); false: one Confirm button (first run)
+ *   onSave(patch) -> Promise   saves { profiles, profilesConfirmed: true }; rejects when it was not saved
+ *   instant     true: a tick saves at once and the boxes then show what was saved; the last one cannot be unticked (Settings).
+ *               false: one Confirm button (first run)
  *   primary     the Confirm button is the screen's one filled button
  *   idBase      a prefix for the boxes' ids (two pickers can be on one page)
  */
 export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, instant = false, primary = true, idBase = 'ab-prof' }) {
   const choices = profileChoices({ eff, roles, hints });
   const [ticked, setTicked] = useState(choices.ticked);
-  const [status, setStatus] = useState(null); // { ok, text } after a save
+  const [status, setStatus] = useState(null); // { kind: 'ok' | 'warn' | 'danger', text } after a save, or a change that was refused
   const suggestionKey = choices.ticked.join(',');
   // A suggestion that arrives later (the hints read answered) is shown, unless the person already changed a box.
   const [touched, setTouched] = useState(false);
@@ -34,21 +35,34 @@ export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, ins
     return <p className="ab-sub">{names.length ? t('Set by your organisation: {names}.', { names: names.join(t(', ')) }) : t('Set by your organisation.')}</p>;
   }
 
-  async function save(list) {
+  // `before`: what the boxes showed before this change (instant mode), shown again when the browser does not save it.
+  async function save(list, before) {
     setStatus(null);
+    const patch = confirmedProfiles(list, choices);
     try {
-      await onSave(confirmedProfiles(list, choices));
-      if (instant) setStatus({ ok: true, text: t('Saved.') });
+      await onSave(patch);
+      if (!instant) return;
+      // The boxes show what was saved. An add-on alone is saved with a main profile (confirmedProfiles): that box is ticked too, and
+      // the note says why.
+      setTicked(patch.profiles);
+      const added = choices.main.find((p) => patch.profiles.includes(p.id) && !list.includes(p.id));
+      setStatus({ kind: 'ok', text: added ? t('Saved. {name} was ticked too, because at least one choice under "I work on" is needed.', { name: added.label }) : t('Saved.') });
     } catch {
-      setStatus({ ok: false, text: t('The browser did not save that. Try again.') });
+      if (instant) setTicked(before);
+      setStatus({ kind: 'danger', text: t('The browser did not save that. Try again.') });
     }
   }
 
   function toggle(id, on) {
     const next = on ? [...new Set([...ticked, id])] : ticked.filter((x) => x !== id);
     setTouched(true);
+    // Each tick is saved at once, and no profile at all cannot be saved: the last box stays ticked, and the note says so.
+    if (instant && !next.length) {
+      setStatus({ kind: 'warn', text: t('Keep at least one ticked.') });
+      return;
+    }
     setTicked(next);
-    if (instant && next.length) save(next);
+    if (instant) save(next, ticked);
   }
 
   const box = (p) => (
@@ -81,7 +95,7 @@ export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, ins
         </div>
       )}
       {status && (
-        <p className={`ab-note${status.ok ? '' : ' ab-note-danger'}`} role="status">
+        <p className={`ab-note${status.kind === 'ok' ? '' : ` ab-note-${status.kind}`}`} role="status">
           {status.text}
         </p>
       )}

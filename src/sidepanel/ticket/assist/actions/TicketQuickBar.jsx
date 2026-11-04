@@ -6,7 +6,7 @@ import { featureBlock, offeredFeatures, recordBlock } from './plan.js';
 
 // The quick-actions bar of the Ticket screen, drawn inside the ticket at a glance (TRACKER.md F6). State-aware: what fits the
 // ticket's stage comes first. Both halves: AI actions (only when AI can be used now, and only those that can run on this record) and
-// Insights cards (opened with onShowCard; their ids are the Insights agent's INSIGHT_CARDS ids, 'ready' and 'related').
+// Insights cards (opened with onShowCard; their ids are the Insights agent's INSIGHT_CARDS ids, 'resolve' and 'related').
 //
 // props: { page, eff, record, header, busy, aiReady, onRun(feature), onShowCard(cardId) }
 

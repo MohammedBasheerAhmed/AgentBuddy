@@ -218,6 +218,8 @@ const REWRITE = {
   'The form could not be read. Paste the text here instead.': 'تعذرت قراءة النموذج. الصق النص هنا بدلا من ذلك.',
   'This text was read from {number}. Open that ticket again, or paste the text here.': 'تمت قراءة هذا النص من {number}. افتح تلك التذكرة مرة أخرى، أو الصق النص هنا.',
   'This text was read from another record. Open that ticket again, or paste the text here.': 'تمت قراءة هذا النص من سجل آخر. افتح تلك التذكرة مرة أخرى، أو الصق النص هنا.',
+  'The form on the page is not {number}. Open that ticket again, or paste the text here.': 'النموذج في الصفحة ليس {number}. افتح تلك التذكرة مرة أخرى، أو الصق النص هنا.',
+  'The form on the page is not the ticket open here. Open that ticket again, or paste the text here.': 'النموذج في الصفحة ليس التذكرة المفتوحة هنا. افتح تلك التذكرة مرة أخرى، أو الصق النص هنا.',
   "The ticket's people could not be read, so only the names you list are hidden. Check the preview.": 'تعذرت قراءة الأشخاص في التذكرة، لذلك يتم إخفاء الأسماء التي تذكرها فقط. راجع المعاينة.',
   'Text to rewrite': 'النص المراد إعادة صياغته',
   'Paste or type the text here': 'الصق النص أو اكتبه هنا',

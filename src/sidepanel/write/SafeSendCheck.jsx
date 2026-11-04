@@ -110,7 +110,17 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
     <div className="ab-write-check">
       <div className="ab-row ab-write-check-row">
         <label className="ab-sub" htmlFor="ab-check-field">{t('Field')}</label>
-        <select id="ab-check-field" className="ab-select ab-compose-select" value={field.name} onChange={(e) => { setFieldName(e.target.value); setState(null); }}>
+        <select
+          id="ab-check-field"
+          className="ab-select ab-compose-select"
+          value={field.name}
+          onChange={(e) => {
+            // A check still on its way is about the field it read: its answer must not show under the new field's name.
+            token.current += 1;
+            setFieldName(e.target.value);
+            setState(null);
+          }}
+        >
           {CHECK_FIELDS.map((f) => (
             <option key={f.name} value={f.name}>{tr(f.label)}</option>
           ))}

@@ -13,6 +13,7 @@ import { LINK_SOURCES, detectLinkColumn } from '../../context/knowledge.js';
 import { kindForTable } from '../../context/kinds.js';
 import { SYS_ID_RE, raw } from '../../context/util.js';
 import { tryCallPage } from '../pageBridge.js';
+import { formShowsRecord } from '../formRecord.js';
 
 /** The only form fields ever read. */
 export const FORM_FIELDS = Object.freeze(['close_notes', 'close_code', 'resolution_code', 'state', 'hold_reason', 'comments', 'work_notes']);
@@ -58,8 +59,8 @@ function keepText(values, names) {
  * Values that are not text, and fields that were not asked for, are dropped.
  * @param {{ table: string, sysId: string }} record the record the panel is showing (validated by the caller)
  * @param {(action: string, args?: any[]) => Promise<any>} [callPage]
- * @param {{ currentRecord?: () => Promise<{table: string, sysId: string}|null> }} [options] the record the content script finds from
- *   the page's address. Without it a page with no g_form gives null, as before.
+ * @param {{ currentRecord?: () => Promise<{table: string, sysId: string}|null> }} [options] the record the content script finds on the
+ *   page (its form, else its address). Without it a page with no g_form gives null, and a form opened through task.do is not used.
  */
 export async function readFormValues({ table, sysId }, callPage = tryCallPage, { currentRecord = null } = {}) {
   let meta = null;
@@ -70,8 +71,9 @@ export async function readFormValues({ table, sysId }, callPage = tryCallPage, {
   }
   // No form at all (a Workspace): the boxes, but only when the page's address is this record.
   if (meta === null || meta === undefined) return readBoxValues({ table, sysId }, callPage, currentRecord);
-  // The bridge answers for whatever form is open now: make sure it is the record the panel is showing.
-  if (typeof meta !== 'object' || meta.table !== table || !sameId(meta.sysId, sysId)) return null;
+  // The bridge answers for whatever form is open now: make sure it is the record the panel is showing (a form opened through task.do
+  // says 'task': src/content/formRecord.js).
+  if (!(await formShowsRecord(meta, { table, sysId }, currentRecord))) return null;
   let values = null;
   try {
     values = await callPage('getFormValues', [[...FORM_FIELDS]]);

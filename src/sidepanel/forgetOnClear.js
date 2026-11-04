@@ -4,11 +4,14 @@ import { AUDIT_SALT_KEY } from '../audit/auditLog.js';
 import { forgetAnswers } from './ticket/assist/answers/session.js';
 import { insightStore } from './ticket/cards/useInsight.js';
 import { forgetInserts } from './insertFlow.js';
+import { clearPending } from './pendingDraft.js';
 
 // What the panel holds in memory about tickets goes when the person clears their data in Settings ("Clear everything stored by
 // Agent Buddy") or turns a ServiceNow site off: the Ticket screen's answers and runs (real names put back), the Insights cards' reads
-// and the text last put into each box. All of it is memory only (build rule 7), but someone who just removed everything, or turned
-// a site off, expects it gone now, not when the panel closes.
+// (a card on screen is told and lets go of them), the text last put into each box, and a draft carried to another form (an article
+// form, or the email form of a ticket: kept up to 15 minutes, with the values it masked; src/sidepanel/pendingDraft.js). All of it
+// is memory only (build rule 7), but someone who just removed everything, or turned a site off, expects it gone now, not when the
+// panel closes.
 //
 // The panel learns both from chrome.storage, whichever page did it: "Clear everything" removes every agentbuddy_* key, the settings
 // and the activity log's salt among them (src/lib/storedData.js; only it removes those two), and turning a site off saves the
@@ -29,11 +32,12 @@ export function forgetsPanelMemory(changes, areaName) {
   return sitesOf(settings.oldValue).some((origin) => !now.has(origin));
 }
 
-/** Forget every answer and run, the cards' reads and what was inserted where. */
+/** Forget every answer and run, the cards' reads, what was inserted where and a draft carried to another form. */
 export function forgetPanelMemory() {
   forgetAnswers();
   insightStore.clear();
   forgetInserts();
+  clearPending();
 }
 
 /**

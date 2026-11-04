@@ -90,7 +90,9 @@ module.exports = {
     await p.waitForSelector('.ab-quick-choose label', { timeout: 5000 });
     let list = await choices(p);
     t.check('Choose lists the actions this ticket offers and the Insights card, with the current ones ticked', list.length >= 6 && list.filter((c) => c.checked).map((c) => c.text).sort().join('|') === [...WORKING].sort().join('|'), list.map((c) => `${c.text}${c.checked ? '*' : ''}`).join('|'));
-    t.check('in the list the AI actions carry the mark and the card does not', list.find((c) => c.text === 'Related tickets')?.ai === false && list.filter((c) => c.text !== 'Related tickets').every((c) => c.ai));
+    // The Insights cards ("Related tickets", and "Ready to resolve?" since its item points at the card that exists) carry no mark.
+    const CARDS = ['Related tickets', 'Ready to resolve?'];
+    t.check('in the list the AI actions carry the mark and the cards do not', CARDS.every((name) => list.find((c) => c.text === name)?.ai === false) && list.filter((c) => !CARDS.includes(c.text)).every((c) => c.ai), list.map((c) => `${c.text}${c.ai ? '(AI)' : ''}`).join('|'));
     t.check('at four, every item that is not ticked is off (the limit)', list.filter((c) => !c.checked).every((c) => c.disabled) && list.filter((c) => c.checked).length === 4);
     t.check('one can be taken away', await clickLabel(p, 'Next best action'));
     await settle(ctx);
@@ -118,8 +120,8 @@ module.exports = {
 
     // 7. "Skip AI for now": no AI item at all, the Insights item stays.
     await ctx.configure({ aiSkipped: true });
-    await p.waitForFunction(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === 1, { timeout: 5000 }).catch(() => {});
-    t.check('with AI skipped the bar holds only the Insights item, unmarked', JSON.stringify(await barButtons(p)) === JSON.stringify(['Related tickets']) && (await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-quick-actions .ab-ai-badge')).length)) === 0, JSON.stringify(await barButtons(p)));
+    await p.waitForFunction(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === 2, { timeout: 5000 }).catch(() => {});
+    t.check('with AI skipped the bar holds only the Insights items, unmarked', JSON.stringify(await barButtons(p)) === JSON.stringify(['Related tickets', 'Ready to resolve?']) && (await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-quick-actions .ab-ai-badge')).length)) === 0, JSON.stringify(await barButtons(p)));
     await ctx.configure({ aiSkipped: false });
 
     t.check('no secret reached the page: the AI key is not in the panel text', !(await panel.text()).includes(ai.key));

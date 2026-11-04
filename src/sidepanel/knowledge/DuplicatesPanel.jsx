@@ -12,6 +12,7 @@ import ErrorNote from '../ErrorNote.jsx';
 import { plainNote } from '../plainAccess.js';
 import { compareLocked, compareStillCurrent, selectionKey } from './duplicatesState.js';
 import { DUPLICATE_COLUMNS, duplicateRows, exportFileName } from '../knowledgeScreen/articleInfo.js';
+import { placeOf } from '../knowledgeScreen/shared.js';
 import { formatNumber, isolate, t, tn } from '../../i18n/index.js';
 import { tx } from '../../i18n/jsx.jsx';
 
@@ -44,7 +45,15 @@ export function comparedText(scanned, total) {
   return tn(n, 'Compared {n} title.', 'Compared {n} titles.', { n: formatNumber(n) });
 }
 
-export default function DuplicatesPanel({ page, active = true, onCompared = () => {} }) {
+/**
+ * The tool for the tab and instance `page` is on. Another tab or instance starts it over (placeOf): the knowledge bases, groups and
+ * links on screen are the old instance's, and a read still on its way for it is dropped as the old tool goes away.
+ */
+export default function DuplicatesPanel(props) {
+  return <DuplicatesTool key={placeOf(props.page)} {...props} />;
+}
+
+function DuplicatesTool({ page, active = true, onCompared = () => {} }) {
   const [scopes, setScopes] = useState({ phase: 'idle', items: [], access: [], error: '' });
   const [kb, setKb] = useState('');
   const [categories, setCategories] = useState([]);
@@ -76,6 +85,7 @@ export default function DuplicatesPanel({ page, active = true, onCompared = () =
     () => () => {
       scopeToken.current += 1;
       token.current += 1;
+      compareToken.current += 1; // a compared text arriving after the tool went away is not handed on
     },
     []
   );

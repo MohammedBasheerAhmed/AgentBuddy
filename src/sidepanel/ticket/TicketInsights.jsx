@@ -5,6 +5,8 @@ import { shownFor } from '../../profiles/profiles.js';
 import { INSIGHT_CARDS } from './cards/index.js';
 import { t } from '../../i18n/index.js';
 
+const NO_META = Object.freeze({});
+
 /** The cards for this record: its kind, the person's profiles, in order (`order` may be a number or a function of the record). */
 export function cardsFor(cards, record, header, eff) {
   const kind = record.kind || 'other';
@@ -38,12 +40,16 @@ export function cardsFor(cards, record, header, eff) {
 export default function TicketInsights({ page, eff, record, header, active, openCard = null, onShowCard = () => {} }) {
   const key = `${record.table}:${record.sysId}`;
   const cards = cardsFor(INSIGHT_CARDS, record, header, eff);
-  const [meta, setMeta] = useState({}); // card id -> { summary, attention }
+  // Summaries and attention marks, with the record they were reported for: { key, cards: card id -> { summary, attention } }. A set
+  // left from the last record is not shown, and the first report for a new record starts a fresh one. (Not an effect that empties
+  // them when the record changes: the cards' effects run before this one's, so it would wipe what a card had just reported from
+  // memory, and with it every folded card's one line.)
+  const [meta, setMeta] = useState(() => ({ key, cards: {} }));
+  const keyNow = useRef(key);
+  keyNow.current = key;
+  const shownMeta = meta.key === key ? meta.cards : NO_META;
   const [open, setOpen] = useState({}); // card id -> true / false (unset: the card's default)
   const root = useRef(null);
-
-  // A new record: summaries and attention marks belong to the old one.
-  useEffect(() => setMeta({}), [key]);
 
   useEffect(() => {
     if (!openCard?.id) return;
@@ -53,11 +59,19 @@ export default function TicketInsights({ page, eff, record, header, active, open
     return () => clearTimeout(timer);
   }, [openCard]);
 
-  // One stable pair of setters per card, so a card can call them from its effects without causing a loop.
+  // One stable pair of setters per card, so a card can call them from its effects without causing a loop. A report belongs to the
+  // record on screen when it is made (a card is a new one for every record: src/sidepanel/ticket/cards/index.js perRecord).
   const setters = useRef({});
   const settersFor = useCallback((id) => {
     if (!setters.current[id]) {
-      const patch = (field, value) => setMeta((m) => (m[id]?.[field] === value ? m : { ...m, [id]: { ...m[id], [field]: value } }));
+      const patch = (field, value) => {
+        const forKey = keyNow.current;
+        setMeta((m) => {
+          const mine = m.key === forKey ? m.cards : {};
+          if (m.key === forKey && mine[id]?.[field] === value) return m;
+          return { key: forKey, cards: { ...mine, [id]: { ...mine[id], [field]: value } } };
+        });
+      };
       setters.current[id] = {
         setSummary: (text) => patch('summary', String(text || '')),
         setAttention: (level) => patch('attention', level === 'warn' || level === 'danger' ? level : ''),
@@ -88,8 +102,8 @@ export default function TicketInsights({ page, eff, record, header, active, open
             key={c.id}
             id={c.id}
             title={c.title}
-            summary={meta[c.id]?.summary || ''}
-            attention={meta[c.id]?.attention || ''}
+            summary={shownMeta[c.id]?.summary || ''}
+            attention={shownMeta[c.id]?.attention || ''}
             open={isOpen}
             onToggle={(v) => setOpen((o) => ({ ...o, [c.id]: v }))}
           >

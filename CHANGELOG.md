@@ -5,6 +5,29 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Audit fixes, phase 2: the right ticket, fresh data, no races
+- **The Ticket screen keeps to the ticket on screen.** A late header read for the previous ticket no longer replaces the new one's
+  (number, title, state); an action is checked against the right ticket's header; the Insights summaries and warning dots are no longer
+  wiped when cards draw from data already read. "Ready to resolve?" in the quick bar and the palette now opens its card (it pointed at a
+  card that did not exist, so it never showed).
+- **The command palette** offers no "This ticket" actions while the Ticket screen is hidden (setup help shown), does not open over the
+  check before sending, and an action chosen in it expires after 30 seconds like one from the page.
+- **Other screens.** My work no longer shows the previous site's queue (whose rows opened another site's records) after switching tabs;
+  the Knowledge tools start over on another site; "Check my comment" no longer shows one field's findings under another; Rewrite reads
+  the form only when it is the ticket open in the panel, and text read from a form stays bound to it through edits (only text typed or
+  pasted over all of it becomes your own); the coaching "rates people" hold applies to every new answer, not only the first; a coaching
+  sample for one group can no longer land after you picked another; a report that fails after a change of scope no longer shows the old
+  scope's numbers; a dashboard save warning clears after a later save works; the follow-up period chosen in My work is the setting.
+- **Settings.** The line under the key box follows the key when it is moved or encrypted; the profile boxes show what was saved (and
+  refuse an empty choice); a failed save says so once; "Clear everything" turns off every site, also one the organisation's list leaves
+  out, and its outcome stays on screen; Settings and the panel re-read only for changes that matter (not on every usage-log write), and
+  an older read can no longer overwrite a newer one. "Clear everything" also forgets drafts carried to another form, and cards drop
+  what they showed.
+- **On the ServiceNow page.** After an extension update, an open page gets the new page bridge without a reload (a newer bridge takes
+  over from the old one, and only one answers); forms opened through `task.do` are matched to their record (Check, Rewrite and Insert
+  work there); a record found by its number is checked to be that number; a failed class lookup is not repeated every 2 seconds; reports
+  find who is signed in the same checked way as everything else.
+
 ### Audit fixes, phase 1: privacy, the organisation's policy and the AI firewall
 - A full read-only audit (seven reviews, about 110 findings) came first; this is the first of five phases of fixes.
 - **What reaches the AI.** Invisible characters (direction marks common in Arabic text pasted from Outlook, invisible operators,

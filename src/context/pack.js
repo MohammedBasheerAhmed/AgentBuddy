@@ -85,9 +85,11 @@ export async function resolveRecordRef(ref, deps) {
   const number = parseRecordNumber(ref?.number);
   if (!number) throw new TypeError('A record reference needs a sys_id or a record number.');
   const searchTable = TABLE_RE.test(table) ? table : tableForNumber(number) || 'task';
-  const rows = await deps.queryTable(searchTable, `number=${number}`, ['sys_id', 'sys_class_name'], { limit: 1, displayValue: false });
-  const found = rows[0];
-  if (!found || !SYS_ID_RE.test(raw(found.sys_id))) throw notFound(searchTable, number);
+  const rows = await deps.queryTable(searchTable, `number=${number}`, ['sys_id', 'number', 'sys_class_name'], { limit: 1, displayValue: false });
+  const found = Array.isArray(rows) ? rows[0] : null;
+  // The row must carry the number asked for: ServiceNow ignores a condition on a column the table does not have and answers with its
+  // first row, which is some other record.
+  if (!found || !SYS_ID_RE.test(raw(found.sys_id)) || raw(found.number).trim().toUpperCase() !== number) throw notFound(searchTable, number);
   const actual = raw(found.sys_class_name);
   return { table: searchTable === 'task' && TABLE_RE.test(actual) ? actual : searchTable, sysId: raw(found.sys_id).toLowerCase() };
 }

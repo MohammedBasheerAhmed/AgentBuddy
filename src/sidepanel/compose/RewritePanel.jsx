@@ -44,14 +44,25 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
       return;
     }
     setReading(true);
+    // The panel's idea of the open record can lag the page by a moment: with a record, the page reads the form only if it is that
+    // record (as "Check my comment" does), so the text, its provenance and the refusal above are all about the same record.
+    const record = page.record;
+    const expect = record ? { table: record.table, sysId: record.sysId } : undefined;
     try {
-      const answer = await read(page.tabId, 'formValues', { names: [target] });
+      const answer = await read(page.tabId, 'formValues', { names: [target], ...(expect ? { expect } : {}) });
       const value = answer?.values?.[target] || '';
-      if (!answer?.available) setStatus({ kind: 'warn', text: t('Agent Buddy cannot read the form on this page (Workspace and portal pages keep it out of reach). Paste the text here instead.') });
+      if (answer?.wrongForm) {
+        setStatus({
+          kind: 'warn',
+          text: record?.number
+            ? t('The form on the page is not {number}. Open that ticket again, or paste the text here.', { number: isolate(record.number) })
+            : t('The form on the page is not the ticket open here. Open that ticket again, or paste the text here.'),
+        });
+      } else if (!answer?.available) setStatus({ kind: 'warn', text: t('Agent Buddy cannot read the form on this page (Workspace and portal pages keep it out of reach). Paste the text here instead.') });
       else if (!value.trim()) setStatus({ kind: 'warn', text: t('The {field} field is empty. Type something in the form first, or paste the text here.', { field: tr(field.label).toLowerCase() }) });
       else {
         setText(value);
-        setProvenance({ field: target, expect: expectFromPage(page), number: page.record?.number || '' });
+        setProvenance({ field: target, expect: expectFromPage(page), number: record?.number || '', text: value });
         setStatus({ kind: 'ok', text: t('Took the {field} from the form.', { field: tr(field.label).toLowerCase() }) });
       }
     } catch (err) {
@@ -126,8 +137,14 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
             value={text}
             maxLength={MAX_FORM_TEXT}
             onChange={(e) => {
-              setText(e.target.value);
-              if (!e.target.value.trim()) setProvenance(null);
+              const next = e.target.value;
+              setText(next);
+              // Edited, the text still belongs to the ticket it was read from (a corrected typo does not make another ticket's text
+              // the person's own). Typed or pasted over, so that nothing read is left, it is treated like any pasted text (no record
+              // of its own, field "text"). Only "Use what I typed in the form" sets where it came from. The line about the last read
+              // (or about the ticket the text was read from) goes with any change.
+              setProvenance((p) => (p && stillFromForm(p.text, next) ? p : null));
+              setStatus(null);
             }}
             placeholder={t('Paste or type the text here')}
           />
@@ -203,6 +220,27 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
  * Every button is off while an insert is in flight, after it worked into this field ("Inserted"), and when another record is open
  * than the one the rewrite was made on.
  */
+const PIECE = 16;
+
+/**
+ * Is text read from a form still in the box? Yes while one piece of PIECE characters of what was read (all of it, when shorter) is
+ * still there: an edit keeps the text bound to its ticket; typing or pasting over all of it does not. The pieces cover the text from
+ * start to end (the last one ends where the text ends), so an edit anywhere leaves the other pieces to find.
+ * @param {string} read the text as it was read from the form
+ * @param {string} value what the box holds now
+ */
+export function stillFromForm(read, value) {
+  const source = String(read || '');
+  const now = String(value || '');
+  if (!source || !now) return false;
+  const size = Math.min(PIECE, source.length);
+  for (let at = 0; at < source.length; at += size) {
+    const start = Math.min(at, source.length - size);
+    if (now.includes(source.slice(start, start + size))) return true;
+  }
+  return false;
+}
+
 export function RewriteResultActions({ field, fill, made, wrongRecord, hints, onPut, onUseAsText }) {
   return (
     <section className="ab-card ab-compose-actions" aria-label={t('Use the rewrite')}>

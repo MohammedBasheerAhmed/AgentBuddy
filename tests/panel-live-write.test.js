@@ -1,8 +1,10 @@
-import { mount, click, type, choose, settle, focused, makeChrome, fakeAiFetch, fakeClipboard, FakeEvent, document } from './fixtures/panel-dom.js';
+import { mount, click, type, choose, settle, focused, makeChrome, fakeAiFetch, fakeClipboard, FakeEvent, document, deferred, during } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React, { act } from 'react';
 import { WriteAssist, WriteInsights } from '../src/sidepanel/write/index.js';
+import SafeSendCheck from '../src/sidepanel/write/SafeSendCheck.jsx';
+import { stillFromForm } from '../src/sidepanel/compose/RewritePanel.jsx';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
 import { MSG } from '../src/lib/messages.js';
 import { SNIPPETS_KEY } from '../src/lib/storage.js';
@@ -137,6 +139,75 @@ test('"Check my comment": a clean comment, an empty field, and a page whose form
   await click(ui.button('Check this text'));
   assert.match(ui.text(), /The pasted text: check before sending\./);
   await ui.unmount();
+});
+
+test('"Check my comment": another field chosen while the comment is read drops that read; the comment\'s findings never show as the other field\'s', async () => {
+  const { fake } = setup();
+  const held = deferred();
+  fake.onRead('formValues', (args) => (args.names[0] === 'comments' ? held.promise : { available: true, values: { [args.names[0]]: 'Restarted the VPN client.' } }));
+  const ui = await mount(<SafeSendCheck page={pageOf(A, 'INC0010001')} eff={eff()} active />);
+  await click(ui.button('Check my comment'));
+  await choose(ui.$('#ab-check-field'), 'close_notes');
+  await during(() => held.resolve({ available: true, values: { comments: 'Your new password: Winter2026!x' } }));
+  assert.ok(!/check before sending/.test(ui.text()), 'the comment\'s findings are not shown under "Your resolution notes"');
+  assert.equal(ui.button('Check my resolution notes').disabled, false, 'the field chosen can be checked at once');
+  await click(ui.button('Check my resolution notes'));
+  assert.deepEqual(fake.readsOf('formValues').map((a) => a.names), [['comments'], ['close_notes']]);
+  assert.match(ui.text(), /Your resolution notes: nothing to worry about found/);
+  await ui.unmount();
+});
+
+test('Rewrite, "Use what I typed in the form": only from the form of the ticket open here; another form on the page is said, not read', async () => {
+  const { fake } = setup();
+  fake.onRead('formValues', (args) => (args.expect ? { available: false, values: {}, wrongForm: true } : { available: true, values: { comments: 'thx, vpn is back' } }));
+  const ui = await mount(<WriteAssist page={pageOf(A, 'INC0010001')} eff={eff()} active />);
+  await click(ui.button('Use what I typed in the form'));
+  assert.deepEqual(fake.readsOf('formValues')[0], { names: ['comments'], expect: { table: 'incident', sysId: A } });
+  assert.match(ui.text(), /The form on the page is not INC0010001\. Open that ticket again, or paste the text here\./);
+  assert.equal(ui.field('Text to rewrite').value, '', 'nothing was taken');
+  await ui.unmount();
+  // A blank form has no record to name: the form is read as it is.
+  const blank = await mount(<WriteAssist page={pageOf(A, '', { status: 'new-record', href: `${ORIGIN}/incident.do?sys_id=-1`, record: null, newRecord: { table: 'incident' } })} eff={eff()} active />);
+  await click(blank.button('Use what I typed in the form'));
+  assert.deepEqual(fake.readsOf('formValues')[1], { names: ['comments'] });
+  assert.equal(blank.field('Text to rewrite').value, 'thx, vpn is back');
+  await blank.unmount();
+});
+
+test('Rewrite: text read from a form stays bound to its ticket until it is typed over; then it is the person\'s own text', async () => {
+  const { fake } = setup();
+  fake.onRead('formValues', () => ({ available: true, values: { comments: 'thx for waiting, vpn is back now' } }));
+  const ui = await mount(<WriteAssist page={pageOf(A, 'INC0010001')} eff={eff()} active />);
+  await click(ui.button('Use what I typed in the form'));
+  assert.equal(ui.field('Text to rewrite').value, 'thx for waiting, vpn is back now');
+  await ui.rerender(<WriteAssist page={pageOf(B, 'INC0010002')} eff={eff()} active />);
+  await click(ui.button('Shorter'));
+  assert.match(ui.text(), /This text was read from INC0010001\. Open that ticket again, or paste the text here\./);
+  assert.equal(globalThis.fetch.calls.length, 0, 'not sent for the other ticket');
+  // Edited (a typo corrected): still the first ticket's text, still refused here.
+  await type(ui.field('Text to rewrite'), 'thx for waiting, VPN is back now');
+  await click(ui.button('Shorter'));
+  assert.match(ui.text(), /This text was read from INC0010001\./);
+  assert.equal(globalThis.fetch.calls.length, 0, 'an edit does not make it the person\'s own text');
+  // Pasted over (never empty in between): it is no longer the form's text.
+  await type(ui.field('Text to rewrite'), 'Dear customer, the VPN is back.');
+  await click(ui.button('Shorter'));
+  await settle(6);
+  assert.ok(!/This text was read from/.test(ui.text()));
+  assert.equal(globalThis.fetch.calls.length, 1);
+  assert.match(ui.text(), /Thanks for waiting\. The VPN works again\./);
+  await ui.unmount();
+});
+
+test('stillFromForm: an edit anywhere keeps the text bound to the form it was read from; typed over, it is not', () => {
+  const read = 'thx for waiting, vpn is back now';
+  assert.equal(stillFromForm(read, read), true);
+  assert.equal(stillFromForm(read, 'thx for waiting, VPN is back now'), true, 'a word changed in the middle');
+  assert.equal(stillFromForm(read, 'Thx for waiting, vpn is back now!'), true, 'the first and the last character changed');
+  assert.equal(stillFromForm(read, 'Dear customer, the VPN is back.'), false, 'pasted over');
+  assert.equal(stillFromForm(read, ''), false);
+  assert.equal(stillFromForm('', 'anything'), false);
+  assert.equal(stillFromForm('ok', 'ok then'), true, 'a short text counts as one piece');
 });
 
 test('organisation snippets are listed, marked and read-only; a snippet goes into the field chosen', async () => {

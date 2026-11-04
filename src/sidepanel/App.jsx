@@ -14,9 +14,9 @@ import { screensFor } from '../profiles/profiles.js';
 import { ShieldMark } from './ui/primitives.jsx';
 import { BrandMark, Icon, screenIcon } from './ui/icons.jsx';
 import { SettingsButton } from './shell/shellParts.jsx';
-import CommandPalette, { isPaletteKey, paletteShortcut } from './palette/CommandPalette.jsx';
+import CommandPalette, { isPaletteKey, modalOnScreen, paletteShortcut } from './palette/CommandPalette.jsx';
 import { buildCommands } from './palette/commands.js';
-import { makeLaunch } from '../lib/launch.js';
+import { LAUNCH_TTL_MS, makeLaunch } from '../lib/launch.js';
 import { saveSettings } from '../lib/storage.js';
 import { nextTheme, systemIsDark, themeAttribute } from '../ui/useTheme.js';
 import ScreenView from './shell/ScreenView.jsx';
@@ -159,15 +159,18 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
 
   // The command palette (open and closed by Panel: Ctrl+K, or Cmd+K on a Mac, or the button in the header). A command that runs an action
   // on the record is handed to the Ticket screen as a launch, exactly like the keyboard shortcuts and the bar on the ServiceNow page do.
-  const commands = paletteOpen ? buildCommands({ eff, screens, active: plan.visible, recordPage: plan.recordPage }) : [];
+  // Only while the Ticket screen can show that record: with the setup help in its place (this tab is not an enabled ServiceNow page) the
+  // record view is hidden, and an action launched there would run, preview and all, where nobody can see it.
+  const paletteRecord = plan.showSetup ? null : plan.recordPage;
+  const commands = paletteOpen ? buildCommands({ eff, screens, active: plan.visible, recordPage: paletteRecord }) : [];
   const runCommand = ({ action }) => {
     if (action.type === 'screen') onChoose(action.id);
     else if (action.type === 'half') saveSettings({ halves: { ...(eff.values?.halves || {}), [action.screen]: action.half } }).catch(() => {});
     else if (action.type === 'settings') chrome.runtime.openOptionsPage();
     else if (action.type === 'theme') saveSettings({ theme: action.value }).catch(() => {});
     else if (action.type === 'language') saveSettings({ language: action.value }).catch(() => {});
-    else if (action.type === 'run' && plan.recordPage?.record) {
-      const { record, tabId } = plan.recordPage;
+    else if (action.type === 'run' && paletteRecord?.record) {
+      const { record, tabId } = paletteRecord;
       const request = makeLaunch({ tabId, table: record.table, sysId: record.sysId, featureId: action.featureId, now: Date.now() });
       if (!request) return;
       onChoose('ticket');
@@ -257,25 +260,50 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
   );
 }
 
+/**
+ * Whether the command palette is open, and Ctrl+K (Cmd+K on a Mac) anywhere in the panel to open or close it. While a preview is on
+ * screen the key does nothing: the preview holds the keyboard and the rest of the panel, and the palette must not open over it.
+ */
+export function usePaletteToggle() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!isPaletteKey(e) || modalOnScreen(document)) return;
+      e.preventDefault();
+      setOpen((was) => !was);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  return [open, setOpen];
+}
+
+/**
+ * An action the palette chose for the record on screen (src/sidepanel/palette), handled like the bar's request (useLaunch.js): used
+ * once, and gone after the same LAUNCH_TTL_MS, so one the Ticket screen did not take (it named a record that is no longer on screen)
+ * cannot start an AI action minutes later, when that record comes back. `ttl` is for tests.
+ */
+export function useOwnLaunch(ttl = LAUNCH_TTL_MS) {
+  const [own, setOwn] = useState(null);
+  useEffect(() => {
+    if (!own) return undefined;
+    const timer = setTimeout(() => setOwn(null), Math.max(0, own.at + ttl - Date.now()));
+    return () => clearTimeout(timer);
+  }, [own, ttl]);
+  return [own, setOwn];
+}
+
 function Panel() {
   const eff = useEffective();
-  // Settings "Clear everything" or a site turned off: the answers, card reads and inserts held in memory go (forgetOnClear.js).
+  // Settings "Clear everything" or a site turned off: the answers, card reads, inserts and carried drafts held in memory go
+  // (forgetOnClear.js).
   useForgetOnClear();
   const lang = useLanguage(eff.values?.language); // before anything below draws a text
   useTheme(eff.values?.theme);
   const { page, lastGood, lastSeen, refresh } = usePage(eff.policy);
   const { launch, clear: clearLaunch } = useLaunch();
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [ownLaunch, setOwnLaunch] = useState(null); // an action the palette chose (src/sidepanel/palette): handled like `launch`
-  useEffect(() => {
-    const onKey = (e) => {
-      if (!isPaletteKey(e)) return;
-      e.preventDefault();
-      setPaletteOpen((open) => !open);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  const [paletteOpen, setPaletteOpen] = usePaletteToggle();
+  const [ownLaunch, setOwnLaunch] = useOwnLaunch(); // an action the palette chose: handled like `launch`
   const [nav, setNav] = useState(() => {
     const section = rememberedScreen(['ticket', 'mywork', 'team', 'write', 'knowledge']);
     return { section, visited: new Set([section]) };

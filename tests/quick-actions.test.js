@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { FEATURES, featuresFor } from '../src/features/registry.js';
 import { KINDS } from '../src/context/kinds.js';
 import { normalizePolicy } from '../src/policy/policy.js';
-import { MAX_QUICK, QUICK_DEFAULTS, QUICK_LABELS, QUICK_MIN_LIST, cleanPins, isQuickId, panelShowsBar, quickActions } from '../src/features/quick.js';
+import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
+import { MAX_QUICK, QUICK_CARDS, QUICK_DEFAULTS, QUICK_LABELS, QUICK_MIN_LIST, cleanPins, isQuickId, panelShowsBar, quickActions, quickCardItem, quickItems } from '../src/features/quick.js';
+import { INSIGHT_CARDS } from '../src/sidepanel/ticket/cards/index.js';
+import { cardsFor } from '../src/sidepanel/ticket/assist/actions/TicketQuickBar.jsx';
 
 // ---- the table and the registry stay in step --------------------------------------------------------------------
 
@@ -25,6 +28,19 @@ test('every labelled id is a real feature that the Actions list can offer (and n
     assert.ok((feature.kinds || []).length > 0, `${id} works on a record`);
     assert.ok(QUICK_LABELS[id].length <= 30, `${id}: a short label`);
   }
+});
+
+test('every Insights item opens a card the Insights half really has (audit P2.4: "card:ready" named a card "ready" that does not exist)', () => {
+  const ids = INSIGHT_CARDS.map((c) => c.id);
+  for (const [id, item] of Object.entries(QUICK_CARDS)) assert.ok(ids.includes(item.card), `${id}: no Insights card "${item.card}"`);
+  // ...so the bar of the Ticket screen offers it: a resolved incident puts "Ready to resolve?" first (it was never shown).
+  const eff = effectiveSettings({ ...DEFAULT_SETTINGS, profiles: ['it'] }, {});
+  const items = quickItems({ kind: 'incident', stage: 'resolve', cards: cardsFor({ kind: 'incident' }, eff), ai: false });
+  assert.deepEqual(items.map((i) => [i.id, i.card]), [['card:ready', 'resolve'], ['card:related', 'related']]);
+  assert.equal(quickCardItem('resolve'), 'card:ready');
+  assert.equal(quickCardItem('related'), 'card:related');
+  assert.equal(quickCardItem('ready'), '', 'there is no card "ready"');
+  assert.equal(quickCardItem('journey'), '', 'a card without an item');
 });
 
 test('every feature in an Actions list has a short label, so it can be pinned', () => {

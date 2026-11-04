@@ -5,6 +5,7 @@ import { sharedCis } from '../../mywork/rank.js';
 import { readText, readWhen } from '../../mywork/time.js';
 import { noteText } from './accessNotes.js';
 import { cleanDays, DEFAULT_FOLLOW_UP_DAYS } from '../../mywork/followups.js';
+import { saveSettings } from '../../lib/storage.js';
 import { useMyWork } from './useMyWork.js';
 import { QueueCard, ApprovalsCard, FollowUpsCard, GroupsCard } from './cards.jsx';
 import { isolate, t, t as tr } from '../../i18n/index.js';
@@ -18,18 +19,9 @@ import { isolate, t, t as tr } from '../../i18n/index.js';
 //
 // props: { page, eff, active, onOpenTicket() }. A plain click on a ticket opens it in this tab and calls onOpenTicket, so the shell
 // switches to the Ticket screen.
-
-const DAYS_KEY = 'ab-mywork-days';
-
-function rememberedDays(eff) {
-  try {
-    const saved = sessionStorage.getItem(DAYS_KEY);
-    if (saved) return cleanDays(saved);
-  } catch {
-    // no session storage: the setting below, or the default
-  }
-  return cleanDays(eff?.values?.followUpDays ?? DEFAULT_FOLLOW_UP_DAYS);
-}
+//
+// The follow-up period has one home, the setting `followUpDays` (Settings > My work): the period chosen on this screen saves that
+// setting, and the screen always shows what the setting says, also after it is changed in Settings while the panel is open.
 
 /** The access notes as one short line, each said once. Pure. */
 export function accessLine(access) {
@@ -41,19 +33,13 @@ export default function MyWorkView({ page, eff, active, onOpenTicket }) {
   const shown = active !== false; // (a host that does not say is showing it)
   const work = useMyWork({ page, eff, active: shown });
   const [filter, setFilter] = useState('');
-  const [days, setDaysState] = useState(() => rememberedDays(eff));
+  const days = cleanDays(eff?.values?.followUpDays ?? DEFAULT_FOLLOW_UP_DAYS);
   const { data, now } = work;
   const busy = work.phase === 'loading';
 
-  const setDays = (d) => {
-    const n = cleanDays(d);
-    setDaysState(n);
-    try {
-      sessionStorage.setItem(DAYS_KEY, String(n));
-    } catch {
-      // kept for this panel only
-    }
-  };
+  // The new period shows when the saved setting comes back (useEffective follows the storage); if the browser does not save it,
+  // the period stays what the setting says.
+  const setDays = (d) => saveSettings({ followUpDays: cleanDays(d) }).catch(() => {});
 
   // A ticket opens in this tab and the panel follows it to the Ticket screen.
   const openTicket = (item) => {
