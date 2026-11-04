@@ -42,9 +42,7 @@ button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 .act-first:hover:not(:disabled), .act-first[data-ai='true']:hover:not(:disabled) { background: var(--ab-accent-hover); border-color: var(--ab-accent-hover); color: var(--ab-accent-fg); }
 /* No opacity here: the browser's visibility check (bar.js) counts a see-through button as not in plain view. */
 .act:disabled, .act-first:disabled { cursor: not-allowed; background: var(--ab-bg-sunken); border-color: var(--ab-border); color: var(--ab-fg-muted); }
-/* The AI mark on an AI action (TRACKER.md 2.3): a small spark in the corner of the icon. Insights actions have none. */
-.ai-dot { position: absolute; top: -2px; inset-inline-end: -2px; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--ab-bg); border: 1px solid var(--ab-ai-line); color: var(--ab-ai); pointer-events: none; }
-.act:disabled .ai-dot { color: var(--ab-fg-muted); border-color: var(--ab-border); }
+/* An AI action is marked in its hover name (the AI badge in the tooltip), not on the icon: a spark in the corner read as a "+". */
 
 
 /* what a hovered or focused icon is called: above the dock, dark on a light page and light on a dark one. It cannot be clicked.

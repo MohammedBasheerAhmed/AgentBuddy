@@ -303,16 +303,12 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
       hideTip();
       list.replaceChildren(
         ...state.actions.map((action, i) => {
-          // An icon, and the action's name for a screen reader (the tooltip shows it to everyone else). An AI action carries the AI
-          // spark and says where text goes; an Insights card says it stays in ServiceNow.
+          // An icon, and the action's name for a screen reader (the tooltip shows it to everyone else). An AI action says so in its
+          // name on hover (the AI badge) and to a screen reader, and says where text goes; an Insights card says it stays in ServiceNow.
+          // (No mark on the icon itself: the small spark in the corner read as a "+", as if the button added something.)
           const hint = action.ai ? t('Uses AI: opens the side panel, which shows what will be sent first') : t('Stays in ServiceNow: opens this in the side panel');
           const button = h(doc, 'button', { type: 'button', class: i === 0 ? 'act act-first' : 'act', 'data-ai': action.ai ? 'true' : false, 'aria-description': hint });
           button.append(glyph(doc, featureIcon(action.id)), h(doc, 'span', { class: 'sr' }, action.label));
-          if (action.ai) {
-            const dot = h(doc, 'span', { class: 'ai-dot', 'aria-hidden': 'true' });
-            dot.append(glyph(doc, 'spark', 8));
-            button.append(dot);
-          }
           button.addEventListener('click', (e) => e.isTrusted && press(action, button));
           bindTip(button, () => ({ name: action.label, ai: action.ai, hint }));
           watcher?.observe(button);

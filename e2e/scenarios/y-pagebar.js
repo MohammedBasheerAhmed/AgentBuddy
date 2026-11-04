@@ -103,7 +103,8 @@ module.exports = {
     t.check("a click opens it: the incident's three main actions show, each one as an icon", v.open && !v.folded && JSON.stringify(v.actions) === JSON.stringify(['Summarise', 'Draft a reply', 'Resolution notes']), JSON.stringify(v));
     const all = await bar.elements();
     const acts = all.filter((e) => e.tag === 'button' && e.cls.split(/\s+/).includes('act'));
-    t.check('every action has a drawn icon, an AI spark (all three use AI) and no visible words', acts.length === 3 && all.filter((e) => e.tag === 'svg' && e.cls.split(/\s+/).includes('glyph')).length >= 6 && all.filter((e) => e.cls.split(/\s+/).includes('ai-dot')).length === 3, JSON.stringify({ acts: acts.length }));
+    // No mark on the icons (a spark in the corner read as a "+"): an AI action says so in its hover name, checked below.
+    t.check('every action has a drawn icon, no mark in its corner and no visible words', acts.length === 3 && all.filter((e) => e.tag === 'svg' && e.cls.split(/\s+/).includes('glyph')).length >= 3 && all.filter((e) => e.cls.split(/\s+/).includes('ai-dot')).length === 0, JSON.stringify({ acts: acts.length }));
     const sizes = await Promise.all(acts.map((a) => bar.box(a)));
     t.check('each icon button is a round 36 px target', sizes.every((b) => b && Math.round(b.width) === 36 && Math.round(b.height) === 36), JSON.stringify(sizes.map((b) => b && [b.width, b.height])));
     t.check('its mark reports that it is expanded, and offers to close it', v.expanded && /Close the Agent Buddy/.test((await bar.find('handle')).attrs['aria-label'] || ''));
