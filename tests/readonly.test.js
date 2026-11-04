@@ -120,7 +120,9 @@ test('the row limit is always between 1 and 1000: a negative, zero or odd limit 
 });
 
 test('the page bridge and the content script never press, submit or navigate the page (AB2-08)', () => {
-  const files = [path.join(SRC, 'page', 'bridge.js'), ...sourceFiles.filter((p) => /src[\/]content[\/]/.test(p))];
+  // [\\/]: a backslash or a slash, so the content script's files are found on Windows too (written [\/] it matched only "/").
+  const files = [path.join(SRC, 'page', 'bridge.js'), ...sourceFiles.filter((p) => /src[\\/]content[\\/]/.test(p))];
+  assert.ok(files.length > 10, `the content script's files are checked (${files.length} files)`);
   const offenders = [];
   for (const file of files) {
     const text = fs.readFileSync(file, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');

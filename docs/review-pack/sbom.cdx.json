@@ -2,7 +2,7 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:8fae0f01-e1a8-5b94-8795-6d4937bb7fe0",
+  "serialNumber": "urn:uuid:137ea0ad-4b91-5260-a2c4-f82a6b589c1e",
   "version": 1,
   "metadata": {
     "tools": {
@@ -25,7 +25,7 @@
     "properties": [
       {
         "name": "agentbuddy:lockfile-sha256",
-        "value": "826d4475f68e953f886c8848620e05c92948ad28f5412bd11b79b06ae4b88110"
+        "value": "b8b0e07bcf9be3e79343c3b16b3164276028cbc0083c137f6584e7ed321a2a8d"
       },
       {
         "name": "agentbuddy:note",
@@ -1140,6 +1140,335 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/%40puppeteer/browsers@3.2.6",
+      "group": "@puppeteer",
+      "name": "browsers",
+      "version": "3.2.6",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "3093f6f605681f39e6aa6c211f5b6566acdf790ddaca54e94926ba58a657b64c18507d368bd8a60665864f266b6e7028bb9a5a5fbf121388cc014aa710f7fcba"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40puppeteer/browsers@3.2.6",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@puppeteer/browsers/-/browsers-3.2.6.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@puppeteer/browsers"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/ansi-regex@6.4.0",
+      "name": "ansi-regex",
+      "version": "6.4.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "2b34d5936b425801ed62bbefbda3fc6c9289ab6a558a784b70611076d2c860f6e634637261ef10c0d693518429d89effbc8b142ade500aa01f5246321bd0e43b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/ansi-regex@6.4.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.4.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/ansi-regex"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/ansi-styles@6.2.3",
+      "name": "ansi-styles",
+      "version": "6.2.3",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "e038fa336f0907ea001fc9059132d4a3e6b68f038592ea9bdf2b9c53408035c45151bc52d1c3f49d96021a371cdc1357c1122c5159831a0cdac267bbcef247be"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/ansi-styles@6.2.3",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-6.2.3.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/ansi-styles"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/chromium-bidi@157.0.8090-0",
+      "name": "chromium-bidi",
+      "version": "157.0.8090-0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "289c3b21082a5f0c692602651083e0e66af6668a80fa391346d739100048eec509ddbbb772923b36e101a23e069f502c17bf02693f52a395905aca4adffc186a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/chromium-bidi@157.0.8090-0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/chromium-bidi/-/chromium-bidi-157.0.8090-0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/chromium-bidi"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/cliui@9.0.1",
+      "name": "cliui",
+      "version": "9.0.1",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "93b9dd80a870a10bde04bfbfd6da86258373d3dec8ed63afc1b9a6536011e7e99a82d6e33d64134b50b9bf31a4042f189bc5164737ca533514a852f2a58e10fb"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:npm/cliui@9.0.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/cliui/-/cliui-9.0.1.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/cliui"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/string-width@7.2.0",
+      "name": "string-width",
+      "version": "7.2.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "b6c693224296f5be0df80123f92540f96849cd5effccc85c4aeefc98b2964a4edc5cc3921ec04a15652cd1f5b0abc4322b73202414115fa19b8b89186ddbc691"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/string-width@7.2.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/string-width/-/string-width-7.2.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/cliui/node_modules/string-width"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/devtools-protocol@0.0.1704951",
+      "name": "devtools-protocol",
+      "version": "0.0.1704951",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "1908503acf6efccbe6d7332d2481fcef6252e00b24b997544ac3cd3e4e0285a86d58052a833e9ab44b48b0cb7e9ceecca85d487381f1208fe4f02bb7e898af36"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:npm/devtools-protocol@0.0.1704951",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/devtools-protocol/-/devtools-protocol-0.0.1704951.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/devtools-protocol"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/emoji-regex@10.6.0",
+      "name": "emoji-regex",
+      "version": "10.6.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "b68508f38612e589b15b6d7d7ab9e2583d022153a8e3ac46282a2578d41180ecc3a2b8018b5bf80fbd7f385ce00fd18ed9418a22fd42dd2a7c0c09f4fa3e70ec"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/emoji-regex@10.6.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-10.6.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/emoji-regex"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:npm/esbuild@0.23.1",
       "name": "esbuild",
       "version": "0.23.1",
@@ -1168,6 +1497,129 @@
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/esbuild"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/escalade@3.2.0",
+      "name": "escalade",
+      "version": "3.2.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "5948f6aa5c5a42d3b883a3eae5cdbd193716183c9df22b4bf334e58a98040b3dc97ac02288e2a8b5df0953aa2d0773c00a01bac64254c9585ba0c4be6e37bf8c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/escalade@3.2.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/escalade/-/escalade-3.2.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/escalade"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/get-caller-file@2.0.5",
+      "name": "get-caller-file",
+      "version": "2.0.5",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "0f214fdc133fdd81d340e0942ffc343991d1d25a4a786af1a2d70759ca8d11d9e5b6a1705d57e110143de1e228df801f429a34ac6922e1cc8889fb58d3a87616"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:npm/get-caller-file@2.0.5",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/get-caller-file/-/get-caller-file-2.0.5.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/get-caller-file"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/get-east-asian-width@1.7.0",
+      "name": "get-east-asian-width",
+      "version": "1.7.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "5e31f50040b17f48222f6575694f2f2b2451da9a5151be5cd04bd3ef3b894e8910ef86cda39db33ad821a9d588aab8540fbf5fa37c7459f29974eab117a2c6d5"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/get-east-asian-width@1.7.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/get-east-asian-width/-/get-east-asian-width-1.7.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/get-east-asian-width"
         },
         {
           "name": "cdx:npm:package:development",
@@ -1246,6 +1698,129 @@
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/loose-envify"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/mitt@3.0.1",
+      "name": "mitt",
+      "version": "3.0.1",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "bca8af0137ebf7b976fd00426009176036eb2163ccd8820a125ed83e18c2bca946de4136826fae068ea71172b7339fc57e1fc52e9284c73390dc926824614a07"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/mitt@3.0.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/mitt/-/mitt-3.0.1.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/mitt"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/modern-tar@0.8.6",
+      "name": "modern-tar",
+      "version": "0.8.6",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "2d84a4b34b4d56a6ed7b3ffd381d1814feaa2d14aa91d031256390a55691ebb94d4db8f6ccd2f2629a309113226b99572c264acf1c28c64c47d8c6db051d9a12"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/modern-tar@0.8.6",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/modern-tar/-/modern-tar-0.8.6.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/modern-tar"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/puppeteer-core@25.16.0",
+      "name": "puppeteer-core",
+      "version": "25.16.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "540e4f7f9e0df2c85fa293646595c27628b07e79d8f1925800ca854118651f99865217f07f9dc0afbef418fb5da530cb52abd0798a4806d0bdfc6d898a3d8827"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/puppeteer-core@25.16.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/puppeteer-core/-/puppeteer-core-25.16.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/puppeteer-core"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
         },
         {
           "name": "agentbuddy:bundled",
@@ -1363,6 +1938,457 @@
           "value": "true"
         }
       ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/string-width@8.3.0",
+      "name": "string-width",
+      "version": "8.3.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "65b9993342428a140df757569f1a22a53d8a384c87a84c9f4575328ee4615bc6ffc67a8f0e8ab88161150294d56bd75bdb037c9a6a229201416e387bd7e70679"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/string-width@8.3.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/string-width/-/string-width-8.3.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/string-width"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/strip-ansi@7.2.0",
+      "name": "strip-ansi",
+      "version": "7.2.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "c833cc363a785b27d80641e78c844b7dc6b58ba28cc860adb1582829eff3d7eeafba481a10d76018166df9998a3dce206afbc46793a01df1ddadace180dc86ef"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/strip-ansi@7.2.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/strip-ansi"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/typed-query-selector@2.12.3",
+      "name": "typed-query-selector",
+      "version": "2.12.3",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "fddb6e319caeb472e5af15a1842d6e89bd3410b52bd9d67c0bd07c633658b0999e137579e8ec516e5ad233651a175e36a5c32d6a4ede859ebea6858679e84d22"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/typed-query-selector@2.12.3",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/typed-query-selector/-/typed-query-selector-2.12.3.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/typed-query-selector"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/webdriver-bidi-protocol@1.0.1",
+      "name": "webdriver-bidi-protocol",
+      "version": "1.0.1",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "5975acfda5c5d9ae80975676fd5ffb1a9da83d93800261e324e4e6bf82825d1275db620c8f7b5248c73a6b8ab72b840e9a141bb1efc086bfa84d524e5367548b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/webdriver-bidi-protocol@1.0.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/webdriver-bidi-protocol/-/webdriver-bidi-protocol-1.0.1.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/webdriver-bidi-protocol"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/wrap-ansi@9.0.2",
+      "name": "wrap-ansi",
+      "version": "9.0.2",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "e3602d9a0aa357e5f556974e7f24c6398462d3fceca0baad5d07244e6a937b26d3f810c86ccfc6bb1a3bc77a44dafb69af5a24eb146a33d3a905ef89ca8ab2c3"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/wrap-ansi@9.0.2",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-9.0.2.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/wrap-ansi"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/string-width@7.2.0#node_modules/wrap-ansi/node_modules/string-width",
+      "name": "string-width",
+      "version": "7.2.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "b6c693224296f5be0df80123f92540f96849cd5effccc85c4aeefc98b2964a4edc5cc3921ec04a15652cd1f5b0abc4322b73202414115fa19b8b89186ddbc691"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/string-width@7.2.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/string-width/-/string-width-7.2.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/wrap-ansi/node_modules/string-width"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/ws@8.22.0",
+      "name": "ws",
+      "version": "8.22.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "61d82073df3bf913b40275ad67fed6abd16d36f72b2f56ff44ed2e77d9968d43e00ebb00030412179d6c9b6866d57a1f6d4ff88e4a4612c2c5b1967153ed433a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/ws@8.22.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/ws/-/ws-8.22.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/ws"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/y18n@5.0.8",
+      "name": "y18n",
+      "version": "5.0.8",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "d297c5cde81e0d62472480264cb44fd83c078dd179b3b8e8f6dbb3b5d43102120d09dbd2fb79c620da8f774d00a61a8947fd0b8403544baffeed209bf7c60e7c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:npm/y18n@5.0.8",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/y18n/-/y18n-5.0.8.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/y18n"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/yargs@18.2.0",
+      "name": "yargs",
+      "version": "18.2.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "f4ea4a38b79aa0d15e704a7b3fa8986f3cdeff90aa5a81fb37748cb3feb2d571789ccbc532ca44199cc9eae162f4c990c17872cea62848428ededbc0dd9fe8db"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/yargs@18.2.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/yargs/-/yargs-18.2.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/yargs"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/yargs-parser@22.0.0",
+      "name": "yargs-parser",
+      "version": "22.0.0",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "af0bbf0a535d48ca644ab51bf9de8146c4a42d4ab57e67ec63a4cea58cd3c2fc24835fcd446f39281cb792afbe03c2ca4305fa96cbbe69669dfb6921bee5ebab"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:npm/yargs-parser@22.0.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/yargs-parser/-/yargs-parser-22.0.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/yargs-parser"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/zod@4.6.7",
+      "name": "zod",
+      "version": "4.6.7",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "83c5b60f6914e9af2e9ed734e777d7d6e5412b333bcaa0315bfdf3c24f37fba472176f9228eb95f9cd30043854c335753da19aa66647fab99c5333dffb7086c2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/zod@4.6.7",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/zod"
+        },
+        {
+          "name": "cdx:npm:package:development",
+          "value": "true"
+        },
+        {
+          "name": "agentbuddy:bundled",
+          "value": "false"
+        }
+      ]
     }
   ],
   "dependencies": [
@@ -1370,6 +2396,7 @@
       "ref": "pkg:npm/agentbuddy@0.1.0",
       "dependsOn": [
         "pkg:npm/esbuild@0.23.1",
+        "pkg:npm/puppeteer-core@25.16.0",
         "pkg:npm/react-dom@18.3.1",
         "pkg:npm/react@18.3.1"
       ]
@@ -1471,6 +2498,52 @@
       "dependsOn": []
     },
     {
+      "ref": "pkg:npm/%40puppeteer/browsers@3.2.6",
+      "dependsOn": [
+        "pkg:npm/modern-tar@0.8.6",
+        "pkg:npm/yargs@18.2.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/ansi-regex@6.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/ansi-styles@6.2.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/chromium-bidi@157.0.8090-0",
+      "dependsOn": [
+        "pkg:npm/mitt@3.0.1",
+        "pkg:npm/zod@4.6.7"
+      ]
+    },
+    {
+      "ref": "pkg:npm/cliui@9.0.1",
+      "dependsOn": [
+        "pkg:npm/string-width@7.2.0",
+        "pkg:npm/strip-ansi@7.2.0",
+        "pkg:npm/wrap-ansi@9.0.2"
+      ]
+    },
+    {
+      "ref": "pkg:npm/string-width@7.2.0",
+      "dependsOn": [
+        "pkg:npm/emoji-regex@10.6.0",
+        "pkg:npm/get-east-asian-width@1.7.0",
+        "pkg:npm/strip-ansi@7.2.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/devtools-protocol@0.0.1704951",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/emoji-regex@10.6.0",
+      "dependsOn": []
+    },
+    {
       "ref": "pkg:npm/esbuild@0.23.1",
       "dependsOn": [
         "pkg:npm/%40esbuild/aix-ppc64@0.23.1",
@@ -1500,6 +2573,18 @@
       ]
     },
     {
+      "ref": "pkg:npm/escalade@3.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/get-caller-file@2.0.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/get-east-asian-width@1.7.0",
+      "dependsOn": []
+    },
+    {
       "ref": "pkg:npm/js-tokens@4.0.0",
       "dependsOn": []
     },
@@ -1507,6 +2592,25 @@
       "ref": "pkg:npm/loose-envify@1.4.0",
       "dependsOn": [
         "pkg:npm/js-tokens@4.0.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/mitt@3.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/modern-tar@0.8.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/puppeteer-core@25.16.0",
+      "dependsOn": [
+        "pkg:npm/%40puppeteer/browsers@3.2.6",
+        "pkg:npm/chromium-bidi@157.0.8090-0",
+        "pkg:npm/devtools-protocol@0.0.1704951",
+        "pkg:npm/typed-query-selector@2.12.3",
+        "pkg:npm/webdriver-bidi-protocol@1.0.1",
+        "pkg:npm/ws@8.22.0"
       ]
     },
     {
@@ -1527,6 +2631,70 @@
       "dependsOn": [
         "pkg:npm/loose-envify@1.4.0"
       ]
+    },
+    {
+      "ref": "pkg:npm/string-width@8.3.0",
+      "dependsOn": [
+        "pkg:npm/get-east-asian-width@1.7.0",
+        "pkg:npm/strip-ansi@7.2.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/strip-ansi@7.2.0",
+      "dependsOn": [
+        "pkg:npm/ansi-regex@6.4.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/typed-query-selector@2.12.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/webdriver-bidi-protocol@1.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/wrap-ansi@9.0.2",
+      "dependsOn": [
+        "pkg:npm/ansi-styles@6.2.3",
+        "pkg:npm/string-width@7.2.0#node_modules/wrap-ansi/node_modules/string-width",
+        "pkg:npm/strip-ansi@7.2.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/string-width@7.2.0#node_modules/wrap-ansi/node_modules/string-width",
+      "dependsOn": [
+        "pkg:npm/emoji-regex@10.6.0",
+        "pkg:npm/get-east-asian-width@1.7.0",
+        "pkg:npm/strip-ansi@7.2.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/ws@8.22.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/y18n@5.0.8",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/yargs@18.2.0",
+      "dependsOn": [
+        "pkg:npm/cliui@9.0.1",
+        "pkg:npm/escalade@3.2.0",
+        "pkg:npm/get-caller-file@2.0.5",
+        "pkg:npm/string-width@8.3.0",
+        "pkg:npm/y18n@5.0.8",
+        "pkg:npm/yargs-parser@22.0.0"
+      ]
+    },
+    {
+      "ref": "pkg:npm/yargs-parser@22.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/zod@4.6.7",
+      "dependsOn": []
     }
   ]
 }

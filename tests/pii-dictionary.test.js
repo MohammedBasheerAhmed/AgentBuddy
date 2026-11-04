@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDictionary, fold, COMMON_WORDS } from '../src/pii/dictionary.js';
 import { resolveOverlaps } from '../src/pii/detectors.js';
+import { cpuTime } from './fixtures/timing.js';
 
 const A = 'a'.repeat(32);
 const B = 'b'.repeat(32);
@@ -181,12 +182,11 @@ test('matching 200k characters against a dozen people is fast', () => {
   const people = Array.from({ length: 12 }, (_, i) => ({ name: `Person${String.fromCharCode(97 + i)} Surname${String.fromCharCode(97 + i)}`, email: `p${i}@example.com`, sysId: String(i).repeat(32).slice(0, 32) }));
   const d = createDictionary(people);
   const text = 'Personb Surnameb wrote to p3@example.com about the printer and Persona said hi. '.repeat(2600).slice(0, 200000);
-  const started = performance.now();
-  const found = d.find(text);
+  // CPU time, warm, best of three (tests/fixtures/timing.js): the clock also counts the time other test processes had the CPU.
+  const { ms, value: found } = cpuTime(() => d.find(text), 500);
   assert.ok(found.length > 2000);
-  assert.ok(performance.now() - started < 500);
+  assert.ok(ms < 500, `${Math.round(ms)} ms of CPU`);
   const noise = 'word '.repeat(40000);
-  const t2 = performance.now();
-  d.find(noise);
-  assert.ok(performance.now() - t2 < 500);
+  const { ms: noiseMs } = cpuTime(() => d.find(noise), 500);
+  assert.ok(noiseMs < 500, `noise: ${Math.round(noiseMs)} ms of CPU`);
 });

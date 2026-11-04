@@ -15,15 +15,26 @@ const { hashFolder, toSha256Sum, compareHashes } = require('./lib/hashes.js');
 
 const root = path.join(__dirname, '..');
 const argv = process.argv.slice(2);
+const USAGE = 'Usage: node scripts/repro-check.js [--enterprise <config.json>] [--minify] [--write <file>]';
 let enterprise = '';
 let minify = false;
 let write = '';
+// An option without its value stops here: `--enterprise` alone used to check the normal build instead, and `--write` alone wrote
+// nothing, both while reporting success.
+const valueAfter = (i) => {
+  const value = argv[i + 1];
+  if (!value || value.startsWith('--')) {
+    console.error(`${argv[i]} needs a value. ${USAGE}`);
+    process.exit(1);
+  }
+  return value;
+};
 for (let i = 0; i < argv.length; i += 1) {
-  if (argv[i] === '--enterprise') enterprise = argv[(i += 1)] || '';
+  if (argv[i] === '--enterprise') enterprise = valueAfter(i++);
   else if (argv[i] === '--minify') minify = true;
-  else if (argv[i] === '--write') write = argv[(i += 1)] || '';
+  else if (argv[i] === '--write') write = valueAfter(i++);
   else {
-    console.error(`Unknown option ${argv[i]}. Usage: node scripts/repro-check.js [--enterprise <config.json>] [--minify] [--write <file>]`);
+    console.error(`Unknown option ${argv[i]}. ${USAGE}`);
     process.exit(1);
   }
 }

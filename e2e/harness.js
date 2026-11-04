@@ -11,7 +11,9 @@ const crypto = require('crypto');
 const esbuild = require('esbuild');
 
 const ROOT = path.join(__dirname, '..');
-const TMP = process.env.AB_E2E_TMP || path.join(os.tmpdir(), 'agentbuddy-e2e');
+// The folder for the run's files (the TLS key, the patched copy of the extension, screenshots). A new one per run unless AB_E2E_TMP
+// names one: two runs at once (E2E_DIST lets several people test their own builds) must not empty each other's extension copy.
+const TMP = process.env.AB_E2E_TMP || path.join(os.tmpdir(), `agentbuddy-e2e-${Date.now().toString(36)}-${process.pid}`);
 const CHROME = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -45,7 +47,25 @@ function prepareExtension() {
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   const mutation = process.env.E2E_MUTATE || '';
   if (mutation) applyMutation(dir, mutation);
-  return { dir, manifest, realManifestHash, realManifestPath: path.join(dist, 'manifest.json'), mutation };
+  return { dir, manifest, realManifestHash, realManifestPath: path.join(dist, 'manifest.json'), mutation, source: path.relative(ROOT, dist) || dist };
+}
+
+// What the run made that is not for a person to look at: the throw-away TLS key, the copy of the extension, the bundled fixtures. They go
+// when the run ends, however it ends (a crash, the hard stop, Ctrl+C: puppeteer turns that into process.exit). Screenshots and notes of
+// failures stay; a folder this run made and left empty goes too.
+function removeRunFiles() {
+  for (const name of ['tls', 'extension', 'data.cjs']) {
+    try {
+      fs.rmSync(path.join(TMP, name), { recursive: true, force: true });
+    } catch {
+      /* Chrome still holds a file of the copy (Windows): it is not secret, and a later run uses its own folder */
+    }
+  }
+  try {
+    if (!process.env.AB_E2E_TMP && !fs.readdirSync(TMP).length) fs.rmdirSync(TMP);
+  } catch {
+    /* already gone */
+  }
 }
 
 // SELF-CHECK OF THE HARNESS (not part of a normal run): `E2E_MUTATE=<name> node e2e/run.js` breaks the COPY of the extension on
@@ -84,6 +104,7 @@ function applyMutation(dir, name) {
  */
 async function createContext({ headed = false, watchWorker = true } = {}) {
   fs.mkdirSync(TMP, { recursive: true });
+  process.on('exit', removeRunFiles);
   const puppeteer = require('puppeteer-core');
   const { makeCertificate } = require('./tls.js');
   const { startFakeInstance } = require('./fakeInstance.js');
@@ -105,6 +126,10 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
     acceptInsecureCerts: true,
     args: ['--no-sandbox', '--ignore-certificate-errors', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--window-size=1200,900'],
   });
+  // From now on the run's files are removed after puppeteer's own 'exit' handler has ended Chrome (on Windows Chrome holds the files of
+  // the extension copy while it runs, and a listener runs in the order it was added).
+  process.removeListener('exit', removeRunFiles);
+  process.on('exit', removeRunFiles);
 
   /** Every network request of any page (with its frames and workers) or the service worker: { from, url, method }. */
   const net = [];
@@ -286,7 +311,7 @@ async function createContext({ headed = false, watchWorker = true } = {}) {
       await inst.close().catch(() => {});
       await ai.close().catch(() => {});
       // The throw-away TLS key and the extension copy are not needed any more (screenshots of failures stay).
-      for (const dir of ['tls', 'extension']) fs.rmSync(path.join(TMP, dir), { recursive: true, force: true });
+      removeRunFiles();
     },
   };
 

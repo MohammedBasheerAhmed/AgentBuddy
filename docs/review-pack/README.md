@@ -16,7 +16,7 @@ needs a network connection except `npm ci` (to fetch the pinned packages) and `n
 
 ## 1. Build from source
 
-Needs Node.js 18 or later (tested with 22) and npm.
+Needs Node.js 22.12 or later (`.nvmrc`; CI uses it) and npm.
 
 ```
 npm ci                      # exactly the versions in package-lock.json, checked against their integrity hashes
@@ -25,7 +25,10 @@ npm run build:enterprise -- enterprise/<your config>.json   # dist-enterprise/: 
 ```
 
 `build.js` is short; read it. It bundles six entry points with esbuild (no minification, no source maps, no remote code) and copies the
-manifest, the policy schema, three HTML pages, the icons and one stylesheet. Nothing is downloaded during the build.
+manifest, the policy schema, three HTML pages, the icons, one stylesheet and the licence file of every package bundled into the code
+(`licenses/<package>/LICENSE`: React, ReactDOM, scheduler). Nothing is downloaded during the build. `package-lock.json` also lists the
+test tools (esbuild, puppeteer-core and what they need): they build and test the extension and are not part of it (the SBOM marks them
+`excluded`).
 
 ## 2. Check that a build is the one you reviewed
 
@@ -42,8 +45,9 @@ manifest, the policy schema, three HTML pages, the icons and one stylesheet. Not
 ```
 npm test            # every unit test (node:test); no browser, no network
 npm run check       # every entry point compiles
-npm run traceability -- --check   # every test file named in the review documents exists, and traceability.md is current
-npm run e2e         # optional: real Chrome against a fake ServiceNow and a stub AI (needs: npm i --no-save puppeteer-core)
+npm run traceability:check       # every test file named in the review documents exists, and traceability.md is current
+npm run verify      # all of the above, and every text has its Arabic entry
+npm run e2e         # optional: real Chrome against a fake ServiceNow and a stub AI (puppeteer-core comes with npm ci; see README)
 ```
 
 ## 4. What to look at first

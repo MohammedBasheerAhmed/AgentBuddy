@@ -4,7 +4,7 @@ A privacy-first browser extension that helps ServiceNow **fulfillers** (IT, cust
 **team leads** work tickets faster. No admin role needed. It works on the classic UI, on Workspaces and on portals (Service Portal,
 Employee Center, customer service and HR portals).
 
-What it does (the side panel has five sections: This page, My day, Team, Write, Knowledge):
+What it does (the side panel has five screens, chosen from an icon dock at the bottom: Ticket, My work, Team, Write, Knowledge):
 
 - **Quick actions**: a short bar of the 3 or 4 main actions for the open ticket, at the top of the side panel and as a small icon dock at the
   bottom centre of the ServiceNow page itself (hover an icon for its name; a click opens the panel and starts the action there). You
@@ -20,7 +20,7 @@ What it does (the side panel has five sections: This page, My day, Team, Write, 
   notes to a new ticket, personal snippets, a safe-to-send check before text goes to a customer.
 - **Knowledge**: article from a ticket, article checks and optimise, duplicate finder with a merge draft, knowledge-gap radar, chat
   summary and chat reply suggestions.
-- **My day and Team**: your queue most urgent first; team dashboards (overview, SLA radar, fulfilment, workload, quality), a report
+- **My work and Team**: your queue most urgent first; team dashboards (overview, SLA radar, fulfilment, workload, quality), a report
   builder, saved dashboards, CSV export with names masked, a full-page view, shift hand-over, "explain this dashboard", and an
   opt-in coaching snapshot (off unless the organisation switches it on).
 - Works with any AI key: Azure OpenAI, OpenAI or a company gateway, Anthropic, Gemini, Mistral, Groq, DeepSeek, OpenRouter, or a
@@ -33,25 +33,45 @@ Details: `docs/plan.md` (the approved plan and use-case catalogue), `docs/securi
 `docs/deployment.md` (managed policy, feature ids, enterprise build), `docs/review-pack/` (for the security review: reviewer guide,
 data flow, STRIDE, DPIA template, policy samples, SBOM, traceability), `docs/contracts.md` (module contracts), `docs/build-rules.md` (the rules every
 change follows), `docs/live-questions/` (what must be checked on a real instance), `docs/review/` (the independent reviews),
-`PROGRESS.md` (where we are).
+`TRACKER.md` (the live plan: the status of every item and where to pick up; `PROGRESS.md` is the earlier log).
 
 ## Build and run
 
-```
-npm install
-npm run build        # writes dist/
-npm test             # unit tests
-npm run check        # compiles every build entry without writing anything
-npm i --no-save puppeteer-core && npm run e2e   # real Chrome against a fake ServiceNow and a stub AI server
+Needs Node.js 22.12 or later (`.nvmrc` says 22; `engines` in `package.json`) and npm.
 
+```
+npm ci               # exactly the versions in package-lock.json (not `npm install`, which may rewrite the lockfile)
+npm run build        # writes dist/
+npm test             # unit tests (node tests/run.js <part of a file name> runs only those files)
+npm run check        # compiles every build entry without writing anything; a warning fails it
+npm run verify       # before a commit: unit tests, compile check, traceability check, Arabic check (stops at the first failure)
+npm run e2e          # rebuilds dist/, then real Chrome against a fake ServiceNow and a stub AI server (see "End-to-end" below)
+
+npm run watch        # rebuild dist/ on every change (the static files too)
 npm run build:enterprise -- enterprise/example.json   # dist-enterprise/: one organisation's hosts and policy compiled in
-npm run repro        # builds twice from two folders and compares SHA-256 of every file
+npm run package -- --minify   # the release: release/agentbuddy-<version>.zip (minified, built in release/unpacked/) and a readable zip
+npm run repro        # builds twice from two folders and compares SHA-256 of every file (-- --minify for the release)
 npm run sbom         # CycloneDX 1.5 SBOM from package-lock.json, no network
-npm run traceability # control-to-test matrix (docs/review-pack/traceability.md); add -- --check to verify it
+npm run traceability # control-to-test matrix (docs/review-pack/traceability.md); npm run traceability:check verifies it
+npm run i18n         # every text a person reads has an Arabic entry
 ```
 
 Load `dist/` at `chrome://extensions` (Developer mode, Load unpacked), click the Agent Buddy toolbar button to open the side panel,
 then "Turn on for this site" on your ServiceNow tab and add an AI key in Settings.
+
+### End-to-end
+
+`npm run e2e` (or `node e2e/run.js a,c,g` for some scenarios, on a build that is already there) drives a real Chrome with the built
+extension. It needs:
+
+- `puppeteer-core`, a pinned devDependency: `npm ci` installs it. It drives a Chrome that is already installed and downloads none.
+- Chrome: `CHROME_PATH` is its executable (default `C:/Program Files/Google/Chrome/Application/chrome.exe`; on Linux, for example
+  `/usr/bin/google-chrome`).
+- A TLS certificate for the fake ServiceNow at https://localhost, made for each run: by `openssl` on the PATH or the one that comes
+  with Git for Windows; with neither, `npm i --no-save selfsigned` once. Chrome is started with `--ignore-certificate-errors`.
+- Optional: `E2E_DIST=<folder>` tests a build in another folder (for example the minified one: `node build.js --minify --out
+  .build-tmp-min`); `AB_E2E_TMP=<folder>` keeps the run's screenshots there (default: a new folder in the system temp folder, printed
+  at the start); `E2E_HEADED=1` shows the browser.
 
 ## Layout
 
@@ -75,5 +95,7 @@ src/sidepanel    the side panel UI (sections, tabs, quick-actions bar, charts, c
 src/options      the settings page               src/ui         shared styles (tokens --ab-*) per area
 e2e              end-to-end harness: leak detector, request-log checks, scenarios a-z
 docs             security, deployment, contracts, build rules, live questions, reviews, review pack
-enterprise       example config for the enterprise build      scripts   compile check, SBOM, repro, hashes, policy check, traceability
+enterprise       example config for the enterprise build
+scripts          compile check, SBOM, repro, hashes, policy check, traceability, Arabic check, release package, self-hosted install
+                 (scripts/lib/entries.js: the build's entry points and esbuild options, shared by build.js and the scripts)
 ```

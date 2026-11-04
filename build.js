@@ -6,13 +6,16 @@
 //                                                   the AI endpoint and the policy in the config are compiled in (docs/deployment.md)
 //   node build.js --minify                          the same build with the bundles minified (what is shipped: smaller, faster to
 //                                                   load; the unminified build of the same source is the one a reviewer reads)
-//   node build.js --watch                           rebuild on change (static files are copied once)
+//   node build.js --watch                           rebuild on change (the static files are copied again when they change)
 //
 // The normal build is unaffected by the enterprise options: same manifest, same bundles, src/policy/baked.js left as it is (null).
+// The entry points and the esbuild options are in scripts/lib/entries.js (shared with scripts/check-compile.js and scripts/sbom.js).
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 const { collect, loadCatalogue } = require('./scripts/lib/i18nCheck.js');
+const { ENTRIES, bundleOptions } = require('./scripts/lib/entries.js');
+const { bundledKeys } = require('./scripts/lib/sbom.js');
 
 const rootDir = __dirname;
 
@@ -31,7 +34,8 @@ function parseArgs(argv) {
     else if (flag === '--minify' && eq < 0) opts.minify = true;
     else if (flag === '--out' || flag === '--enterprise') {
       const value = eq > 0 ? arg.slice(eq + 1) : argv[(i += 1)];
-      if (!value || value.startsWith('--')) fail(`${flag} needs a value, for example ${flag === '--out' ? '--out build-check' : '--enterprise enterprise/example.json'}.`);
+      // (.build-tmp-* is in .gitignore, so the example does not leave a folder git would want to add)
+      if (!value || value.startsWith('--')) fail(`${flag} needs a value, for example ${flag === '--out' ? '--out .build-tmp-check' : '--enterprise enterprise/example.json'}.`);
       opts[flag.slice(2)] = value;
     } else fail(`unknown option "${arg}". Options: --out <folder>, --enterprise <config.json>, --minify, --watch.`);
   }
@@ -105,35 +109,18 @@ const bakedPlugins = () => {
   return [bakedPolicyPlugin(enterprise.source, enterprise.tools.BAKED_MODULE_FILTER)];
 };
 
+const shared = bundleOptions(rootDir); // loader, JSX, target, format, the production define, CSS read with LF endings
 const common = {
-  bundle: true,
+  ...shared,
   minify: opts.minify, // whitespace, names and syntax; the code is the same, so the tests of the unminified build hold (npm run repro -- --minify)
   sourcemap: false, // no source maps in the shipped build: the review pack ships the source instead
   logLevel: 'info',
-  loader: { '.js': 'jsx', '.jsx': 'jsx', '.css': 'text' },
-  jsx: 'automatic',
-  target: ['chrome116', 'edge116'],
-  format: 'iife',
-  legalComments: 'none',
-  // The path comments esbuild writes are relative to this folder, so the output does not depend on where the build is started.
-  absWorkingDir: rootDir,
-  // React's production build: smaller, no development warnings. Minified only with --minify; the default stays readable for review.
-  define: { 'process.env.NODE_ENV': '"production"' },
-  ...(enterprise ? { plugins: bakedPlugins() } : {}),
+  plugins: [...shared.plugins, ...(enterprise ? bakedPlugins() : [])],
 };
 
-const builds = [
-  { entryPoints: ['src/background/service-worker.js'], outfile: 'background.bundle.js' },
-  // The content script and the page bridge are registered at run time (service worker), only on enabled instances.
-  { entryPoints: ['src/content/index.js'], outfile: 'content.bundle.js' },
-  { entryPoints: ['src/page/bridge.js'], outfile: 'pagebridge.js' },
-  { entryPoints: ['src/sidepanel/index.jsx'], outfile: 'sidepanel.bundle.js' },
-  { entryPoints: ['src/options/index.jsx'], outfile: 'options.bundle.js' },
-  // The full-page Team dashboard (opened from the Team tab; reads through the ServiceNow tab named in its address).
-  { entryPoints: ['src/dashboard/index.jsx'], outfile: 'dashboard.bundle.js' },
-].map((b) => ({
+const builds = ENTRIES.map((b) => ({
   ...common,
-  entryPoints: b.entryPoints.map((e) => path.join(rootDir, e)),
+  entryPoints: [path.join(rootDir, b.entry)],
   outfile: path.join(outdir, b.outfile),
 }));
 
@@ -160,6 +147,53 @@ function copyStatic() {
   const areas = fs.existsSync(areaDir) ? fs.readdirSync(areaDir).filter((f) => f.endsWith('.css')).sort().map((f) => path.join('areas', f)) : [];
   const css = ['theme.css', 'ui.css', ...areas].map((f) => readText(path.join('src/ui', f))).join('\n');
   fs.writeFileSync(path.join(outdir, 'agentbuddy.css'), css);
+}
+
+// The packages bundled into the extension (React, React DOM, scheduler) are MIT licensed, and the MIT licence asks for its notice to go
+// with every copy. The bundles keep no comments (legalComments: 'none'), so each bundled package's own licence file is copied to
+// licenses/<package>/ in the build. Which packages are inside comes from the files esbuild read, as in scripts/sbom.js; a bundled
+// package without a licence file stops the build rather than ship without its notice.
+const LICENCE_FILE = /^(licen[cs]e|copying|notice)(\.(md|txt))?$/i;
+function copyLicences(inputs) {
+  for (const key of bundledKeys(inputs)) {
+    const name = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+    const files = fs.readdirSync(path.join(rootDir, key)).filter((f) => LICENCE_FILE.test(f)).sort();
+    if (!files.length) fail(`${name} is bundled into the extension but ${key}/ has no licence file to ship with it.`);
+    const to = path.join(outdir, 'licenses', ...name.split('/'));
+    fs.mkdirSync(to, { recursive: true });
+    for (const f of files) fs.writeFileSync(path.join(to, f), readText(path.join(key, f)));
+  }
+}
+
+// --watch: esbuild watches the code; the static files are not in its graph, so they are watched here and copied again, once per burst
+// of changes (one save in an editor can fire several events, a branch switch many).
+function watchStatic() {
+  let timer = null;
+  const recopy = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      try {
+        copyStatic();
+        console.log(`Copied the static files again (${new Date().toLocaleTimeString()}).`);
+      } catch (err) {
+        console.error(`Could not copy the static files: ${err.message}`); // (a file half-written by the editor: the next save copies it)
+      }
+    }, 200);
+  };
+  const watchDir = (rel, wanted) => {
+    try {
+      fs.watch(path.join(rootDir, rel), (event, name) => {
+        if (!name || wanted(String(name))) recopy();
+      });
+    } catch (err) {
+      console.error(`Not watching ${rel}: ${err.message}`);
+    }
+  };
+  watchDir('.', (name) => name === 'manifest.json' || name === 'managed_schema.json');
+  for (const dir of ['src/sidepanel', 'src/options', 'src/dashboard']) watchDir(dir, (name) => name.endsWith('.html'));
+  watchDir('src/ui', (name) => name.endsWith('.css'));
+  if (fs.existsSync(path.join(rootDir, 'src/ui/areas'))) watchDir('src/ui/areas', (name) => name.endsWith('.css'));
+  watchDir('assets/icons', () => true);
 }
 
 // In an enterprise build every bundle that reads the policy must carry the config's policy, never the empty one.
@@ -190,7 +224,8 @@ async function buildOne(b) {
   const { keys } = collect(files);
   const subset = {};
   for (const key of [...keys.keys()].sort()) if (fullCatalogue[key] !== undefined) subset[key] = fullCatalogue[key];
-  return esbuild.build({ ...b, plugins: [...(b.plugins || []), catalogueModule(subset)] });
+  // (the metafile names the files that went into the bundle: copyLicences reads it)
+  return esbuild.build({ ...b, metafile: true, plugins: [...(b.plugins || []), catalogueModule(subset)] });
 }
 
 const shownOut = (path.relative(rootDir, outdir) || outdir).split(path.sep).join('/');
@@ -198,12 +233,15 @@ const shownOut = (path.relative(rootDir, outdir) || outdir).split(path.sep).join
 async function main() {
   copyStatic();
   if (isWatch) {
+    // (a watch build is for development and carries no licence files; a normal build copies them)
     const contexts = await Promise.all(builds.map((b) => esbuild.context(b)));
     await Promise.all(contexts.map((c) => c.watch()));
-    console.log('Watching for changes. Static files (manifest, html, css) are copied once; rebuild to refresh them.');
+    watchStatic();
+    console.log('Watching for changes. The static files (manifest, html, css, icons) are copied again when they change.');
     return;
   }
-  await Promise.all(builds.map((b) => buildOne(b)));
+  const results = await Promise.all(builds.map((b) => buildOne(b)));
+  copyLicences(results.flatMap((r) => Object.keys(r.metafile.inputs)));
   if (enterprise) {
     checkBaked();
     const { plan } = enterprise;

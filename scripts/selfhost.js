@@ -4,7 +4,8 @@
 //   node scripts/selfhost.js init   [--key <file>]              make the signing key (once) and print the extension id
 //   node scripts/selfhost.js id     [--key <file>]              print the extension id of a key
 //   node scripts/selfhost.js pack   --base-url <https address> [--dist <folder>] [--key <file>] [--out <folder>]
-//       dist      the build to pack (default dist-enterprise if it exists, else dist; build it first: npm run build)
+//       dist      the build to pack (default: dist-enterprise or dist, whichever holds a build; when both do, --dist must say which;
+//                 build it first: npm run build, or npm run package -- --minify for the minified release in release/unpacked)
 //       base-url  the https folder the files will be served from, for example https://extensions.corp.example/agentbuddy
 //       key       the signing key (default selfhost/agentbuddy-key.pem); the SAME key every time: it is what makes the extension id
 //       out       where to write (default selfhost/out)
@@ -129,9 +130,23 @@ function updateManifest({ id, version, crxUrl, sha256 }) {
 `;
 }
 
+// An option given without its value (`--dist` at the end, or followed by another option) is a mistake: it used to fall back to the
+// default silently, which for --key or --dist means signing or packing something other than what was asked for.
 function arg(args, name, fallback) {
   const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+  if (i < 0) return fallback;
+  const value = args[i + 1];
+  if (!value || value.startsWith('--')) throw new Error(`--${name} needs a value.`);
+  return value;
+}
+
+// The build to pack when --dist is not given. dist-enterprise/ and dist/ can both be on disk, and either can be older than the source:
+// preferring one silently because it exists could pack the wrong or a stale build. So the one that exists is packed, and when both do,
+// the person says which.
+function defaultDist() {
+  const built = ['dist-enterprise', 'dist'].filter((d) => fs.existsSync(path.join(root, d, 'manifest.json')));
+  if (built.length > 1) throw new Error('Both dist-enterprise/ and dist/ hold a build. Say which one to pack: --dist dist-enterprise or --dist dist.');
+  return path.join(root, built[0] || 'dist');
 }
 
 function loadKey(file) {
@@ -153,11 +168,12 @@ function init(args) {
 function pack(args) {
   const baseUrl = String(arg(args, 'base-url', '')).replace(/\/+$/, '');
   if (!/^https:\/\/[^/\s]+/.test(baseUrl)) throw new Error('--base-url must be the https address the files will be served from, for example https://extensions.corp.example/agentbuddy');
-  const enterprise = path.join(root, 'dist-enterprise');
-  const dist = path.resolve(arg(args, 'dist', fs.existsSync(enterprise) ? enterprise : path.join(root, 'dist')));
+  const dist = path.resolve(arg(args, 'dist', '') || defaultDist());
   const manifestFile = path.join(dist, 'manifest.json');
   if (!fs.existsSync(manifestFile)) throw new Error(`${dist} has no manifest.json. Build first: npm run build (or npm run build:enterprise -- enterprise/<name>.json).`);
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  // Say which build is packed and when it was made, so a stale one is noticed before it is uploaded.
+  console.log(`Packing ${path.relative(root, dist) || dist}: version ${manifest.version}, ${manifest.host_permissions ? 'an enterprise build' : 'the normal build'}, built ${fs.statSync(manifestFile).mtime.toLocaleString()}.`);
   const keyPem = loadKey(path.resolve(arg(args, 'key', DEFAULT_KEY)));
   const out = path.resolve(arg(args, 'out', path.join(root, 'selfhost', 'out')));
   fs.mkdirSync(path.join(out, 'policies'), { recursive: true });

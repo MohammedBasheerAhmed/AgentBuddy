@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { detect, detectCandidates, resolveOverlaps, KINDS, REGIONS, validators, HIGH_CONFIDENCE } from '../src/pii/detectors.js';
 import { POSITIVES, NEGATIVES } from './fixtures/pii-corpus.js';
+import { cpuTime } from './fixtures/timing.js';
 
 const kindsOf = (text, options) => detect(text, options).map((f) => f.kind);
 const valuesOf = (text, options) => detect(text, options).map((f) => f.value);
@@ -304,15 +305,15 @@ function adversarial() {
   };
 }
 
+// CPU time, warm, best of three (tests/fixtures/timing.js): the whole suite runs at once, and the clock also counts the time other
+// test processes had the CPU.
 test('200k characters of adversarial input finish quickly (no catastrophic backtracking)', () => {
   const slow = [];
   for (const [name, raw] of Object.entries(adversarial())) {
     const text = raw.slice(0, N);
     assert.equal(text.length, N, name);
-    const started = performance.now();
-    detect(text);
-    const ms = performance.now() - started;
-    if (ms >= 500) slow.push(`${name}: ${ms.toFixed(0)} ms`);
+    const { ms } = cpuTime(() => detect(text), 500);
+    if (ms >= 500) slow.push(`${name}: ${ms.toFixed(0)} ms of CPU`);
   }
   assert.deepEqual(slow, []);
 });
@@ -320,10 +321,9 @@ test('200k characters of adversarial input finish quickly (no catastrophic backt
 test('the whole corpus joined many times is linear, not quadratic', () => {
   const text = POSITIVES.concat(NEGATIVES).map((c) => c.text).join('\n');
   const big = text.repeat(Math.ceil(N / text.length));
-  const started = performance.now();
-  const found = detect(big);
+  const { ms, value: found } = cpuTime(() => detect(big), 2000);
   assert.ok(found.length > 500);
-  assert.ok(performance.now() - started < 2000, 'a few hundred KB of realistic text takes well under two seconds');
+  assert.ok(ms < 2000, `a few hundred KB of realistic text takes well under two seconds (${Math.round(ms)} ms of CPU)`);
 });
 
 test('HIGH_CONFIDENCE sits where the firewall expects', () => {

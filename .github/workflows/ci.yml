@@ -25,20 +25,42 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # The Node version people use locally (nvm, fnm, volta read the same file).
+          node-version-file: .nvmrc
           cache: npm
       - name: Install (exact versions from the lockfile)
         run: npm ci
       - name: Unit tests
         run: node tests/run.js
-      - name: Compile check (every entry, nothing written)
+      - name: Compile check (every entry, nothing written; a warning fails it)
         run: node scripts/check-compile.js
       - name: Build
         run: node build.js
       - name: Traceability (every control names a test file that exists)
-        run: npm run traceability -- --check
+        run: npm run traceability:check
+      - name: Arabic (every text a person reads has an Arabic entry)
+        run: npm run i18n
       - name: Audit of the shipped dependencies
         run: npm audit --omit=dev
+
+  # The same source must test the same on Windows, where most of the team works (paths with backslashes, a checkout that git could give
+  # CRLF line endings; .gitattributes keeps it LF). Unit tests and the compile check only: the build and the e2e run are on Linux.
+  windows:
+    name: Unit tests and compile check on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install (exact versions from the lockfile)
+        run: npm ci
+      - name: Unit tests
+        run: node tests/run.js
+      - name: Compile check (every entry, nothing written; a warning fails it)
+        run: node scripts/check-compile.js
 
   e2e:
     name: End-to-end (real Chrome, fake ServiceNow, fake AI)
@@ -53,12 +75,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
-      - name: Install
+      - name: Install (puppeteer-core is a pinned devDependency)
         run: npm ci
-      - name: Install puppeteer-core (not a dependency of the repo)
-        run: npm i --no-save puppeteer-core
       - name: Chrome version
         run: $CHROME_PATH --version
       - name: Build and run every scenario
@@ -73,5 +93,39 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: e2e-screenshots
+          path: ${{ runner.temp }}/agentbuddy-e2e/**/*.png
+          if-no-files-found: ignore
+
+  # What is shipped is the minified build (npm run package -- --minify): the same scenarios run against it, built into its own folder
+  # (E2E_DIST) so dist/ stays the readable build the job above tested.
+  e2e-minified:
+    name: End-to-end on the minified build (what is shipped)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: checks
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install (puppeteer-core is a pinned devDependency)
+        run: npm ci
+      - name: Chrome version
+        run: $CHROME_PATH --version
+      - name: Build minified and run every scenario
+        env:
+          AB_E2E_TMP: ${{ runner.temp }}/agentbuddy-e2e
+          E2E_DIST: ${{ runner.temp }}/agentbuddy-minified
+          SCENARIOS: ${{ inputs.scenarios }}
+          E2E_TIMING: "1"
+        run: node build.js --minify --out "$E2E_DIST" && node e2e/run.js "$SCENARIOS"
+      - name: Keep the screenshots of failed steps
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screenshots-minified
           path: ${{ runner.temp }}/agentbuddy-e2e/**/*.png
           if-no-files-found: ignore

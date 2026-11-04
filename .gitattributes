@@ -1,0 +1,21 @@
+# Every text file is stored and checked out with LF line endings, on every system. Without this, Git for Windows (core.autocrlf=true)
+# checks text files out with CRLF, and a stylesheet with CRLF changed content.bundle.js: the same commit built different bytes (and a
+# different SHA256SUMS) on Windows than on Linux or macOS. (build.js also reads that stylesheet with LF, for a file saved with CRLF.)
+* text=auto eol=lf
+
+# Binary files: never converted, never diffed as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.zip binary
+*.crx binary
+
+# The policy samples for the Windows registry: regedit expects CRLF.
+*.reg text eol=crlf

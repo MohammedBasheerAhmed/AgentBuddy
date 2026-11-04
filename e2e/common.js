@@ -206,7 +206,7 @@ async function waitPanel(ctx, p, what, fn, opts) {
     const text = await p.evaluate(() => document.body.innerText).catch(() => '');
     const file = require('path').join(ctx.TMP, 'panel-at-failure.txt');
     require('fs').writeFileSync(file, text);
-    throw new Error(`${err.message}. The panel showed (full text in ${file}): ${text.replace(/s+/g, ' ').slice(0, 160)}`);
+    throw new Error(`${err.message}. The panel showed (full text in ${file}): ${text.replace(/\s+/g, ' ').slice(0, 160)}`);
   }
 }
 module.exports.waitPanel = waitPanel;

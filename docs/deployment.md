@@ -335,7 +335,10 @@ be able to find it.
 1. Raise `version` in `manifest.json` and `package.json` (the browsers update only to a higher version).
 2. Build: `npm run build` (the normal build) or `npm run build:enterprise -- enterprise/<name>.json` (your hosts and policy compiled in; its
    `updateUrl` is the address of `update.xml` below).
-3. Pack: `node scripts/selfhost.js pack --base-url https://extensions.corp.example/agentbuddy`. It writes `selfhost/out/`:
+3. Pack: `node scripts/selfhost.js pack --base-url https://extensions.corp.example/agentbuddy --dist dist-enterprise` (or
+   `--dist dist`, or `--dist release/unpacked` for the minified build `npm run package -- --minify` makes). Without `--dist` it packs
+   whichever of `dist-enterprise/` and `dist/` holds a build, and stops when both do; it prints which build it packed and when it was
+   built. It writes `selfhost/out/`:
    `agentbuddy-<version>.crx` (the signed package), `update.xml` (what the browsers poll), `policies/` (the policy files of
    `docs/review-pack/policies/` with your extension id and update address filled in), and `SHA256SUMS`.
 4. Upload the `.crx` and `update.xml` to the address. Keep the older `.crx` files there for a while.

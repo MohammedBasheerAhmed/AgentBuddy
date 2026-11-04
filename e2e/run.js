@@ -1,27 +1,32 @@
 // End-to-end run: real Chrome + the built extension + a fake ServiceNow (HTTPS) + a fake AI endpoint.
 //
 //   npm run e2e                   rebuilds dist/ first, then runs every scenario (about two minutes)
-//   node e2e/run.js [a,c,g]       run only some scenarios (dist/ must be built already)
+//   node e2e/run.js [a,c,g]       run only some scenarios (dist/ must be built already); an id that is not a scenario stops the run
 //   node e2e/run.js --headed      show the browser (needs a display)
 //
-// Needs puppeteer-core, which is NOT a dependency of the repo:  npm i --no-save puppeteer-core
+// Needs puppeteer-core, a pinned devDependency (npm ci installs it), and a Chrome to drive (CHROME_PATH).
 // The real manifest is never modified: the harness patches a temp COPY (see e2e/harness.js).
 //
-// Environment: CHROME_PATH (default: Chrome in Program Files), AB_E2E_TMP (temp folder), E2E_HEADED=1,
-//   E2E_SCENARIO_TIMEOUT_MS, E2E_RUN_TIMEOUT_MS, and E2E_MUTATE=write|leak|beacon: breaks a COPY of the extension on purpose to
-//   show that the run then fails (a self-check of the harness, see MUTATIONS in e2e/harness.js).
+// Environment: CHROME_PATH (default: Chrome in Program Files), E2E_DIST (test a build in another folder, for example the minified
+//   one: node build.js --minify --out .build-tmp-min), AB_E2E_TMP (the folder for the run's files; default a new one per run),
+//   E2E_HEADED=1, E2E_SCENARIO_TIMEOUT_MS, E2E_RUN_TIMEOUT_MS, and E2E_MUTATE=write|leak|beacon: breaks a COPY of the extension on
+//   purpose to show that the run then fails (a self-check of the harness, see MUTATIONS in e2e/harness.js).
 const fs = require('fs');
 const path = require('path');
 
 try {
   require.resolve('puppeteer-core');
 } catch {
-  console.error('puppeteer-core is not installed. Run: npm i --no-save puppeteer-core');
+  console.error('puppeteer-core is not installed. Run: npm ci (it is a pinned devDependency in package.json)');
   process.exit(2);
 }
 
 const { createContext } = require('./harness.js');
 const { Checker } = require('./checker.js');
+
+// Ctrl+C or a stop from CI ends the run through process.exit, so the 'exit' handlers run: puppeteer's closes Chrome, the harness's removes
+// the TLS key and the extension copy (a signal alone would end the process without either).
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(130));
 
 // Scenarios are every file in e2e/scenarios/ (a new area adds <letter>-<name>.js; nothing here to edit). Each exports { id, title, run }.
 // Order: alphabetical, except e-readonly (it re-checks every request of the whole run) which goes last.
@@ -102,7 +107,15 @@ async function describeFailure(ctx, id) {
 async function main() {
   const args = process.argv.slice(2);
   const headed = args.includes('--headed') || process.env.E2E_HEADED === '1';
-  const only = (args.find((a) => !a.startsWith('--')) || '').split(',').filter(Boolean);
+  // "b, d" and "b,d" are the same list (the CI form's input is typed by a person).
+  const only = (args.find((a) => !a.startsWith('--')) || '').split(',').map((id) => id.trim()).filter(Boolean);
+  // An id that is not a scenario is a typo: running the others and reporting PASSED would hide that the one asked for never ran.
+  const known = SCENARIOS.map((s) => s.id);
+  const unknown = only.filter((id) => !known.includes(id));
+  if (unknown.length) {
+    console.error(`No scenario with the id ${unknown.map((id) => `"${id}"`).join(', ')}. The scenarios are: ${known.join(', ')}.`);
+    process.exit(2);
+  }
   const started = Date.now();
   const t = new Checker();
   const ctx = await createContext({ headed });
@@ -110,7 +123,9 @@ async function main() {
   console.log(`  fake instance  ${ctx.origin}  (HTTPS, self-signed, strict CSP)`);
   console.log(`  fake AI        ${ctx.ai.baseUrl}`);
   console.log(`  extension id   ${ctx.extId}`);
-  console.log('  note           the shipped dist/manifest.json is NOT modified; a temp copy gets localhost host_permissions');
+  console.log(`  build          ${ctx.extension.source}`);
+  console.log(`  files          ${ctx.TMP}  (screenshots and notes of the run stay here)`);
+  console.log('  note           the build\'s own manifest.json is NOT modified; a temp copy gets localhost host_permissions');
 
   // Never hang: a hard stop for the whole run, and a time box per scenario.
   const hardStop = setTimeout(async () => {
@@ -136,11 +151,14 @@ async function main() {
 
   clearTimeout(hardStop);
   await ctx.close();
+  // A run in which no check ran proved nothing (every scenario skipped, or one that returns before its first check): it fails.
+  const nothingRan = t.pass + t.fail === 0;
+  const failed = t.fail > 0 || nothingRan;
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`${t.fail ? 'FAILED' : 'PASSED'}: ${t.pass} passed, ${t.fail} failed, ${t.warn} warnings  (${Math.round((Date.now() - started) / 1000)}s)`);
+  console.log(`${failed ? 'FAILED' : 'PASSED'}: ${t.pass} passed, ${t.fail} failed, ${t.warn} warnings  (${Math.round((Date.now() - started) / 1000)}s)${nothingRan ? '  - no check ran' : ''}`);
   if (t.failures.length) console.log(`\nFailures:\n${t.failures.map((f) => `  - ${f}`).join('\n')}`);
   if (t.warnings.length) console.log(`\nWarnings (known limits, not failures):\n${t.warnings.map((f) => `  - ${f}`).join('\n')}`);
-  process.exit(t.fail ? 1 : 0);
+  process.exit(failed ? 1 : 0);
 }
 
 main().catch((err) => {

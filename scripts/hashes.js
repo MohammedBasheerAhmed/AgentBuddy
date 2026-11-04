@@ -8,19 +8,28 @@ const fs = require('fs');
 const path = require('path');
 const { hashFolder, toSha256Sum, compareHashes } = require('./lib/hashes.js');
 
+const USAGE = 'Usage: node scripts/hashes.js <build folder> [--out <file>] [--check <file>]';
 const opts = { dir: '', out: '', check: '' };
 const argv = process.argv.slice(2);
+const stop = (message) => {
+  console.error(`${message} ${USAGE}`);
+  process.exit(1);
+};
 for (let i = 0; i < argv.length; i += 1) {
-  if (argv[i] === '--out' || argv[i] === '--check') opts[argv[i].slice(2)] = argv[(i += 1)] || '';
+  if (argv[i] === '--out' || argv[i] === '--check') {
+    // `--check` without a file used to print the hashes and exit 0, as if the check had passed.
+    const value = argv[i + 1];
+    if (!value || value.startsWith('--')) stop(`${argv[i]} needs a file.`);
+    opts[argv[i].slice(2)] = value;
+    i += 1;
+  } else if (argv[i].startsWith('--')) stop(`Unknown option ${argv[i]}.`);
   else if (!opts.dir) opts.dir = argv[i];
+  else stop(`One build folder only (got ${opts.dir} and ${argv[i]}).`);
 }
 const { dir } = opts;
 const valueOf = (flag) => opts[flag.slice(2)];
 
-if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-  console.error('Usage: node scripts/hashes.js <build folder> [--out <file>] [--check <file>]');
-  process.exit(1);
-}
+if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) stop(dir ? `${dir} is not a folder.` : 'Name the build folder.');
 
 const rows = hashFolder(path.resolve(dir));
 const check = valueOf('--check');

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSafeText, toPlainText, stripUnsafeChars, DEFAULT_MAX_CHARS } from '../src/render/safeText.js';
+import { cpuTime } from './fixtures/timing.js';
 
 // Invisible characters are built from code points so this file itself stays plain ASCII.
 const cp = (...codes) => String.fromCodePoint(...codes);
@@ -418,12 +419,11 @@ const ADVERSARIAL = {
 
 for (const [name, input] of Object.entries(ADVERSARIAL)) {
   test(`300k characters of "${name}" parse in under 500 ms`, () => {
-    // Both the default cap and a cap high enough that the whole input is parsed.
+    // Both the default cap and a cap high enough that the whole input is parsed. CPU time, warm, best of three (tests/fixtures/timing.js):
+    // the whole suite runs at once, and the clock also counts the time other test processes had the CPU.
     for (const options of [undefined, { maxChars: 1000000 }]) {
-      const started = performance.now();
-      const blocks = parse(input, options);
-      const ms = performance.now() - started;
-      assert.ok(ms < 500, `${name}: ${Math.round(ms)} ms`);
+      const { ms, value: blocks } = cpuTime(() => parse(input, options), 500);
+      assert.ok(ms < 500, `${name}: ${Math.round(ms)} ms of CPU`);
       assertPlainData(blocks);
     }
   });

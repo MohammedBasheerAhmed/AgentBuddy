@@ -6,7 +6,10 @@
 //   node scripts/package.js --dist <dir>   zip a build that is already in <dir> (node build.js --out <dir>); nothing is rebuilt
 //   npm run package -- --minify            the release: minified bundles in release/agentbuddy-<version>.zip, and next to it
 //                                          release/agentbuddy-<version>-readable.zip, the same source built without minifying, which is
-//                                          what a security reviewer reads (the code is the same; `npm run repro -- --minify` rebuilds both)
+//                                          what a security reviewer reads (the code is the same; `npm run repro -- --minify` rebuilds both).
+//                                          The minified build is made in release/unpacked/ and stays there (load it unpacked, run the
+//                                          end-to-end tests on it with E2E_DIST=release/unpacked, or pack it with scripts/selfhost.js
+//                                          --dist release/unpacked); dist/, the readable build people load while working, is left alone.
 //
 // The zip is reproducible: entries in a fixed order, every file dated 1980-01-01 (or SOURCE_DATE_EPOCH), no extra fields, so the
 // same build gives the same bytes and the same SHA-256 (scripts/repro-check.js does the same for the build itself).
@@ -125,8 +128,8 @@ function main(argv) {
   const at = argv.indexOf('--dist');
   const given = at >= 0 ? argv[at + 1] : '';
   if (at >= 0 && (!given || given.startsWith('--'))) fail('--dist needs a folder, for example --dist dist');
-  const dist = given ? path.resolve(given) : path.join(root, 'dist');
-  if (!given) execFileSync(process.execPath, [path.join(root, 'build.js'), ...(minify ? ['--minify'] : [])], { cwd: root, stdio: 'inherit' });
+  const dist = given ? path.resolve(given) : minify ? path.join(root, 'release', 'unpacked') : path.join(root, 'dist');
+  if (!given) execFileSync(process.execPath, [path.join(root, 'build.js'), ...(minify ? ['--minify', '--out', dist] : [])], { cwd: root, stdio: 'inherit' });
 
   const manifestPath = path.join(dist, 'manifest.json');
   if (!fs.existsSync(manifestPath)) fail(`${path.relative(root, dist) || dist} has no manifest.json. Build first (node build.js).`);
@@ -144,7 +147,7 @@ function main(argv) {
   fs.writeFileSync(path.join(outDir, name), zip);
   const hash = crypto.createHash('sha256').update(zip).digest('hex');
   fs.writeFileSync(path.join(outDir, `${name}.sha256`), `${hash}  ${name}\n`);
-  console.log(`Wrote release/${name} (${listFiles(dist).length} files, ${zip.length} bytes)`);
+  console.log(`Wrote release/${name} (${listFiles(dist).length} files, ${zip.length} bytes) from ${path.relative(root, dist).split(path.sep).join('/') || dist}/`);
   console.log(`SHA-256 ${hash}  (release/${name}.sha256)`);
 
   if (minify && !given) {

@@ -5,6 +5,16 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Build, tests and CI (audit phase 4, first half)
+- `npm run verify` runs every gate CI runs (unit tests, compile check, review map, Arabic); `npm run i18n` and
+  `npm run traceability:check` exist on their own. `npm ci` installs everything the end-to-end run needs (puppeteer-core is pinned).
+- A test filter or end-to-end scenario id that matches nothing now fails instead of reporting success; the read-only guard test that
+  scanned nothing on Windows scans the content script again; timing tests measure CPU time, so a busy computer no longer fails them.
+- `.gitattributes` keeps every checkout LF, so a Windows checkout builds the same bytes; CI also runs the unit tests on Windows and the
+  end-to-end run on the minified build that is shipped (`npm run package -- --minify` builds into `release/unpacked/`, not `dist/`).
+- The release carries the licence files of the bundled React packages (`licenses/`). Node 22.12 or later (`.nvmrc`, `engines`).
+
+
 ### Answer formats: write the summary the way you want it (R11)
 - You asked whether the summary (and the other AI actions) can follow a format of your own, for example "Issue, Key actions performed" and
   so on, instead of the fixed one. **Settings > AI Assist > "How AI answers are written"** now lists every action whose format can change,

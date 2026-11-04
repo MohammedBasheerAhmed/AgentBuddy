@@ -1,37 +1,30 @@
-// Compiles every entry point listed in build.js WITHOUT writing anything (so it is safe to run while someone else builds
-// dist/). Use it after UI or content-script changes:  node scripts/check-compile.js
+// Compiles every entry point of the build (scripts/lib/entries.js, the list build.js uses) WITHOUT writing anything, so it is safe to
+// run while someone else builds dist/. Use it after UI or content-script changes:  node scripts/check-compile.js
+//
+// A warning fails the check too: esbuild warns about code that compiles but is very likely wrong (a duplicate key in an object, a
+// comparison with -0 or NaN, an import that does not exist, `typeof x == "undefiend"`), and the normal build prints its warnings
+// among many lines where they are easy to miss.
 const esbuild = require('esbuild');
-const fs = require('fs');
 const path = require('path');
+const { ENTRIES, bundleOptions } = require('./lib/entries.js');
 
 const root = path.join(__dirname, '..');
-const source = fs.readFileSync(path.join(root, 'build.js'), 'utf8');
-const entries = [...source.matchAll(/entryPoints:\s*\['([^']+)'\]/g)].map((m) => m[1]);
-if (!entries.length) {
-  console.error('No entry points found in build.js');
-  process.exit(1);
-}
+const where = (m) => (m.location ? `${m.location.file}:${m.location.line} ` : '');
 
 (async () => {
   let failed = 0;
-  for (const entry of entries) {
+  for (const { entry } of ENTRIES) {
     try {
-      await esbuild.build({
-        entryPoints: [path.join(root, entry)],
-        bundle: true,
-        write: false,
-        logLevel: 'silent',
-        loader: { '.js': 'jsx', '.jsx': 'jsx', '.css': 'text' },
-        jsx: 'automatic',
-        target: ['chrome116'],
-        format: 'iife',
-        define: { 'process.env.NODE_ENV': '"production"' },
-      });
-      console.log(`ok    ${entry}`);
+      const result = await esbuild.build({ ...bundleOptions(root), entryPoints: [path.join(root, entry)], write: false, logLevel: 'silent' });
+      if (result.warnings.length) {
+        failed += 1;
+        console.log(`WARN  ${entry}\n${result.warnings.map((w) => `      ${where(w)}${w.text}`).join('\n')}`);
+      } else console.log(`ok    ${entry}`);
     } catch (err) {
       failed += 1;
-      console.log(`FAIL  ${entry}\n${(err.errors || []).map((e) => `      ${e.location ? `${e.location.file}:${e.location.line} ` : ''}${e.text}`).join('\n') || err.message}`);
+      console.log(`FAIL  ${entry}\n${(err.errors || []).map((e) => `      ${where(e)}${e.text}`).join('\n') || err.message}`);
     }
   }
+  if (failed) console.log(`\n${failed} of ${ENTRIES.length} entries have errors or warnings.`);
   process.exit(failed ? 1 : 0);
 })();
