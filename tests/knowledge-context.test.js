@@ -170,7 +170,7 @@ test('the list: published articles of one knowledge base only, titles and counts
   assert.deepEqual(articles.map((a) => a.number).sort(), ['KB0000001', 'KB0000002', 'KB0000003', 'KB0000004', 'KB0000005']);
   assert.equal(articles.length, 5, 'the draft and the HR article are not in it');
   assert.ok(articles.every((a) => a.knowledgeBase === 'IT Knowledge Base'));
-  assert.deepEqual(Object.keys(articles[0]).sort(), ['category', 'knowledgeBase', 'number', 'sysId', 'title', 'updated', 'views']);
+  assert.deepEqual(Object.keys(articles[0]).sort(), ['category', 'knowledgeBase', 'number', 'sysId', 'title', 'updated', 'updatedUtc', 'views']);
   assert.equal(articles.find((a) => a.number === 'KB0000001').views, 340);
   assert.equal(truncated, false);
   assert.equal(total, 5);

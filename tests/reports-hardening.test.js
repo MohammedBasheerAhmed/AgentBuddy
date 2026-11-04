@@ -203,11 +203,13 @@ test('SLA: the business percentage decides (an 8-to-5 SLA passes 100% plain time
 test('SLA: a paused SLA is never "due soon", even with a planned end in the past; a running one is', () => {
   const now = NOW;
   const tickets = groupSlaByTicket(
-    [sla(id(1), { pct: 50, bpct: 50, stage: 'paused', end: '2026-10-27 10:00:00' }), sla(id(2), { pct: 50, bpct: 50, end: '2026-10-27 13:00:00' })],
+    [sla(id(1), { pct: 50, bpct: 50, stage: 'paused', end: '2026-10-27 10:00:00' }), sla(id(2), { pct: 50, bpct: 50, end: '2026-10-27 13:00:00' }), sla(id(3), { pct: 80, bpct: 80, stage: 'paused', end: '2026-10-27 10:00:00' })],
     { now }
   );
-  assert.equal(tickets.find((t) => t.sysId === id(1)).dueSoon, false);
+  // The paused one with half its time used is then not at issue at all, so it is not kept; a paused one at risk is, but not "due soon".
+  assert.equal(tickets.find((t) => t.sysId === id(1)), undefined);
   assert.equal(tickets.find((t) => t.sysId === id(2)).dueSoon, true);
+  assert.deepEqual([tickets.find((t) => t.sysId === id(3)).atRisk, tickets.find((t) => t.sysId === id(3)).dueSoon], [true, false]);
   assert.equal(isPaused({ stage: cell('paused', 'Paused') }), true);
   assert.equal(isPaused({ stage: 'Paused' }), true);
   assert.equal(isPaused({ stage: cell('in_progress', 'In progress') }), false);

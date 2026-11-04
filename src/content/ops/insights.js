@@ -15,11 +15,11 @@ import { findOpenDuplicates, findSimilarTickets, readContextPack } from '../../c
 import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from '../../context/access.js';
 import { readChangesOnTarget } from '../../context/related.js';
 import { FIELDS_BY_KIND } from '../../context/allowlists.js';
+import { customersOf } from '../../context/identity.js';
 import { isSensitiveTable, kindForTable } from '../../context/kinds.js';
 import { SYS_ID_RE, cleanText, disp, oneLine, raw } from '../../context/util.js';
 
 const SENSITIVE_NOTE = 'This record is in a sensitive table, so this is not looked up unless sensitive data is allowed.';
-const CUSTOMER_ROLES = ['caller', 'requested_for', 'contact', 'consumer'];
 const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 
 // `deps.now` is optional (tests pin the clock with it); the live deps do not have it.
@@ -63,7 +63,7 @@ export async function readSlaTimes({ sysId }, deps, memo = new Map()) {
 
 /** { status: 'yes' | 'no' | 'unknown', access }. Unknown when there is no caller, the user row is not readable or the flag is hidden. */
 export async function readVip(pack, deps) {
-  const person = (Array.isArray(pack?.people) ? pack.people : []).find((p) => CUSTOMER_ROLES.includes(p?.role) && SYS_ID_RE.test(p?.sysId || ''));
+  const person = customersOf(pack).find((p) => SYS_ID_RE.test(p.sysId || ''));
   if (!person || pack?.sensitive) return { status: 'unknown', access: [] };
   const id = person.sysId.toLowerCase();
   const { rows, failure } = await softRead(deps, 'sys_user', `sys_id=${id}`, ['sys_id', 'vip'], { limit: 1, displayValue: false });
@@ -122,7 +122,8 @@ async function groupNames(ids, deps) {
 export async function readFieldHistory({ table, sysId }, deps, memo = new Map()) {
   const source = 'sys_audit';
   const unavailable = (status, note) => ({ available: false, changes: [], note, access: [accessEntry('field history', status, note)] });
-  const query = `tablename=${table}^documentkey=${sysId}^fieldnameIN${TRACKED.join(',')}^ORDERBYsys_created_on`;
+  // Newest first, so a long history keeps its latest changes (where the ticket is now, and how it got there lately).
+  const query = `tablename=${table}^documentkey=${sysId}^fieldnameIN${TRACKED.join(',')}^ORDERBYDESCsys_created_on`;
   const { rows, failure } = await softRead(deps, source, query, AUDIT_FIELDS, { limit: MAX_CHANGES + 1, displayValue: false });
   if (failure) return unavailable(failure.status, failure.status === STATUS.BLOCKED ? failure.note : NO_HISTORY);
   if (rows.some((row) => !sameId(raw(row.documentkey), sysId) || !TRACKED.includes(raw(row.fieldname)))) {
@@ -133,7 +134,9 @@ export async function readFieldHistory({ table, sysId }, deps, memo = new Map())
     if (seen.status !== STATUS.EMPTY) return unavailable(seen.status, NO_HISTORY);
     return { available: true, changes: [], note: '', access: [accessEntry('field history', STATUS.EMPTY)] };
   }
-  const kept = rows.slice(0, MAX_CHANGES);
+  // The newest MAX_CHANGES, then oldest first as the journey reads them (a stable sort: changes made in the same second keep the
+  // order the instance gave them). The stored 'YYYY-MM-DD HH:MM:SS' sorts as text.
+  const kept = rows.slice(0, MAX_CHANGES).sort((a, b) => (raw(a.sys_created_on) < raw(b.sys_created_on) ? -1 : raw(a.sys_created_on) > raw(b.sys_created_on) ? 1 : 0));
   const groupIds = [...new Set(kept.filter((r) => raw(r.fieldname) === 'assignment_group').flatMap((r) => [raw(r.oldvalue), raw(r.newvalue)]).map((id) => id.toLowerCase()).filter((id) => SYS_ID_RE.test(id)))];
   const [groups, labels] = await Promise.all([groupNames(groupIds, deps), kept.some((r) => raw(r.fieldname) !== 'assignment_group') ? choiceLabels(table, deps) : new Map()]);
   const nameOf = (field, value) => {
@@ -149,7 +152,7 @@ export async function readFieldHistory({ table, sysId }, deps, memo = new Map())
     to: nameOf(raw(row.fieldname), row.newvalue),
     atUtc: oneLine(raw(row.sys_created_on), 40),
   }));
-  const note = rows.length > MAX_CHANGES ? `Showing the first ${MAX_CHANGES} changes.` : '';
+  const note = rows.length > MAX_CHANGES ? `Showing the newest ${MAX_CHANGES} changes.` : '';
   return { available: true, changes, note, access: [accessEntry('field history', STATUS.OK, note)] };
 }
 

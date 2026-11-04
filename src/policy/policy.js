@@ -160,6 +160,8 @@ export function normalizeEndpoint(input) {
     return bad('it is not a web address');
   }
   const local = LOCAL_AI_HOSTS.has(url.hostname);
+  // (http:// reaches only localhost and 127.0.0.1, the two names the manifest allows over http: http://[::1] could never be called)
+  if (url.protocol === 'http:' && url.hostname === '[::1]') return bad('plain http:// is only allowed for localhost or 127.0.0.1, not [::1]: the browser would refuse every call to it');
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return bad('it must start with https:// (http:// only for localhost or 127.0.0.1)');
   if (url.username || url.password) return bad('it must not contain a user name or password');
   if (url.search || url.hash || /[?#]/.test(text)) return bad('it must not have a ?query or #fragment');

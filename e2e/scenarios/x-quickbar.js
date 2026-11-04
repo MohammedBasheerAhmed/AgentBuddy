@@ -31,8 +31,10 @@ module.exports = {
     ai.reset();
     inst.setBehaviour();
     await ctx.ensureEnabled();
+    // Everything this scenario relies on, so it also runs alone: without confirmed work profiles the panel goes back to its set-up steps
+    // part of the way through (an earlier scenario confirms them in a full run).
     await ctx.configure(
-      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin], quickBarOpen: true, quickPins: {}, pageBar: false, aiSkipped: false },
+      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin], quickBarOpen: true, quickPins: {}, pageBar: false, aiSkipped: false, profiles: ['it'], profilesConfirmed: true },
       { key: { provider: 'custom', value: ai.key } }
     );
 

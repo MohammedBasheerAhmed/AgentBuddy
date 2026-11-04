@@ -1,4 +1,4 @@
-import { FORMAT_FEATURES, resolveFormat } from '../formats/formats.js';
+import { FORMAT_FEATURES, orgFormatOf, resolveFormat } from '../formats/formats.js';
 import { saveFormat } from '../formats/saveFormat.js';
 import FormatEditor from '../formats/FormatEditor.jsx';
 import { featureById, isFeatureAvailable } from '../features/registry.js';
@@ -16,6 +16,7 @@ const STATE_TEXT = {
   locked: tm('Set by your organisation'),
   org: tm("Your organisation's format"),
   mine: tm('Your format'),
+  standard: tm('Your choice: the standard format'),
   default: '',
 };
 
@@ -38,7 +39,9 @@ export function FormatsSection({ eff, reload }) {
         <div key={g.id} className="ab-fmt-group" role="group" aria-label={g.title}>
           <h3 className="ab-fmt-grouphead">{g.title}</h3>
           {g.items.map(({ feature }) => {
-            const { format, source } = resolveFormat(feature.id, mine, org);
+            const { source } = resolveFormat(feature.id, mine, org);
+            // The organisation's format whatever is in force, so the editor can offer it back after the person chose another one.
+            const inherited = orgFormatOf(feature.id, org);
             return (
               <details key={feature.id} className="ab-more ab-fmt-item" data-feature={feature.id}>
                 <summary>
@@ -50,7 +53,7 @@ export function FormatsSection({ eff, reload }) {
                   feature={feature}
                   saved={mine[feature.id] || null}
                   source={source}
-                  inherited={source === 'org' || source === 'locked' ? format : null}
+                  inherited={inherited}
                   idBase={`fmt-${feature.id}`}
                   onSave={async (next) => {
                     await saveFormat(feature.id, next);

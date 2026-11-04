@@ -9,11 +9,13 @@ export const AR_FORMATS = {
   'Set by your organisation': 'حددته مؤسستك',
   "Your organisation's format": 'تنسيق مؤسستك',
   'Your format': 'تنسيقك',
+  'Your choice: the standard format': 'اختيارك: التنسيق القياسي',
   'Change format': 'غيّر التنسيق',
   'See format': 'اعرض التنسيق',
 
   'Set by your organisation. You can read this format, but not change it.': 'حددته مؤسستك. يمكنك قراءة هذا التنسيق لكن لا يمكنك تغييره.',
   "This is your organisation's format. Save your own to use it instead.": 'هذا تنسيق مؤسستك. احفظ تنسيقك الخاص لاستخدامه بدلًا منه.',
+  "You chose the standard format over your organisation's.": 'اخترت التنسيق القياسي بدلًا من تنسيق مؤسستك.',
   'The panel reads this answer back, so its headings stay as they are. Extra instructions can still change the tone and the length.':
     'تقرأ اللوحة هذه الإجابة لاحقًا، لذا تبقى عناوينها كما هي. ما زال بإمكان التعليمات الإضافية تغيير النبرة والطول.',
   "The customer reads this text. Agent Buddy's rules about internal notes, names and gaps to fill in stay on, whatever you add.":
@@ -59,6 +61,7 @@ export const AR_FORMATS = {
   'Copy for your administrator': 'انسخ لمسؤول النظام',
   'Saved. The next answer uses this format.': 'تم الحفظ. ستستخدم الإجابة التالية هذا التنسيق.',
   'Saved. This action uses its standard format again.': 'تم الحفظ. يعود هذا الإجراء إلى تنسيقه القياسي.',
+  "Saved. This action uses its standard format, not your organisation's.": 'تم الحفظ. يستخدم هذا الإجراء تنسيقه القياسي لا تنسيق مؤسستك.',
   'This action uses its standard format again.': 'يعود هذا الإجراء إلى تنسيقه القياسي.',
   "Back to your organisation's format.": 'عاد إلى تنسيق مؤسستك.',
   'Copied. Your administrator can add it to the orgFormats list of the policy, so the whole team gets it.':

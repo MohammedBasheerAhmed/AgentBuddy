@@ -13,19 +13,20 @@ const BAR_HEIGHT = 10;
  *   items   [{ key, label, value, tone, hint }]
  *   unit    'incidents', '%', 'h' ...
  *   total   the denominator for the percentages (default: the sum of the items)
+ *   shares  false for values that are not parts of a whole (averages): no percentages, no total, no sum of the rows left out
  *   onDrill(item)  makes every row a button
  *   hrefFor(item)  with onDrill: the address of the list a row opens; the row is then a real link (see DrillLink.jsx). A row without
  *                  an address is not clickable at all, so nothing looks like it opens something it cannot.
  */
-export default function HorizontalBar({ title, items, unit = '', total, onDrill, hrefFor, maxItems = 12, emptyText = t('Nothing to show.'), labelHeader, valueHeader, defaultTable = false }) {
+export default function HorizontalBar({ title, items, unit = '', total, shares = true, onDrill, hrefFor, maxItems = 12, emptyText = t('Nothing to show.'), labelHeader, valueHeader, defaultTable = false }) {
   const list = Array.isArray(items) ? items.filter((it) => it && typeof it === 'object') : [];
   const layout = barLayout(list, { width: 100, rowHeight: BAR_HEIGHT, maxItems });
   const denominator = Number(total) > 0 ? Number(total) : layout.total;
-  const summary = `${title ? `${title}. ` : ''}${summarizeItems(list, { unit, total })}`;
+  const summary = `${title ? `${title}. ` : ''}${summarizeItems(list, { unit, total, shares })}`;
 
   const rows = layout.rows.map((row, i) => {
     const item = list[i];
-    const pct = denominator > 0 ? percent(row.value, denominator) : null;
+    const pct = shares && denominator > 0 ? percent(row.value, denominator) : null;
     const valueText = withUnit(formatNumber(row.value), unit);
     const inner = (
       <>
@@ -72,8 +73,8 @@ export default function HorizontalBar({ title, items, unit = '', total, onDrill,
       defaultTable={defaultTable}
       empty={list.length === 0}
       emptyText={emptyText}
-      table={{ ...itemsToTable(list, { unit, total, labelHeader, valueHeader }), caption: title }}
-      note={layout.hidden.count > 0 ? t('and {n} more ({value}). Show as table for all rows.', { n: layout.hidden.count, value: withUnit(formatNumber(layout.hidden.value), unit) }) : ''}
+      table={{ ...itemsToTable(list, { unit, total, labelHeader, valueHeader, shares }), caption: title }}
+      note={layout.hidden.count > 0 ? (shares ? t('and {n} more ({value}). Show as table for all rows.', { n: layout.hidden.count, value: withUnit(formatNumber(layout.hidden.value), unit) }) : t('and {n} more. Show as table for all rows.', { n: layout.hidden.count })) : ''}
     >
       <ul className="ab-hbar">{rows}</ul>
     </ChartFrame>

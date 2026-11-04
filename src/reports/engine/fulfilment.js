@@ -6,7 +6,7 @@ import { t } from '../../i18n/core.js';
 import { shown, placeholderName } from '../shown.js';
 import { andQuery, byCountDesc, raw, disp, sectionResult, stateClass, sumResults, usableTables, verifiedCount } from './common.js';
 import { buildQuery } from './queryBuilder.js';
-import { daysBetween, timeOf } from './time.js';
+import { localDaysBetween, timeOf } from './time.js';
 
 export const FULFILMENT_TABLES = ['sc_req_item', 'sc_task'];
 
@@ -17,8 +17,11 @@ export function stateRows(groups) {
     .sort(byCountDesc);
 }
 
-/** The oldest open items first, across tables, with their age in whole days. Pure. */
-export function oldestItems(rowsByTable, now, n = LIMITS.topN) {
+/**
+ * The oldest open items first, across tables, with their age in calendar days in the person's zone (`tz`, see time.js): 0 is "opened
+ * today", never an item opened yesterday evening. Pure.
+ */
+export function oldestItems(rowsByTable, { now, tz, n = LIMITS.topN }) {
   const items = [];
   rowsByTable.forEach(({ table, label, rows }) => {
     rows.forEach((r) => {
@@ -33,7 +36,7 @@ export function oldestItems(rowsByTable, now, n = LIMITS.topN) {
         owner: disp(r.assigned_to),
         group: disp(r.assignment_group),
         openedAt: disp(r.opened_at),
-        ageDays: Number.isFinite(opened) ? daysBetween(opened, now) : null,
+        ageDays: Number.isFinite(opened) ? localDaysBetween(opened, now, tz) : null,
         openedMs: Number.isFinite(opened) ? opened : Infinity,
       });
     });
@@ -93,7 +96,7 @@ export async function fulfilmentSection(ctx) {
     },
     oldest: oldestItems(
       parts.filter((p) => p.oldest.ok).map((p) => ({ table: p.t.table, label: p.t.meta.label, rows: p.oldest.value })),
-      ctx.now
+      { now: ctx.now, tz: ctx.offsetMin }
     ),
     // A table whose count failed is not added as 0: the total is then flagged as partial (the tile says so).
     open: openSum.value,

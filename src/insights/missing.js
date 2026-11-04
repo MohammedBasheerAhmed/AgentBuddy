@@ -5,6 +5,7 @@
 // A field the pack could not read is not "missing": on a sensitive (HR) record free text is not read at all, and then the text
 // rules are skipped instead of reporting every text as empty.
 
+import { customersOf } from '../context/identity.js';
 import { isolate, t } from '../i18n/index.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -16,7 +17,6 @@ const VAGUE_TITLE = /^(?:(?:it|issue|issues|problem|problems|help|urgent|error|n
 const SCOPE = /\b(?:only me|just me|everyone|everybody|all (?:users|staff|of us)|whole (?:team|office|site|floor|department)|several|many users|multiple users|\d+\s*(?:users|people|colleagues|staff)|my team|our team|the team|nobody else|no one else|others|colleagues|department|site[- ]wide|company[- ]wide)\b/i;
 const ERROR_TEXT = /\berror\b|\bcode\b|\bmessage\b|\bexception\b|\bfail(?:s|ed|ure|ing)?\b|\bdenied\b|\btime[- ]?out\b|\bcrash(?:es|ed)?\b|0x[0-9a-f]{3,}|\b\d{3,5}\b|["'][^"'\n]{6,}["']/i;
 const STEPS = /\bsteps?\b|\breproduce\b|^\s*(?:\d+[.)]|[-*])\s+\S|\bwhen i\b|\bafter i\b|\bwhenever\b|\bevery time\b|\beach time\b|\bi tried\b|\btried to\b|\bthen\b.{0,40}\bthen\b/im;
-const CUSTOMER_ROLES = ['caller', 'requested_for', 'contact', 'consumer'];
 
 // A word or two per item, for the card's one-line summary.
 // (Getters, so the words follow the language when they are read.)
@@ -80,8 +80,8 @@ export function missingDetails(pack) {
   if (textRead && ['incident', 'problem', 'case'].includes(kind) && (title || body) && !ERROR_TEXT.test(all)) {
     items.push(item('error', t('No error message quoted'), t('The exact error text (or a screenshot) is often the fastest way to the fix.')));
   }
-  const people = Array.isArray(pack?.people) ? pack.people : [];
-  const customer = people.find((p) => CUSTOMER_ROLES.includes(p?.role));
+  // The caller, requester, contact or consumer (src/context/identity.js).
+  const [customer] = customersOf(pack);
   // An email that could not be read (sys_user refused) is not an email that is missing.
   const usersRead = !(Array.isArray(pack?.access) ? pack.access : []).some((a) => a?.source === 'sys_user' && a?.status !== 'ok' && a?.status !== 'empty');
   if (textRead && kind !== 'problem') {

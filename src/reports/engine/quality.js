@@ -9,9 +9,9 @@ import { attempt } from './reader.js';
 import { say, tm } from './say.js';
 import { t } from '../../i18n/core.js';
 import { shown, placeholderName } from '../shown.js';
-import { andQuery, byCountDesc, raw, sectionResult, usableTables, resolvedColumn } from './common.js';
+import { andQuery, byCountDesc, raw, sectionResult, usableTables, resolvedColumn, readOpenStates, openOf } from './common.js';
 import { buildQuery } from './queryBuilder.js';
-import { DAY, HOUR, bucketCounts, bucketLabels, bucketStarts, mean, median, timeOf } from './time.js';
+import { DAY, HOUR, bucketCounts, bucketLabels, bucketStarts, localDaysBetween, mean, median, timeOf } from './time.js';
 
 export const TREND_CHOICES = Object.freeze([
   { id: 'day-14', unit: 'day', span: 14, label: tm('Last 14 days') },
@@ -90,11 +90,14 @@ async function readTable(ctx, t, { starts, since, step, windowDays }) {
   const qual = t.meta.quality;
   const has = (col) => col && t.cols.has(col);
 
-  const [openedRead, resolvedRead, openedCount, openNow, reopened, avgReassign, multiReassigned, categories, cis, callers] = await Promise.all([
+  const [openedRead, resolvedRead, openedCount, activeNow, openStates, reopened, avgReassign, multiReassigned, categories, cis, callers] = await Promise.all([
     attempt(() => reader.pages(t.table, q(newestFirst('opened_at')), ['opened_at'], { max: LIMITS.dateRowsMax }), t.table),
     rf ? attempt(() => reader.pages(t.table, q(newestFirst(rf)), [rf, 'opened_at'], { max: LIMITS.dateRowsMax }), t.table) : null,
     attempt(() => reader.count(t.table, q(sinceOpened)), t.table),
     attempt(() => reader.count(t.table, q('active=true')), t.table),
+    // A ticket resolved but not yet closed is still active. The backlog walks back from "open now" and adds every resolved ticket back,
+    // so it must start from the open count the Overview shows (active less those): counted in both, they were there twice.
+    readOpenStates(reader, t.table, q('active=true')),
     has(qual.reopen) ? attempt(() => reader.count(t.table, q(sinceOpened, buildQuery([{ op: 'gt', field: qual.reopen, value: 0 }]))), t.table) : null,
     has(qual.reassign) ? attempt(() => reader.averages(t.table, q(sinceOpened), [qual.reassign]), t.table) : null,
     has(qual.reassign) ? attempt(() => reader.count(t.table, q(sinceOpened, buildQuery([{ op: 'gte', field: qual.reassign, value: LIMITS.pingPongMin }]))), t.table) : null,
@@ -115,6 +118,7 @@ async function readTable(ctx, t, { starts, since, step, windowDays }) {
   const resolved = rf ? bucket(resolvedRead, rf) : null;
 
   const durations = resolvedRead?.ok && rf ? durationsHours(resolvedRead.value.rows.filter((r) => timeOf(raw(r[rf])) >= since), rf) : [];
+  const openNow = openOf(activeNow, openStates.done);
   return { t, rf, opened, resolved, openedRead, resolvedRead, openedCount, openNow, reopened, avgReassign, multiReassigned, categories, cis, callers, durations, windowDays };
 }
 
@@ -123,7 +127,8 @@ export async function qualitySection(ctx) {
   const step = trend.unit === 'week' ? 7 * DAY : DAY;
   const starts = bucketStarts({ now: ctx.now, unit: trend.unit, count: trend.span, offsetMin: ctx.offsetMin });
   const since = starts[0];
-  const windowDays = Math.round((ctx.now - since) / DAY);
+  // The calendar days the trend covers, today included: "Last 14 days" is 14 days at any hour (a rounded difference said 13 before noon).
+  const windowDays = localDaysBetween(since, ctx.now, ctx.offsetMin) + 1;
   const tables = usableTables(ctx);
   const parts = await Promise.all(tables.map((t) => readTable(ctx, t, { starts, since, step, windowDays })));
 

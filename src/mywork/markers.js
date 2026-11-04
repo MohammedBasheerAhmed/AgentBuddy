@@ -10,6 +10,7 @@
 //                    no customer we could match; '' otherwise
 //   since            what the read covered: entries older than this may be missing for a ticket with none in the window (the read
 //                    is capped); 0 when the read was complete. `known` is false when the comments could not be read at all.
+//   customerKnown    the ticket's customer could be matched by login: then lastOtherAt is never the customer's (a colleague's)
 import { raw, parseSnTime } from '../context/util.js';
 
 const lower = (v) => String(v ?? '').trim().toLowerCase();
@@ -32,7 +33,7 @@ export function entriesByTicket(rows) {
 }
 
 /** An empty marker for a ticket whose comments could not be read. */
-export const UNKNOWN_MARKER = Object.freeze({ known: false, since: 0, lastMineAt: null, lastCustomerAt: null, lastOtherAt: null, lastAt: null, replied: '' });
+export const UNKNOWN_MARKER = Object.freeze({ known: false, since: 0, lastMineAt: null, lastCustomerAt: null, lastOtherAt: null, lastAt: null, replied: '', customerKnown: false });
 
 /**
  * @param {{ at: number, by: string }[]} entries one ticket's comments, newest first
@@ -54,7 +55,7 @@ export function markerFor(entries, { me, customer = '', since = 0 }) {
   let replied = '';
   if (after(lastCustomerAt)) replied = 'customer';
   else if (!them && after(lastOtherAt)) replied = 'other';
-  return { known: true, since, lastMineAt, lastCustomerAt, lastOtherAt, lastAt, replied };
+  return { known: true, since, lastMineAt, lastCustomerAt, lastOtherAt, lastAt, replied, customerKnown: Boolean(them) };
 }
 
 /**

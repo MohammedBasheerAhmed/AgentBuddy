@@ -5,6 +5,32 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Audit fixes, phase 3: names, dates and numbers that are right
+- **Names in every script.** Matching a note's author to the customer kept only the letters a to z, so an Arabic, Cyrillic or Chinese
+  name became nothing: "Ready to resolve?" said the customer was not waiting when they were, the mood signals and the journey did not
+  see the customer, and distinct fixes written in Arabic were dropped as duplicates. One shared module (`src/context/identity.js`) now
+  does this for every check, keeps letters of every script, and knows HR cases' customers (opened for, subject person). An unknown name
+  is "cannot tell", never a match.
+- **Who wrote last, when.** Comments and work notes read from two places with two clocks are no longer sorted together as if they were
+  one; a note in summer time on a record updated in winter is no longer an hour off while called exact; a colleague's reply to the
+  customer counts as an update in My work; the ticket journey keeps the newest 60 changes, not the oldest; a stale hold reason no longer
+  makes the email suggestions think the ticket is on hold.
+- **Text as written.** "List<String>" and "a<b and c>d" in a plain field or a note are no longer cut out as if they were HTML; HTML is
+  stripped only where there is HTML, and stripping is fast on any text (hostile markup took seconds to minutes before).
+- **Snippets and formats.** "Hello {{caller.first_name}}" uses the first name from the person's record ("Mary Ann", not "Mary"); a
+  backup the snippets page writes can always be read back; the next SLA due and knowledge lists sort by time, not by how the date is
+  written; a problem offers its fix notes. "Use the standard format" now holds over an organisation's format that is not locked (it said
+  so, but the organisation's format stayed), and Settings and the panel both offer the organisation's format back.
+- **Reports.** The Workload widget no longer breaks for a team of more than 12 people; the SLA radar counts and lists only tickets that are
+  breached, at risk or due soon; Quality's backlog and every person's "Open" agree with the Open tile; "(unassigned)" opens its list;
+  custom reports with an average draw no donut and no percentages and say so when nothing matches; a week-grouped report draws only the
+  weeks its filter covers and does not call a capped count the total; "last 14 days" is 14 at any hour; days in zones whose clocks
+  change at midnight are right; "opened today" means today. The custom report editor no longer fails as it opens (scenario `s` now opens
+  it), and its Preview works for HR reports.
+- **Smaller.** The request status line no longer says "SLA: finished" when every SLA was cancelled; plural names from the instance get no
+  English "s" in Arabic; `http://[::1]` is refused with a clear message (only localhost and 127.0.0.1 can be reached); the "too long"
+  messages name the model's real budget and no longer promise a server setting that changes nothing.
+
 ### Audit fixes, phase 2: the right ticket, fresh data, no races
 - **The Ticket screen keeps to the ticket on screen.** A late header read for the previous ticket no longer replaces the new one's
   (number, title, state); an action is checked against the right ticket's header; the Insights summaries and warning dots are no longer

@@ -75,6 +75,21 @@ export function notResolved(values) {
   }
 }
 
+/**
+ * What "open" means for one table, the same in every section (Overview, Workload, Quality, the hand-over): active tickets, less the
+ * ones resolved and waiting to close. It reads the state breakdown of the active tickets in `openQuery` (the same question in every
+ * section, so one cached request serves them all) and returns { states (the attempt), done (resolvedStates), live (the condition that
+ * leaves the resolved-but-active out, '' when there are none or the breakdown could not be read) }.
+ */
+export async function readOpenStates(reader, table, openQuery) {
+  const states = await attempt(() => reader.groups(table, openQuery, ['state']), table);
+  const done = states.ok ? resolvedStates(states.value) : { count: 0, values: [], labels: [] };
+  return { states, done, live: notResolved(done.values) };
+}
+
+/** An attempt that counted the active tickets, as the open count: `done.count` left out (read a moment apart, so never below zero). */
+export const openOf = (active, done) => (active?.ok ? { ok: true, value: Math.max(0, active.value - (done?.count || 0)) } : active);
+
 /** The condition that lists only resolved-but-active tickets ('' when there are none). */
 export function onlyResolved(values) {
   if (!Array.isArray(values) || !values.length) return '';
@@ -159,13 +174,30 @@ export function sumResults(results) {
 /** Largest first, ties by name; stable output for tests and for screens. */
 export const byCountDesc = (a, b) => b.count - a.count || String(a.name).localeCompare(String(b.name));
 
-/** The first `n` entries plus one "others" entry that sums the rest (omitted when nothing is left). */
+/** Add up maps of numbers ({ working: 3, waiting: 1 }); undefined when no entry has one. */
+function sumMaps(maps) {
+  const present = maps.filter((m) => m && typeof m === 'object');
+  if (!present.length) return undefined;
+  const out = {};
+  present.forEach((m) => Object.entries(m).forEach(([k, v]) => (out[k] = (out[k] || 0) + (Number(v) || 0))));
+  return out;
+}
+
+/**
+ * The first `n` entries plus one "others" entry that sums the rest (omitted when nothing is left). The breakdowns the entries carry
+ * (`classes` by state, `byTable`) are summed too, so the "others" row draws like the rows it stands for.
+ */
 export function topWithOthers(list, n, othersLabel = tm('Others ({n})')) {
   if (list.length <= n) return list;
   const rest = list.slice(n);
   // The label is a text with {n} ('Other people ({n})'), or a plain word that "(n)" is added to.
   const name = othersLabel.includes('{n}') ? say(othersLabel, { n: rest.length }) : `${othersLabel} (${rest.length})`;
-  return [...list.slice(0, n), { key: '__others', id: '', name, count: rest.reduce((s, x) => s + x.count, 0), others: true }];
+  const others = { key: '__others', id: '', name, count: rest.reduce((s, x) => s + x.count, 0), others: true };
+  ['classes', 'byTable'].forEach((key) => {
+    const sum = sumMaps(rest.map((x) => x[key]));
+    if (sum) others[key] = sum;
+  });
+  return [...list.slice(0, n), others];
 }
 
 /** A cap note when a read stopped before the end: "first 3000 of 4210". */

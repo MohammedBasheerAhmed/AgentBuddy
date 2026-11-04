@@ -201,6 +201,17 @@ test('SLA: breached first, else the running one, paused and finished are describ
   assert.equal(sla([]), null);
 });
 
+// Audit P3.15: when no SLA is running, the line names the SLA and says whether it was met or cancelled.
+test('SLA: none running says which one, and a cancelled SLA is not called finished', () => {
+  const sla = (slas) => requestStatus(pack({ related: { slas, approvals: [], catalogTasks: [] } }), { now: NOW }).sla;
+  assert.deepEqual(sla([{ name: 'Deliver in 3 days', stage: 'Completed', breached: 'false' }]), { text: 'SLA "Deliver in 3 days" is finished.', breached: false });
+  assert.deepEqual(sla([{ name: 'Deliver in 3 days', stage: 'Cancelled', breached: 'false' }]), { text: 'SLA "Deliver in 3 days" was cancelled.', breached: false });
+  assert.deepEqual(sla([{ name: '', stage: 'Achieved', breached: 'false' }]), { text: 'SLA "unnamed" is finished.', breached: false });
+  assert.equal(sla([{ name: 'A', stage: 'Cancelled' }, { name: 'B', stage: 'Cancelled' }]).text, 'Every SLA was cancelled.');
+  assert.equal(sla([{ name: 'A', stage: 'Completed' }, { name: 'B', stage: 'Achieved' }]).text, 'Every SLA is finished.');
+  assert.equal(sla([{ name: 'A', stage: 'Completed' }, { name: 'B', stage: 'Cancelled' }]).text, 'No SLA is running: some were met, some cancelled.');
+});
+
 test('access notes say what could not be read, in plain words, for the sources the view shows', () => {
   const notes = accessNotes([
     { source: 'sysapproval_approver', status: 'denied', note: '' },

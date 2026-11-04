@@ -13,7 +13,8 @@
 // draws its headings) takes extra instructions only, so its labels stay as the panel expects (note: 'reads-back').
 //
 // A format is plain data: { sections?: [{ name, hint? }], style?: 'lines'|'bullets', words?: number, extra?: string }. A missing part
-// means the action's own default. The person's formats live in their settings (settings.formats, by action id); an organisation
+// means the action's own default. The person's formats live in their settings (settings.formats, by action id; STANDARD_CHOICE there
+// keeps the action's own default even when the organisation publishes a standard format); an organisation
 // publishes some through its policy (orgFormats, read by readOrgFormats and combined by resolveFormat). A prompt built here holds no
 // ticket data, ever (docs/build-rules.md, rule 3): only the words the agent or the organisation wrote.
 //
@@ -232,11 +233,27 @@ export function normalizeFormat(raw, id) {
   return Object.keys(out).length ? out : null;
 }
 
-/** The person's formats from settings: a map of action id to a clean format; unknown actions and empty formats are dropped. */
+/**
+ * The person's choice of an action's own standard format, stored in settings.formats in place of a format. Without it, choosing the
+ * standard would only remove the person's entry, and an organisation's standard format (unlocked) would then be used instead: the
+ * opposite of what was chosen. It wins over the organisation's standard format, never over a locked one (resolveFormat). It is the
+ * person's setting only: an organisation's entry can not be "standard" (normalizeFormat does not read it).
+ */
+export const STANDARD_CHOICE = Object.freeze({ standard: true });
+export const isStandardChoice = (value) => isPlain(value) && value.standard === true;
+
+/**
+ * The person's formats from settings: a map of action id to a clean format or the standard choice ({ standard: true }); unknown
+ * actions and empty formats are dropped.
+ */
 export function cleanFormats(raw) {
   const out = {};
   if (!isPlain(raw)) return out;
   for (const spec of FORMAT_FEATURES) {
+    if (isStandardChoice(raw[spec.id])) {
+      out[spec.id] = { ...STANDARD_CHOICE };
+      continue;
+    }
     const format = normalizeFormat(raw[spec.id], spec.id);
     if (format) out[spec.id] = format;
   }
@@ -272,18 +289,26 @@ const formatOf = ({ feature, locked, ...format }) => format; // eslint-disable-l
 /** What a policy entry for this action looks like (what "Copy for your administrator" puts on the clipboard). */
 export const policyEntry = (id, format, locked = false) => ({ feature: id, ...format, ...(locked ? { locked: true } : {}) });
 
+/** The organisation's format for this action (locked or not), without its action and its lock; null when it publishes none. */
+export function orgFormatOf(id, org) {
+  const entry = (Array.isArray(org) ? org : []).find((o) => o.feature === String(id ?? ''));
+  return entry ? formatOf(entry) : null;
+}
+
 /**
  * Which format an action uses now, and why.
  * @param {string} id
  * @param {object} mine  settings.formats
  * @param {{ feature: string, locked: boolean }[]} org  policy.orgFormats (readOrgFormats)
- * @returns {{ format: object|null, source: 'default'|'mine'|'org'|'locked' }}
+ * @returns {{ format: object|null, source: 'default'|'mine'|'org'|'locked'|'standard' }}
  *   locked: the organisation's, and the person can not change it. org: the organisation's standard, until the person sets their own.
+ *   standard: the action's standard format (format null), which the person chose over the organisation's standard one.
  */
 export function resolveFormat(id, mine, org) {
   const key = String(id ?? '');
   const entry = (Array.isArray(org) ? org : []).find((o) => o.feature === key);
   if (entry && entry.locked) return { format: formatOf(entry), source: 'locked' };
+  if (isPlain(mine) && isStandardChoice(mine[key])) return { format: null, source: entry ? 'standard' : 'default' };
   const own = isPlain(mine) ? normalizeFormat(mine[key], key) : null;
   if (own) return { format: own, source: 'mine' };
   if (entry) return { format: formatOf(entry), source: 'org' };

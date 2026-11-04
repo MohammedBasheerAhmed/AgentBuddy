@@ -72,5 +72,8 @@ export function dueText(item, now = Date.now()) {
   return end <= now ? t('Overdue by {span}', { span: span(now - end) }) : t('Due in {span}', { span: span(end - now) });
 }
 
-/** '3 days old', '1 day old', 'opened today' for an age in whole days. */
+/**
+ * '3 days old', '1 day old', 'opened today' for an age in calendar days in the person's zone, as the engine gives it (ageDays): 0 is
+ * only ever a ticket opened today.
+ */
 export const ageText = (days) => (!Number.isFinite(days) ? '' : days <= 0 ? t('opened today') : tn(days, '{n} day old', '{n} days old'));

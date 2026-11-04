@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import { AiBadge } from '../../../ui/primitives.jsx';
 import FormatEditor from '../../../../formats/FormatEditor.jsx';
-import { resolveFormat, specOf } from '../../../../formats/formats.js';
+import { orgFormatOf, resolveFormat, specOf } from '../../../../formats/formats.js';
 import { saveFormat } from '../../../../formats/saveFormat.js';
 import { destinationOf } from '../../../shell/shellParts.jsx';
 import { featureById } from '../../../../features/registry.js';
@@ -28,8 +28,16 @@ const CHECKLIST_KINDS = ['catalog_task', 'requested_item'];
 function FormatToggle({ feature, eff }) {
   const [open, setOpen] = useState(false);
   const bodyId = useId();
-  const { format, source } = resolveFormat(feature.id, eff.values.formats, eff.policy?.orgFormats);
-  const mark = { mine: t('Your format'), org: t("Your organisation's format"), locked: t('Set by your organisation') }[source];
+  const { source } = resolveFormat(feature.id, eff.values.formats, eff.policy?.orgFormats);
+  // The organisation's format whatever is in force, so the editor can offer it back after the person chose their own or the standard
+  // one (the same as Settings, src/options/FormatsSection.jsx).
+  const inherited = orgFormatOf(feature.id, eff.policy?.orgFormats);
+  const mark = {
+    mine: t('Your format'),
+    standard: t('Your choice: the standard format'),
+    org: t("Your organisation's format"),
+    locked: t('Set by your organisation'),
+  }[source];
   return (
     <div className="ab-fmt-open">
       <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
@@ -42,7 +50,7 @@ function FormatToggle({ feature, eff }) {
             feature={feature}
             saved={eff.values.formats?.[feature.id] || null}
             source={source}
-            inherited={source === 'org' || source === 'locked' ? format : null}
+            inherited={inherited}
             idBase={`act-fmt-${feature.id}`}
             onSave={(next) => saveFormat(feature.id, next)}
           />

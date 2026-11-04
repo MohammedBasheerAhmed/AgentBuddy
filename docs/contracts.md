@@ -303,3 +303,30 @@ what). The contracts that cross areas:
   `choicesOf`, `insertsForKind`. Review options may carry `internalPhrases`.
 - **Launches from the bar on the page** may name an Insights card: `card:<id>` (`QUICK_CARDS`, `src/features/quick.js`); the panel only
   brings that card forward.
+
+## Additions from the audit fixes (2026-11-04)
+
+- **Who is the customer** (`src/context/identity.js`): one place for every check that asks whether a note's author is the customer
+  (resolution check, mood signals, email suggestions, missing information, email templates, the journey, steps that worked).
+  `CUSTOMER_ROLES` (caller, requested_for, contact, consumer, opened_for, subject_person: the roles `src/context/people.js` produces),
+  `foldWords` / `foldText` / `personKey` (Unicode letters and digits, so Arabic, Cyrillic and CJK names fold too; accents dropped;
+  `personKey` sorts the words, so "Tuter, Abel" is "abel.tuter"), `customersOf`, `identities`, `authorRole` ('customer' | 'support' |
+  'unknown'). An empty key is always 'unknown', never a match. Snippet variables pick the caller by the same roles.
+- **Journal clocks**: when comments and work notes come from different sources (the `sys_journal_field` table, UTC; the record's display
+  string, the reader's time zone), `src/context/journal.js` moves the local ones to UTC where it can pair entries; otherwise the journal
+  access entry carries `localTimes: [type]` and `isLocalTime(entry, access)` says which clock an entry is on.
+- **Text clean-up** (`src/context/util.js`): `cleanText` / `oneLine` take `{ html: true | 'auto' | false }` ('auto' strips HTML only
+  when the value carries real markup, so "List<String>" stays); `journalText(value)` for comments, work notes and chat (entities decoded,
+  tags stripped only from rich text); `plainText`, `looksLikeHtml`, `asText`. Every pattern is linear on hostile text.
+- **Masking rules shared by masking and the final check**: `placesOf` in `src/pii/firewall.js` (see "Firewall and pipeline" above);
+  invisible characters: `src/lib/invisible.js`.
+- **The policy guard** (`src/content/policyGuard.js`): `DOT_WALK_TABLES` maps every reference column the code dot-walks to its target
+  table(s); `walkTables(column)`; a new dot-walk must be added there (`tests/policy-hardening-dotwalk.test.js` scans `src/` for them).
+  `checkRead(table, query, columns)` applies the guard to a read made another way (the reports' Aggregate API call). PAGE_STATE carries
+  the panel's policy like READ (`pageStateMessage(policy)` in `src/lib/messages.js`).
+- **Formats**: a person's `{ standard: true }` keeps the standard format over an unlocked organisation format (`resolveFormat` source
+  'standard'); `orgFormatOf(id, org)` gives the organisation's format whatever is in force, so both editors can offer it back.
+- **Storage changes worth a re-read**: `settingsChangeMatters(changes, area)` (`src/lib/settingsChanges.js`), used by the panel
+  (`useEffective`) and Settings, each with a newest-read-wins counter.
+- **The page bridge** (`src/page/bridge.js`) is versioned (`BRIDGE_VERSION`, pinned to the file by `tests/page-bridge-version.test.js`):
+  raise it with every change, so an open page swaps the old bridge for the new one after an extension update.

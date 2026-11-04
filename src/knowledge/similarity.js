@@ -6,6 +6,7 @@
 // only helps the person judge, and says how much of the shorter article also appears in the other.
 
 import { STOP_TITLE, jaccard, stemsOf, wordsOf } from './text.js';
+import { parseSnTime } from '../context/util.js';
 
 export const DUPLICATE_THRESHOLD = 0.55;
 export const MIN_SHARED_WORDS = 2;
@@ -35,13 +36,22 @@ export function titleSimilarity(a, b) {
   return { score: Math.round((0.65 * words + 0.35 * pairs) * 1000) / 1000, shared };
 }
 
-const cmpRank = (a, b) => b.views - a.views || String(b.updated).localeCompare(String(a.updated)) || String(a.number).localeCompare(String(b.number));
+// When an article was last changed, in ms: the stored UTC value when the article carries it (updatedUtc), else the shown one
+// (updated) when it is in ServiceNow's own YYYY-MM-DD form; NaN when neither can be read. Never the shown text itself: in the
+// person's date format "12/01/2026" sorts after "01/06/2027".
+const changedAt = (a) => {
+  const stored = parseSnTime(a.updatedUtc);
+  return Number.isFinite(stored) ? stored : parseSnTime(a.updated);
+};
+// Newest first; a time that cannot be read comes after every one that can.
+const newerFirst = (x, y) => (Number.isFinite(x) ? (Number.isFinite(y) ? y - x : -1) : Number.isFinite(y) ? 1 : 0);
+const cmpRank = (a, b) => b.views - a.views || newerFirst(changedAt(a), changedAt(b)) || String(a.number).localeCompare(String(b.number));
 
 /**
  * Groups of articles whose titles read alike. Greedy and star-shaped: articles are taken most-viewed first (then newest);
  * each one that is not already in a group becomes the centre of a new group made of every still-free article whose title is
  * alike enough. Nothing chains (A~B and B~C never puts A and C together), so a group can always be explained by its centre.
- * @param {{ sysId: string, number: string, title: string, views?: number, updated?: string }[]} articles
+ * @param {{ sysId: string, number: string, title: string, views?: number, updated?: string, updatedUtc?: string }[]} articles
  * @param {{ threshold?: number, minShared?: number, maxClusters?: number }} [options]
  * @returns {{ id: string, keep: object, articles: object[], score: number, sharedWords: string[], exactTitle: boolean }[]}
  *   `keep` is the centre (the most-viewed article) as a suggestion; `articles` lists it first. Biggest groups first.

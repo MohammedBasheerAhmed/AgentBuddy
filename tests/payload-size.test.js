@@ -110,11 +110,31 @@ test('"Mask this too" keeps the cut request: it is built again from the same par
 
 test('when even the newest note does not fit, nothing is sent and the person is told what to do', () => {
   const pack = { ...hostilePack(), fields: { short_description: 'VPN', description: 'word '.repeat(4000) } };
+  // (audit P3.29: a model on this computer is always counted at 4,096 tokens, so the message does not suggest setting up the server for
+  // more, or another local model: neither would change anything)
   assert.throws(
     () => prepare('record-summary', pack, ollama()),
-    (e) => e instanceof RunBlocked && e.code === 'TOO_LONG' && /too long for the chosen AI model/.test(e.message) && /Settings/.test(e.message) && /4,000 tokens/.test(e.message)
+    (e) => e instanceof RunBlocked && e.code === 'TOO_LONG' && /too long for the chosen AI model/.test(e.message) && /Settings/.test(e.message) &&
+      /always counts on 4,096 tokens, whatever its server is set up for/.test(e.message) && !/unless its server|Choose a model that reads more/.test(e.message)
   );
+  assert.throws(() => prepare('record-summary', pack, { ...cloud(), model: 'gpt-4' }), (e) => e.code === 'TOO_LONG' && /Choose a model that reads more in Settings\./.test(e.message) && !/this computer/.test(e.message));
   assert.doesNotThrow(() => prepare('record-summary', pack), 'a cloud model takes it');
+});
+
+// Audit P3.30: when the masked request comes out longer than the estimate, the pipeline fits again to a lowered target; if even the
+// newest note does not fit that, the message still names the model's own budget, never the lowered internal number.
+test('"too long" after a second fit names the model\'s budget, and a size above it', () => {
+  // Many short addresses: each one is masked into a longer placeholder, so the finished request is larger than the first estimate.
+  const pack = { ...hostilePack(), journal: [], fields: { short_description: 'VPN', description: Array.from({ length: 800 }, (_, i) => `u${i}@x.io`).join(' ') } };
+  const budget = promptBudget(ollama()).prompt;
+  assert.throws(() => prepare('record-summary', pack, ollama()), (e) => {
+    const m = /about ([\d,]+) tokens, and the model reads about ([\d,]+)\./.exec(e.message);
+    assert.ok(m, e.message);
+    const [said, reads] = [Number(m[1].replace(/,/g, '')), Number(m[2].replace(/,/g, ''))];
+    assert.equal(reads, budget, 'the model\'s budget');
+    assert.ok(said > reads, `${said} is more than ${reads}`);
+    return e.code === 'TOO_LONG';
+  });
 });
 
 test('a reply keeps the message it answers: the last customer message is the one that stays', () => {

@@ -56,6 +56,9 @@ const SOURCES = {
         breached: flag(row.has_breached),
         percentage: Number.isFinite(pct) ? String(Math.round(pct)) : '',
         plannedEnd: text(row.planned_end_time, 40),
+        // The stored (UTC) end, so "the next SLA due" is the soonest by time, not by how the date is written (dd/MM/yyyy sorts wrong as
+        // text). Panel-side only: the parts formatters name the fields they send (src/itsm/parts.js, src/domain/parts.js).
+        plannedEndUtc: oneLine(raw(row.planned_end_time), 40),
       };
     },
   },

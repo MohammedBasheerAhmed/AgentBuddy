@@ -16,7 +16,7 @@ import { NOT_AVAILABLE_FIELD, isJournalPart, journalCut, madeWithout, notAvailab
 import { NEVER_REHYDRATE, RULES_PREAMBLE, placesOf } from '../pii/firewall.js';
 import { alignedLower } from '../pii/dictionary.js';
 import { truncationNote } from '../providers/messages.js';
-import { estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
+import { LOCAL_CONTEXT, estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
 import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
 import { answerLanguageRule } from '../prompts/rules.js';
 import { withFormat } from '../formats/formats.js';
@@ -187,7 +187,18 @@ ${languageRule}` : feature.system;
   // When it is still over, leave out more of the oldest notes and build again (a few rounds at most).
   let tokens = estimateMessages(request.messages);
   for (let round = 0; tokens > budget.prompt; round++) {
-    const tighter = round < 3 ? fitToModel({ feature, pack, parts: built, budget: fit.target - (tokens - budget.prompt) - 32, source: budget.source }) : null;
+    let tighter = null;
+    if (round < 3) {
+      const target = fit.target - (tokens - budget.prompt) - 32;
+      try {
+        tighter = fitToModel({ feature, pack, parts: built, budget: target, source: budget.source });
+      } catch (err) {
+        // Even the newest note alone is over this lowered target, an internal number: the person is told the model's own budget,
+        // and the size that request would have as the finished text counts it (the estimate, plus what the target was lowered by).
+        if (err instanceof RunBlocked && err.code === 'TOO_LONG' && Number.isFinite(err.tokens)) throw tooLong(err.tokens + (budget.prompt - target), budget);
+        throw err;
+      }
+    }
     if (!tighter || tighter.trimmed <= fit.trimmed) throw tooLong(tokens, budget);
     fit = tighter;
     input = make(fit.parts);
@@ -217,11 +228,18 @@ ${languageRule}` : feature.system;
 const RULES_TOKENS = estimateTokens(RULES_PREAMBLE);
 const NOT_AVAILABLE_SLACK = 40;
 
+// `tokens` is kept on the error (a number only), so a caller that fitted to a lowered target can say it in the model's terms.
 function tooLong(tokens, budget) {
-  const local = budget.source === 'local-default' ? t('A model on this computer reads about 4,000 tokens unless its server was set up for more.') : '';
   const head = t('This is too long for the chosen AI model, even with only the newest note: about {tokens} tokens, and the model reads about {budget}.', { tokens: tokens.toLocaleString('en-US'), budget: budget.prompt.toLocaleString('en-US') });
-  // (three whole sentences, joined by a space)
-  return new RunBlocked([head, local, t('Choose a model that reads more in Settings.')].filter(Boolean).join(' '), 'TOO_LONG');
+  // A model on this computer is always given the default context of a local server (src/lib/tokens.js), whichever model and however its
+  // server is set up: another local model, or a server set up for more, changes nothing here. Only a model elsewhere reads more.
+  const next = budget.source === 'local-default'
+    ? t('For a model on this computer Agent Buddy always counts on {window} tokens, whatever its server is set up for. Only an AI model that is not on this computer, chosen in Settings, reads more.', { window: LOCAL_CONTEXT.toLocaleString('en-US') })
+    : t('Choose a model that reads more in Settings.');
+  // (whole sentences, joined by a space)
+  const err = new RunBlocked(`${head} ${next}`, 'TOO_LONG');
+  err.tokens = tokens;
+  return err;
 }
 
 /**

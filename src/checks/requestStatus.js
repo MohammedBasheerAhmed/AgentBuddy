@@ -80,14 +80,23 @@ function dueInfo(pack, now) {
   return { text: due, overdue };
 }
 
-// The SLA that matters most: a breached one, else the first that is still running.
+// The SLA that matters most: a breached one, else the first that is still running. When none is running, each one was met
+// (completed, achieved) or cancelled: a cancelled SLA is not called finished.
 function slaInfo(pack) {
   const slas = Array.isArray(pack?.related?.slas) ? pack.related.slas : [];
   if (!slas.length) return null;
   const breached = slas.find((s) => s.breached === 'true');
   const running = slas.find((s) => !/complet|cancel|achiev/i.test(text(s.stage)));
   const pick = breached || running;
-  if (!pick) return { text: t('{name}: finished', { name: isolate(text(pick?.name)) || 'SLA' }), breached: false };
+  if (!pick) {
+    const cancelled = slas.filter((s) => /cancel/i.test(text(s.stage))).length;
+    if (slas.length === 1) {
+      const only = isolate(text(slas[0].name)) || t('unnamed');
+      return { text: cancelled ? t('SLA "{name}" was cancelled.', { name: only }) : t('SLA "{name}" is finished.', { name: only }), breached: false };
+    }
+    const all = cancelled === slas.length ? t('Every SLA was cancelled.') : cancelled ? t('No SLA is running: some were met, some cancelled.') : t('Every SLA is finished.');
+    return { text: all, breached: false };
+  }
   const name = isolate(text(pick.name)) || t('unnamed');
   if (breached) return { text: t('SLA "{name}" is breached.', { name }), breached: true };
   const paused = /pause/i.test(text(pick.stage));

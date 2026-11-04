@@ -5,7 +5,10 @@
 import { LIMITS } from './store.js';
 import { t } from '../i18n/index.js';
 
-/** The largest file read at all (bytes). A UTF-8 file of LIMITS.importChars characters is at most four times that. */
+/**
+ * The largest file read at all (bytes): the largest file "Save to a file" can write (LIMITS.importChars, src/snippets/store.js). Its
+ * text has at most as many characters as the file has bytes, so it passes importSnippets' own length check too.
+ */
 export const MAX_FILE_BYTES = LIMITS.importChars;
 
 const JSON_TYPES = new Set(['', 'application/json', 'text/json', 'text/plain']);

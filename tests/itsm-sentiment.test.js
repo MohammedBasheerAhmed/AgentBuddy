@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyseText, approxAge, computeSignals, identities, roleOfEntry, signalsText } from '../src/itsm/sentiment.js';
 import { journalParts, sentimentParts } from '../src/itsm/parts.js';
+import { personKey } from '../src/context/identity.js';
 
 // Today in these tests is 2026-10-26 12:00 UTC.
 const NOW = Date.UTC(2026, 9, 26, 12, 0, 0);
@@ -108,10 +109,11 @@ test('analyseText survives odd input and long text without hanging', () => {
 test('the customer is the caller, requester, contact or consumer; the assignee is support', () => {
   const ids = identities(pack({ people: [ABEL, BETH, { role: 'opened_by', name: 'Charlie Whitherspoon' }] }));
   assert.equal(ids.known, true);
-  assert.ok(ids.customers.has('abel tuter'));
-  assert.ok(ids.customers.has('abel tuter example com'));
-  assert.ok(ids.support.has('beth anglin'));
-  assert.ok(!ids.customers.has('charlie whitherspoon'), 'opened_by is not assumed to be the customer');
+  // (the keys are src/context/identity.js personKey: words in sorted order)
+  assert.ok(ids.customers.has(personKey('Abel Tuter')));
+  assert.ok(ids.customers.has(personKey('abel.tuter@example.com')));
+  assert.ok(ids.support.has(personKey('Beth Anglin')));
+  assert.ok(!ids.customers.has(personKey('Charlie Whitherspoon')), 'opened_by is not assumed to be the customer');
   assert.equal(identities(pack({ people: [BETH] })).known, false);
   assert.equal(identities({}).known, false);
   assert.equal(identities(pack({ people: [null, 'x', { role: 'caller' }] })).known, false);

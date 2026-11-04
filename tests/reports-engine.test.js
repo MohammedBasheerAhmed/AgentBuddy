@@ -248,15 +248,16 @@ test('SLA rows collapse to one entry per ticket, breached first, then fullest, t
     [slaRow(id(1), 130, true), slaRow(id(2), 82, false), slaRow(id(3), 30, false, '2026-10-27 13:30:00'), slaRow(id(4), 40, false), slaRow(id(4), 90, false), slaRow(id(5), 10, false), slaRow('junk', 99, true)],
     { now: NOW }
   );
-  assert.equal(tickets.length, 5, 'rows without a real ticket id are skipped');
+  // id(5) (10 % used, due tomorrow) is not at issue: it is left out, as are rows without a real ticket id.
+  assert.equal(tickets.length, 4, 'rows without a real ticket id, and tickets that are not at issue, are skipped');
   const by = Object.fromEntries(tickets.map((t) => [t.sysId, t]));
   assert.equal(by[id(1)].breached, true);
   assert.equal(by[id(2)].atRisk, true);
   assert.equal(by[id(3)].dueSoon, true);
   assert.equal(by[id(3)].atRisk, false);
   assert.equal(by[id(4)].sla.percentage, 90, 'the worst SLA of the ticket');
-  assert.equal(by[id(5)].dueSoon, false);
-  assert.deepEqual(rankSlaTickets(tickets).map((t) => t.sysId), [id(1), id(4), id(2), id(3), id(5)]);
+  assert.equal(by[id(5)], undefined);
+  assert.deepEqual(rankSlaTickets(tickets).map((t) => t.sysId), [id(1), id(4), id(2), id(3)]);
   assert.deepEqual(groupSlaByTicket([], { now: NOW }), []);
 });
 

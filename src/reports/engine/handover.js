@@ -15,9 +15,9 @@ import { attempt } from './reader.js';
 import { tm } from './say.js';
 import { t } from '../../i18n/core.js';
 import { shown } from '../shown.js';
-import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn, verifiedCount, resolvedStates, notResolved } from './common.js';
+import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn, verifiedCount, readOpenStates } from './common.js';
 import { buildQuery } from './queryBuilder.js';
-import { HOUR, daysBetween, timeOf } from './time.js';
+import { HOUR, localDaysBetween, timeOf } from './time.js';
 import { overviewSection, waitingStates } from './overview.js';
 import { groupSlaByTicket, rankSlaTickets, readSlaSnapshot, SLA_UNSEEN } from './sla.js';
 import { readApprovals } from './fulfilment.js';
@@ -56,8 +56,11 @@ const priorityNumber = (value) => {
   return Number.isFinite(n) ? n : 9;
 };
 
-/** One ticket row (read with display values) as the plain item every list on the page uses. */
-function ticketItem(row, { table, kind }, now) {
+/**
+ * One ticket row (read with display values) as the plain item every list on the page uses. `ctx` gives "now" and the person's zone:
+ * the age is in calendar days there, so 0 means opened today (not "less than 24 hours ago", which may be yesterday evening).
+ */
+function ticketItem(row, { table, kind }, { now, offsetMin }) {
   const opened = timeOf(raw(row.opened_at));
   const names = [row.opened_by, row.caller_id].map(disp).filter(Boolean);
   return {
@@ -72,7 +75,7 @@ function ticketItem(row, { table, kind }, now) {
     owner: disp(row.assigned_to),
     group: disp(row.assignment_group),
     openedAt: disp(row.opened_at),
-    ageDays: Number.isFinite(opened) ? daysBetween(opened, now) : null,
+    ageDays: Number.isFinite(opened) ? localDaysBetween(opened, now, offsetMin) : null,
     maskNames: [...new Set(names)],
     openedMs: Number.isFinite(opened) ? opened : 0,
   };
@@ -128,9 +131,8 @@ async function readTable(ctx, t, since) {
 
   // The state breakdown has the same query as the Overview's, so it is a cache hit when Overview ran first. It also says which
   // states mean 'resolved, waiting to close': those tickets are not 'oldest open'.
-  const states = await attempt(() => reader.groups(t.table, open, ['state']), t.table);
+  const { states, live } = await readOpenStates(reader, t.table, open);
   const waiting = states.ok ? waitingStates(states.value) : null;
-  const live = states.ok ? notResolved(resolvedStates(states.value).values) : '';
   const [oldestF, oldestO] = list(['active=true', live], { orderBy: 'opened_at' });
 
   const [openedUrgent, resolvedUrgent, reassigned, waitingRows, oldest] = await Promise.all([
@@ -182,7 +184,7 @@ function mergeLists(parts, pick, ctx, sorter, max) {
   const reads = parts.map((p) => ({ p, read: pick(p) })).filter((x) => x.read);
   const ok = reads.filter((x) => x.read.ok);
   if (!ok.length) return { available: false, total: null, items: [], partial: false, capped: false };
-  const items = ok.flatMap(({ p, read }) => read.value.rows.map((row) => ({ ...ticketItem(row, kindOf(p.t), ctx.now), ...(row.reassignment_count !== undefined ? { reassignments: Number(raw(row.reassignment_count)) || 0 } : {}) })));
+  const items = ok.flatMap(({ p, read }) => read.value.rows.map((row) => ({ ...ticketItem(row, kindOf(p.t), ctx), ...(row.reassignment_count !== undefined ? { reassignments: Number(raw(row.reassignment_count)) || 0 } : {}) })));
   const unknown = ok.some(({ read }) => read.value.total === null);
   return {
     available: true,
@@ -234,7 +236,7 @@ export async function handoverSection(ctx) {
       .map((e) => {
         const row = details.get(e.sysId);
         const t = row && tableOf(row);
-        return t ? { ...strip(ticketItem(row, kindOf(t), ctx.now)), ...extra(e) } : null;
+        return t ? { ...strip(ticketItem(row, kindOf(t), ctx)), ...extra(e) } : null;
       })
       .filter(Boolean);
 
@@ -253,13 +255,13 @@ export async function handoverSection(ctx) {
   const sumKind = (kind) => byState.filter((s) => s.kind === kind).reduce((n, s) => n + s.count, 0);
   const waitingOldest = parts
     .filter((p) => p.waitingRows?.ok)
-    .flatMap((p) => p.waitingRows.value.map((row) => ticketItem(row, kindOf(p.t), ctx.now)))
+    .flatMap((p) => p.waitingRows.value.map((row) => ticketItem(row, kindOf(p.t), ctx)))
     .sort(byAge)
     .slice(0, HANDOVER_LIMITS.waitingOldest)
     .map(strip);
   const oldest = parts
     .filter((p) => p.oldest.ok)
-    .flatMap((p) => p.oldest.value.map((row) => ticketItem(row, kindOf(p.t), ctx.now)))
+    .flatMap((p) => p.oldest.value.map((row) => ticketItem(row, kindOf(p.t), ctx)))
     .sort(byAge)
     .slice(0, HANDOVER_LIMITS.oldest)
     .map(strip);

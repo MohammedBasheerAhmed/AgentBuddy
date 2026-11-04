@@ -196,7 +196,9 @@ test('tables: profiles choose the per-table counts; HR needs content allowed AND
   assert.ok(columnsFor('sc_task', { group: true }).includes('assignment_group'));
   assert.ok(!columnsFor('incident').some((c) => /description$|comments|work_notes|close_notes/.test(c) && c !== 'short_description'), 'no free text but the title');
   assert.equal(customerColumn('sc_task'), 'request_item.requested_for.user_name');
-  assert.equal(pluralOf('u_facilities', 'Facilities request'), 'Facilities requests');
+  // (audit P3.13: the instance's own name is used as given; an English "s" would be wrong in any other language)
+  assert.equal(pluralOf('u_facilities', 'Facilities request'), 'Facilities request');
+  assert.equal(pluralOf('u_facilities', 'طلب المرافق'), 'طلب المرافق', 'an Arabic name gets no Latin "s"');
   assert.equal(pluralOf('u_facilities', ''), 'Other tickets');
 });
 

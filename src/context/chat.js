@@ -17,7 +17,7 @@
 
 import { LIMITS } from './allowlists.js';
 import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
-import { SYS_ID_RE, clipText, disp, oneLine, raw, stripHtml, uniq } from './util.js';
+import { SYS_ID_RE, clipText, disp, journalText, oneLine, raw, uniq } from './util.js';
 
 export const CHAT_SOURCE = 'chat';
 export const CHAT_MAX_MESSAGES = 80;
@@ -80,7 +80,7 @@ export function messageText(row) {
     } else if (column === 'payload') {
       text = value;
     }
-    const clean = clipText(stripHtml(text), LIMITS.journalEntry);
+    const clean = clipText(journalText(text), LIMITS.journalEntry);
     if (clean) return clean;
   }
   return '';

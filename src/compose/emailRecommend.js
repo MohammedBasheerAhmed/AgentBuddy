@@ -8,6 +8,8 @@
 // kind allows) just means that signal is not available, never an error.
 
 import { SYS_ID_RE, TABLE_RE, parseSnTime } from '../context/util.js';
+import { authorRole, identities } from '../context/identity.js';
+import { isLocalTime } from '../context/journal.js';
 import { isolate, t, tm, tn } from '../i18n/index.js';
 
 // label and blurb are shown to the person: marked with tm() here, shown with t() on the property.
@@ -27,39 +29,27 @@ const DAY = 24 * HOUR;
 const MIN_SCORE = 30; // below this a suggestion is noise
 const MAX_PICKS = 3;
 
-// People who are the customer, by the role the pack gives them. opened_by is left out on purpose: an agent often opens a
-// ticket on behalf of someone else, so that person is not necessarily the one writing the comments.
-const CUSTOMER_ROLES = new Set(['caller', 'requested_for', 'contact', 'consumer', 'subject_person', 'opened_for', 'affected_user', 'requester']);
-
 const text = (v) => (typeof v === 'string' || typeof v === 'number' ? String(v).trim() : '');
-
-// Combining accents (U+0300 to U+036F), written as codes so this file stays plain ASCII.
-const COMBINING = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
-
-// Names compare without case, accents or order: "Tuter, Abel" and "Abel Tuter" are the same person.
-function nameKey(name) {
-  const plain = text(name).normalize('NFD').replace(COMBINING, '').toLowerCase();
-  if (!plain) return '';
-  return plain.replace(/,/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
-}
 
 function ms(when) {
   const at = parseSnTime(text(when));
   return Number.isFinite(at) ? at : null;
 }
 
-// Which clock the notes' times are on. Read from sys_journal_field they are stored UTC; read from the record's own comments and
-// work notes columns (the fallback, src/context/journal.js) they are in the reader's time zone, like every field value.
-const notesAreLocal = (pack) => (Array.isArray(pack.access) ? pack.access : []).some((a) => a && a.source === 'journal' && a.strategy === 'record-fields');
+// Which clock the customer-visible comments' times are on (only comments are compared with the record's dates). Read from
+// sys_journal_field they are stored UTC; read from the record's own comments column (the fallback, src/context/journal.js) they are
+// in the reader's time zone, like every field value. When the comments and the work notes came from different places, the
+// journal's access entry says which (isLocalTime).
+const commentsAreLocal = (pack) => isLocalTime({ type: 'comment' }, pack.access);
 
 /**
- * A date of the record on the same clock as the notes and the clock of this computer: the stored UTC value the pack carries
- * (related.times, the 'email-compose' spec asks for it) unless the notes are in local time, then the display value.
+ * A date of the record on the same clock as the comments and the clock of this computer: the stored UTC value the pack carries
+ * (related.times, the 'email-compose' spec asks for it) unless the comments are in local time, then the display value.
  * Comparing a UTC note time with a display value was off by the reader's UTC offset ("told after it was resolved" or not).
  */
 function dateOf(pack, name) {
   const stored = pack.related?.times && typeof pack.related.times === 'object' ? text(pack.related.times[name]) : '';
-  return stored && !notesAreLocal(pack) ? ms(stored) : ms(pack.fields?.[name]);
+  return stored && !commentsAreLocal(pack) ? ms(stored) : ms(pack.fields?.[name]);
 }
 
 /** "3 hours", "2 days" - rough on purpose. */
@@ -103,22 +93,10 @@ function lastMessage(pack, now) {
   const known = journal.length > 0 || access.some((a) => a && a.source === 'journal' && (a.status === 'ok' || a.status === 'empty'));
   if (!comments.length) return { known, direction: known ? 'none' : 'unknown', ageMs: null, atMs: null, count: 0 };
 
-  const customers = (Array.isArray(pack.people) ? pack.people : []).filter((p) => p && CUSTOMER_ROLES.has(p.role));
-  const customerNames = new Set(customers.map((p) => nameKey(p.name)).filter(Boolean));
-  const customerEmails = new Set(customers.map((p) => text(p.email).toLowerCase()).filter(Boolean));
-  // A note author who could not be turned into a display name is a login, often the start of the email address.
-  const customerLogins = new Set([...customerEmails].map((e) => e.split('@')[0]).filter(Boolean));
-
+  // The customer by name (in any script, in any order), email or login (src/context/identity.js). A display name that is not the
+  // customer's is someone else, so the service desk. A login or address that matches no one is not a reason to guess either way.
   const last = comments[comments.length - 1];
-  let direction = 'unknown';
-  if (customers.length && text(last.by)) {
-    const by = text(last.by);
-    const lowered = by.toLowerCase();
-    if (customerNames.has(nameKey(by)) || customerEmails.has(lowered) || customerLogins.has(lowered)) direction = 'customer';
-    // A display name that is not the customer's is someone else, so the service desk. A bare login that matches no one is not
-    // a reason to guess either way.
-    else if (/\s/.test(by) || by.includes('@')) direction = 'agent';
-  }
+  const direction = { customer: 'customer', support: 'agent' }[authorRole(last.by, identities(pack))] || 'unknown';
   const atMs = ms(last.when);
   return { known: true, direction, ageMs: atMs === null ? null : Math.max(0, now - atMs), atMs, count: comments.length };
 }
@@ -151,13 +129,16 @@ export function readSignals(pack, now = Date.now()) {
   const p = pack && typeof pack === 'object' ? pack : {};
   const f = p.fields && typeof p.fields === 'object' ? p.fields : {};
   const state = text(f.state) || text(f.request_state) || text(f.stage);
-  const hold = text(f.hold_reason);
+  const reason = /^(none|-- none --)$/i.test(text(f.hold_reason)) ? '' : text(f.hold_reason);
 
   // With no readable state, the dates decide.
   const closedByDate = !state && Boolean(text(f.closed_at));
   const closed = /\b(closed|cancel+ed)\b/i.test(state) || closedByDate;
   const resolved = !closed && (/\b(resolved|fulfil+ed|complete[d]?)\b/i.test(state) || (!state && Boolean(text(f.resolved_at))));
-  const onHold = !closed && !resolved && (/\bhold\b|pending|awaiting|waiting/i.test(state) || Boolean(hold));
+  // The STATE decides whether it is on hold; the hold reason only says for whom (as in src/mywork/states.js). A reason left filled
+  // in after the ticket went back to In Progress is stale: it is neither "on hold" nor said. With no state, the reason is all there is.
+  const onHold = !closed && !resolved && (state ? /\bhold\b|pending|awaiting|waiting/i.test(state) : Boolean(reason));
+  const hold = onHold ? reason : '';
   const waitingOnCustomer = onHold && /(caller|customer|\buser\b|requester|requestor|requested for|\binfo(rmation)?\b)/i.test(`${state} ${hold}`);
 
   const resolvedAt = dateOf(p, 'resolved_at') ?? dateOf(p, 'closed_at');

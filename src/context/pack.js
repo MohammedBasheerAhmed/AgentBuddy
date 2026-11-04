@@ -177,7 +177,9 @@ export async function readContextPack(ref, deps, options = {}) {
   const fields = {};
   for (const name of names) {
     if (maskOnly.has(name)) continue;
-    const value = cleanText(disp(row[name]), fieldLimit(name));
+    // An article's body is an HTML column; any other column is read as HTML only when it carries markup (cleanText's 'auto'), so a
+    // title such as "List<String> is empty" keeps its words.
+    const value = cleanText(disp(row[name]), fieldLimit(name), { html: kind === 'knowledge' && name === 'text' ? true : 'auto' });
     if (value) fields[name] = value;
   }
 

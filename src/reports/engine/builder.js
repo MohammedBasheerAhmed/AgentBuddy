@@ -6,10 +6,11 @@ import { attempt } from './reader.js';
 import { andQuery, capNote, probeTables, raw, disp, resolvedColumn, tableAccess } from './common.js';
 import { FILTER_PRESETS, buildQuery, normalizePresets, presetConditions, windowDaysOf, QueryError } from './queryBuilder.js';
 import { readMyGroups } from './scope.js';
-import { DAY, bucketCounts, bucketLabels, bucketStarts, mean, timeOf } from './time.js';
+import { DAY, bucketCounts, bucketLabels, bucketStarts, localWeeksCovering, mean, timeOf } from './time.js';
+import { partialBuckets } from './quality.js';
 import { say, tm } from './say.js';
 import { t } from '../../i18n/core.js';
-import { shown } from '../shown.js';
+import { shown, placeholderName } from '../shown.js';
 
 export const GROUP_BY = Object.freeze([
   { id: 'none', label: tm('No grouping (one number)') },
@@ -50,6 +51,8 @@ export function normalizeBuilderConfig(input) {
   let chart = byId(CHARTS, input?.chart) ? input.chart : timeGroup ? 'line' : 'bar';
   if (chart === 'line' && !timeGroup) chart = 'bar';
   if (timeGroup && chart === 'donut') chart = 'line';
+  // A donut shows the shares of a whole. Averages are not parts of anything: their sum and its percentages mean nothing.
+  if (metric !== 'count' && chart === 'donut') chart = 'bar';
   const title = typeof input?.title === 'string' ? input.title.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 60) : '';
   return { table, presets: normalizePresets(input?.presets), groupBy, metric, chart, title };
 }
@@ -58,6 +61,20 @@ export function normalizeBuilderConfig(input) {
 export function describeFilter(presets) {
   const names = normalizePresets(presets).map((id) => byId(FILTER_PRESETS, id).label);
   return names.length ? names.join(', ') : tm('All tickets');
+}
+
+// A chart holds at most this many groups.
+const MAX_ITEMS = 40;
+
+/**
+ * The first `n` counted groups, and the rest added up into one "Others (n)" entry (it opens no list): the shares, the donut and the
+ * table are then of the real total, not of the first groups only.
+ */
+function withOthers(items, n) {
+  if (items.length <= n) return items;
+  const rest = items.slice(n);
+  const sum = rest.reduce((s, x) => s + x.value, 0);
+  return [...items.slice(0, n), { key: '__others', label: say(tm('Others ({n})'), { n: rest.length }), value: sum, n: sum, query: '', others: true }];
 }
 
 /** Group of drill-down: the query for one bar. */
@@ -157,7 +174,7 @@ export async function runBuilder(ctx, rawConfig) {
       .map((x) => ({ key: x.keys[0]?.value || '', label: x.keys[0]?.display || tm('(empty)'), value: x.count, n: x.count }))
       .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
       .map((x) => ({ ...x, query: itemQuery(query, group.field, x.key) }));
-    return { ...base, readAt: reader.readAt || ctx.generatedAt, data: { ...out, unit, items: items.slice(0, 40), total: items.reduce((n, x) => n + x.value, 0), hidden: Math.max(0, items.length - 40), person: Boolean(group.person) } };
+    return { ...base, readAt: reader.readAt || ctx.generatedAt, data: { ...out, unit, items: withOthers(items, MAX_ITEMS), total: items.reduce((n, x) => n + x.value, 0), hidden: Math.max(0, items.length - MAX_ITEMS), person: Boolean(group.person) } };
   }
 
   // ---- everything else reads a bounded number of rows and works them out here ----
@@ -169,7 +186,11 @@ export async function runBuilder(ctx, rawConfig) {
 
   if (group.time) {
     const field = group.time.field === 'resolved' ? rf : 'opened_at';
-    const span = group.time.unit === 'week' ? 12 : windowDaysOf(config.presets) && windowDaysOf(config.presets) <= 30 ? windowDaysOf(config.presets) : 30;
+    // The weeks drawn are the ones the report's own window touches ("opened in the last 7 days" is two weeks, not twelve): a week
+    // before the window can only be empty because of the filter, and drawn as 0 it would look like a quiet week. (A ticket resolved
+    // in a week was opened by then, so this holds for the resolved weeks too.) Without a window, the last 12 weeks.
+    const windowDays = windowDaysOf(config.presets);
+    const span = group.time.unit === 'week' ? (windowDays ? localWeeksCovering(now - windowDays * DAY, now, ctx.offsetMin) : 12) : windowDays && windowDays <= 30 ? windowDays : 30;
     const starts = bucketStarts({ now, unit: group.time.unit, count: span, offsetMin: ctx.offsetMin });
     const since = starts[0];
     const read = await attempt(
@@ -181,10 +202,22 @@ export async function runBuilder(ctx, rawConfig) {
     const times = read.value.rows.map((r) => timeOf(raw(r[field]))).filter((x) => Number.isFinite(x));
     const counts = bucketCounts(times, starts, group.time.unit === 'week' ? 7 * DAY : DAY);
     const labels = bucketLabels(starts, ctx.offsetMin);
+    const counted = counts.reduce((a, b) => a + b, 0);
+    // A read that stopped at its limit (newest first) counted only part of the oldest buckets: they are marked, and the sum is not
+    // called the total.
+    const partial = partialBuckets(starts, times.length ? Math.min(...times) : NaN, read.value.capped);
     return {
       ...base,
       readAt: reader.readAt || ctx.generatedAt,
-      data: { ...out, unit, series: { labels, values: counts }, items: labels.map((label, i) => ({ key: String(starts[i]), label, value: counts[i], n: counts[i] })), total: counts.reduce((a, b) => a + b, 0), timeUnit: group.time.unit },
+      data: {
+        ...out,
+        unit,
+        series: { labels, values: counts, partial },
+        items: labels.map((label, i) => ({ key: String(starts[i]), label, value: counts[i], n: counts[i] })),
+        total: counted,
+        ...(read.value.capped ? { basedOn: say(tm('{count} tickets (the first ones read; there are more)'), { count: counted }) } : {}),
+        timeUnit: group.time.unit,
+      },
     };
   }
 
@@ -205,8 +238,9 @@ export async function runBuilder(ctx, rawConfig) {
     entry.days.push((end - opened) / DAY);
     buckets.set(key, entry);
   });
+  // A bar opens the tickets its average was worked out from: the filter AND what the measure adds (only open ones, or only resolved).
   const items = [...buckets.values()]
-    .map((b) => ({ key: b.key, label: b.label, value: Math.round(mean(b.days) * 10) / 10, n: b.days.length, query: group.id === 'none' ? query : itemQuery(query, group.field, b.key) }))
+    .map((b) => ({ key: b.key, label: b.label, value: Math.round(mean(b.days) * 10) / 10, n: b.days.length, query: group.id === 'none' ? where : itemQuery(where, group.field, b.key) }))
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
   const allDays = [...buckets.values()].flatMap((b) => b.days);
   return {
@@ -223,8 +257,9 @@ export function builderTables(result) {
   return [
     {
       title: shown(result.title),
-      columns: [{ key: 'label', label: d.groupLabel === 'No grouping (one number)' ? t('Measure') : shown(d.groupLabel), person: Boolean(d.person) }, { key: 'value', label: valueLabel }, ...(d.metric === 'count' ? [] : [{ key: 'n', label: t('Tickets counted') }])],
-      rows: d.items,
+      columns: [{ key: 'label', label: d.groupBy === 'none' ? t('Measure') : shown(d.groupLabel), person: Boolean(d.person) }, { key: 'value', label: valueLabel }, ...(d.metric === 'count' ? [] : [{ key: 'n', label: t('Tickets counted') }])],
+      // The engine's own words ("Others (3)", "(empty)") in the language of the panel; a value from the instance as it is.
+      rows: d.items.map((i) => ({ ...i, label: i.others ? shown(i.label) : placeholderName(i.label) })),
     },
   ];
 }

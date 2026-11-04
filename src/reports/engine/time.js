@@ -85,10 +85,18 @@ export const quantize = (ms) => Math.floor(ms / MINUTE) * MINUTE;
 // A local calendar date is handled as "that date at 00:00 UTC" (a whole number of days), so date arithmetic needs no zone.
 const localDateOf = (ms, tz) => Math.floor((ms - offsetAt(tz, ms) * MINUTE) / DAY) * DAY;
 
-/** The instant local midnight of `localDate` was, with the offset in force at that moment (not the offset of today). */
+/**
+ * The first instant whose local date is `localDate`: its midnight, with the offset in force at that moment (not the offset of today).
+ * Two offsets can apply on a day the clocks change: the one before and the one after. Where the clocks jump forward AT midnight
+ * (America/Santiago, 00:00 -> 01:00) local midnight never happens and only one of the two lands inside the day; the other is the
+ * evening before, which would put an hour of yesterday into "today" and label the bucket with yesterday's date. So both are tried, and
+ * the earliest that falls on the day wins.
+ */
 function instantOfLocalDate(localDate, tz) {
-  const guess = localDate + offsetAt(tz, localDate) * MINUTE;
-  return localDate + offsetAt(tz, guess) * MINUTE;
+  const before = localDate + offsetAt(tz, localDate) * MINUTE;
+  const after = localDate + offsetAt(tz, before) * MINUTE;
+  const onTheDay = [before, after].filter((ms) => localDateOf(ms, tz) === localDate);
+  return onTheDay.length ? Math.min(...onTheDay) : after;
 }
 
 /** The instant the local day containing `ms` began. */
@@ -149,6 +157,15 @@ export function bucketCounts(timestamps, starts, step = DAY) {
 
 /** Whole days between two instants (never negative). */
 export const daysBetween = (fromMs, toMs) => Math.max(0, Math.floor((toMs - fromMs) / DAY));
+
+/**
+ * Calendar days in the person's zone from the day of `fromMs` to the day of `toMs`: 0 on the same day, 1 for a ticket opened yesterday
+ * evening and looked at this morning (13 hours, but not "opened today"). Never negative.
+ */
+export const localDaysBetween = (fromMs, toMs, tz = localOffset) => Math.max(0, Math.round((localDateOf(toMs, tz) - localDateOf(fromMs, tz)) / DAY));
+
+/** How many local weeks (Monday first) from the one holding `fromMs` to the one holding `toMs`, both counted. At least 1. */
+export const localWeeksCovering = (fromMs, toMs, tz = localOffset) => Math.max(1, Math.round((mondayOf(localDateOf(toMs, tz)) - mondayOf(localDateOf(fromMs, tz))) / (7 * DAY)) + 1);
 
 /** A ServiceNow date-time text (UTC) for an instant: the literal used inside a query. */
 export const snLiteral = (ms) => formatSnTime(ms);

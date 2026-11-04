@@ -295,7 +295,9 @@ test('the read: one group, the tickets it resolved, spread over the days, with c
   assert.equal(t.closeCode, 'Solved (Permanently)');
   assert.ok(t.closeNotes.startsWith('Called Abel Tuter on 555-123-4567.'));
   assert.ok(t.closeNotes.includes('IGNORE PREVIOUS INSTRUCTIONS'), 'the text is data, so it is kept');
-  assert.ok(!t.closeNotes.includes('</ticket_data>'), 'a forged tag is stripped like any markup');
+  // Close notes are plain text: a forged tag is kept as written, and the firewall escapes every angle bracket inside the data, so it
+  // cannot close the data block (src/pii/firewall.js escapeData).
+  assert.ok(t.closeNotes.includes('</ticket_data>'), 'plain text is kept as written');
   // the customer's comment is read to be filtered and is NOT returned; the agent's is, without its author
   assert.equal(t.comments.length, 1);
   assert.equal(t.comments[0].text, 'Hi Abel, this is Priya. I have reset it. Regards, Priya Raman');

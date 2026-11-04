@@ -16,14 +16,16 @@ const TARGETS = Object.freeze({
   description: { label: tm('Description'), fieldLabel: 'Description' },
   cause_notes: { label: tm('Cause notes'), fieldLabel: 'Cause notes' },
   workaround: { label: tm('Workaround'), fieldLabel: 'Workaround' },
+  fix_notes: { label: tm('Fix notes'), fieldLabel: 'Fix notes' },
   body: { label: tm('Email body'), fieldLabel: 'Body' },
 });
 
-// Which fields each kind of record has. A kind not listed gets the journal fields only.
+// Which fields each kind of record has. A kind not listed gets the journal fields only. A problem's resolution goes into its Fix notes:
+// the problem form has no Resolution notes (close_notes) box.
 const BY_KIND = {
   incident: ['comments', 'work_notes', 'close_notes', 'description'],
   case: ['comments', 'work_notes', 'close_notes', 'description'],
-  problem: ['work_notes', 'comments', 'description', 'cause_notes', 'workaround', 'close_notes'],
+  problem: ['work_notes', 'comments', 'description', 'cause_notes', 'workaround', 'fix_notes'],
   change: ['work_notes', 'comments', 'description', 'close_notes'],
   requested_item: ['comments', 'work_notes', 'close_notes'],
   catalog_task: ['work_notes', 'comments', 'close_notes', 'description'],

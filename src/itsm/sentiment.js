@@ -9,7 +9,11 @@
 // Nothing here quotes ticket text. The output holds counts and labels from our own word lists only, so the signals part
 // cannot carry a name or number of its own.
 
+import { authorRole, identities } from '../context/identity.js';
 import { parseSnTime } from '../context/util.js';
+
+// Kept here as before for the modules that import them from this file (src/itsm/parts.js, src/insights/glance.js and journey.js).
+export { identities };
 
 // ---- Word lists ---------------------------------------------------------------------------------------
 // [label, pattern]: the label is what the signals part says; the pattern is matched case-insensitively, whole words only.
@@ -97,7 +101,6 @@ const ACRONYMS = new Set(
 
 // Curly apostrophes (U+2018, U+2019, U+02BC) become plain ones so "can't" matches. Written as numbers: this file stays plain ASCII.
 const CURLY_APOSTROPHES = new RegExp(`[${String.fromCharCode(0x2018, 0x2019, 0x2bc)}]`, 'g');
-const COMBINING_MARKS = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
 const plainQuotes = (text) => String(text ?? '').replace(CURLY_APOSTROPHES, "'");
 const labelsFound = (list, text) => list.filter(([, re]) => re.test(text)).map(([label]) => label);
 
@@ -126,48 +129,17 @@ export function analyseText(text) {
 }
 
 // ---- Who is the customer? -----------------------------------------------------------------------------
-
-// The people on the record who raised it or asked for it. (opened_by is not used: an agent often opens a ticket for someone.)
-const CUSTOMER_ROLES = new Set(['caller', 'requested_for', 'contact', 'consumer']);
-
-// Names with accents, logins such as abel.tuter, and "Abel Tuter" all become lower-case words separated by single spaces, so a note author written
-// as a login still matches the person's name or the front of their email address.
-const fold = (value) =>
-  String(value ?? '')
-    .normalize('NFKD')
-    .replace(COMBINING_MARKS, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
-function identityKeys(person) {
-  const email = String(person?.email || '');
-  const keys = [person?.name, email, email.split('@')[0], `${person?.firstName || ''} ${person?.lastName || ''}`].map(fold).filter(Boolean);
-  return new Set(keys);
-}
-
-/** The customer(s) and the assignee of a pack, as sets of folded names. */
-export function identities(pack) {
-  const people = Array.isArray(pack?.people) ? pack.people : [];
-  const customers = new Set();
-  const support = new Set();
-  for (const p of people) {
-    if (!p || typeof p !== 'object') continue;
-    if (CUSTOMER_ROLES.has(p.role)) identityKeys(p).forEach((k) => customers.add(k));
-    else if (p.role === 'assigned_to') identityKeys(p).forEach((k) => support.add(k));
-  }
-  return { customers, support, known: customers.size > 0 };
-}
+// src/context/identity.js: the caller, requester, contact, consumer, or on an HR case the employee; names in any script, logins
+// and email addresses all match the person.
 
 /**
- * Who wrote a journal entry: 'customer', 'support' (a customer is known and it is someone else), 'unknown' (no customer
- * could be identified, or the entry has no author, so its role cannot be told), or 'note' for an internal work note.
+ * Who wrote a journal entry: 'customer', 'support' (the assignee, or a display name that is not a customer's), 'unknown' (no
+ * customer could be identified, the entry has no author, or a login that matches no one, so its role cannot be told), or 'note'
+ * for an internal work note.
  */
 export function roleOfEntry(entry, ids) {
   if (!entry || entry.type !== 'comment') return 'note';
-  const by = fold(entry.by);
-  if (!ids.known || !by) return 'unknown';
-  return ids.customers.has(by) ? 'customer' : 'support';
+  return authorRole(entry.by, ids);
 }
 
 // ---- Time ---------------------------------------------------------------------------------------------
@@ -219,7 +191,7 @@ export function computeSignals(pack, { now = Date.now(), depth = 20 } = {}) {
       if (c.found.chase) chasers += 1;
       continue;
     }
-    if (c.role === 'unknown') continue; // an entry with no author is neither a reply nor a chaser
+    if (c.role === 'unknown') continue; // an entry whose author cannot be told is neither a reply nor a chaser
     if (c.role !== 'customer') {
       run = 0;
       continue;

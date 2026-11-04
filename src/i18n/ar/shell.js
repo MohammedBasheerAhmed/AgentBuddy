@@ -86,6 +86,8 @@ export const AR_SHELL = {
   'Agent Buddy needs your permission to contact {host}. Nothing was sent.': 'يحتاج Agent Buddy إلى إذنك للاتصال بالعنوان {host}. لم يرسل شيء.',
   'That is not a web address. Start with https://': 'هذا ليس عنوان ويب. ابدأ بـ https://',
   'Use https://. Plain http:// is only allowed for localhost or 127.0.0.1.': 'استخدم https://. يسمح بـ http:// العادي فقط مع localhost أو 127.0.0.1.',
+  'Write http://localhost or http://127.0.0.1 instead of [::1]. The browser lets Agent Buddy reach a server on this computer over http:// only by those two names.':
+    'اكتب http://localhost أو http://127.0.0.1 بدلا من [::1]. لا يسمح المتصفح لـ Agent Buddy بالوصول إلى خادم على هذا الحاسوب عبر http:// إلا بهذين الاسمين.',
   'Do not put a user name or password in the address. The key goes in the key field.': 'لا تضع اسم مستخدم أو كلمة مرور في العنوان. المفتاح مكانه حقل المفتاح.',
   'Leave off the ?query and #fragment.': 'احذف ?query و #fragment.',
   'Only api-version may follow the ? in an Azure address. Leave off everything else.': 'يسمح فقط بـ api-version بعد علامة ? في عنوان Azure. احذف كل ما عداه.',
@@ -164,7 +166,8 @@ export const AR_SHELL = {
   'Your privacy mode only allows an AI model running on this computer. Choose Ollama or another local server in Settings.': 'يسمح وضع الخصوصية لديك فقط بنموذج ذكاء اصطناعي يعمل على هذا الحاسوب. اختر Ollama أو خادما محليا آخر من الإعدادات.',
   'Add your AI key in Settings first.': 'أضف مفتاح الذكاء الاصطناعي في الإعدادات أولا.',
   'Choose an AI model in Settings first.': 'اختر نموذج ذكاء اصطناعي في الإعدادات أولا.',
-  'A model on this computer reads about 4,000 tokens unless its server was set up for more.': 'يقرأ النموذج على هذا الحاسوب نحو 4,000 رمز ما لم يكن خادمه مضبوطا لأكثر من ذلك.',
+  'For a model on this computer Agent Buddy always counts on {window} tokens, whatever its server is set up for. Only an AI model that is not on this computer, chosen in Settings, reads more.':
+    'يحسب Agent Buddy دائما {window} رمز لأي نموذج على هذا الحاسوب، مهما كان ضبط خادمه. لا يقرأ أكثر من ذلك إلا نموذج ذكاء اصطناعي ليس على هذا الحاسوب، تختاره من الإعدادات.',
   'This is too long for the chosen AI model, even with only the newest note: about {tokens} tokens, and the model reads about {budget}.': 'هذا أطول مما يتسع له نموذج الذكاء الاصطناعي المختار، حتى مع أحدث ملاحظة وحدها: نحو {tokens} رمز، بينما يقرأ النموذج نحو {budget}.',
   'Choose a model that reads more in Settings.': 'اختر من الإعدادات نموذجا يقرأ أكثر.',
   'Your organisation\'s daily limit of {cap} AI tokens has been reached. It starts again tomorrow.': 'بلغت الحد اليومي لمؤسستك وهو {cap} رمز للذكاء الاصطناعي. يبدأ الحد من جديد غدا.',

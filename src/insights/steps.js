@@ -1,6 +1,8 @@
 // N12, steps that worked before: the fixes written on solved look-alike tickets and the steps of matching knowledge articles, as
 // one list, best first. No AI: the text is what colleagues wrote, cut to its first sentences. Pure.
 
+import { foldText } from '../context/identity.js';
+
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 const MAX_FIX = 240;
 
@@ -34,8 +36,6 @@ export function articleSteps(excerpt, max = MAX_FIX) {
   }
   return firstSentences(excerpt, max);
 }
-
-const fold = (s) => text(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /**
  * @param {{ lookalikes?: object[], articles?: object[] }} input solved look-alikes (with close_notes) and knowledge hits
@@ -72,14 +72,16 @@ export function stepsThatWorked({ lookalikes = [], articles = [] } = {}) {
       score: Number.isFinite(hit.score) ? hit.score : 0,
     });
   }
-  // The same fix written twice (two tickets closed with the same note) is shown once, the better match kept.
+  // The same fix written twice (two tickets closed with the same note) is shown once, the better match kept. The words are compared
+  // in any script (src/context/identity.js); a fix with no letter or digit to compare is never taken for another.
   const seen = new Set();
   const unique = items
     .map((x, i) => ({ x, i }))
     .sort((a, b) => b.x.score - a.x.score || a.i - b.i)
     .map((e) => e.x)
     .filter((x) => {
-      const k = fold(x.fix);
+      const k = foldText(x.fix);
+      if (!k) return true;
       if (seen.has(k)) return false;
       seen.add(k);
       return true;

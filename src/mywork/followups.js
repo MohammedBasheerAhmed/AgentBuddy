@@ -3,8 +3,9 @@
 //
 //   'replied'   the ticket was waiting on the customer and the customer answered: pick it up (no template)
 //   'reminder'  waiting on the customer for N days or more since the last customer-visible comment: send a reminder
-//   'update'    live work where I have not written to the customer for N days (or never, on a ticket opened N days ago):
-//               send a status update. Only for tickets that have a customer (an incident, a request, a case...).
+//   'update'    live work where nobody on our side (me, or a colleague such as the previous assignee) has written to the customer for
+//               N days (or ever, on a ticket opened N days ago): send a status update. Only for tickets that have a customer (an
+//               incident, a request, a case...).
 //
 // "N days" needs the comments: when they could not be read (marker.known false), nothing is claimed. When the read of comments was
 // capped (marker.since > 0) a ticket with no comment in the window has had none since `since`; that proves "N days" only when
@@ -34,11 +35,18 @@ function quietSince(item) {
   return Number.isFinite(item.updatedAt) ? item.updatedAt : null;
 }
 
-/** When I last wrote to the customer; null for "never" (complete read) and undefined for "cannot tell". */
-function mineSince(item) {
+/**
+ * When the customer last had a word from our side: my newest comment, or a colleague's when it is newer. null for "never" (complete
+ * read). A comment by somebody else is a colleague's only when it cannot be the customer's: the ticket's customer is known (then
+ * their own comments are lastCustomerAt, src/mywork/markers.js customerKnown). Otherwise it may be the customer's and is not counted.
+ */
+function ourSince(item) {
   const m = item.marker;
-  if (m.lastMineAt !== null && m.lastMineAt !== undefined) return m.lastMineAt;
-  if (m.since) return m.since; // nothing of mine in a capped window: at least since then
+  const at = (v) => (v !== null && v !== undefined ? v : null);
+  const colleague = m.customerKnown ? at(m.lastOtherAt) : null;
+  const newest = [at(m.lastMineAt), colleague].filter((v) => v !== null);
+  if (newest.length) return Math.max(...newest);
+  if (m.since) return m.since; // nothing of ours in a capped window: at least since then
   return null;
 }
 
@@ -65,13 +73,13 @@ export function followUps(items, { now, days = DEFAULT_FOLLOW_UP_DAYS }) {
     }
     // Live work, and tickets on hold for somebody else (the customer still wants to hear why it waits).
     if (!hasCustomer(item.type || item.table) || (groupOf(item) !== 'now' && item.work !== 'on-hold')) continue;
-    const mine = mineSince(item);
-    if (mine === null) {
+    const ours = ourSince(item);
+    if (ours === null) {
       // Never written to the customer: due once the ticket is N days old.
       if (Number.isFinite(item.openedAt) && item.openedAt <= limit) out.push({ kind: 'update', item, days: daysSince(item.openedAt, now), never: true });
       continue;
     }
-    if (mine <= limit) out.push({ kind: 'update', item, days: daysSince(mine, now) });
+    if (ours <= limit) out.push({ kind: 'update', item, days: daysSince(ours, now) });
   }
   const rank = { replied: 0, reminder: 1, update: 2 };
   return out.sort((a, b) => rank[a.kind] - rank[b.kind] || b.days - a.days || String(a.item.number).localeCompare(String(b.item.number)));

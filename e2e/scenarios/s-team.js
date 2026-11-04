@@ -183,6 +183,19 @@ module.exports = {
     }
     const offered = await p.$$eval('.ab-customize select.ab-select option', (os) => os.map((o) => o.value));
     t.check('Customize offers no AI section (Explain this dashboard and coaching are under AI Assist)', !offered.includes('insights') && !offered.includes('coaching'), offered.join(','));
+    // The custom report editor opens and previews (it once threw on opening: no scenario had opened it).
+    await clickButton(p, /^Add custom report$/);
+    const builderOpened = await p.waitForSelector('.ab-builder', { visible: true, timeout: 8000 }).then(() => true, () => false);
+    const builderText = builderOpened ? await p.$eval('.ab-builder', (e) => e.innerText) : '';
+    t.check('Customize > Add custom report: the editor opens with its fields (no error in its place)', builderOpened && /New custom report/.test(builderText) && /Preview/.test(builderText), builderText.slice(0, 160));
+    await clickButton(p, /^Preview$/);
+    const previewed = await p.waitForFunction(() => {
+      const box = document.querySelector('.ab-builder');
+      return box && /in total|nothing to average|No ticket|could not|not available/i.test(box.innerText);
+    }, { timeout: 10000 }).then(() => true, () => false);
+    t.check('the editor\'s Preview reads and shows a number', previewed && !/could not/i.test(await p.$eval('.ab-builder', (e) => e.innerText)), (await p.$eval('.ab-builder', (e) => e.innerText).catch(() => '')).slice(-200));
+    await clickButton(p, /^Cancel$/);
+    await p.waitForFunction(() => !document.querySelector('.ab-builder'), { timeout: 5000 }).catch(() => {});
     await clickButton(p, /^Done$/);
     t.check('Workload: the ageing buckets and the open work by state are there', /Open/.test(await widgetText(p, 'Workload and ageing')));
     t.check('Quality: opened against resolved, and the top categories, are there', /Opened|resolved/i.test(await widgetText(p, 'Quality and trend')));

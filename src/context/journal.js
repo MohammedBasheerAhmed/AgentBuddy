@@ -12,11 +12,13 @@
 //   ...
 //
 // Each column falls back on its own, so one that can be read through the table is not replaced by the string.
-// The header's time and name are in the reader's date format and time zone, not UTC.
+// The header's time and name are in the reader's date format and time zone, not UTC: a column read that way next to one read from
+// the table is put on UTC first (see "Two clocks"), so the two are ordered on one clock.
 
 import { LIMITS } from './allowlists.js';
 import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
-import { clipText, oneLine, parseSnTime, raw, stripHtml } from './util.js';
+import { foldText } from './identity.js';
+import { clipText, formatSnTime, journalText, oneLine, parseSnTime, raw } from './util.js';
 
 export const JOURNAL_SOURCE = 'journal';
 export const JOURNAL_RECORD_FIELDS = Object.freeze(['comments', 'work_notes']);
@@ -99,7 +101,7 @@ export function parseJournalString(text, { type } = {}) {
       when: block.when,
       by: block.by,
       type: type || typeOfLabel(block.label),
-      text: clipText(stripHtml(block.body.join('\n')), LIMITS.journalEntry),
+      text: clipText(journalText(block.body.join('\n')), LIMITS.journalEntry),
     }))
     .filter((e) => e.text || e.by || e.when);
 }
@@ -129,6 +131,61 @@ export function orderChronological(groups) {
   return groups.flatMap((group) => [...group].reverse());
 }
 
+// ---- Two clocks ---------------------------------------------------------------------------------------
+// When one column comes from the table (stored UTC) and the other from the record's own text (the reader's time zone), their times
+// are on two clocks. The column read from the table is in the record's text too: the same entries, the same words, with the time
+// the reader sees. Those pairs give the reader's offset at their dates, and the other column is put on UTC with the offset of the
+// nearest pair (a clock change between two notes is then still right on both sides of it).
+
+const QUARTER = 15 * 60000;
+const MAX_OFFSET = 14 * 3600000; // the widest real UTC offset
+
+// The same entry read both ways: the same words (the table's rich text and the display string differ in spacing and line breaks), the
+// first 200 characters of them so a long entry cut at a different place still pairs.
+const pairKey = (entry) => foldText(entry?.text).slice(0, 200);
+
+/** [{ at, offset }] from entries read both ways (the table's, newest first; the same column parsed from the record's text). */
+function offsetsFromPairs(tableEntries, textEntries) {
+  const pairs = [];
+  const used = new Set();
+  for (const e of tableEntries) {
+    const key = pairKey(e);
+    const i = key ? textEntries.findIndex((x, k) => !used.has(k) && pairKey(x) === key) : -1;
+    if (i < 0) continue;
+    used.add(i);
+    const utc = parseSnTime(e.when);
+    const local = parseSnTime(textEntries[i].when); // year first only: another date format is not read on a guess
+    const offset = Math.round((local - utc) / QUARTER) * QUARTER;
+    if (Number.isFinite(offset) && Math.abs(offset) <= MAX_OFFSET) pairs.push({ at: utc, offset });
+  }
+  return pairs;
+}
+
+/** The entries with their local times put on UTC; null when one of them cannot be (no time, or another date format). */
+function toUtc(entries, pairs) {
+  const out = [];
+  for (const e of entries) {
+    const local = parseSnTime(e.when);
+    if (!Number.isFinite(local)) return null;
+    const near = pairs.reduce((best, p) => (Math.abs(p.at - local) < Math.abs(best.at - local) ? p : best));
+    out.push({ ...e, when: formatSnTime(local - near.offset) });
+  }
+  return out;
+}
+
+/**
+ * Is the time of this entry in the reader's time zone (read from the record's own text) rather than stored UTC? The journal's access
+ * entry says: every entry when the notes were read from the record's text ('record-fields'); the types listed in `localTimes` when the
+ * comments and the work notes came from different places and could not be put on one clock ('mixed').
+ * @param {{ type?: string }} entry
+ * @param {object[]} access the pack's access list
+ */
+export function isLocalTime(entry, access) {
+  const a = (Array.isArray(access) ? access : []).find((x) => x && x.source === JOURNAL_SOURCE);
+  if (a?.strategy === 'record-fields') return true;
+  return a?.strategy === 'mixed' && Array.isArray(a.localTimes) && a.localTimes.includes(entry?.type);
+}
+
 // ---- Reading ------------------------------------------------------------------------------------------
 
 const TYPE_OF_ELEMENT = { comments: 'comment', work_notes: 'work_note' };
@@ -139,7 +196,7 @@ function entriesFromRows(rows) {
   const out = { comment: [], work_note: [] };
   for (const row of rows) {
     const type = TYPE_OF_ELEMENT[raw(row.element)];
-    const text = clipText(stripHtml(raw(row.value)), LIMITS.journalEntry);
+    const text = clipText(journalText(raw(row.value)), LIMITS.journalEntry);
     if (type && text) out[type].push({ when: raw(row.sys_created_on), by: raw(row.sys_created_by), type, text });
   }
   return out;
@@ -151,7 +208,8 @@ function entriesFromRows(rows) {
  *   `recordText` is the record's own comments/work_notes display strings (null when they were not read).
  * @returns {Promise<{ entries: object[], access: object[], loginNames: string[] }>}
  *   `loginNames`: authors still given as a login (from sys_journal_field); applyAuthorNames swaps in display names.
- *   access[0].strategy: 'sys_journal_field' | 'record-fields' | 'mixed' | 'none'.
+ *   access[0].strategy: 'sys_journal_field' | 'record-fields' | 'mixed' | 'none'; access[0].localTimes: on 'mixed', the type whose
+ *   times stayed in the reader's time zone (see isLocalTime), when it could not be put on UTC.
  */
 export async function readJournal({ table, sysId, recordText = null }, deps, { max = LIMITS.journalEntries, memo } = {}) {
   const query = `name=${table}^element_id=${sysId}^elementINcomments,work_notes^ORDERBYDESCsys_created_on`;
@@ -167,20 +225,35 @@ export async function readJournal({ table, sysId, recordText = null }, deps, { m
 
   const groups = [];
   const strategies = new Set();
+  const textOf = (type) => (recordText ? String(recordText[COLUMN_OF_TYPE[type]] || '') : '');
+  let fromText = ''; // the type read from the record's text while the other came from the table ('mixed')
   for (const type of ['comment', 'work_note']) {
-    const text = recordText ? String(recordText[COLUMN_OF_TYPE[type]] || '') : '';
+    const text = textOf(type);
     if (viaTable[type].length) {
       groups.push(viaTable[type]);
       strategies.add('sys_journal_field');
     } else if (text.trim()) {
       groups.push(parseJournalString(text, { type }));
       strategies.add('record-fields');
+      fromText = type;
     }
+  }
+  const strategy = strategies.size > 1 ? 'mixed' : [...strategies][0] || 'none';
+
+  // Mixed: put the column from the record's text on the table's clock (UTC) before the two are ordered together. When that cannot be
+  // done, the access entry names the column whose times are local, and its order among the other column's is only approximate.
+  let localTimes = [];
+  if (strategy === 'mixed') {
+    const fromTable = fromText === 'comment' ? 'work_note' : 'comment';
+    const at = fromText === 'comment' ? 0 : 1;
+    const pairs = offsetsFromPairs(viaTable[fromTable], parseJournalString(textOf(fromTable), { type: fromTable }));
+    const onUtc = pairs.length ? toUtc(groups[at], pairs) : null;
+    if (onUtc) groups[at] = onUtc;
+    else localTimes = [fromText];
   }
 
   const ordered = orderChronological(groups);
   const entries = ordered.slice(-max);
-  const strategy = strategies.size > 1 ? 'mixed' : [...strategies][0] || 'none';
 
   if (!entries.length) {
     const access = await emptyAccess({ failure, mismatched, recordFieldsRead: recordText !== null }, deps, memo);
@@ -188,15 +261,21 @@ export async function readJournal({ table, sysId, recordText = null }, deps, { m
   }
 
   const notes = [];
-  if (strategy !== 'sys_journal_field') {
+  if (strategy === 'record-fields') {
     const why = failure ? 'could not be read by your user' : mismatched ? 'answered with other records' : 'showed no entries';
     notes.push(`The journal table ${why}, so notes were read from the record's own comments and work notes fields. Times are in your time zone.`);
+  } else if (strategy === 'mixed') {
+    // (The table answered for this record, with entries of the other column only.)
+    const column = fromText === 'comment' ? 'comments' : 'work notes';
+    notes.push(`The journal table showed no ${column} for this record, so they were read from the record's own ${column} field.`);
+    if (localTimes.length) notes.push('Their times are in your time zone, so their order among the other notes may be off by a few hours.');
   }
   if (ordered.length > max) notes.push(`Showing the newest ${max} entries.`);
   const loginNames = strategy === 'record-fields' ? [] : [...new Set(entries.map((e) => e.by).filter((by) => by && !/\s/.test(by)))];
   // `more`: older entries exist and were not read. The AI request says so (src/features/parts.js, notAvailable), so a summary does not
-  // take the newest entries for the whole story.
-  return { entries, loginNames, access: [accessEntry(JOURNAL_SOURCE, STATUS.OK, notes.join(' '), { strategy, ...(ordered.length > max ? { more: true } : {}) })] };
+  // take the newest entries for the whole story. `localTimes`: see isLocalTime.
+  const extra = { strategy, ...(localTimes.length ? { localTimes } : {}), ...(ordered.length > max ? { more: true } : {}) };
+  return { entries, loginNames, access: [accessEntry(JOURNAL_SOURCE, STATUS.OK, notes.join(' '), extra)] };
 }
 
 // Nothing was found by either route: say whether that is a fact or only what this user can see.

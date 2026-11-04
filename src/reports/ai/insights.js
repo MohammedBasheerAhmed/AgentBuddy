@@ -76,7 +76,8 @@ function workloadLines(d, blocked) {
     `- Ageing of open tickets: ${(d.ageing?.buckets || []).map((b) => `${b.label} ${b.count}`).join('; ') || 'not available'}`,
   ];
   const names = [];
-  const owner = (r) => `${r.name}: ${r.count} open (working ${r.classes?.working ?? 0}, waiting ${r.classes?.waiting ?? 0}, new ${r.classes?.new ?? 0}, other ${r.classes?.other ?? 0})`;
+  // `count` is the open tickets, as on the Open tile; the resolved-but-not-closed are said apart, never as open.
+  const owner = (r) => `${r.name}: ${r.count} open (working ${r.classes?.working ?? 0}, waiting ${r.classes?.waiting ?? 0}, new ${r.classes?.new ?? 0}, other ${r.classes?.other ?? 0})${r.classes?.resolved ? `, plus ${r.classes.resolved} resolved and waiting to close` : ''}`;
   const people = (d.byAssignee || []).filter((r) => !r.others).slice(0, 8);
   if (people.length && !blocked.has('assigned_to')) {
     lines.push(`- Open work by person (busiest ${people.length}): ${people.map(owner).join('; ')}`);

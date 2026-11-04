@@ -287,7 +287,10 @@ test('who wrote last: name order, accents and email all work; no known customer 
   assert.equal(dir(abel, 'Beth Anglin'), 'agent');
   assert.equal(dir(abel, 'abel.tuter'), 'customer', 'a login that is the start of their email address');
   assert.equal(dir(abel, 'bglin'), 'unknown', 'a login that matches no one is not guessed at');
-  assert.equal(dir(abel, 'beth@example.com'), 'agent');
+  // An address that is not the customer's may still be theirs (a comment emailed in from another address): not guessed at either.
+  assert.equal(dir(abel, 'beth@example.com'), 'unknown');
+  assert.equal(dir([...abel, { role: 'assigned_to', name: 'Beth Anglin', email: 'beth@example.com' }], 'beth@example.com'), 'agent', "the assignee's own address");
+  assert.equal(dir([...abel, { role: 'assigned_to', name: 'Beth Anglin' }], 'beth.anglin'), 'agent', "the assignee's login");
   const accented = `Jos${String.fromCharCode(0xe9)} N${String.fromCharCode(0xfa, 0xf1)}ez`;
   assert.equal(dir([{ role: 'caller', name: accented }], 'Jose Nunez'), 'customer');
   assert.equal(dir([{ role: 'requested_for', name: 'Req Uester' }], 'Req Uester'), 'customer');

@@ -109,6 +109,18 @@ test('ties are broken by the newest change, then the number; the result is the s
   assert.deepEqual(a, b);
 });
 
+// Audit P3.12: "newest" is decided on times, never on the text of a date in the person's format.
+test('the newest change is found on times: the stored value when there is one, never the shown date as text', () => {
+  const pair = (one, two) => findDuplicateClusters([{ ...article(1, 'Reset VPN password now', 5), ...one }, { ...article(2, 'Reset VPN password now!', 5), ...two }])[0].keep.number;
+  // day/month/year as the person sees it: 12/01/2026 (January) sorts after 01/06/2026 (June) as text
+  assert.equal(pair({ updated: '12/01/2026 09:00', updatedUtc: '2026-01-12 09:00:00' }, { updated: '01/06/2026 09:00', updatedUtc: '2026-06-01 09:00:00' }), 'KB2');
+  // the stored time wins over the shown one
+  assert.equal(pair({ updated: '2026-06-01 09:00:00', updatedUtc: '2026-01-01 09:00:00' }, { updated: '2026-03-01 09:00:00', updatedUtc: '2026-03-01 09:00:00' }), 'KB2');
+  // a shown time in ServiceNow's own form is read when nothing else is there; one that cannot be read comes last
+  assert.equal(pair({ updated: '01/06/2026 09:00' }, { updated: '2025-12-01 09:00:00' }), 'KB2');
+  assert.equal(pair({ updated: '' }, { updated: 'yesterday' }), 'KB1', 'no time at all: the number decides');
+});
+
 test('the threshold, the shared-word minimum and the cap are honoured', () => {
   const set = [article(1, 'Reset VPN password', 3), article(2, 'Reset VPN token', 2)];
   assert.equal(findDuplicateClusters(set, { threshold: 0.9 }).length, 0);

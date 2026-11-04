@@ -10,7 +10,7 @@
 //
 // Nothing is stored: the reader gets a cache of its own that is dropped with the call, so no close note or comment lingers in
 // the shared report cache.
-import { SYS_ID_RE, clipText, stripHtml, oneLine } from '../../context/util.js';
+import { SYS_ID_RE, cleanText, clipText, journalText, oneLine } from '../../context/util.js';
 import { allowedFields } from '../../context/allowlists.js';
 import { parseJournalString } from '../../context/journal.js';
 import { isSensitiveTable } from '../../context/kinds.js';
@@ -130,7 +130,7 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
         number: c.number,
         resolvedMs: c.resolvedMs,
         closeCode: oneLine(disp(r.close_code) || disp(r.resolution_code), 80),
-        closeNotes: clipText(stripHtml(disp(r.close_notes)), COACHING_LIMITS.closeNotesChars),
+        closeNotes: cleanText(disp(r.close_notes), COACHING_LIMITS.closeNotesChars),
         comments: comments.entries,
         commentsNote: comments.note,
         // Only for masking: these names are never shown to the AI as authors or subjects of anything.
@@ -182,7 +182,7 @@ async function readAgentComments(reader, c, isAgent) {
   if (table.ok) {
     // An instance that ignores a condition answers with other records' rows: none of them may be used.
     const own = table.value.filter((row) => raw(row.element_id) === c.sysId && raw(row.element) === 'comments');
-    entries = own.map((row) => ({ when: raw(row.sys_created_on), by: raw(row.sys_created_by), text: clipText(stripHtml(raw(row.value)), COACHING_LIMITS.commentChars) }));
+    entries = own.map((row) => ({ when: raw(row.sys_created_on), by: raw(row.sys_created_by), text: clipText(journalText(raw(row.value)), COACHING_LIMITS.commentChars) }));
     if (entries.length) how = 'journal';
   }
   let access = '';

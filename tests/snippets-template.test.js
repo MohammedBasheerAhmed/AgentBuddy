@@ -262,3 +262,34 @@ test('buildVariables returns plain strings only, and a fresh object each time', 
   const walk = (o) => Object.values(o).forEach((v) => (typeof v === 'object' ? walk(v) : assert.equal(typeof v, 'string')));
   walk(a);
 });
+
+// Audit P3.5: the caller's first and last name are the ones sys_user holds (the pack's firstName / lastName), not a cut of the display name.
+test('buildVariables: the caller\'s first and last name come from sys_user when the pack has them', () => {
+  const caller = (person) => buildVariables({ people: [{ role: 'caller', ...person }] }, {}).caller;
+  assert.deepEqual(caller({ name: 'Mary Ann Smith', firstName: 'Mary Ann', lastName: 'Smith' }), { first_name: 'Mary Ann', last_name: 'Smith', name: 'Mary Ann Smith' });
+  assert.deepEqual(caller({ name: 'Abdul Rahman Al Saud', firstName: 'Abdul Rahman', lastName: 'Al Saud' }), { first_name: 'Abdul Rahman', last_name: 'Al Saud', name: 'Abdul Rahman Al Saud' });
+  assert.deepEqual(caller({ name: 'Yamada Taro', firstName: 'Taro', lastName: 'Yamada' }), { first_name: 'Taro', last_name: 'Yamada', name: 'Yamada Taro' }, 'family name first');
+  // sys_user could not be read: src/context/people.js cut the display name at its first space; the comma form is still read right
+  assert.deepEqual(caller({ name: 'Tuter, Abel', firstName: 'Tuter,', lastName: 'Abel' }), { first_name: 'Abel', last_name: 'Tuter', name: 'Tuter, Abel' });
+  assert.deepEqual(caller({ name: 'Mary Jane van Dyke', firstName: 'Mary', lastName: 'Jane van Dyke' }), { first_name: 'Mary', last_name: 'Jane van Dyke', name: 'Mary Jane van Dyke' });
+  // a first name alone (no last name in sys_user)
+  assert.deepEqual(caller({ name: 'Madonna', firstName: 'Madonna', lastName: '' }), { first_name: 'Madonna', name: 'Madonna' });
+});
+
+// Audit P3.12: the earliest SLA is found on times, not on the text of the dates as the person's format writes them.
+test('buildVariables: sla.due is the earliest open SLA by time, whatever the date format shows', () => {
+  const due = (slas) => buildVariables({ related: { slas } }, {}).sla?.due;
+  // display values in the person's format (day/month/year), with the stored UTC value next to them
+  assert.equal(due([
+    { stage: 'In progress', plannedEnd: '11/04/2027 09:00:00', plannedEndUtc: '2027-04-11 09:00:00' },
+    { stage: 'In progress', plannedEnd: '20/11/2026 09:00:00', plannedEndUtc: '2026-11-20 09:00:00' },
+  ]), '20/11/2026 09:00:00', 'November 2026 comes before April 2027, though "11/04/2027" sorts first as text');
+  // the stored time decides even when the shown one is in ServiceNow's own form
+  assert.equal(due([
+    { stage: 'In progress', plannedEnd: '2026-11-05 08:00:00', plannedEndUtc: '2026-11-05 20:00:00' },
+    { stage: 'In progress', plannedEnd: '2026-11-05 10:00:00', plannedEndUtc: '2026-11-05 10:00:00' },
+  ]), '2026-11-05 10:00:00');
+  // a time that cannot be read comes after one that can
+  assert.equal(due([{ stage: 'In progress', plannedEnd: 'next Tuesday' }, { stage: 'In progress', plannedEnd: '2026-12-01 08:00:00' }]), '2026-12-01 08:00:00');
+  assert.equal(due([{ stage: 'In progress', plannedEnd: 'next Tuesday' }]), 'next Tuesday', 'one open SLA is used as it is shown');
+});

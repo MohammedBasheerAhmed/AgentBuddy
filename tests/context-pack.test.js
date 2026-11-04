@@ -94,8 +94,8 @@ test('notes: oldest first, display names for the authors, plain text', async () 
 test('SLAs and child tasks of this record only', async () => {
   const { pack } = await read(incident);
   assert.deepEqual(pack.related.slas, [
-    { name: 'P2 resolution 8 hours', stage: 'In progress', breached: 'false', percentage: '62', plannedEnd: '2026-10-26 19:55:12' },
-    { name: 'P2 response 2 hours', stage: 'Achieved', breached: 'false', percentage: '40', plannedEnd: '2026-10-26 11:55:12' },
+    { name: 'P2 resolution 8 hours', stage: 'In progress', breached: 'false', percentage: '62', plannedEnd: '2026-10-26 19:55:12', plannedEndUtc: '2026-10-26 17:55:12' },
+    { name: 'P2 response 2 hours', stage: 'Achieved', breached: 'false', percentage: '40', plannedEnd: '2026-10-26 11:55:12', plannedEndUtc: '2026-10-26 09:55:12' },
   ]);
   assert.deepEqual(pack.related.childTasks, [
     {
@@ -415,7 +415,7 @@ test('a case: account, contact (with email), product, entitlement and a breached
   assert.ok(!('consumer' in pack.fields));
   const contact = pack.people.find((p) => p.role === 'contact');
   assert.deepEqual([contact.name, contact.email, contact.sysId], [ERIN.name, ERIN.email, ERIN.sysId]);
-  assert.deepEqual(pack.related.slas, [{ name: 'Gold response 1 hour', stage: 'In progress', breached: 'true', percentage: '130', plannedEnd: '2026-10-25 12:00:00' }]);
+  assert.deepEqual(pack.related.slas, [{ name: 'Gold response 1 hour', stage: 'In progress', breached: 'true', percentage: '130', plannedEnd: '2026-10-25 12:00:00', plannedEndUtc: '2026-10-25 10:00:00' }]);
   assert.equal(pack.journal.length, 2, 'from the record\'s own fields');
 });
 
@@ -475,4 +475,16 @@ test('HR child tasks follow the same rule', async () => {
 
 test('stripHtml is exported next to the pack', () => {
   assert.equal(stripHtml('<p>a &amp; b</p>'), 'a & b');
+});
+
+// Audit P3.27: a column is read as HTML only when it carries markup, so a plain title with angle brackets keeps its words.
+test('the record\'s columns: plain text keeps "<String>", HTML in a column is still stripped (scripts with it)', async () => {
+  const tables = buildInstance();
+  const row = tables.incident.find((r) => r.sys_id.value === INCIDENT_ID);
+  row.short_description = v('List<String> is empty when a<b and c>d');
+  row.close_notes = v('<p>Restarted the gateway.</p><script>alert(1)</script>');
+  const pack = await readContextPack(incident, fakeDeps(tables), { feature: 'record-summary' });
+  assert.equal(pack.fields.short_description, 'List<String> is empty when a<b and c>d');
+  assert.equal(pack.fields.close_notes, 'Restarted the gateway.');
+  assert.match(pack.fields.description, /^Hi, my VPN drops/, 'the HTML description is still read as text');
 });

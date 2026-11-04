@@ -10,9 +10,11 @@
 // accented Latin), and 20% on top of that for numbers, timestamps, placeholders and the like, which split into more tokens than prose.
 // Over-estimating only means a long ticket loses an old note a little earlier; under-estimating would let the server cut the rules.
 //
-// THE CONTEXT of a model is known for the common cloud models by name. A model on this computer (Ollama, LM Studio...) is assumed to
-// have Ollama's default context of 4096 tokens unless the setup says otherwise (`config.contextTokens`), because that is what it
-// gets when nobody changed it. An unknown cloud model is assumed to take 32,000 tokens. Pure: no chrome.*, no network.
+// THE CONTEXT of a model is known for the common cloud models by name. A model on this computer (Ollama, LM Studio...) is always
+// given Ollama's default context of 4096 tokens, because that is what it gets when nobody changed it, and Agent Buddy can neither ask
+// the server what it was set up for nor ask it for more: so a server set up for more, or a larger local model, changes nothing here
+// (the "too long" message says so, src/lib/pipeline.js). `config.contextTokens` would override it, but no setting sets it today.
+// An unknown cloud model is assumed to take 32,000 tokens. Pure: no chrome.*, no network.
 
 export const CHARS_PER_TOKEN = 4;
 export const MARGIN = 1.2;
@@ -82,7 +84,7 @@ const modelName = (model) => String(model || '').trim().toLowerCase().split('/')
 /**
  * The context of the configured model, in tokens, and where that number comes from.
  * @param {{ model?: string, local?: boolean, contextTokens?: number }} config from resolveProviderConfig (contextTokens is optional:
- *   the size the person or the organisation says their model has)
+ *   a size the set-up states for the model; resolveProviderConfig does not set it today)
  * @returns {{ tokens: number, source: 'setting' | 'local-default' | 'model' | 'unknown' }}
  */
 export function contextWindow(config = {}) {

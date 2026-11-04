@@ -20,10 +20,14 @@ export const DEFAULT_HISTORY_DAYS = 30;
 // --- Endpoints --------------------------------------------------------------------------------------------------
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+// Plain http:// reaches only the two names the manifest lets Agent Buddy call over http (optional_host_permissions and the pages'
+// connect-src): localhost and 127.0.0.1. http://[::1] is this computer too, but the browser would refuse every call to it.
+const LOCAL_HTTP_HOSTS = new Set(['localhost', '127.0.0.1']);
 
 /**
- * Check a base URL typed by the user. https only, except http to this machine (Ollama, LM Studio); no user:password@,
- * no query string or fragment; a trailing slash is dropped. An empty string means "use the provider's own endpoint".
+ * Check a base URL typed by the user. https only, except http to this machine (Ollama, LM Studio) by the name localhost or
+ * 127.0.0.1; no user:password@, no query string or fragment; a trailing slash is dropped. An empty string means "use the provider's
+ * own endpoint".
  * @returns {{ ok: boolean, url: string, host: string, origin: string, local: boolean, error?: string }}
  */
 export function validateBaseUrl(input) {
@@ -37,6 +41,9 @@ export function validateBaseUrl(input) {
     return { ...empty, ok: false, error: t('That is not a web address. Start with https://') };
   }
   const local = LOCAL_HOSTS.has(parsed.hostname);
+  if (parsed.protocol === 'http:' && local && !LOCAL_HTTP_HOSTS.has(parsed.hostname)) {
+    return { ...empty, ok: false, error: t('Write http://localhost or http://127.0.0.1 instead of [::1]. The browser lets Agent Buddy reach a server on this computer over http:// only by those two names.') };
+  }
   if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && local)) {
     return { ...empty, ok: false, error: t('Use https://. Plain http:// is only allowed for localhost or 127.0.0.1.') };
   }

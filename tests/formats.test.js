@@ -3,7 +3,7 @@
 // and the organisation's formats combine in one way, and a chosen format reaches the request that is sent.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FORMAT_FEATURES, FORMAT_LIMITS, EXTRA_LEAD, cleanFormats, cleanSections, normalizeFormat, policyEntry, readOrgFormats, resolveFormat, settledFormat, specOf, systemFor, withFormat } from '../src/formats/formats.js';
+import { FORMAT_FEATURES, FORMAT_LIMITS, EXTRA_LEAD, cleanFormats, cleanSections, normalizeFormat, orgFormatOf, policyEntry, readOrgFormats, resolveFormat, settledFormat, specOf, systemFor, withFormat } from '../src/formats/formats.js';
 import { featureById } from '../src/features/registry.js';
 import { prepareRun } from '../src/lib/pipeline.js';
 import { DEFAULT_SETTINGS, effectiveSettings, mergePolicies, normalizePolicy, policyProblems } from '../src/policy/policy.js';
@@ -233,6 +233,28 @@ test('a chosen format reaches the request: the system message, once, with the ru
   assert.match(system(locked), /at most 50 words/);
   const standard = build({ provider: 'anthropic', formats: { 'record-summary': { words: 200 } } }, { orgFormats: [{ feature: 'record-summary', words: 50 }] });
   assert.match(system(standard), /at most 200 words/, 'the person may set their own when the organisation\'s is not locked');
+  // (audit P3.6) the person's choice of the standard format holds over the organisation's standard one, never over a locked one
+  const chosen = build({ provider: 'anthropic', formats: { 'record-summary': { standard: true } } }, { orgFormats: [{ feature: 'record-summary', words: 50 }] });
+  assert.equal(system(chosen), system(plain), 'the action\'s own standard prompt, not the organisation\'s 50 words');
+  const overruled = build({ provider: 'anthropic', formats: { 'record-summary': { standard: true } } }, { orgFormats: [{ feature: 'record-summary', words: 50, locked: true }] });
+  assert.match(system(overruled), /at most 50 words/);
+});
+
+// Audit P3.6: choosing "standard" over an unlocked organisation format is stored as a choice, and resolveFormat honours it.
+test('the standard choice: kept in settings, wins over the organisation\'s standard format, never over a locked one', () => {
+  const org = readOrgFormats([{ feature: 'record-summary', words: 60 }, { feature: 'reply-draft', extra: 'Org.', locked: true }]);
+  const mine = cleanFormats({ 'record-summary': { standard: true }, 'reply-draft': { standard: true }, 'handoff-brief': { standard: true, words: 300 }, nope: { standard: true } });
+  assert.deepEqual(mine, { 'record-summary': { standard: true }, 'reply-draft': { standard: true }, 'handoff-brief': { standard: true } }, 'known actions only; a choice is nothing but the choice');
+  assert.deepEqual(effectiveSettings({ formats: { 'record-summary': { standard: true } } }, {}).values.formats, { 'record-summary': { standard: true } });
+  assert.deepEqual(resolveFormat('record-summary', mine, org), { format: null, source: 'standard' });
+  assert.deepEqual(resolveFormat('reply-draft', mine, org), { format: { extra: 'Org.' }, source: 'locked' });
+  assert.deepEqual(resolveFormat('handoff-brief', mine, org), { format: null, source: 'default' }, 'with no organisation format it is simply the default');
+  assert.equal(withFormat(featureById('record-summary'), mine, org), featureById('record-summary'), 'the action as it is');
+  // an organisation entry can not be "standard": it changes nothing, so it is not read
+  assert.deepEqual(readOrgFormats([{ feature: 'record-summary', standard: true }]), []);
+  assert.deepEqual(orgFormatOf('record-summary', org), { words: 60 });
+  assert.deepEqual(orgFormatOf('reply-draft', org), { extra: 'Org.' });
+  assert.equal(orgFormatOf('handoff-brief', org), null);
 });
 
 test('docs/deployment.md names exactly the actions whose format can change, under the right heading', async () => {

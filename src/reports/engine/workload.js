@@ -6,14 +6,20 @@ import { attempt } from './reader.js';
 import { tm } from './say.js';
 import { t } from '../../i18n/core.js';
 import { shown, placeholderName } from '../shown.js';
-import { andQuery, byCountDesc, clampInt, raw, disp, sectionResult, stateClass, STATE_CLASSES, sumResults, topWithOthers, usableTables, resolvedStates, notResolved } from './common.js';
+import { andQuery, byCountDesc, clampInt, raw, disp, sectionResult, stateClass, STATE_CLASSES, sumResults, topWithOthers, usableTables, notResolved, readOpenStates, openOf } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { DAY } from './time.js';
 
 const emptyClasses = () => Object.fromEntries(STATE_CLASSES.map((c) => [c.key, 0]));
 
+// The key of the row for "nobody" ('(unassigned)', '(no group)'): never '' (a chart swaps an empty key for the row's position, and the
+// row could then not be found again for a click). Its `id` stays '' so its query asks for an empty column.
+export const NOBODY_KEY = '__none';
+
 /**
  * Fold "assignee x state" (or "group x state") groups from several tables into one row per person or group.
+ * `count` is the row's OPEN tickets, as the Open tile counts them: the resolved-but-active are in `classes.resolved` (drawn as their own
+ * part of the bar) but are not open. `byTable` counts every active ticket of the row (what a click on the row lists).
  * @param {{table:string, groups: ReturnType<import('./reader.js').normalizeGroups>}[]} parts
  * @returns {{ key, id, name, count, classes, byTable }[]} busiest first
  */
@@ -23,13 +29,13 @@ export function foldByOwner(parts, emptyName) {
     groups.forEach((g) => {
       const who = g.keys[0] || { value: '', display: '' };
       const state = g.keys[1] || { display: '' };
-      const key = who.value || '';
-      const row = rows.get(key) || { key, id: key, name: who.display || emptyName, count: 0, classes: emptyClasses(), byTable: {} };
+      const id = who.value || '';
+      const row = rows.get(id) || { key: id || NOBODY_KEY, id, name: who.display || emptyName, count: 0, classes: emptyClasses(), byTable: {} };
       const cls = stateClass(state.display);
-      row.count += g.count;
+      if (cls !== 'resolved') row.count += g.count;
       row.classes[cls] += g.count;
       row.byTable[table] = (row.byTable[table] || 0) + g.count;
-      rows.set(key, row);
+      rows.set(id, row);
     });
   });
   return [...rows.values()].sort(byCountDesc);
@@ -56,9 +62,7 @@ async function readTable(ctx, t) {
   const open = q('active=true');
   // Which states mean "resolved, waiting to close" (the Overview asks the same question, so this is a cache hit after it): those
   // tickets are left out of the open, stale, ageing and hand-off numbers, and shown as their own part of the per-person bars.
-  const states = await attempt(() => reader.groups(t.table, open, ['state']), t.table);
-  const done = states.ok ? resolvedStates(states.value) : { count: 0, values: [] };
-  const live = notResolved(done.values);
+  const { states, done, live } = await readOpenStates(reader, t.table, open);
   const staleCut = buildQuery([{ op: 'before', field: 'sys_updated_on', ms: now - clampInt(ctx.params.staleDays, 1, 60, LIMITS.staleDays) * DAY }]);
   const cumulative = AGE_BUCKETS.filter((b) => b.to !== null).map((b) => attempt(() => reader.count(t.table, q('active=true', buildQuery([{ op: 'after', field: 'opened_at', ms: now - b.to * DAY }]), live)), t.table));
   const pingPong = t.cols.has('reassignment_count');
@@ -78,8 +82,7 @@ async function readTable(ctx, t) {
         )
       : null,
   ]);
-  const openLive = openN.ok ? { ok: true, value: Math.max(0, openN.value - done.count) } : openN;
-  return { t, openN: openLive, resolvedActive: states.ok ? done.count : null, doneValues: done.values, byAssignee, byGroup, unassigned, stale, ageCounts, pingCount, pingRows };
+  return { t, openN: openOf(openN, done), resolvedActive: states.ok ? done.count : null, doneValues: done.values, byAssignee, byGroup, unassigned, stale, ageCounts, pingCount, pingRows };
 }
 
 /**
@@ -118,7 +121,8 @@ export async function workloadSection(ctx) {
   };
   const assigneeRows = scope.kind === 'mine' ? [] : fold('byAssignee', tm('(unassigned)'));
   const groupRows = scope.kind === 'mine' ? [] : fold('byGroup', tm('(no group)'));
-  // For a click on a row: the query that lists exactly that person's (or group's) open tickets, per table.
+  // For a click on a row: the query that lists exactly that person's (or group's) active tickets, per table: what the bar draws, its
+  // resolved-but-active part included. "Nobody" (id '') asks for an empty column.
   const ownerQueries = (row, field) =>
     Object.fromEntries(Object.keys(row.byTable).map((table) => [table, andQuery(scope.query, 'active=true', row.id ? buildQuery([{ op: 'eq', field, value: row.id }]) : `${field}ISEMPTY`)]));
   assigneeRows.forEach((r) => {

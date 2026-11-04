@@ -91,6 +91,8 @@ const toListItem = (row) => ({
   knowledgeBase: oneLine(disp(row.kb_knowledge_base), 100),
   category: oneLine(disp(row.kb_category), 100),
   updated: oneLine(disp(row.sys_updated_on), 40),
+  // The stored (UTC) time, so lists sort by when it was updated, not by how the date is written (src/knowledge/similarity.js).
+  updatedUtc: oneLine(raw(row.sys_updated_on), 40),
   views: Number.parseInt(raw(row.sys_view_count) || raw(row.view_count), 10) || 0,
 });
 

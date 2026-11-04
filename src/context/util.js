@@ -73,22 +73,108 @@ export function stripHtml(input) {
   if (/[<&]/.test(text)) {
     // Ends of blocks first, so an opening tag can tell whether it already starts a line.
     const startsLine = (whole, offset) => offset === 0 || whole[offset - 1] === '\n';
-    text = text
-      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
+    // Every pattern runs in linear time on hostile text (ticket text is data from anyone): a tag stops at the next "<" ([^<>]*, not
+    // [^>]*, which scanned to the end again for every "<a " with no ">": "<a " 70,000 times took 19 s), and the blocks and comments
+    // are found by searching forward, never by a lazy match that fails at the end for every unclosed one.
+    text = dropComments(dropBlocks(text))
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/(p|h[1-6]|ul|ol|table|blockquote|pre)\s*>/gi, '\n\n')
       .replace(/<\/(div|tr|li)\s*>/gi, '\n')
-      .replace(/<li\b[^>]*>/gi, (tag, offset, whole) => (startsLine(whole, offset) ? '- ' : '\n- '))
-      .replace(/<(p|div|h[1-6]|tr|blockquote|pre)\b[^>]*>/gi, (tag, name, offset, whole) => (startsLine(whole, offset) ? '' : '\n'))
-      .replace(/<\/?[a-z][^>]*>/gi, '');
+      .replace(/<li\b[^<>]*>/gi, (tag, offset, whole) => (startsLine(whole, offset) ? '- ' : '\n- '))
+      .replace(/<(p|div|h[1-6]|tr|blockquote|pre)\b[^<>]*>/gi, (tag, name, offset, whole) => (startsLine(whole, offset) ? '' : '\n'))
+      .replace(/<\/?[a-z][^<>]*>/gi, '');
     text = decodeEntities(text).replace(/[ \t]+/g, ' ');
   }
-  return text
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return tidyLines(text);
+}
+
+// <script>...</script> and <style>...</style>, with what is inside. An unclosed one is left to the tag pass (which removes the tag
+// itself); once a name has no closing tag after some point, no later opening tag of that name can have one either.
+function dropBlocks(text) {
+  const lower = text.toLowerCase();
+  const open = /<(script|style)\b[^<>]*>/g;
+  const unclosed = new Set();
+  let out = '';
+  let from = 0;
+  for (let m = open.exec(lower); m; m = open.exec(lower)) {
+    if (unclosed.has(m[1])) continue;
+    const end = closingEnd(lower, m[1], open.lastIndex);
+    if (end === -1) {
+      unclosed.add(m[1]);
+      continue;
+    }
+    out += text.slice(from, m.index);
+    from = end;
+    open.lastIndex = end;
+  }
+  return out + text.slice(from);
+}
+
+// Where the first `</name>` (spaces allowed before ">") at or after `at` ends; -1 when there is none.
+function closingEnd(lower, name, at) {
+  for (let i = lower.indexOf(`</${name}`, at); i !== -1; i = lower.indexOf(`</${name}`, i + 1)) {
+    let j = i + name.length + 2;
+    while (j < lower.length && /\s/.test(lower[j])) j += 1;
+    if (lower[j] === '>') return j + 1;
+  }
+  return -1;
+}
+
+// <!-- comments -->. Only the text up to the last "-->" can hold a whole one: an unclosed "<!--" after it is left alone (the lazy
+// match would have scanned to the end of the text for each of them).
+function dropComments(text) {
+  const last = text.lastIndexOf('-->');
+  if (last === -1) return text;
+  return text.slice(0, last + 3).replace(/<!--[\s\S]*?-->/g, '') + text.slice(last + 3);
+}
+
+// Spaces and tabs at the end of a line, cut by hand: the pattern /[ \t]+\n/g takes quadratic time on a long run of spaces (a field of
+// 200,000 spaces held the page for minutes).
+function trimLineEnd(line) {
+  let end = line.length;
+  while (end > 0 && (line[end - 1] === ' ' || line[end - 1] === '\t')) end -= 1;
+  return end === line.length ? line : line.slice(0, end);
+}
+
+// Line ends evened out, no spaces at the end of a line, three or more line breaks squeezed to two, trimmed.
+const tidyLines = (text) => text.replace(/\r\n?/g, '\n').split('\n').map(trimLineEnd).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+/**
+ * Plain text tidied the way stripHtml tidies its result (zero-width characters out, line ends and blank lines evened out, trimmed),
+ * with every other character kept as written: "List<String>", "a<b and c>d" and "R&amp;D" stay as they are.
+ */
+export function plainText(input) {
+  return tidyLines(String(input ?? '').replace(ZERO_WIDTH, ''));
+}
+
+// Markup that only HTML has: a tag of an HTML element, closing ("</p>"), bare ("<b>", "<br/>") or with an attribute value
+// ("<img src=x>"); a comment; or ServiceNow's [code] wrapper of rich journal text. Plain text that holds angle brackets is never
+// taken for HTML: "List<String>" and a pasted XML error name no HTML element, and in "a<b and c>d" the b has no attribute value.
+const HTML_ELEMENT = 'a|abbr|audio|b|base|big|blockquote|body|br|button|caption|center|code|col|dd|del|div|dl|dt|em|embed|font|form|h[1-6]|head|hr|html|i|iframe|img|input|ins|kbd|label|li|link|mark|meta|object|ol|option|p|pre|q|s|samp|script|select|small|source|span|strike|strong|style|sub|sup|svg|table|tbody|td|textarea|tfoot|th|thead|title|tr|tt|u|ul|video';
+// (the attribute part stops at its first "=", so a long run of brackets or equals signs costs linear time)
+const HTML_MARK = new RegExp(`</(?:${HTML_ELEMENT})\\s*>|<(?:${HTML_ELEMENT})(?:\\s*/?>|\\s[^<>=]*=[^<>]*>)|<!--|\\[/?code\\]`, 'i');
+
+/** Does this value carry HTML markup (see HTML_MARK)? */
+export const looksLikeHtml = (value) => HTML_MARK.test(String(value ?? ''));
+
+/**
+ * A journal entry (a comment, a work note, a chat message) as text. ServiceNow keeps it as escaped text ("O&#39;Neil", "&nbsp;"), and
+ * as HTML only when it carries markup (a [code] block, rich text): the entities are decoded either way, but tags are stripped only
+ * from HTML, so "List<String>" written in a plain note stays.
+ */
+export function journalText(value) {
+  const s = String(value ?? '');
+  if (looksLikeHtml(s)) return stripHtml(s);
+  return plainText(s.includes('&') ? decodeEntities(s).replace(/[ \t]+/g, ' ') : s);
+}
+
+/**
+ * A value as text. html: true for a source that is HTML (an article's body); 'auto' for one whose type is not known (a record's
+ * columns, which hold HTML on some tables and releases): HTML only when it carries markup, so script and style blocks still go;
+ * false for plain text.
+ */
+export function asText(value, html = 'auto') {
+  return html === true || (html === 'auto' && looksLikeHtml(value)) ? stripHtml(value) : plainText(value);
 }
 
 /** Cut to `max` characters with an ellipsis. Line breaks are kept. */
@@ -98,15 +184,18 @@ export function clipText(text, max) {
   return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
 
-/** A value as it goes into a pack: HTML stripped, capped, and never a bare sys_id. */
-export function cleanText(value, max) {
-  const text = clipText(stripHtml(value), max);
+/**
+ * A value as it goes into a pack: capped, and never a bare sys_id. HTML is stripped only where the value is HTML: `html` true (an HTML
+ * column), 'auto' (the default: a column whose type is not known is read as HTML only when it carries markup), false (plain text).
+ */
+export function cleanText(value, max, { html = 'auto' } = {}) {
+  const text = clipText(asText(value, html), max);
   return SYS_ID_RE.test(text) ? '' : text;
 }
 
-/** One line, whitespace squeezed, capped. For names, titles and labels. */
-export function oneLine(value, max = 120) {
-  return clipText(stripHtml(value).replace(/\s+/g, ' ').trim(), max);
+/** One line, whitespace squeezed, capped. For names, titles and labels; `html` as for cleanText. */
+export function oneLine(value, max = 120, { html = 'auto' } = {}) {
+  return clipText(asText(value, html).replace(/\s+/g, ' ').trim(), max);
 }
 
 // ---- Times --------------------------------------------------------------------------------------

@@ -291,7 +291,7 @@ export async function searchKnowledge(pack, deps, { limit = 5, now = Date.now(),
         sysId: raw(row.sys_id).toLowerCase(),
         number: oneLine(disp(row.number), 40),
         short_description: title,
-        excerpt: cleanText(body, LIMITS.kbExcerpt),
+        excerpt: cleanText(body, LIMITS.kbExcerpt, { html: false }), // (the body is plain text already: "<String>" in it is a word)
         knowledgeBase: oneLine(disp(row.kb_knowledge_base), 100),
         viewCount: Number.parseInt(raw(row.view_count) || raw(row.sys_view_count), 10) || 0,
         updated: oneLine(disp(row.sys_updated_on), 40),

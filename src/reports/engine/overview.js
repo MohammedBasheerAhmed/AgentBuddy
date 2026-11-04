@@ -6,7 +6,7 @@ import { attempt } from './reader.js';
 import { say, tm } from './say.js';
 import { t } from '../../i18n/core.js';
 import { shown } from '../shown.js';
-import { andQuery, clampInt, sectionResult, stateClass, sumResults, usableTables, resolvedColumn, resolvedStates, notResolved, onlyResolved } from './common.js';
+import { andQuery, clampInt, sectionResult, stateClass, sumResults, usableTables, resolvedColumn, notResolved, onlyResolved, readOpenStates, openOf } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { DAY, HOUR, startOfLocalDay } from './time.js';
 import { readSlaSnapshot } from './sla.js';
@@ -30,9 +30,7 @@ async function readTable(ctx, t, { staleDays, dayStart }) {
   // The state breakdown comes first: it says which states mean "resolved, waiting to close" on this instance (an incident stays
   // active after Resolved), so Open, Unassigned and Stale leave those out and they are counted on their own. It is the same question
   // the hand-over and the workload ask, so one cached request serves all three.
-  const states = await attempt(() => reader.groups(t.table, open, ['state']), t.table);
-  const done = states.ok ? resolvedStates(states.value) : { count: 0, values: [], labels: [] };
-  const live = notResolved(done.values);
+  const { states, done, live } = await readOpenStates(reader, t.table, open);
   const [openN, unassigned, stale, openedToday, resolvedToday] = await Promise.all([
     attempt(() => reader.count(t.table, open), t.table),
     scope.unassignedMeaningful ? attempt(() => reader.count(t.table, q('active=true', 'assigned_toISEMPTY', live)), t.table) : null,
@@ -43,8 +41,8 @@ async function readTable(ctx, t, { staleDays, dayStart }) {
   return {
     table: t.table,
     label: t.meta.label,
-    // Active minus resolved-but-active (the breakdown and the count are read a moment apart, so never below zero).
-    open: openN.ok ? { ok: true, value: Math.max(0, openN.value - done.count) } : openN,
+    // Active minus resolved-but-active.
+    open: openOf(openN, done),
     unassigned,
     stale,
     waiting: states.ok ? { ok: true, value: waitingStates(states.value).count, detail: waitingStates(states.value) } : states,

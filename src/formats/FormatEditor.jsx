@@ -1,17 +1,20 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { FORMAT_LIMITS, normalizeFormat, policyEntry, settledFormat, specOf, systemFor } from './formats.js';
+import { FORMAT_LIMITS, STANDARD_CHOICE, isStandardChoice, normalizeFormat, policyEntry, settledFormat, specOf, systemFor } from './formats.js';
 import { t, t as tr } from '../i18n/index.js';
 
 // The editor for how one AI action writes its answer (TRACKER R11). Used on the Settings page (every action in a list) and in the side
-// panel (under an action, "Change format"). It edits a draft; "Save format" hands the clean format to onSave, "Use the standard format"
-// hands null (the person's own format is removed). Nothing is sent anywhere from here.
+// panel (under an action, "Change format"). It edits a draft; "Save format" hands the clean format to onSave, or STANDARD_CHOICE when the
+// draft is the action's standard format (stored as a choice, so an organisation's standard format does not come back in its place);
+// "Use the standard format" hands STANDARD_CHOICE too, and "Use my organisation's format" hands null (the person's own entry is removed).
+// Nothing is sent anywhere from here.
 //
 // A sectioned action (summary, hand-off brief, discussion catch-up) shows the list of sections, the style and the length. Every action
 // shows the extra instructions. The instructions that will be sent can be read in full under "Show the instructions this sends", so
 // nobody has to guess what a choice does. An organisation's locked format is shown and can not be edited.
 //
-// props: feature (the registry action), saved (the person's own format or null), source ('default'|'mine'|'org'|'locked', from
-//   resolveFormat), inherited (the organisation's format for this action or null), onSave(format|null) => Promise, idBase
+// props: feature (the registry action), saved (the person's own entry: a format, the standard choice, or null), source
+//   ('default'|'mine'|'org'|'locked'|'standard', from resolveFormat), inherited (the organisation's format for this action or null; the
+//   Settings page passes it whatever is in force, so it can be offered back), onSave(format|STANDARD_CHOICE|null) => Promise, idBase
 
 let rowCounter = 0;
 const newRow = (s = {}) => ({ key: `r${++rowCounter}`, name: s.name || '', hint: s.hint || '' });
@@ -31,8 +34,13 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
   const spec = specOf(feature.id);
   const sectioned = spec.kind === 'sections';
   const locked = source === 'locked';
-  const seed = saved || (source === 'org' || locked ? inherited : null);
-  const [draft, setDraft] = useState(() => draftOf(feature.id, seed));
+  // What is in force now: the organisation's (locked, or the standard one the person has not replaced), the person's own, or nothing
+  // (the action's standard format, also when the person chose it over the organisation's).
+  const own = isStandardChoice(saved) ? null : saved;
+  const inForce = locked || source === 'org' ? inherited : own;
+  // The organisation publishes a standard format for this action that the person may replace (as far as this editor is told).
+  const orgStandard = !locked && (source === 'org' || source === 'standard' || Boolean(inherited));
+  const [draft, setDraft] = useState(() => draftOf(feature.id, inForce));
   const [status, setStatus] = useState(null); // { kind, text }
   const [busy, setBusy] = useState(false);
   const focusNext = useRef(null);
@@ -58,9 +66,20 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
     }
     return out;
   }, [draft, sectioned]);
-  // (what is already in force: the person's own format, or the organisation's standard they have not replaced)
-  const dirty = !sameFormat(candidate, saved || (source === 'org' ? inherited : null));
+  const dirty = !sameFormat(candidate, inForce);
   const text = useMemo(() => systemFor(feature, candidate || null), [feature, candidate]);
+
+  // What is in force changed (a save here or in the other window, a new policy): the draft starts again from it, so it never shows one
+  // format while another is used.
+  const inForceKey = JSON.stringify(inForce || null);
+  const shownKey = useRef(inForceKey);
+  useEffect(() => {
+    if (shownKey.current === inForceKey) return;
+    shownKey.current = inForceKey;
+    setDraft(draftOf(feature.id, inForce));
+    // (inForce is read through its key: a new object with the same content is not a change)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inForceKey, feature.id]);
 
   // Put the focus where the person is working after a row is added, moved or removed.
   useEffect(() => {
@@ -114,12 +133,23 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
       setBusy(false);
     }
   };
-  const save = () => run(candidate, candidate ? t('Saved. The next answer uses this format.') : t('Saved. This action uses its standard format again.'));
+  const save = () =>
+    candidate
+      ? run(candidate, t('Saved. The next answer uses this format.'))
+      : run(STANDARD_CHOICE, orgStandard ? t("Saved. This action uses its standard format, not your organisation's.") : t('Saved. This action uses its standard format again.'));
+  // The second button goes back to the organisation's format where there is one to go back to, else to the action's standard format.
   const reset = async () => {
-    setDraft(draftOf(feature.id, source === 'org' ? inherited : null));
-    if (saved) await run(null, source === 'org' ? t("Back to your organisation's format.") : t('This action uses its standard format again.'));
-    else setStatus(null);
+    if (orgStandard) {
+      setDraft(draftOf(feature.id, inherited));
+      if (saved) await run(null, t("Back to your organisation's format."));
+      else setStatus(null);
+    } else {
+      setDraft(draftOf(feature.id, null));
+      if (own) await run(STANDARD_CHOICE, t('This action uses its standard format again.'));
+      else setStatus(null);
+    }
   };
+  const resetOff = busy || (!(orgStandard ? saved : own) && !dirty);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(policyEntry(feature.id, candidate || {}), null, 2));
@@ -135,6 +165,7 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
     <div className="ab-fmt" ref={root}>
       {locked && <p className="ab-note ab-note-warn">{t('Set by your organisation. You can read this format, but not change it.')}</p>}
       {source === 'org' && <p className="ab-note">{t("This is your organisation's format. Save your own to use it instead.")}</p>}
+      {source === 'standard' && <p className="ab-note">{t("You chose the standard format over your organisation's.")}</p>}
       {noteFor && <p className="ab-hint">{noteFor}</p>}
 
       {sectioned && (
@@ -213,7 +244,7 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
       {!locked && (
         <div className="ab-row ab-fmt-actions">
           <button type="button" className="ab-btn ab-btn-primary" disabled={busy || !dirty || problems.length > 0} onClick={save}>{t('Save format')}</button>
-          <button type="button" className="ab-btn" disabled={busy || (!saved && !dirty)} onClick={reset}>{source === 'org' ? t("Use my organisation's format") : t('Use the standard format')}</button>
+          <button type="button" className="ab-btn" disabled={resetOff} onClick={reset}>{orgStandard ? t("Use my organisation's format") : t('Use the standard format')}</button>
           <button type="button" className="ab-btn ab-btn-quiet" disabled={!candidate || problems.length > 0} onClick={copy}>{t('Copy for your administrator')}</button>
         </div>
       )}

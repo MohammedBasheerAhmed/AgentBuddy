@@ -4,10 +4,14 @@
 // The six kinds are the ones src/compose/emailRecommend.js recommends (EMAIL_TYPES); this file never changes which one fits.
 
 import { EMAIL_TYPES } from '../compose/emailRecommend.js';
+import { CUSTOMER_ROLES } from '../context/identity.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
-const CUSTOMER_ROLES = ['caller', 'requested_for', 'contact', 'consumer', 'opened_for'];
 const MAX_TITLE = 120;
+const PLACEHOLDER = /\[[^\]\n]{2,80}\]/g;
+const TOKEN = /\{(greeting|number|title|agent|state)\}/g;
+// What stands in a value's place when the ticket (or the panel) does not give it: a placeholder for the agent.
+const FALLBACK = { number: '[ticket number]', title: '[short description]', agent: '[your name]', state: '[state]' };
 
 // {first_name} {number} {title} {agent} {state}: filled from the ticket. [Brackets]: left for the agent.
 export const EMAIL_TEMPLATES = Object.freeze({
@@ -103,7 +107,10 @@ export const EMAIL_TEMPLATES = Object.freeze({
   },
 });
 
-/** The person the email is for: the caller (or requester, contact) on the pack, as { firstName, name }; null when nobody is named. */
+/**
+ * The person the email is for: the caller (or requester, contact, consumer, the employee of an HR case) on the pack, in the order of
+ * CUSTOMER_ROLES, as { firstName, name }; null when nobody is named.
+ */
 export function recipientOf(pack) {
   const people = Array.isArray(pack?.people) ? pack.people : [];
   for (const role of CUSTOMER_ROLES) {
@@ -125,18 +132,21 @@ export function fillEmailTemplate(typeId, { pack, agentName = '', number = '' } 
   const who = recipientOf(pack);
   let title = text(pack?.fields?.short_description).replace(/\s+/g, ' ');
   if (title.length > MAX_TITLE) title = `${title.slice(0, MAX_TITLE - 1).trimEnd()}…`;
-  const values = {
+  const given = {
     greeting: who?.firstName ? `Hello ${who.firstName},` : 'Hello,',
-    number: text(pack?.fields?.number) || text(pack?.number) || text(number) || '[ticket number]',
-    title: title || '[short description]',
-    agent: text(agentName) || '[your name]',
-    state: text(pack?.fields?.state) || '[state]',
+    number: text(pack?.fields?.number) || text(pack?.number) || text(number),
+    title,
+    agent: text(agentName),
+    state: text(pack?.fields?.state),
   };
   // One pass over the template: a value that itself contains "{...}" (a title with braces) is never filled in again.
-  const fill = (line) => line.replace(/\{(greeting|number|title|agent|state)\}/g, (_, k) => values[k]);
+  const fill = (line) => line.replace(TOKEN, (_, k) => given[k] || FALLBACK[k]);
   const subject = fill(template.subject);
   const body = template.body.map(fill).join('\n');
-  const placeholders = (`${subject}\n${body}`.match(/\[[^\]\n]{2,80}\]/g) || []).length;
+  // What is left for the agent: the template's own [brackets] and the ones that stand for a value the ticket did not give. Brackets
+  // in the ticket's own text ("[URGENT] VPN down") are not something to fill in.
+  const open = (line) => line.replace(TOKEN, (_, k) => (given[k] ? '' : FALLBACK[k]));
+  const placeholders = (`${open(template.subject)}\n${template.body.map(open).join('\n')}`.match(PLACEHOLDER) || []).length;
   return { subject, body, placeholders };
 }
 

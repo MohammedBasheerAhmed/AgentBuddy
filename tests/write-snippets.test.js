@@ -67,11 +67,30 @@ test('a file saved with a byte-order mark imports like the export it came from; 
   assert.equal(importSnippets(text, own).errors[0], 'This is not a valid JSON file.', 'with the mark left in, the JSON does not parse');
 });
 
+// Audit P3.10: whatever "Save to a file" writes, "Add from a file" reads back: a full library of the longest snippets, written in a
+// script of three bytes a character, or full of characters JSON escapes.
+test('the largest library that can be exported can be imported again, as a file and as pasted text', () => {
+  const full = (char) => Array.from({ length: 500 }, (_, i) => ({ id: `s${i}`, title: `${i} ${char.repeat(80 - String(i).length - 1)}`, shortcut: `w${i}`.padEnd(30, 'x'), body: char.repeat(8000), createdAt: 1, updatedAt: 1 }));
+  for (const char of ['€', '"']) {
+    const text = `${String.fromCharCode(0xfeff)}${exportSnippets(full(char))}`;
+    const bytes = Buffer.byteLength(text, 'utf8');
+    assert.ok(bytes <= MAX_FILE_BYTES, `${bytes} bytes <= ${MAX_FILE_BYTES}`);
+    assert.equal(fileProblem({ name: 'agent-buddy-snippets.json', size: bytes, type: 'application/json' }), '');
+    const result = importSnippets(withoutBom(text), [], { now: 5 });
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.added, 500);
+  }
+  assert.ok(MAX_FILE_BYTES < 16 * 1024 * 1024, 'still a sane upper bound');
+});
+
 const pageOf = (kind, href = 'https://acme.service-now.com/x.do') => ({ href, record: kind ? { table: kind, sysId: 'a'.repeat(32), kind } : null, newRecord: null });
 
 test('a snippet can go into every multi-line field the form of this kind has, customer comment first on an incident', () => {
   assert.deepEqual(snippetTargets(pageOf('incident')).map((t) => t.field), ['comments', 'work_notes', 'close_notes', 'description']);
-  assert.deepEqual(snippetTargets(pageOf('problem')).map((t) => t.field), ['work_notes', 'comments', 'description', 'cause_notes', 'workaround', 'close_notes']);
+  // (audit P3.14: a problem form has Fix notes, not Resolution notes)
+  assert.deepEqual(snippetTargets(pageOf('problem')).map((t) => t.field), ['work_notes', 'comments', 'description', 'cause_notes', 'workaround', 'fix_notes']);
+  assert.equal(snippetTargetFor(pageOf('problem'), 'close_notes'), null, 'no Resolution notes box on a problem');
+  assert.deepEqual([snippetTargetFor(pageOf('problem'), 'fix_notes').label, snippetTargetFor(pageOf('problem'), 'fix_notes').customerVisible], ['Fix notes', false]);
   assert.deepEqual(snippetTargets(pageOf('catalog_task')).map((t) => t.field)[0], 'work_notes', 'an internal task starts with work notes');
   assert.deepEqual(snippetTargets(pageOf('')).map((t) => t.field), ['comments', 'work_notes'], 'no record: the journal fields');
   assert.deepEqual(snippetTargets(pageOf('incident', 'https://acme.service-now.com/email_client.do?sysparm_table=incident&sysparm_sys_id=' + 'a'.repeat(32))).map((t) => t.field), ['body'], 'the email form: its body');

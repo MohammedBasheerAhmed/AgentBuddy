@@ -7,6 +7,7 @@ import React from 'react';
 import { FormatsSection } from '../src/options/FormatsSection.jsx';
 import { ActionGroups } from '../src/sidepanel/ticket/assist/actions/index.js';
 import { effectiveSettings } from '../src/policy/policy.js';
+import { resolveFormat } from '../src/formats/formats.js';
 import { SETTINGS_KEY } from '../src/lib/storage.js';
 
 const A = 'a'.repeat(32);
@@ -127,8 +128,87 @@ test('an action that only takes extra instructions shows just the box; saving an
   await click(inItem('Save format'));
   assert.deepEqual(stored(fake), { 'reply-draft': { extra: 'Use plain words.' } });
   await click(inItem('Use the standard format'));
-  assert.deepEqual(stored(fake), {});
+  // (audit P3.6: the standard format is kept as a choice, so a standard format the organisation publishes later does not replace it)
+  assert.deepEqual(stored(fake), { 'reply-draft': { standard: true } });
+  assert.match(ui.text(), /This action uses its standard format again\./);
+  assert.equal(item.querySelector('textarea').value, '');
+  assert.equal(item.querySelectorAll('.ab-fmt-state').length, 0, 'no mark: the action uses its standard format');
   await ui.unmount();
+});
+
+// Audit P3.6: the standard format can be chosen over the organisation's standard one (not locked), and what the editor says stays true.
+test('the standard format can be chosen over the organisation\'s, and the organisation\'s can be taken back', async () => {
+  const policy = { orgFormats: [{ feature: 'record-summary', words: 60 }, { feature: 'reply-draft', extra: 'Sign off as the Service Desk.' }] };
+  const { fake } = setup();
+  const ui = await mount(<Live fake={fake} policy={policy} />);
+  // what an AI action would use now, from what is stored
+  const inForce = (id) => {
+    const eff = effectiveSettings(fake.chrome.storage.local.data[SETTINGS_KEY] || {}, policy);
+    return resolveFormat(id, eff.values.formats, eff.policy.orgFormats);
+  };
+
+  const summary = await open(ui, 'Summarise this ticket');
+  const inSummary = (label) => [...summary.querySelectorAll('button')].find((b) => b.textContent === label);
+  assert.equal(summary.querySelector('input[type="number"]').value, '60', 'the organisation\'s format to start from');
+  await choose(summary.querySelector('select'), 'standard');
+  assert.equal(summary.querySelector('input[type="number"]').value, '120');
+  await click(inSummary('Save format'));
+  assert.deepEqual(stored(fake), { 'record-summary': { standard: true } });
+  assert.deepEqual(inForce('record-summary'), { format: null, source: 'standard' }, 'what is sent is the standard format');
+  assert.match(summary.textContent, /Saved\. This action uses its standard format, not your organisation's\./);
+  assert.match(summary.textContent, /You chose the standard format over your organisation's\./);
+  assert.match(summary.querySelector('.ab-fmt-state').textContent, /Your choice: the standard format/);
+
+  await click(inSummary("Use my organisation's format"));
+  assert.deepEqual(stored(fake), {});
+  assert.deepEqual(inForce('record-summary'), { format: { words: 60 }, source: 'org' });
+  assert.match(summary.textContent, /Back to your organisation's format\./);
+  assert.equal(summary.querySelector('input[type="number"]').value, '60');
+
+  // an action that takes extra instructions only: emptying the organisation's text and saving is the standard format too
+  const reply = await open(ui, 'Draft a reply to the customer');
+  await type(reply.querySelector('textarea'), '');
+  await click([...reply.querySelectorAll('button')].find((b) => b.textContent === 'Save format'));
+  assert.deepEqual(stored(fake), { 'reply-draft': { standard: true } });
+  assert.deepEqual(inForce('reply-draft'), { format: null, source: 'standard' });
+  await ui.unmount();
+});
+
+test('your own format over the organisation\'s: in Settings and in the panel it can go back to the organisation\'s', async () => {
+  const policy = { orgFormats: [{ feature: 'reply-draft', extra: 'Sign off as the Service Desk.' }] };
+  const { fake } = setup();
+  fake.chrome.storage.local.data[SETTINGS_KEY] = { formats: { 'reply-draft': { extra: 'Be brief.' } } };
+  const ui = await mount(<Live fake={fake} policy={policy} />);
+  const reply = await open(ui, 'Draft a reply to the customer');
+  await click([...reply.querySelectorAll('button')].find((b) => b.textContent === "Use my organisation's format"));
+  assert.deepEqual(stored(fake), {}, 'the person\'s own entry is removed');
+  assert.match(reply.textContent, /Back to your organisation's format\./);
+  assert.equal(reply.querySelector('textarea').value, 'Sign off as the Service Desk.');
+  await ui.unmount();
+
+  // The panel's editor under the action offers the same way back (it is told about the organisation's format whatever is in force).
+  const panel = setup({ formats: { 'reply-draft': { extra: 'Be brief.' } } }, policy);
+  const ui2 = await mount(<ActionGroups page={page} eff={panel.eff} record={rec} header={head} aiReady onRun={() => {}} />);
+  const item = ui2.$$('li.ab-act-item', { all: true }).find((li) => li.querySelector('[data-feature="reply-draft"]'));
+  const inItem = (label) => [...item.querySelectorAll('button')].find((b) => b.textContent === label);
+  await click(inItem('Change format'));
+  await click(inItem("Use my organisation's format"));
+  assert.deepEqual(stored(panel.fake), {}, 'the person\'s own entry is removed');
+  assert.match(item.textContent, /Back to your organisation's format\./);
+  await ui2.unmount();
+
+  // With no organisation format, "Use the standard format" keeps the standard as a choice, so what it says stays true whatever the
+  // organisation publishes later; the panel marks it.
+  const plain = setup({ formats: { 'reply-draft': { extra: 'Be brief.' } } });
+  const ui3 = await mount(<ActionGroups page={page} eff={plain.eff} record={rec} header={head} aiReady onRun={() => {}} />);
+  const item3 = ui3.$$('li.ab-act-item', { all: true }).find((li) => li.querySelector('[data-feature="reply-draft"]'));
+  const inItem3 = (label) => [...item3.querySelectorAll('button')].find((b) => b.textContent === label);
+  await click(inItem3('Change format'));
+  await click(inItem3('Use the standard format'));
+  assert.deepEqual(stored(plain.fake), { 'reply-draft': { standard: true } });
+  assert.deepEqual(resolveFormat('reply-draft', stored(plain.fake), policy.orgFormats), { format: null, source: 'standard' }, 'it stands over an organisation format published later');
+  assert.match(item3.textContent, /This action uses its standard format again\./);
+  await ui3.unmount();
 });
 
 test('"Show the instructions this sends" holds the real text, with the rules and the extra instructions', async () => {

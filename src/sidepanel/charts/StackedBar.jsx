@@ -12,14 +12,15 @@ const BAR_HEIGHT = 22;
  * compared. Series differ by pattern as well as colour; the value is printed in a segment when it fits, and is always in the
  * tooltip, the accessible name and the table view.
  *
- *   rows     [{ key, label, parts: [{ key, value }] }]
+ *   rows     [{ key, label, parts: [{ key, value }], total? }]   (total: the number printed for the row, when not the sum of its parts)
  *   series   [{ key, label, tone }]   (tone defaults to the next categorical colour)
+ *   totalHeader  the table view's name for that number ('Total' by default)
  *   onDrill(rowKey, partKey)  makes every segment a button (Enter or Space)
  *   hrefFor(rowKey)  with onDrill: the address of the list a ROW opens (one person's or one group's tickets). The whole row (label,
  *                    total and bar) is then one real link (see DrillLink.jsx) and the segments are not separate targets. A row without
  *                    an address ("Others") is not clickable.
  */
-export default function StackedBar({ title, rows, series, onDrill, hrefFor, emptyText = t('Nothing to show.'), labelHeader, maxRows = 12, defaultTable = false }) {
+export default function StackedBar({ title, rows, series, onDrill, hrefFor, emptyText = t('Nothing to show.'), labelHeader, totalHeader, maxRows = 12, defaultTable = false }) {
   const uid = useUid();
   const [ref, width] = useWidth();
   const defs = (Array.isArray(series) ? series : []).filter((s) => s && typeof s === 'object').map((s, i) => ({ ...s, tone: s.tone || toneForIndex(i) }));
@@ -47,7 +48,7 @@ export default function StackedBar({ title, rows, series, onDrill, hrefFor, empt
       empty={layout.rows.length === 0}
       emptyText={emptyText}
       legend={legend}
-      table={{ ...stackedToTable(list, defs, { labelHeader }), caption: title }}
+      table={{ ...stackedToTable(list, defs, { labelHeader, totalHeader }), caption: title }}
       note={layout.hidden > 0 ? t('and {n} more. Show as table for all rows.', { n: layout.hidden }) : ''}
     >
       <div ref={ref} className="ab-stack">

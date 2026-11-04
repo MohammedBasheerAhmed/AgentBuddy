@@ -26,7 +26,12 @@ const isTrue = (v) => ['true', '1', 'yes'].includes(raw(v).toLowerCase());
  */
 export const worryingQuery = (pct, untilMs) => `has_breached=true^ORbusiness_percentage>=${pct}^ORpercentage>=${pct}^ORplanned_end_time<=${snLiteral(untilMs)}`;
 
-/** Collapse SLA rows to one entry per ticket: the worst SLA, and whether any SLA is due within `dueMs`. Pure. */
+/**
+ * Collapse SLA rows to one entry per ticket: the worst SLA, and whether any SLA is due within `dueMs`. Only tickets that are breached,
+ * at risk or due soon are kept: the read is wider than the risk (worryingQuery), and a ticket that is none of the three (118 % of wall
+ * time but 62 % of its working time, as the record shows) would otherwise be counted at issue, listed as closest to breaking and called
+ * "at risk" or "due soon" in the export and the hand-over. Pure.
+ */
 export function groupSlaByTicket(slaRows, { now, dueMs = LIMITS.dueSoonHours * HOUR, atRiskPercent = LIMITS.slaAtRiskPercent } = {}) {
   const byTask = new Map();
   for (const r of slaRows || []) {
@@ -49,6 +54,7 @@ export function groupSlaByTicket(slaRows, { now, dueMs = LIMITS.dueSoonHours * H
     });
     const dueSoon = !worst.breached && Number.isFinite(soonest) && soonest <= now + dueMs;
     const atRisk = !worst.breached && worst.percentage >= atRiskPercent;
+    if (!worst.breached && !atRisk && !dueSoon) continue;
     // The stored (UTC) end of the worst SLA, so the panel can say 'due in 1 h 20 min' or 'breached 2 h ago' instead of a timestamp.
     const worstRow = rows.find((r) => disp(r.planned_end_time) === worst.plannedEnd && disp(r.sla) === worst.name);
     const endMs = worstRow ? timeOf(raw(worstRow.planned_end_time)) : NaN;
@@ -203,7 +209,7 @@ export function slaTables(result) {
         { key: 'owner', label: t('Owner'), person: true },
         { key: 'group', label: t('Group') },
       ],
-      rows: d.top.map((x) => ({ number: x.number, title: x.title, priority: x.priority, risk: x.breached ? t('Breached') : t('At risk'), percent: x.sla.percentage, due: x.sla.plannedEnd, owner: x.owner || t('(unassigned)'), group: x.group })),
+      rows: d.top.map((x) => ({ number: x.number, title: x.title, priority: x.priority, risk: x.breached ? t('Breached') : x.atRisk ? t('At risk') : t('Due soon'), percent: x.sla.percentage, due: x.sla.plannedEnd, owner: x.owner || t('(unassigned)'), group: x.group })),
     },
     {
       title: t('SLA risk by owner'),

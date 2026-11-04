@@ -199,6 +199,25 @@ test('an aiBaseUrl that is not valid blocks every AI call instead of being ignor
   assert.equal(normalizePolicy({ aiBaseUrl: '' }).aiBaseUrl, null, 'empty is "not set"');
 });
 
+// Audit P3.31: the manifest lets Agent Buddy call http:// only on localhost and 127.0.0.1, so http://[::1] (this computer too) could
+// never be reached. Settings and the policy refuse it when it is written, and say what to write instead.
+test('http://[::1] is refused where it is written, with what to write instead; localhost and 127.0.0.1 stay fine', () => {
+  for (const url of ['http://[::1]:11434/v1', 'http://[0:0:0:0:0:0:0:1]:8080']) {
+    const typed = validateBaseUrl(url);
+    assert.equal(typed.ok, false, url);
+    assert.match(typed.error, /http:\/\/localhost or http:\/\/127\.0\.0\.1 instead of \[::1\]/);
+    assert.equal(normalizeEndpoint(url).ok, false, url);
+    assert.match(normalizePolicy({ aiBaseUrl: url }).aiBlocked, /not valid/, url);
+  }
+  for (const url of ['http://localhost:11434/v1', 'http://127.0.0.1:1234/v1']) {
+    assert.equal(validateBaseUrl(url).ok, true, url);
+    assert.equal(validateBaseUrl(url).local, true, url);
+    assert.equal(normalizeEndpoint(url).ok, true, url);
+  }
+  // over https, [::1] is still this computer (an https:// address is not limited to two names)
+  assert.deepEqual([validateBaseUrl('https://[::1]:8443/v1').ok, validateBaseUrl('https://[::1]:8443/v1').local], [true, true]);
+});
+
 test('allowed models are compared exactly, after trimming', () => {
   const p = normalizePolicy({ allowedModels: [' gpt-5-mini '] });
   assert.equal(checkProviderAllowed({ provider: 'openai', model: 'gpt-5-mini', baseUrl: '' }, p).ok, true);

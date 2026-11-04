@@ -9,6 +9,8 @@
 // so the agent can see what still needs filling in. An empty or whitespace-only value counts as no value.
 
 import { stripUnsafeChars } from '../render/safeText.js';
+import { parseSnTime } from '../context/util.js';
+import { CUSTOMER_ROLES } from '../context/identity.js';
 import { tm } from '../i18n/index.js';
 
 const MAX_INNER = 1000; // longest text between the braces; longer is left as plain text
@@ -172,9 +174,24 @@ function splitName(full) {
   return { first: words[0], last: words.slice(1).join(' ') };
 }
 
-// Who the record is "for", by role. The first role found wins. A customer service case names a contact (business customers) or
-// a consumer (private customers): both are the person a reply is written to.
-const CALLER_ROLES = ['caller', 'requested_for', 'contact', 'consumer', 'affected_user', 'opened_for', 'subject_person', 'requester'];
+// The caller's first and last name: the ones sys_user holds (the pack's firstName / lastName, src/context/people.js) when there are
+// some, so "Mary Ann Smith" is greeted as Mary Ann and "Yamada Taro" as Taro. Where sys_user could not be read, people.js fills them
+// by cutting the display name at its first space, which reads "Tuter, Abel" as "Tuter,": a pair that is only that cut is replaced by
+// splitName, which knows the comma form.
+function callerNames(person) {
+  const split = splitName(person.name);
+  const first = text(person.firstName);
+  const last = text(person.lastName);
+  if (!first && !last) return split;
+  const words = text(person.name).split(/\s+/);
+  const onlyTheCut = first === words[0] && last === words.slice(1).join(' ');
+  return onlyTheCut ? split : { first, last };
+}
+
+// Who the record is "for", by role: the customer roles every check uses (src/context/identity.js), in their order; the first role
+// found wins. A customer service case names a contact (business customers) or a consumer (private customers): both are the person a
+// reply is written to.
+const CALLER_ROLES = CUSTOMER_ROLES;
 
 function findPerson(people, roles) {
   if (!Array.isArray(people)) return null;
@@ -187,7 +204,10 @@ function findPerson(people, roles) {
 
 // The next SLA due time: the record's own sla_due field, else the earliest open one in related SLAs (if present).
 // The context engine's SLA rows (src/context/related.js) are { name, stage, breached, percentage, plannedEnd }; the older
-// column-style names (due, has_breached, planned_end_time) are understood too.
+// column-style names (due, has_breached, planned_end_time) are understood too. What is inserted is the time as the person sees it
+// (the display value); which one is earliest is decided on times, never on that text ("11/04/2026" sorts after "02/05/2027" as
+// text): the stored UTC value when the row carries it (plannedEndUtc), else the shown one when it is in ServiceNow's own
+// YYYY-MM-DD form. A time that cannot be read comes after every one that can, in the order the rows were given.
 function slaDue(pack) {
   const fromField = text(pack.fields && pack.fields.sla_due);
   if (fromField) return fromField;
@@ -195,10 +215,14 @@ function slaDue(pack) {
   const list = [rel.slas, rel.sla, rel.task_sla].find(Array.isArray) || [];
   const dues = list
     .filter((s) => s && typeof s === 'object' && !/^true$/i.test(text(s.has_breached)) && !/^true$/i.test(text(s.breached)) && !/^(completed|cancelled)$/i.test(text(s.stage)))
-    .map((s) => text(s.due) || text(s.plannedEnd) || text(s.planned_end_time) || text(s.breach_time))
-    .filter(Boolean)
-    .sort();
-  return dues[0] || '';
+    .map((s) => {
+      const shown = text(s.due) || text(s.plannedEnd) || text(s.planned_end_time) || text(s.breach_time);
+      const stored = parseSnTime(text(s.plannedEndUtc));
+      return { shown, at: Number.isFinite(stored) ? stored : parseSnTime(shown) };
+    })
+    .filter((d) => d.shown)
+    .sort((a, b) => (Number.isFinite(a.at) ? (Number.isFinite(b.at) ? a.at - b.at : -1) : Number.isFinite(b.at) ? 1 : 0));
+  return dues[0]?.shown || '';
 }
 
 function localDate(now) {
@@ -228,7 +252,7 @@ export function buildVariables(pack, agent, now) {
 
   const caller = findPerson(p.people, CALLER_ROLES);
   if (caller) {
-    const { first, last } = splitName(caller.name);
+    const { first, last } = callerNames(caller);
     put(vars, 'caller.first_name', first);
     put(vars, 'caller.last_name', last);
     put(vars, 'caller.name', caller.name);

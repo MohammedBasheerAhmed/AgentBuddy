@@ -62,12 +62,15 @@ export function tablesForProfiles(profiles) {
 const HR_FAMILY_RE = /^sn_hr_/;
 export const isHrTable = (table) => HR_FAMILY_RE.test(String(table || ''));
 
-/** "Incidents", "Catalog tasks"; for a class we do not know, the name the instance gave it ("Facilities requests"), else "Other tickets". */
+/**
+ * "Incidents", "Catalog tasks"; for a class we do not know, the name the instance gave it, exactly as given ("Facilities request"):
+ * it can be in any language, so no English plural is made of it. Else "Other tickets".
+ */
 export function pluralOf(table, display = '') {
   const known = KNOWN_TABLES[table];
   if (known) return known.many;
   const name = String(display || '').trim();
-  if (name && !/^[a-z0-9_]+$/.test(name)) return /s$/i.test(name) ? name : `${name}s`;
+  if (name && !/^[a-z0-9_]+$/.test(name)) return name;
   return tm('Other tickets');
 }
 

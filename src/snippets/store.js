@@ -13,7 +13,19 @@
 import { stripUnsafeChars } from '../render/safeText.js';
 import { isolate, t } from '../i18n/index.js';
 
-export const LIMITS = Object.freeze({ title: 80, shortcut: 30, body: 8000, count: 500, importChars: 2000000, importEntries: 2000, importErrors: 20 });
+const SIZES = { title: 80, shortcut: 30, body: 8000, count: 500 };
+// importChars: the longest text exportSnippets() can write, so whatever was exported can be read back. A full library of the longest
+// snippets, each character of a title or a text at most three bytes in UTF-8 (two where JSON escapes it: a quote, a backslash, a new
+// line or a tab; every other character JSON escapes was removed when the snippet was saved), the search word plain ASCII, and under
+// 100 characters of layout per snippet (keys, quotes, indentation) and around the list (the file's own byte-order mark included):
+// about 12 MB. It bounds both the file's size in bytes (src/snippets/file.js) and the text's length, which is never more than that.
+const EXPORT_LAYOUT = 100;
+export const LIMITS = Object.freeze({
+  ...SIZES,
+  importChars: SIZES.count * (3 * (SIZES.title + SIZES.body) + SIZES.shortcut + EXPORT_LAYOUT) + EXPORT_LAYOUT,
+  importEntries: 2000,
+  importErrors: 20,
+});
 
 const SHORTCUT_OK = /^[a-z0-9_/-]+$/;
 const ID_OK = /^[A-Za-z0-9_-]{1,64}$/;

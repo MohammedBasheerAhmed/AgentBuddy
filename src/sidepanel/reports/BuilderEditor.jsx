@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FILTER_PRESETS } from '../../reports/engine/queryBuilder.js';
 import { GROUP_BY, METRICS, CHARTS, normalizeBuilderConfig } from '../../reports/engine/builder.js';
 import { REPORT_TABLES } from '../../reports/engine/constants.js';
-import { BuilderChart } from './BuilderView.jsx';
+import { BuilderChart, builderRequest } from './BuilderView.jsx';
 import { useReport } from './useReport.js';
 import ErrorNote from '../ErrorNote.jsx';
 import { t } from '../../i18n/index.js';
@@ -10,8 +10,9 @@ import { shown, shownList } from '../../reports/shown.js';
 
 const WINDOW = ['last_7', 'last_30', 'last_90'];
 
+// The same request the saved widget will send: an HR table previews as it will show (allowSensitive), with the dashboard's params.
 function Preview({ config, env }) {
-  const state = useReport({ tabId: env.page.tabId, request: { kind: 'builder', config, blocked: env.blocked }, refreshKey: env.refreshKey });
+  const state = useReport({ tabId: env.page.tabId, request: builderRequest(config, env), refreshKey: env.refreshKey });
   const d = state.result?.data;
   if (state.phase === 'error') return <ErrorNote error={shown(state.error)} onRetry={state.reload} />;
   if (!d) return <p className="ab-note" role="status">{t('Reading the numbers…')}</p>;
@@ -28,7 +29,8 @@ function Preview({ config, env }) {
 // text query; every choice is a name from a list, turned into a safe query by the engine.
 export default function BuilderEditor({ initial, env, usableTables, onSave, onCancel }) {
   const [draft, setDraft] = useState(() => normalizeBuilderConfig(initial || { table: usableTables[0] || 'incident' }));
-  const [shown, setShown] = useState(null);
+  // The configuration the Preview reads (named apart from shown(), the panel's words, which this view also draws with).
+  const [previewed, setPreviewed] = useState(null);
   const group = GROUP_BY.find((g) => g.id === draft.groupBy);
   const timeGroup = Boolean(group?.time);
 
@@ -104,18 +106,18 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
         <label className="ab-label" htmlFor="ab-b-chart">{t('Chart')}</label>
         <select id="ab-b-chart" className="ab-select" value={draft.chart} onChange={(e) => change({ chart: e.target.value })}>
           {CHARTS.map((c) => (
-            <option key={c.id} value={c.id} disabled={(c.id === 'line' && !timeGroup) || (c.id === 'donut' && timeGroup)}>{shown(c.label)}</option>
+            <option key={c.id} value={c.id} disabled={(c.id === 'line' && !timeGroup) || (c.id === 'donut' && (timeGroup || draft.metric !== 'count'))}>{shown(c.label)}</option>
           ))}
         </select>
       </div>
 
       <div className="ab-row">
-        <button type="button" className="ab-btn" onClick={() => setShown(draft)}>{t('Preview')}</button>
+        <button type="button" className="ab-btn" onClick={() => setPreviewed(draft)}>{t('Preview')}</button>
         <button type="button" className="ab-btn ab-btn-primary" onClick={() => onSave(draft)}>{initial ? t('Save changes') : t('Add to dashboard')}</button>
         <button type="button" className="ab-btn ab-btn-quiet" onClick={onCancel}>{t('Cancel')}</button>
       </div>
 
-      {shown && <Preview config={shown} env={env} />}
+      {previewed && <Preview config={previewed} env={env} />}
     </section>
   );
 }

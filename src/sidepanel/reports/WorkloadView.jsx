@@ -11,7 +11,11 @@ const CLASS_TONE = { new: 'c1', working: 'c2', waiting: 'c3', resolved: 'c4', ot
 
 // A row's name is a person's or a group's (data), or the engine's own word for nobody / "Other people (3)" (shown in the panel's language).
 const nameOf = (r) => (r.others ? shown(r.name) : placeholderName(r.name));
-const rowsOf = (list) => list.map((r) => ({ key: r.key, label: nameOf(r), parts: Object.entries(r.classes).map(([key, value]) => ({ key, value })) }));
+// The number printed is the row's open tickets (as the Open tile counts them); the bar also draws the resolved-but-not-closed part.
+const rowsOf = (list) => list.map((r) => ({ key: r.key, label: nameOf(r), total: r.count, parts: Object.entries(r.classes || {}).map(([key, value]) => ({ key, value })) }));
+// The engine already keeps the busiest rows and sums the rest into one "Other people (n)" row: the bars draw all of them (the chart's
+// own cap would hide that row), and "top n" counts only the named rows.
+const named = (list) => list.filter((r) => !r.others).length;
 
 /** The table that holds most of a row's tickets, and the query for that row there: what a click on the row opens. */
 function biggest(byTable, queries) {
@@ -67,10 +71,12 @@ export function WorkloadBody({ d, env }) {
 
       {d.byAssignee.length > 0 && (
         <StackedBar
-          title={d.assigneeCount > d.byAssignee.length ? t('Open work by person (top {n} of {total})', { n: d.byAssignee.length, total: d.assigneeCount }) : t('Open work by person')}
+          title={d.assigneeCount > named(d.byAssignee) ? t('Open work by person (top {n} of {total})', { n: named(d.byAssignee), total: d.assigneeCount }) : t('Open work by person')}
           rows={rowsOf(d.byAssignee)}
+          maxRows={d.byAssignee.length}
           series={series}
           labelHeader={t('Person')}
+          totalHeader={shown('Open')}
           hrefFor={links ? (rowKey) => hrefTo(env, rowTarget(d.byAssignee, rowKey)) : undefined}
           onDrill={(rowKey) => {
             const row = find(d.byAssignee, rowKey);
@@ -82,8 +88,10 @@ export function WorkloadBody({ d, env }) {
         <StackedBar
           title={t('Open work by group')}
           rows={rowsOf(d.byGroup)}
+          maxRows={d.byGroup.length}
           series={series}
           labelHeader={t('Group')}
+          totalHeader={shown('Open')}
           hrefFor={links ? (rowKey) => hrefTo(env, rowTarget(d.byGroup, rowKey)) : undefined}
           onDrill={(rowKey) => {
             const row = find(d.byGroup, rowKey);

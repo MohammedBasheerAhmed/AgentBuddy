@@ -235,7 +235,9 @@ export function barLayout(items, { width = 100, rowHeight = 10, gap = 6, labelWi
 
 /**
  * Layout for stacked bars: one bar per row, its segments in the order of `series`. All rows share one scale (the largest
- * row total, or `max`), so bars can be compared. Segments with no value are left out of `segments` but stay in `parts`.
+ * row's sum, or `max`), so bars can be compared. Segments with no value are left out of `segments` but stay in `parts`.
+ * A row's `total` is the sum of its parts, unless the row gives its own (a number): Workload prints a person's OPEN tickets and draws
+ * their resolved-but-not-closed part beside them, so the number agrees with the Open tile while the bar shows both.
  */
 export function stackedLayout(rows, series, { width = 100, rowHeight = 18, gap = 10, labelWidth = 0, max, maxRows } = {}) {
   const list = Array.isArray(rows) ? rows.filter((r) => r && typeof r === 'object') : [];
@@ -244,8 +246,9 @@ export function stackedLayout(rows, series, { width = 100, rowHeight = 18, gap =
   const shown = list.slice(0, cap);
   const valueOf = (row, key) =>
     (Array.isArray(row.parts) ? row.parts : []).reduce((sum, p) => (p && String(p.key) === key ? sum + num(p.value) : sum), 0);
-  const totals = shown.map((row) => defs.reduce((sum, s) => sum + valueOf(row, s.key), 0));
-  const scaleMax = num(max) || totals.reduce((a, b) => Math.max(a, b), 0);
+  const sums = shown.map((row) => defs.reduce((sum, s) => sum + valueOf(row, s.key), 0));
+  const totals = shown.map((row, ri) => (typeof row.total === 'number' ? num(row.total) : sums[ri]));
+  const scaleMax = num(max) || sums.reduce((a, b) => Math.max(a, b), 0);
   const barSpace = Math.max(0, num(width) - num(labelWidth));
   const h = num(rowHeight) || 18;
   const g = num(gap);
@@ -508,18 +511,22 @@ export function heatLayout(cells, { total } = {}) {
 
 const statusWord = (tone) => ({ good: t('good'), warn: t('warning'), bad: t('bad') })[tone];
 
-/** "In Progress 12 (40%), New 8 (27%), and 3 more. Total 30." */
-export function summarizeItems(items, { unit = '', total, max = 6 } = {}) {
+/**
+ * "In Progress 12 (40%), New 8 (27%), and 3 more. Total 30." With `shares: false` (values that are not parts of a whole, such as
+ * averages) no percentage and no total: "Critical 0.5 days, Low 9.5 days."
+ */
+export function summarizeItems(items, { unit = '', total, max = 6, shares = true } = {}) {
   const list = Array.isArray(items) ? items.filter((it) => it && typeof it === 'object') : [];
   if (!list.length) return t('No data.');
   const sum = list.reduce((a, it) => a + num(it.value), 0);
-  const whole = num(total) || sum;
+  const whole = shares ? num(total) || sum : 0;
   const cap = Math.max(1, Math.floor(num(max)) || 6);
   const parts = list.slice(0, cap).map((it) => {
     const value = withUnit(formatNumber(num(it.value)), unit);
     return `${clipLabel(it.label, 40)} ${value}${whole > 0 ? ` (${percent(it.value, whole)}%)` : ''}`;
   });
   const more = list.length - cap;
+  if (!shares) return more > 0 ? t('{parts}, and {more} more.', { parts: parts.join(t(', ')), more }) : t('{parts}.', { parts: parts.join(t(', ')) });
   const totalText = withUnit(formatNumber(whole), unit);
   return more > 0 ? t('{parts}, and {more} more. Total {total}.', { parts: parts.join(t(', ')), more, total: totalText }) : t('{parts}. Total {total}.', { parts: parts.join(t(', ')), total: totalText });
 }
@@ -578,20 +585,22 @@ export function describeTile({ label, value, hint, delta, unavailable, loading }
 
 const col = (key, label, align) => ({ key, label, ...(align ? { align } : {}) });
 
-export function itemsToTable(items, { unit = '', total, labelHeader = t('Name'), valueHeader } = {}) {
+/** The items as table rows; `shares: false` leaves out the Share column (averages are not shares of anything). */
+export function itemsToTable(items, { unit = '', total, labelHeader = t('Name'), valueHeader, shares = true } = {}) {
   const list = Array.isArray(items) ? items.filter((it) => it && typeof it === 'object') : [];
   const sum = list.reduce((a, it) => a + num(it.value), 0);
   const whole = num(total) || sum;
   return {
-    columns: [col('label', labelHeader), col('value', valueHeader ?? (unit ? t('Value ({unit})', { unit }) : t('Count')), 'right'), col('share', t('Share'), 'right')],
-    rows: list.map((it, i) => ({ key: keyOf(it, i), label: String(it.label ?? ''), value: num(it.value), share: whole > 0 ? `${percent(it.value, whole)}%` : '-' })),
+    columns: [col('label', labelHeader), col('value', valueHeader ?? (unit ? t('Value ({unit})', { unit }) : t('Count')), 'right'), ...(shares ? [col('share', t('Share'), 'right')] : [])],
+    rows: list.map((it, i) => ({ key: keyOf(it, i), label: String(it.label ?? ''), value: num(it.value), ...(shares ? { share: whole > 0 ? `${percent(it.value, whole)}%` : '-' } : {}) })),
   };
 }
 
-export function stackedToTable(rows, series, { labelHeader = t('Name') } = {}) {
+/** `totalHeader` names the last column when the rows print their own total (see stackedLayout); 'Total' otherwise. */
+export function stackedToTable(rows, series, { labelHeader = t('Name'), totalHeader } = {}) {
   const layout = stackedLayout(rows, series);
   return {
-    columns: [col('label', labelHeader), ...layout.series.map((s) => col(`s_${s.key}`, String(s.label ?? s.key), 'right')), col('total', t('Total'), 'right')],
+    columns: [col('label', labelHeader), ...layout.series.map((s) => col(`s_${s.key}`, String(s.label ?? s.key), 'right')), col('total', totalHeader ?? t('Total'), 'right')],
     rows: layout.rows.map((row) => ({ key: row.key, label: row.label, total: row.total, ...Object.fromEntries(layout.series.map((s) => [`s_${s.key}`, row.parts[s.key]])) })),
   };
 }

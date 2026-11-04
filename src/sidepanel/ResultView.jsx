@@ -69,7 +69,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   // Low-severity findings (another person's name, an IP address...) are shown, never hidden: they do not block anything.
   const hints = useMemo(
     () => (insertsFor(feature).some((s) => isCustomerVisible(s.field)) ? reviewForCustomer(plain, { people, scan, internalTexts, internalPhrases }).hints : []),
-    [feature, plain, people, scan, internalTexts]
+    [feature, plain, people, scan, internalTexts, internalPhrases]
   );
 
   // The record this answer was written for must be the one that is open. (An insert that names its own form, such as an
