@@ -8,7 +8,8 @@ brackets are the `TRACKER.md` items.
 ### The page dock without the corner mark
 - You asked why the icons of the bar on the ServiceNow page carried a "+". It was the AI spark in the corner of each AI action, too small
   to read as anything but a plus. It is gone; an AI action still says so in its name on hover (the AI badge) and to a screen reader.
-  Scenario `y` checks there is no mark on the icons.
+  Every action icon now looks the same (you chose that): the first one is no longer filled green; the step suggested for the
+  ticket's state is still first, and only the Agent Buddy mark is filled. Scenario `y` checks both.
 
 ### Easier to work on (audit phase 5)
 - **Unreachable code removed** (3,645 lines): panel views no screen shows, a READ nobody sends, dollar caps nothing could set,

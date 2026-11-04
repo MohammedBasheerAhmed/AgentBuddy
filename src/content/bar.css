@@ -37,11 +37,9 @@ button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 .act { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ab-fg-soft); }
 .act:hover:not(:disabled) { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); color: var(--ab-accent); }
 .act[data-ai='true']:hover:not(:disabled) { background: var(--ab-ai-soft); border-color: var(--ab-ai-line); color: var(--ab-ai); }
-/* The first action is the main one: filled. */
-.act-first { background: var(--ab-accent); border-color: var(--ab-accent); color: var(--ab-accent-fg); }
-.act-first:hover:not(:disabled), .act-first[data-ai='true']:hover:not(:disabled) { background: var(--ab-accent-hover); border-color: var(--ab-accent-hover); color: var(--ab-accent-fg); }
+/* Every action looks alike (only the mark is filled): the first in the list is the step suggested for the ticket's state. */
 /* No opacity here: the browser's visibility check (bar.js) counts a see-through button as not in plain view. */
-.act:disabled, .act-first:disabled { cursor: not-allowed; background: var(--ab-bg-sunken); border-color: var(--ab-border); color: var(--ab-fg-muted); }
+.act:disabled { cursor: not-allowed; background: var(--ab-bg-sunken); border-color: var(--ab-border); color: var(--ab-fg-muted); }
 /* An AI action is marked in its hover name (the AI badge in the tooltip), not on the icon: a spark in the corner read as a "+". */
 
 
