@@ -43,8 +43,10 @@ esbuild
   })
   .then(
     () => {
-      const files = entries.map((f) => path.join(outdir, path.basename(f)));
-      const result = spawnSync(process.execPath, ['--test', ...files], { stdio: 'inherit' });
+      // Relative to the root, and run from there: with full paths the command line of 220-odd files outgrew Windows' limit (32,767
+      // characters) in a deeply nested checkout, and the runner did not start at all (ENAMETOOLONG).
+      const files = entries.map((f) => path.relative(root, path.join(outdir, path.basename(f))));
+      const result = spawnSync(process.execPath, ['--test', ...files], { stdio: 'inherit', cwd: root });
       if (result.error) console.error(`tests/run.js: could not start the test runner: ${result.error.message}`);
       process.exit(result.status ?? 1);
     },
