@@ -5,6 +5,20 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Easier to work on (audit phase 5)
+- **Unreachable code removed** (3,645 lines): panel views no screen shows, a READ nobody sends, dollar caps nothing could set,
+  provider code `sendChat` never used, unused exports, 133 Arabic entries for texts only that code used.
+- **Settings in folders.** `src/options/Options.jsx` (about 1,500 lines, 17 components) is a 187-line root with `fields.jsx` (the shared
+  pieces and one `useSaveSetting` hook instead of six copies of the save handler), `provider/`, `basics/` and `data/`. The activity
+  log's CSV goes through the shared download (UTF-8 for Excel); a stored follow-up period of 5.5 days is read as 5, not reset to 3.
+- **One copy of each helper**: the Luhn check (`src/pii/luhn.js`), the spreadsheet-formula guard for exports (`src/lib/export.js`), the
+  sys_id, table and field patterns and `sameId` (`src/context/util.js`; a table name over 80 characters is refused everywhere), the
+  group search (`useGroupSearch`), the copy helper, the preview style (`previewCheck`), the Insert findings box (`InsertFindings`) and the
+  answer cards' Insert actions (`useInsertActions`). Functions that shared a name but not a meaning were renamed (`daysSinceSnTime` and
+  `wholeDaysSince`, `glanceSlaLine` and `mostPressingSla`, `cardIdsFor`).
+- **Docs**: `docs/review/audit-2026-11-04.md` (what was found, the commits, what is still yours to decide), build rule 2 says what a view
+  may import (and lint checks it), the one exception to "Insert fills one field" is named, the README lists the new scripts.
+
 ### Lint, and the end-to-end run made dependable (audit phase 4, second half)
 - **ESLint** (`npm run lint`, part of `npm run verify` and CI): the recommended rules, the two rules of React hooks, unused names
   everywhere, and in `src` `no-shadow` and `no-await-in-loop`. Views may not import the AI senders or the seal (build rule 2, now

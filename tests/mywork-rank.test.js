@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 import { workState } from '../src/mywork/states.js';
-import { pickSla, riskOfSla } from '../src/mywork/sla.js';
+import { mostPressingSla, riskOfSla } from '../src/mywork/sla.js';
 import { groupQueue, compareNow, filterChips, passes, sharedCis, priorityRank, groupOf } from '../src/mywork/rank.js';
 import { spanText, slaText, readText, idleText, dueToday, HOUR, MINUTE, DAY } from '../src/mywork/time.js';
 import { tablesForProfiles, readDecision, columnsFor, pluralOf, customerColumn } from '../src/mywork/tables.js';
@@ -53,24 +53,24 @@ const slaRow = ({ pct = 10, bpct, breached = false, stage = 'in_progress', end =
 });
 
 test('SLA: breached first, then the running one that ends soonest, paused ones last', () => {
-  assert.equal(pickSla([], NOW), null);
-  const two = pickSla([slaRow({ end: NOW + 9 * HOUR, name: 'Late' }), slaRow({ end: NOW + 3 * HOUR, name: 'Soon' })], NOW);
+  assert.equal(mostPressingSla([], NOW), null);
+  const two = mostPressingSla([slaRow({ end: NOW + 9 * HOUR, name: 'Late' }), slaRow({ end: NOW + 3 * HOUR, name: 'Soon' })], NOW);
   assert.equal(two.name, 'Soon');
   assert.equal(two.dueAt, NOW + 3 * HOUR);
-  const paused = pickSla([slaRow({ stage: 'paused', end: NOW - HOUR, pct: 99, name: 'Paused' }), slaRow({ end: NOW + 30 * HOUR, name: 'Running' })], NOW);
+  const paused = mostPressingSla([slaRow({ stage: 'paused', end: NOW - HOUR, pct: 99, name: 'Paused' }), slaRow({ end: NOW + 30 * HOUR, name: 'Running' })], NOW);
   assert.equal(paused.name, 'Running', 'a paused SLA never outranks a running one');
-  const onlyPaused = pickSla([slaRow({ stage: 'paused', pct: 99 })], NOW);
+  const onlyPaused = mostPressingSla([slaRow({ stage: 'paused', pct: 99 })], NOW);
   assert.equal(onlyPaused.risk, 'paused');
-  const breached = pickSla([slaRow({ end: NOW + HOUR }), slaRow({ breached: true, end: NOW - DAY, name: 'Gone' })], NOW);
+  const breached = mostPressingSla([slaRow({ end: NOW + HOUR }), slaRow({ breached: true, end: NOW - DAY, name: 'Gone' })], NOW);
   assert.equal(breached.name, 'Gone');
   assert.equal(breached.risk, 'breached');
 });
 
 test('SLA risk: 75 % used, or under two hours left; business time decides the share', () => {
   assert.equal(riskOfSla(null, NOW), 'none');
-  assert.equal(pickSla([slaRow({ pct: 118, bpct: 62, end: NOW + 20 * HOUR })], NOW).risk, 'ok');
-  assert.equal(pickSla([slaRow({ pct: 80, end: NOW + 20 * HOUR })], NOW).risk, 'at-risk');
-  assert.equal(pickSla([slaRow({ pct: 10, end: NOW + 90 * MINUTE })], NOW).risk, 'at-risk');
+  assert.equal(mostPressingSla([slaRow({ pct: 118, bpct: 62, end: NOW + 20 * HOUR })], NOW).risk, 'ok');
+  assert.equal(mostPressingSla([slaRow({ pct: 80, end: NOW + 20 * HOUR })], NOW).risk, 'at-risk');
+  assert.equal(mostPressingSla([slaRow({ pct: 10, end: NOW + 90 * MINUTE })], NOW).risk, 'at-risk');
 });
 
 // ---- time phrases ----------------------------------------------------------------------------------------------------------------

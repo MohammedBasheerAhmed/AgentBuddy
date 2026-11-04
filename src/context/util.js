@@ -1,8 +1,19 @@
 // Small helpers shared by src/context: the shapes the Table API returns, text clean-up, ServiceNow times, a bounded
 // parallel map. Pure: no DOM, no network.
 
+// ---- Identifiers ---------------------------------------------------------------------------------
+// The one set of checks for what crosses from the panel to the page and into a query or an address (everything that validates a
+// sys_id, a table or a column name imports these; src/page/bridge.js, which runs in the page's own world, keeps its own copy).
+
+/** A record id: 32 hexadecimal characters, either case. */
 export const SYS_ID_RE = /^[0-9a-f]{32}$/i;
-export const TABLE_RE = /^[a-z][a-z0-9_]*$/;
+/** A table name: a plain lower-case identifier. ServiceNow allows 80 characters, so a longer name is not a table. */
+export const TABLE_RE = /^[a-z][a-z0-9_]{0,79}$/;
+/** A column name: the same rule as a table name. */
+export const FIELD_RE = TABLE_RE;
+
+/** The same record id, whatever the case of either (a sys_id is hexadecimal; the instance may answer in either case). */
+export const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 
 // ---- Table API value shapes ---------------------------------------------------------------------
 // With sysparm_display_value=all every value is { value, display_value } (tests may use plain strings).

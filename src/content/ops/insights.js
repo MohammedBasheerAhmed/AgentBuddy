@@ -17,10 +17,9 @@ import { readChangesOnTarget } from '../../context/related.js';
 import { FIELDS_BY_KIND } from '../../context/allowlists.js';
 import { customersOf } from '../../context/identity.js';
 import { isSensitiveTable, kindForTable } from '../../context/kinds.js';
-import { SYS_ID_RE, cleanText, disp, oneLine, raw } from '../../context/util.js';
+import { SYS_ID_RE, cleanText, disp, oneLine, raw, sameId } from '../../context/util.js';
 
 const SENSITIVE_NOTE = 'This record is in a sensitive table, so this is not looked up unless sensitive data is allowed.';
-const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 
 // `deps.now` is optional (tests pin the clock with it); the live deps do not have it.
 const nowOf = (deps) => (typeof deps.now === 'function' ? Number(deps.now()) : Date.now());

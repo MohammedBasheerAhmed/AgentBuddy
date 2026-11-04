@@ -5,6 +5,7 @@ import ErrorNote from '../../ErrorNote.jsx';
 import Notes from '../../knowledge/Notes.jsx';
 import { readFailure } from '../../plainAccess.js';
 import { EmptyNote } from '../../ui/primitives.jsx';
+import { copyText } from '../../reports/download.js';
 import { t } from '../../../i18n/index.js';
 
 export { EmptyNote, Notes };
@@ -76,30 +77,6 @@ export function QuietButton({ children, ...props }) {
       {children}
     </button>
   );
-}
-
-/** Copy text; true when it worked. Falls back to a hidden text area where the clipboard API is not allowed. */
-export async function copyText(value) {
-  const textValue = String(value ?? '');
-  try {
-    await navigator.clipboard.writeText(textValue);
-    return true;
-  } catch {
-    try {
-      const area = document.createElement('textarea');
-      area.value = textValue;
-      area.setAttribute('readonly', '');
-      area.style.position = 'fixed';
-      area.style.opacity = '0';
-      document.body.appendChild(area);
-      area.select();
-      const ok = document.execCommand('copy');
-      area.remove();
-      return Boolean(ok);
-    } catch {
-      return false;
-    }
-  }
 }
 
 /** A Copy button that says "Copied" for a moment. */

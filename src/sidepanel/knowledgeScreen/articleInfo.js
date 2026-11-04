@@ -2,6 +2,7 @@
 // the rows the duplicate groups and the knowledge-gap topics are exported as (CSV, through src/lib/export.js toCsv). The CSV files keep
 // their English column names and values: they are data for a spreadsheet, not text of the panel.
 import { t, tn } from '../../i18n/index.js';
+import { SYS_ID_RE } from '../../context/util.js';
 
 /** "3 days", "5 weeks", "8 months", "2 years" for an age in days (>= 1). */
 export function ageText(days) {
@@ -30,7 +31,6 @@ export function freshnessOf({ ageDays = null, expiresInDays = null } = {}) {
 
 const PORTAL_SEGMENT_RE = /^\/[a-z][a-z0-9_-]{0,30}$/i;
 const NUMBER_RE = /^[A-Za-z]{2,8}\d{4,12}$/;
-const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 
 /**
  * The address to share an article with a customer: by its number, which stays the same when a new version is published (a sys_id

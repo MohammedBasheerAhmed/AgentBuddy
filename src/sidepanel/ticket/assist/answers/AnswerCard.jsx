@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SafeText } from '../../../../render/SafeText.jsx';
 import { AiBadge } from '../../../ui/primitives.jsx';
-import { applyFieldStates, choicesOf, createGuard, insertTargets, insertText, readFieldStates, reviewInsert } from '../../../insertFlow.js';
+import { applyFieldStates, choicesOf, insertTargets, readFieldStates, reviewInsert } from '../../../insertFlow.js';
+import { useInsertActions } from '../../../useInsertActions.js';
+import InsertFindings from '../../../InsertFindings.jsx';
 import { auditRefFromPage, currentFromPage, isCustomerVisible, matchesExpect, sourceFromPack, wrongRecordText } from '../../../../lib/fillable.js';
 import { auditInsert } from '../../../../lib/storage.js';
 import { resolveProviderConfig } from '../../../../providers/config.js';
@@ -18,7 +20,6 @@ import { LANGUAGES, ago, answerPrimary, baseFeatureOf, plainOf, refineChoices, t
 import { t, t as tr } from '../../../../i18n/index.js';
 
 const NO_TEXTS = [];
-const sendToTab = (tabId, message) => chrome.tabs.sendMessage(tabId, message);
 
 /**
  * One answer on the Ticket screen (AI0.4). Folded, it is one line ("Earlier: Summary · 2 min ago"); open, it is the answer with at
@@ -49,14 +50,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     [answer.people, answer.scan, answer.lastPack, eff?.policy?.internalPhrases]
   );
   const [states, setStates] = useState(null); // which of the boxes the open form has (insertFlow readFieldStates)
-  const [note, setNote] = useState(null); // { kind, text } about the last insert or copy
-  const [findings, setFindings] = useState(null); // { items, target, text, mode }: an insert the review stopped
-  const [editing, setEditing] = useState(null); // { text, key } while the edit box is open
   const [menu, setMenu] = useState(''); // '' | 'refine' | 'more'
-  const [done, setDone] = useState({}); // target keys that were inserted
-  const [inserting, setInserting] = useState(false);
-  const guard = useRef(null);
-  if (!guard.current) guard.current = createGuard();
 
   const wrongRecord = Boolean(answer.source?.expect) && !matchesExpect(answer.source.expect, currentFromPage(page));
   // (keyed on what the targets depend on, not on the page object, so the form is not asked again on every render)
@@ -94,62 +88,23 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     }
   };
 
+  // Copy and Insert (useInsertActions: the one insert path, one at a time, the review's findings, the edit box).
+  const { note, setNote, findings, editing, setEditing, done, busy: inserting, copy, insert, insertNow, startEdit: openEditor } = useInsertActions({
+    page,
+    source: answer.source,
+    review,
+    audit,
+    copyValue: plain,
+    textFor,
+    emptyText: t('That part is not in the text, so there is nothing to insert. Use Copy instead.'),
+  });
+
   // Low findings (another person's name, an IP address) are shown, never hidden; they block nothing.
   // The same review the insert runs (reviewInsert): in resolution notes, words shared with the work notes are a hint, not a stop.
   const hints = useMemo(() => {
     const visible = targets.find((x) => isCustomerVisible(x.field));
     return visible ? reviewInsert(visible.field, plain, review).hints : [];
   }, [targets, plain, review]);
-
-  async function copy(why = '', value = plain) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setNote({ kind: 'ok', text: why ? t('{why} Copied to the clipboard instead.', { why }) : t('Copied to the clipboard.') });
-      audit('copied');
-    } catch {
-      setNote({ kind: 'danger', text: t('The browser blocked copying. Select the text and copy it by hand.') });
-    }
-  }
-
-  async function insert(target, text, mode, force = false) {
-    if (guard.current.busy) return null;
-    setNote(null);
-    setInserting(true);
-    let outcome;
-    try {
-      outcome = await guard.current.run(null, () => insertText({ page, target, text, mode, source: answer.source, review, force, send: sendToTab }));
-    } finally {
-      setInserting(false);
-    }
-    if (!outcome) return null;
-    if (outcome.status === 'findings') {
-      if (!editing) setFindings({ items: outcome.items, target, text, mode });
-      return outcome;
-    }
-    setFindings(null);
-    if (outcome.status === 'inserted') {
-      setNote({ kind: 'ok', text: outcome.note });
-      setDone((d) => ({ ...d, [target.key]: true }));
-      setEditing(null);
-      audit('inserted');
-    } else if (outcome.status === 'blocked') {
-      setNote({ kind: 'warn', text: outcome.why });
-    } else if (outcome.status === 'empty') {
-      setNote({ kind: 'danger', text: t('That part is not in the text, so there is nothing to insert. Use Copy instead.') });
-    } else {
-      await copy(outcome.why, text);
-    }
-    return outcome;
-  }
-
-  const insertNow = (target) => {
-    const text = textFor(target);
-    if (!text) {
-      setNote({ kind: 'danger', text: t('That part is not in the text, so there is nothing to insert. Use Copy instead.') });
-      return;
-    }
-    insert(target, text, target.mode, false);
-  };
 
   // "Open the email form": the email form is not a ticket, so neither the Ticket screen nor this answer is on show there. The draft
   // goes with it (src/sidepanel/pendingDraft.js: memory only, this site only, the email form of THIS ticket only, 15 minutes), and the
@@ -185,9 +140,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   };
   const startEdit = (target, text) => {
     setMenu('');
-    setFindings(null);
-    setNote(null);
-    setEditing({ key: target?.key || '', text: text ?? textFor(target) });
+    openEditor(target, text);
   };
 
   if (!open) {
@@ -273,18 +226,13 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
       {first?.caution && !wrongRecord && <p className="ab-note ab-note-warn ab-answer-caution">{first.caution}</p>}
 
       {findings && (
-        <div className="ab-note ab-note-warn" role="alert">
-          <strong>{isCustomerVisible(findings.target.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
-          <ul className="ab-findings">
-            {findings.items.map((f, i) => (
-              <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
-            ))}
-          </ul>
-          <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={inserting} onClick={() => insert(findings.target, findings.text, findings.mode, true)}>{t('Insert anyway')}</button>
-            <button type="button" className="ab-btn ab-btn-sm" disabled={inserting} onClick={() => startEdit(findings.target, findings.text)}>{t('Edit first')}</button>
-          </div>
-        </div>
+        <InsertFindings
+          field={findings.target.field}
+          items={findings.items}
+          busy={inserting}
+          onInsertAnyway={() => insert(findings.target, findings.text, findings.mode, true)}
+          onEditFirst={() => startEdit(findings.target, findings.text)}
+        />
       )}
       {!findings && !editing && <ReviewHints hints={hints} />}
       {note && <p className={`ab-note ab-note-${note.kind}`} role="status">{note.text}</p>}

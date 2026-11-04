@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { agoText, noteInstant, relativeText, shortSpan, tzOffsetMs } from '../src/insights/time.js';
-import { buildGlance, customerWaiting, ownerText, pickSla, waitingText } from '../src/insights/glance.js';
+import { buildGlance, customerWaiting, ownerText, glanceSlaLine, waitingText } from '../src/insights/glance.js';
 import { outageSignal } from '../src/insights/outage.js';
 import { levelOf, priorityMismatch, riskSignals } from '../src/insights/risk.js';
 import { routingVote } from '../src/insights/routing.js';
@@ -79,20 +79,20 @@ test('time: the reader\'s offset comes from a date the pack has both ways; local
 
 test('glance SLA: breached, running with time left, paused, past due, finished; unknown when it could not be read', () => {
   const end = (h) => at(NOW + h * H);
-  assert.deepEqual(pickSla(null, NOW).kind, 'unknown');
-  assert.equal(pickSla([], NOW).text, '');
-  const running = pickSla([{ name: 'P2 resolution', stage: 'In progress', stageValue: 'in_progress', breached: false, plannedEndUtc: end(2 + 1 / 6) }], NOW);
+  assert.deepEqual(glanceSlaLine(null, NOW).kind, 'unknown');
+  assert.equal(glanceSlaLine([], NOW).text, '');
+  const running = glanceSlaLine([{ name: 'P2 resolution', stage: 'In progress', stageValue: 'in_progress', breached: false, plannedEndUtc: end(2 + 1 / 6) }], NOW);
   assert.equal(running.text, 'SLA 2h 10m');
   assert.equal(running.tone, '');
-  assert.equal(pickSla([{ stage: 'In progress', breached: false, plannedEndUtc: end(0.5) }], NOW).tone, 'warn');
-  assert.equal(pickSla([{ stage: 'In progress', breached: true, plannedEndUtc: end(-1) }], NOW).text, 'SLA breached');
-  assert.equal(pickSla([{ stage: 'In progress', breached: false, plannedEndUtc: end(-1) }], NOW).text, 'SLA past due');
-  assert.equal(pickSla([{ stage: 'Paused', stageValue: 'paused', breached: false, plannedEndUtc: end(1) }], NOW).text, 'SLA paused');
-  assert.equal(pickSla([{ stage: 'Completed', breached: true }], NOW).text, 'SLA was breached');
-  assert.equal(pickSla([{ stage: 'Achieved', breached: false }], NOW).text, '');
-  assert.equal(pickSla([{ stage: 'Cancelled', breached: true }], NOW).kind, 'none');
+  assert.equal(glanceSlaLine([{ stage: 'In progress', breached: false, plannedEndUtc: end(0.5) }], NOW).tone, 'warn');
+  assert.equal(glanceSlaLine([{ stage: 'In progress', breached: true, plannedEndUtc: end(-1) }], NOW).text, 'SLA breached');
+  assert.equal(glanceSlaLine([{ stage: 'In progress', breached: false, plannedEndUtc: end(-1) }], NOW).text, 'SLA past due');
+  assert.equal(glanceSlaLine([{ stage: 'Paused', stageValue: 'paused', breached: false, plannedEndUtc: end(1) }], NOW).text, 'SLA paused');
+  assert.equal(glanceSlaLine([{ stage: 'Completed', breached: true }], NOW).text, 'SLA was breached');
+  assert.equal(glanceSlaLine([{ stage: 'Achieved', breached: false }], NOW).text, '');
+  assert.equal(glanceSlaLine([{ stage: 'Cancelled', breached: true }], NOW).kind, 'none');
   // the soonest of two running SLAs
-  assert.equal(pickSla([{ stage: 'In progress', plannedEndUtc: end(8) }, { stage: 'In progress', plannedEndUtc: end(1.5) }], NOW).text, 'SLA 1h 30m');
+  assert.equal(glanceSlaLine([{ stage: 'In progress', plannedEndUtc: end(8) }, { stage: 'In progress', plannedEndUtc: end(1.5) }], NOW).text, 'SLA 1h 30m');
 });
 
 test('glance: customer waiting runs from the first unanswered customer message; not when support wrote last or the customer is unknown', () => {

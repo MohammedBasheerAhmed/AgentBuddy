@@ -130,8 +130,9 @@ test('through the page bridge: the real default path asks for getFormValues and 
 test('the operations make no network call of their own and no write: the form read only asks the page bridge, the hints read through the guarded deps', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'ops', 'compose.js'), 'utf8').replace(/\/\/.*$/gm, '');
   assert.ok(!/\bfetch\s*\(|queryTable|fetchRecord|XMLHttpRequest|fillField|setValue|method\s*:/.test(source));
-  // (formRecord.js: a form opened through task.do says 'task'; it asks the content script's own record finder which record that is)
-  assert.deepEqual([...source.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]), ['../pageBridge.js', '../formRecord.js', '../../compose/formFields.js', '../../compose/notesHints.js']);
+  // (formRecord.js: a form opened through task.do says 'task'; it asks the content script's own record finder which record that is;
+  // context/util.js: the shared sys_id and table-name checks, pure)
+  assert.deepEqual([...source.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]), ['../pageBridge.js', '../formRecord.js', '../../compose/formFields.js', '../../compose/notesHints.js', '../../context/util.js']);
   const formRecord = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'formRecord.js'), 'utf8').replace(/\/\/.*$/gm, '');
   assert.ok(!/\bfetch\s*\(|queryTable|fetchRecord|XMLHttpRequest|fillField|setValue|method\s*:|\bimport\b/.test(formRecord));
   // Round 3: notesHints (src/compose/notesHints.js) reads with the deps it is handed (GET-only, policy-guarded), nothing else.

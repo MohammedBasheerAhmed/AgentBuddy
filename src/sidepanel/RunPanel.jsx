@@ -1,10 +1,9 @@
-import { useRef } from 'react';
 import PreviewDialog, { previewKey } from './PreviewDialog.jsx';
 import ResultView from './ResultView.jsx';
 import { resolveProviderConfig } from '../providers/config.js';
 import { auditInsert } from '../lib/storage.js';
-import { auditRefFromPage, expectFromPage, sourceFromPack } from '../lib/fillable.js';
-import { madeWithoutLine, otherRecordsSummary, previewStyle, startedOnAfter } from './runLogic.js';
+import { auditRefFromPage, sourceFromPack } from '../lib/fillable.js';
+import { madeWithoutLine, previewCheck } from './runLogic.js';
 import { madeWithoutText } from '../features/parts.js';
 import { RunError, RunProgress } from './ticket/assist/answers/RunStatus.jsx';
 import { t } from '../i18n/index.js';
@@ -29,18 +28,13 @@ const NO_TEXTS = [];
 export default function RunPanel({ run, eff, page, readingText = t('Reading the ticket with your session…') }) {
   const { phase, prepared, active, result, error, people, scan, lastPack } = run;
   const config = resolveProviderConfig(eff.values, eff.apiKey);
-  // The record that was open when the run started (its number is for the message when another one is open later). Taken once, as
-  // the run starts reading, never again while it reads (src/sidepanel/runLogic.js startedOnAfter).
-  const startedOn = useRef(null);
-  const lastPhase = useRef(null);
-  startedOn.current = startedOnAfter(lastPhase.current, phase, startedOn.current, () => ({ expect: expectFromPage(page), number: page.record?.number || '' }));
-  lastPhase.current = phase;
-  const source = startedOn.current && startedOn.current.expect ? startedOn.current : null;
+  // The record that was open when the run started (its number is for the message when another one is open later): the run takes it
+  // once, as it starts, and keeps it while it reads and after (src/sidepanel/useRun.js `source`).
+  const source = run.source && run.source.expect ? run.source : null;
   // The audit entry names the record the pack was about; a pasted text (Rewrite, Notes) is audited against the page it was used on.
   const ref = sourceFromPack(lastPack) ? lastPack : auditRefFromPage(page);
-  // The short check for an action that uses other records and was checked in full before (runLogic previewStyle).
-  const others = phase === 'preview' && prepared ? otherRecordsSummary(prepared.p) : '';
-  const short = Boolean(others) && previewStyle({ previewMode: eff.values.previewMode, feature: prepared.p.feature, pack: prepared.p.pack, seen: eff.values.previewSeen || [], others }) === 'short';
+  // The short check for an action that uses other records and was checked in full before (runLogic previewCheck).
+  const { others, short } = previewCheck(phase === 'preview' ? prepared : null, eff.values);
   return (
     <>
       <RunProgress run={run} onStop={run.reset} readingText={readingText} />

@@ -5,7 +5,8 @@ import { groupQueue, filterChips, passes } from '../../mywork/rank.js';
 import { followUps, followUpReason, followUpText, followUpAction, FOLLOW_UP_DAY_CHOICES } from '../../mywork/followups.js';
 import { fullListUrl } from '../../mywork/links.js';
 import { askedText, dueAgoText, dueInText, spanText, dueToday } from '../../mywork/time.js';
-import { TicketRow, Fold, FilterChips, copyText } from './parts.jsx';
+import { TicketRow, Fold, FilterChips } from './parts.jsx';
+import { copyText } from '../reports/download.js';
 import { shown as shownText } from '../../reports/shown.js';
 import { isolate, t, tn } from '../../i18n/index.js';
 

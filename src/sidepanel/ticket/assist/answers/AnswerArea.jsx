@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import PreviewDialog, { previewKey } from '../../../PreviewDialog.jsx';
 import { resolveProviderConfig } from '../../../../providers/config.js';
 import { isBusyPhase } from '../../../useRun.js';
-import { otherRecordsSummary, previewStyle } from '../../../runLogic.js';
+import { previewCheck } from '../../../runLogic.js';
 import AnswerCard from './AnswerCard.jsx';
 import { RunError, RunProgress, useTick } from './RunStatus.jsx';
 import { t } from '../../../../i18n/index.js';
@@ -53,8 +53,7 @@ export default function AnswerArea({ assist, page, eff, record, active = true })
 
   const prepared = phase === 'preview' ? assist.prepared : null;
   const config = resolveProviderConfig(eff.values, eff.apiKey);
-  const others = prepared ? otherRecordsSummary(prepared.p) : '';
-  const style = prepared ? previewStyle({ previewMode: eff.values.previewMode, feature: prepared.p.feature, pack: prepared.p.pack, seen: eff.values.previewSeen || [], others }) : 'full';
+  const { others, short } = previewCheck(prepared, eff.values);
 
   const close = (answer) => {
     const at2 = answers.findIndex((a) => a.id === answer.id);
@@ -79,7 +78,7 @@ export default function AnswerArea({ assist, page, eff, record, active = true })
           prepared={prepared.p}
           config={prepared.cfg || config}
           canSkipNext={eff.values.previewMode === 'first'}
-          short={style === 'short'}
+          short={short}
           others={others}
           onSend={assist.confirmPreview}
           onCancel={assist.cancelPreview}

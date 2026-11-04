@@ -46,8 +46,8 @@ export function dueAgoText(at, now) {
 }
 export const dueInText = (ms) => t('due in {span}', { span: spanText(ms) });
 
-/** Whole days from `at` to `now` (0 when less than a day or in the future). */
-export const daysSince = (at, now) => (ok(at) ? Math.max(0, Math.floor((now - at) / DAY)) : NaN);
+/** Whole days from `at` to `now`, both in ms (0 when less than a day or in the future; NaN when `at` is not a time). */
+export const wholeDaysSince = (at, now) => (ok(at) ? Math.max(0, Math.floor((now - at) / DAY)) : NaN);
 
 /** "Read just now", "Read 4 min ago", "Read 2 h ago". */
 export function readText(readAt, now) {

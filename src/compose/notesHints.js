@@ -73,7 +73,7 @@ export function namesToLookUp(names) {
  * @returns {Promise<{ routing: ReturnType<typeof voteRouting>, keywords: string[], callers: { name: string, matches: { name, department, email }[] }[], access: object[] }>}
  */
 export async function readNotesHints({ table, text, names = [] }, deps) {
-  const target = HINT_TABLES[table];
+  const target = typeof table === 'string' && Object.hasOwn(HINT_TABLES, table) ? HINT_TABLES[table] : '';
   if (!target) throw new Error('Suggestions are only offered for a new incident or case.');
   const access = [];
   const keywords = similarKeywords(String(text ?? '').slice(0, 300), 4).map((w) => w.replace(/[^a-z0-9_-]/g, '')).filter(Boolean);

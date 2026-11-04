@@ -28,8 +28,8 @@ export function slaOf(row) {
 
 const order = (s) => (s.breached ? 0 : s.paused ? 2 : 1);
 
-/** The SLA to show for a ticket (see the header), or null when it has none. */
-export function pickSla(rows, now) {
+/** The SLA to show for a ticket, from its task_sla rows (see the header), with its risk; null when it has none. */
+export function mostPressingSla(rows, now) {
   let best = null;
   for (const row of rows || []) {
     const s = slaOf(row);

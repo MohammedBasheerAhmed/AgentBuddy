@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
 import { Tile, HorizontalBar, Donut, TrendChart, DataTable } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
 import { useReport } from './useReport.js';
+import { useLoadedResult } from './useSection.js';
 import { t, tn } from '../../i18n/index.js';
 import { placeholderName, shown, shownList } from '../../reports/shown.js';
 
@@ -71,16 +71,7 @@ export default function BuilderView({ widget, env, actions }) {
   const d = state.result?.data;
   const ok = d && d.available !== false;
   // In memory only, next to the sections' results, so "Download all as CSV" includes custom reports ("Explain this dashboard" leaves them out).
-  const loaded = env.loaded;
-  const wid = widget?.id;
-  const result = state.result;
-  useEffect(() => {
-    if (!loaded || !wid) return undefined;
-    if (result) loaded.set(wid, 'builder', result);
-    else loaded.remove(wid);
-    return undefined;
-  }, [loaded, wid, result]);
-  useEffect(() => () => loaded?.remove(wid), [loaded, wid]);
+  useLoadedResult(env.loaded, widget?.id, 'builder', state.result);
   return (
     <SectionShell
       title={shown(state.result?.title) || widget.builder.title || t('Custom report')}

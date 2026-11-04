@@ -1,5 +1,5 @@
-// The two things an export needs from the browser: hand a CSV file to the download, and put text on the clipboard.
-// Nothing here is sent anywhere; both stay on this computer.
+// The two things an export needs from the browser: hand a CSV file to the download, and put text on the clipboard (every screen of
+// the panel copies with copyText). Nothing here is sent anywhere; both stay on this computer.
 
 /** Download text as a file. A byte-order mark makes Excel read the accents right. */
 export function downloadText(fileName, text, mime = 'text/csv;charset=utf-8') {
@@ -16,7 +16,8 @@ export function downloadText(fileName, text, mime = 'text/csv;charset=utf-8') {
 }
 
 /** Copy text; true when it worked. Falls back to a hidden text area where the clipboard API is not allowed. */
-export async function copyText(text) {
+export async function copyText(value) {
+  const text = String(value ?? '');
   try {
     await navigator.clipboard.writeText(text);
     return true;
@@ -30,7 +31,7 @@ export async function copyText(text) {
       area.select();
       const ok = document.execCommand('copy');
       area.remove();
-      return ok;
+      return Boolean(ok);
     } catch {
       return false;
     }

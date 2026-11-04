@@ -20,11 +20,12 @@ const isFinished = (s) => /complet|achiev|cancel/i.test(`${s.stage} ${s.stageVal
 const isPaused = (s) => /pause/i.test(`${s.stage} ${s.stageValue}`);
 
 /**
- * The SLA that matters most for the glance.
+ * The SLA line of the glance: the SLA that matters most, said in words with its tone. (My work picks its SLA from the task_sla rows
+ * themselves and ranks by it: src/mywork/sla.js mostPressingSla.)
  * @param {{ name, stage, stageValue, breached: boolean, plannedEndUtc, percentage }[]|null} slas null when they could not be read
  * @returns {{ kind: 'breached'|'running'|'paused'|'missed'|'met'|'none'|'unknown', text: string, tone: ''|'warn'|'danger', leftMs: number|null, name: string }}
  */
-export function pickSla(slas, now) {
+export function glanceSlaLine(slas, now) {
   if (!Array.isArray(slas)) return { kind: 'unknown', text: '', tone: '', leftMs: null, name: '' };
   const live = slas.filter((s) => s && typeof s === 'object' && !isCancelled(s));
   if (!live.length) return { kind: 'none', text: '', tone: '', leftMs: null, name: '' };
@@ -107,7 +108,7 @@ export function buildGlance({ record, header, headPhase, answer, now }) {
   const titleKind = card.titleKind === 'text' || !text(fields.short_description) ? card.titleKind : 'text';
   const state = text(header?.state) || text(fields.state);
   const priority = text(header?.priority) || text(fields.priority);
-  const sla = pickSla(Array.isArray(answer?.slas?.items) && slaReadable(answer.slas) ? answer.slas.items : null, now);
+  const sla = glanceSlaLine(Array.isArray(answer?.slas?.items) && slaReadable(answer.slas) ? answer.slas.items : null, now);
 
   const line2 = [state && { text: state, tone: '' }, priority && { text: priority, tone: '' }, sla.text && { text: sla.text, tone: sla.tone }].filter(Boolean);
 

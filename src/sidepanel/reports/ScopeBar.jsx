@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { read } from '../ask.js';
+import { useState } from 'react';
+import { useGroupSearch } from './useGroupSearch.js';
 import { isolate, t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 
@@ -10,26 +10,7 @@ const kinds = () => [
 ];
 
 function GroupPicker({ tabId, blocked, chosen, myGroups, onAdd }) {
-  const [text, setText] = useState('');
-  const [found, setFound] = useState({ groups: [], note: '' });
-
-  useEffect(() => {
-    const search = text.trim();
-    if (search.length < 2) {
-      setFound({ groups: [], note: '' });
-      return undefined;
-    }
-    let alive = true;
-    const timer = setTimeout(() => {
-      read(tabId, 'reportGroups', { search, blocked })
-        .then((answer) => alive && setFound(answer))
-        .catch((err) => alive && setFound({ groups: [], note: err.message }));
-    }, 350);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [tabId, text, blocked]);
+  const { text, setText, found } = useGroupSearch(tabId, blocked);
 
   const free = (list) => list.filter((g) => !chosen.includes(g.id));
   const mine = free(myGroups || []);

@@ -150,8 +150,11 @@ module.exports = {
     t.check('on a SAVED record the form cannot be filled: the button is off and says why; Copy buttons remain', savedPlan.fillDisabled === true && /only offered on a blank ticket form/.test(savedPlan.reason), JSON.stringify(savedPlan));
     t.check('the proposal is shown for review: short description, description, and the questions still to ask', (await p.$eval('#ab-notes-short', (el) => el.value)).startsWith('VPN is down for the sales team') && (await p.evaluate(() => document.body.innerText)).includes('Which VPN client version is installed?'));
     await captureClipboard(p);
+    // The log already holds the copies of the steps above (the capture is installed once per page): wait for a NEW one, or an earlier
+    // copy would be read as this one whenever the click is a little slow.
+    const copiesBefore = (await clipboardLog(p)).length;
     await clickButton(p, /^Copy short description/);
-    await ctx.waitUntil('copy', async () => (await clipboardLog(p)).length >= 1, { timeout: 5000 });
+    await ctx.waitUntil('copy', async () => (await clipboardLog(p)).length > copiesBefore, { timeout: 5000 });
     const copied = await clipboardLog(p);
     t.check('Copy short description copies the (editable) short description', copied.slice(-1)[0] === 'VPN is down for the sales team since this morning', JSON.stringify(copied.map((c) => String(c).slice(0, 60))));
     t.check('no field of the saved incident was touched', (await ticket.evaluate(() => window.__gformCalls.length)) === 0);

@@ -8,6 +8,7 @@ import { openNewRecord } from './openRecord.js';
 import { originOf, setPending } from './pendingDraft.js';
 import { choicesOf, createGuard, insertTargets, insertText, insertsForKind, performInsert, primaryOf } from './insertFlow.js';
 import ReviewHints from './ReviewHints.jsx';
+import InsertFindings from './InsertFindings.jsx';
 import InsertEditor from './ticket/assist/answers/InsertEditor.jsx';
 import { t, isolate } from '../i18n/index.js';
 
@@ -201,19 +202,20 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
       </div>
       {madeWithout && <p className="ab-hint ab-answer-gaps" style={{ marginTop: 8 }}>{madeWithout}</p>}
       {findings && (
-        <div className="ab-note ab-note-warn" role="alert" style={{ marginTop: 8 }}>
-          <strong>{isCustomerVisible(findings.spec.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
-          <ul style={{ margin: '4px 0 6px', paddingInlineStart: 18 }}>
-            {findings.items.map((f, i) => (
-              <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
-            ))}
-          </ul>
-          <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.spec, findings.key, true)}>{t('Insert anyway')}</button>
-            {/* The part that was about to be inserted, not the whole answer, in a box to change before it goes in. */}
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => { const { key, value } = findings; setFindings(null); setNote(null); setEditing({ key, text: value }); }}>{t('Edit first')}</button>
-          </div>
-        </div>
+        <InsertFindings
+          field={findings.spec.field}
+          items={findings.items}
+          busy={busy}
+          style={{ marginTop: 8 }}
+          onInsertAnyway={() => insert(findings.spec, findings.key, true)}
+          // The part that was about to be inserted, not the whole answer, in a box to change before it goes in.
+          onEditFirst={() => {
+            const { key, value } = findings;
+            setFindings(null);
+            setNote(null);
+            setEditing({ key, text: value });
+          }}
+        />
       )}
       {!findings && !editing && <ReviewHints hints={hints} />}
       {editing && (

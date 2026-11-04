@@ -11,7 +11,7 @@
 // capped (marker.since > 0) a ticket with no comment in the window has had none since `since`; that proves "N days" only when
 // `since` is itself N days ago.
 import { hasCustomer } from './tables.js';
-import { DAY, daysSince } from './time.js';
+import { DAY, wholeDaysSince } from './time.js';
 import { groupOf } from './rank.js';
 import { t, tn } from '../i18n/index.js';
 
@@ -64,11 +64,11 @@ export function followUps(items, { now, days = DEFAULT_FOLLOW_UP_DAYS }) {
     const m = item.marker;
     if (item.work === 'waiting-customer') {
       if (m.replied === 'customer' || m.replied === 'other') {
-        out.push({ kind: 'replied', item, days: daysSince(m.lastCustomerAt ?? m.lastOtherAt, now) });
+        out.push({ kind: 'replied', item, days: wholeDaysSince(m.lastCustomerAt ?? m.lastOtherAt, now) });
         continue;
       }
       const quiet = quietSince(item);
-      if (quiet !== null && quiet <= limit) out.push({ kind: 'reminder', item, days: daysSince(quiet, now) });
+      if (quiet !== null && quiet <= limit) out.push({ kind: 'reminder', item, days: wholeDaysSince(quiet, now) });
       continue;
     }
     // Live work, and tickets on hold for somebody else (the customer still wants to hear why it waits).
@@ -76,10 +76,10 @@ export function followUps(items, { now, days = DEFAULT_FOLLOW_UP_DAYS }) {
     const ours = ourSince(item);
     if (ours === null) {
       // Never written to the customer: due once the ticket is N days old.
-      if (Number.isFinite(item.openedAt) && item.openedAt <= limit) out.push({ kind: 'update', item, days: daysSince(item.openedAt, now), never: true });
+      if (Number.isFinite(item.openedAt) && item.openedAt <= limit) out.push({ kind: 'update', item, days: wholeDaysSince(item.openedAt, now), never: true });
       continue;
     }
-    if (ours <= limit) out.push({ kind: 'update', item, days: daysSince(ours, now) });
+    if (ours <= limit) out.push({ kind: 'update', item, days: wholeDaysSince(ours, now) });
   }
   const rank = { replied: 0, reminder: 1, update: 2 };
   return out.sort((a, b) => rank[a.kind] - rank[b.kind] || b.days - a.days || String(a.item.number).localeCompare(String(b.item.number)));

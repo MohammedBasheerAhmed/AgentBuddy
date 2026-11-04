@@ -15,6 +15,7 @@ import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION } from '../reports/layoutFile.js';
 import { FORMAT_LIMITS, normalizeFormat, specOf } from '../formats/formats.js';
 import { orgDashboardProblems } from '../reports/dashboards.js';
+import { FIELD_RE, TABLE_RE } from '../context/util.js';
 
 /** Keys that describe the build, not the policy. `$comment` is ignored. */
 export const BUILD_KEYS = Object.freeze(['$comment', 'label', 'updateUrl']);
@@ -30,7 +31,6 @@ export const VENDOR_BASE_URLS = Object.freeze({
 
 // Exactly these two hosts may be reached over plain http, and only for a model on the person's own computer.
 const LOCAL_HTTP_HOSTS = new Set(['localhost', '127.0.0.1']);
-const TABLE_RE = /^[a-z][a-z0-9_]{0,79}$/;
 const PREFIX_RE = /^[a-z][a-z0-9_]{1,63}$/;
 const LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,39}$/;
 const MAX_INSTANCES = 50;
@@ -186,7 +186,7 @@ export function validateEnterpriseConfig(raw) {
     if (has(key)) policy[key] = checkStringList(key, raw[key], errors, { each: (item) => (re.test(item) ? '' : `not ${what} in lower case.`) });
   };
   nameList('blockedTables', TABLE_RE, 'a table name');
-  nameList('blockedFields', TABLE_RE, 'a column name');
+  nameList('blockedFields', FIELD_RE, 'a column name');
   nameList('sensitiveTablePrefixes', PREFIX_RE, 'a table-name prefix (letters, digits, _; at least 2 characters)');
   if (has('disabledFeatures')) {
     policy.disabledFeatures = checkStringList('disabledFeatures', raw.disabledFeatures, errors, {

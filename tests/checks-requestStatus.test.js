@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { requestStatus, accessNotes, describeApproval, taskLine } from '../src/checks/requestStatus.js';
-import { approvalKind, daysSince, finishedKind, isFinishedState, isHoldState, isOpenItem, ownerOf } from '../src/checks/states.js';
+import { approvalKind, daysSinceSnTime, finishedKind, isFinishedState, isHoldState, isOpenItem, ownerOf } from '../src/checks/states.js';
 
 const NOW = Date.UTC(2026, 9, 27, 12, 0, 0);
 
@@ -70,14 +70,14 @@ test('an item is open by its active flag, else by its state; an unknown state co
   assert.ok(isOpenItem({ state: 'Strange new state' }));
 });
 
-test('ownerOf and daysSince', () => {
+test('ownerOf and daysSinceSnTime', () => {
   assert.equal(ownerOf({ assignedTo: 'Beth Anglin', assignmentGroup: 'Desktop Support' }), 'Beth Anglin in Desktop Support');
   assert.equal(ownerOf({ assignmentGroup: 'Desktop Support' }), 'Desktop Support');
   assert.equal(ownerOf({ assignedTo: 'Beth Anglin' }), 'Beth Anglin');
   assert.equal(ownerOf({}), '');
-  assert.equal(Math.round(daysSince('2026-10-24 12:00:00', NOW)), 3);
-  assert.ok(Number.isNaN(daysSince('24/10/2026 12:00', NOW)));
-  assert.ok(Number.isNaN(daysSince('', NOW)));
+  assert.equal(Math.round(daysSinceSnTime('2026-10-24 12:00:00', NOW)), 3);
+  assert.ok(Number.isNaN(daysSinceSnTime('24/10/2026 12:00', NOW)));
+  assert.ok(Number.isNaN(daysSinceSnTime('', NOW)));
 });
 
 // ---- the status line -------------------------------------------------------------------------------------------------

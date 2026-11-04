@@ -6,7 +6,7 @@ import { normalizePolicy } from '../src/policy/policy.js';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
 import { MAX_QUICK, QUICK_CARDS, QUICK_DEFAULTS, QUICK_LABELS, cleanPins, isQuickId, quickActions, quickCardItem, quickItems } from '../src/features/quick.js';
 import { INSIGHT_CARDS } from '../src/sidepanel/ticket/cards/index.js';
-import { cardsFor } from '../src/sidepanel/ticket/assist/actions/TicketQuickBar.jsx';
+import { cardIdsFor } from '../src/sidepanel/ticket/assist/actions/TicketQuickBar.jsx';
 
 // ---- the table and the registry stay in step --------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ test('every Insights item opens a card the Insights half really has (audit P2.4:
   for (const [id, item] of Object.entries(QUICK_CARDS)) assert.ok(ids.includes(item.card), `${id}: no Insights card "${item.card}"`);
   // ...so the bar of the Ticket screen offers it: a resolved incident puts "Ready to resolve?" first (it was never shown).
   const eff = effectiveSettings({ ...DEFAULT_SETTINGS, profiles: ['it'] }, {});
-  const items = quickItems({ kind: 'incident', stage: 'resolve', cards: cardsFor({ kind: 'incident' }, eff), ai: false });
+  const items = quickItems({ kind: 'incident', stage: 'resolve', cards: cardIdsFor({ kind: 'incident' }, null, eff), ai: false });
   assert.deepEqual(items.map((i) => [i.id, i.card]), [['card:ready', 'resolve'], ['card:related', 'related']]);
   assert.equal(quickCardItem('resolve'), 'card:ready');
   assert.equal(quickCardItem('related'), 'card:related');

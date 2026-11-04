@@ -118,8 +118,20 @@ test('Settings lists policy ids that match no feature, so an administrator sees 
   assert.ok(!/match(es)? no feature/.test(draw(PolicySection, { eff: eff({}, { disabledFeatures: [real] }) })));
 });
 
+// The source of the whole Settings page: every file under src/options/, so a section can move between files without a check below
+// missing it.
+const settingsSource = () => {
+  const dir = path.join(__dirname, '..', 'src', 'options');
+  return fs
+    .readdirSync(dir, { recursive: true })
+    .filter((f) => /\.jsx?$/.test(f))
+    .sort()
+    .map((f) => fs.readFileSync(path.join(dir, f), 'utf8'))
+    .join('\n');
+};
+
 test('Settings reads the token budget through the policy module, and shows the limit that applies', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'options', 'Options.jsx'), 'utf8');
+  const source = settingsSource();
   assert.match(source, /dailyTokenLimit\(\{ policyBudget: eff\.policy\?\.tokenBudgetPerDay/);
   assert.equal(normalizePolicy({ tokenBudgetPerDay: 1234 }).tokenBudgetPerDay, 1234);
   // Nothing on the page fails silently: every action has a place for its error.
@@ -212,6 +224,6 @@ test('host access: the normal build asks site by site; a build with fixed hosts 
     globalThis.chrome = real;
   }
   // Nothing in Settings promises a prompt unconditionally any more.
-  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'options', 'Options.jsx'), 'utf8');
+  const source = settingsSource();
   assert.equal((source.match(/asks you to confirm/g) || []).length, 1, 'the one sentence that says so is the normal-build branch');
 });

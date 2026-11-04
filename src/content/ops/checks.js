@@ -11,7 +11,7 @@
 import { STATUS, confirmEmptyIsReallyEmpty, softRead } from '../../context/access.js';
 import { LINK_SOURCES, detectLinkColumn } from '../../context/knowledge.js';
 import { kindForTable } from '../../context/kinds.js';
-import { SYS_ID_RE, raw } from '../../context/util.js';
+import { SYS_ID_RE, raw, sameId } from '../../context/util.js';
 import { tryCallPage } from '../pageBridge.js';
 import { formShowsRecord } from '../formRecord.js';
 
@@ -37,7 +37,6 @@ export function boxLabelsFor(table) {
   return BOX_FIELDS.map((name) => (name === 'close_notes' ? closeNotes : BOX_LABELS[name]));
 }
 
-const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 const isPlainObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
 // Only the names asked for, only text, each cut to length.

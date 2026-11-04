@@ -28,6 +28,7 @@
 // This file has no chrome.* import and no network: `getManaged` is injected (tests/policy-hardening-guard.test.js).
 
 import { normalizePolicy } from '../policy/policy.js';
+import { TABLE_RE } from '../context/util.js';
 
 export const POLICY_TTL_MS = 30000;
 
@@ -62,8 +63,8 @@ export async function readManaged(area = typeof chrome !== 'undefined' ? chrome.
 }
 
 const lower = (value) => String(value ?? '').trim().toLowerCase();
-const NAME_RE = /^[a-z][a-z0-9_]{0,79}$/;
-const cleanList = (value) => (Array.isArray(value) ? value : []).map(lower).filter((v) => NAME_RE.test(v)).slice(0, 500);
+// (a column name follows the same rule as a table name)
+const cleanList = (value) => (Array.isArray(value) ? value : []).map(lower).filter((v) => TABLE_RE.test(v)).slice(0, 500);
 
 /**
  * The guard's state with the policy the panel sent merged in: blocked tables and sensitive prefixes are joined; HR content stays

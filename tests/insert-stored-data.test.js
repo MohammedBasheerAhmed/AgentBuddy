@@ -124,7 +124,13 @@ test('the Settings list says what is saved now', () => {
 });
 
 test('Settings has the section, a confirmation and the button text the person asked for', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'options', 'Options.jsx'), 'utf8');
+  // Every file of the Settings page (src/options/ and its folders), so the section can move between files without this missing it.
+  const dir = path.join(__dirname, '..', 'src', 'options');
+  const source = fs
+    .readdirSync(dir, { recursive: true })
+    .filter((f) => /\.jsx?$/.test(f))
+    .map((f) => fs.readFileSync(path.join(dir, f), 'utf8'))
+    .join('\n');
   assert.match(source, /Stored data/);
   assert.match(source, /Clear everything stored by Agent Buddy/);
   assert.match(source, /Yes, remove everything/);

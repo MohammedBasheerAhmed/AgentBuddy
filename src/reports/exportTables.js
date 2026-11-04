@@ -7,7 +7,7 @@
 // Anna Schmidt", "spoke with Dr. Priya Raman") is found by the firewall's prose-name detector (src/pii/names.js) and numbered
 // after the people of the person columns, in table, row and column order, so the numbering is the same every time. A name
 // with no cue around it ("Anna Schmidt laptop") can still be missed: the export screen says so.
-import { toCsv } from '../lib/export.js';
+import { guardFormula, toCsv } from '../lib/export.js';
 import { detectProseNames } from '../pii/names.js';
 import { resolveOverlaps } from '../pii/detectors.js';
 import { t } from '../i18n/core.js';
@@ -122,12 +122,9 @@ export function tablesToCsv(tables) {
   return real.map((table) => `${toCsv([], [table.title])}\r\n${tableToCsv(table)}`).join('\r\n\r\n');
 }
 
-// A cell pasted into a spreadsheet must not run as a formula: same rule as the CSV guard.
-const guardCell = (value) => {
-  let s = text(value).replace(/[\t\r\n]+/g, ' ').trim();
-  if (/^[=+\-@]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = `'${s}`;
-  return s;
-};
+// A cell pasted into a spreadsheet must not run as a formula: the CSV guard (plain numbers kept as numbers). A tab or a line break
+// inside a cell would start another cell or row of the pasted table, so they become spaces first.
+const guardCell = (value) => guardFormula(text(value).replace(/[\t\r\n]+/g, ' ').trim(), { keepNumbers: true });
 
 /** Tab-separated text, which pastes as a table into a spreadsheet, a mail or a document. */
 export function tablesToTsv(tables) {

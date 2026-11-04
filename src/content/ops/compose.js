@@ -17,11 +17,10 @@
 import { tryCallPage } from '../pageBridge.js';
 import { formShowsRecord } from '../formRecord.js';
 import { FORM_FIELD_NAMES, MAX_FORM_TEXT } from '../../compose/formFields.js';
-import { readNotesHints } from '../../compose/notesHints.js';
+import { HINT_TABLES, readNotesHints } from '../../compose/notesHints.js';
+import { SYS_ID_RE, TABLE_RE } from '../../context/util.js';
 
 const MAX_NAMES = 20;
-const SYS_ID = /^[0-9a-f]{32}$/i;
-const TABLE = /^[a-z][a-z0-9_]{0,79}$/;
 
 /**
  * The operation itself; `call` is the page-bridge caller (replaced in tests), `currentRecord` the record the content script finds on
@@ -36,7 +35,7 @@ export async function readFormValues(args, call = tryCallPage, { currentRecord =
   }
   const expect = args.expect;
   if (expect !== undefined && expect !== null) {
-    if (typeof expect !== 'object' || !TABLE.test(String(expect.table || '')) || !SYS_ID.test(String(expect.sysId || ''))) throw new Error('That is not a valid record.');
+    if (typeof expect !== 'object' || !TABLE_RE.test(String(expect.table || '')) || !SYS_ID_RE.test(String(expect.sysId || ''))) throw new Error('That is not a valid record.');
     let meta;
     try {
       meta = await call('getFormMeta');
@@ -60,7 +59,8 @@ export async function readFormValues(args, call = tryCallPage, { currentRecord =
 
 /** Checked arguments for notesHints: a known table, a short text, up to ten names of plain text. */
 export function notesHintsArgs(args) {
-  const table = typeof args?.table === 'string' ? args.table : '';
+  // (Object.hasOwn: a table named after something every object has, such as 'constructor', is not a known table)
+  const table = typeof args?.table === 'string' && Object.hasOwn(HINT_TABLES, args.table) ? args.table : '';
   const text = typeof args?.text === 'string' ? args.text.slice(0, 300) : '';
   if (!text.trim()) throw new Error('There is no short description to compare yet.');
   const names = Array.isArray(args?.names) ? args.names.filter((n) => typeof n === 'string').slice(0, 10).map((n) => n.slice(0, 60)) : [];

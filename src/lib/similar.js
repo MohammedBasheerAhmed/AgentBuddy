@@ -1,6 +1,8 @@
 // "Records like this one": keyword matching on a record's short description, no AI tokens. The search is a plain
 // LIKE query on the same table; the ranking is how many of the keywords each hit shares with the record on screen.
 
+import { SYS_ID_RE } from '../context/util.js';
+
 const STOP = new Set(
   (
     'a an and are as at be been but by can cannot could did do does for from had has have how i if in into is it its just ' +
@@ -32,7 +34,7 @@ export function similarQuery(keywords, { excludeSysId = '', field = 'short_descr
   const safe = (keywords || []).map((w) => String(w).replace(/[^a-z0-9_-]/gi, '')).filter(Boolean);
   if (!safe.length) return '';
   const any = safe.map((w, i) => `${i ? 'OR' : ''}${field}LIKE${w}`).join('^');
-  const exclude = /^[0-9a-f]{32}$/i.test(excludeSysId) ? `^sys_id!=${excludeSysId}` : '';
+  const exclude = SYS_ID_RE.test(excludeSysId) ? `^sys_id!=${excludeSysId}` : '';
   return `${any}${exclude}^ORDERBYDESCsys_updated_on`;
 }
 

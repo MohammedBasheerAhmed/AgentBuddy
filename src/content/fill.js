@@ -15,8 +15,8 @@
 import { FILL_REASONS, emailClientTarget, fieldMeta, isFillable, matchesExpect, parseExpect, toOneLine, toSafeHtml } from '../lib/fillable.js';
 import { tryCallPage } from './pageBridge.js';
 import { formShowsRecord } from './formRecord.js';
+import { FIELD_RE } from '../context/util.js';
 
-const FIELD_RE = /^[a-z][a-z0-9_]{0,79}$/;
 export const MAX_INSERT_CHARS = 20000;
 
 // What a control is called, from the page: short, printable, one line (the panel shows it as text).

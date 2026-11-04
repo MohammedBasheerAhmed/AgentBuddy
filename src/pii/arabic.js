@@ -12,6 +12,8 @@
 //
 // Pure functions, no I/O. Patterns are anchored on a label word or on a fixed format and use bounded repetition only.
 
+import { luhnOk } from './luhn.js';
+
 // The first digit (zero) of each script's block of ten decimal digits.
 const ZEROS = [0x660, 0x6f0, 0x7c0, 0x966, 0x9e6, 0xa66, 0xae6, 0xb66, 0xbe6, 0xc66, 0xce6, 0xd66, 0xe50, 0xed0, 0xf20, 0x1040, 0x17e0, 0x1810];
 const OTHER_DIGIT = new RegExp(
@@ -103,21 +105,6 @@ const EMIRATES_ID = /(?<![\d-])784[- ]?\d{4}[- ]?\d{7}[- ]?\d(?![\d-])/g;
 const ID_WORD =
   '(?:(?:رقم\\s*)?(?:ال)?(?:هوية|هويه)(?:\\s*(?:ال)?(?:وطنية|وطنيه|إماراتية|الإماراتية))?|(?:ال)?رقم\\s*(?:ال)?قومي|(?:رقم\\s*)?(?:ال)?(?:إقامة|اقامة)|(?:ال)?سجل\\s*(?:ال)?مدني|(?:رقم\\s*)?(?:ال)?بطاقة\\s*(?:ال)?(?:شخصية|مدنية)|(?:رقم\\s*)?(?:ال)?جواز(?:\\s*(?:ال)?سفر)?|(?:ال)?رقم\\s*(?:ال)?مدني)';
 const ID_NUMBER = new RegExp(`${NOT_LETTER_BEFORE}${ID_WORD}${GAP}(?:هو|هي|:|=|-|#)?${GAP}([A-Za-z]{0,2}\\d[\\d -]{6,20}\\d)${NUMBER_AFTER}`, 'gud');
-
-function luhnOk(digits) {
-  let sum = 0;
-  let double = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let n = digits.charCodeAt(i) - 48;
-    if (double) {
-      n *= 2;
-      if (n > 9) n -= 9;
-    }
-    sum += n;
-    double = !double;
-  }
-  return digits.length > 0 && sum % 10 === 0;
-}
 
 function detectIds(text, out) {
   EMIRATES_ID.lastIndex = 0;

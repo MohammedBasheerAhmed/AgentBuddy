@@ -1,7 +1,8 @@
 import QuickBar from '../../../QuickBar.jsx';
 import { INSIGHT_CARDS } from '../../cards/index.js';
+import { cardsFor } from '../../TicketInsights.jsx';
 import { stageOf } from '../../../../features/stages.js';
-import { aiAvailable, shownFor } from '../../../../profiles/profiles.js';
+import { aiAvailable } from '../../../../profiles/profiles.js';
 import { featureBlock, offeredFeatures, recordBlock } from './plan.js';
 
 // The quick-actions bar of the Ticket screen, drawn inside the ticket at a glance (TRACKER.md F6). State-aware: what fits the
@@ -14,12 +15,12 @@ import { featureBlock, offeredFeatures, recordBlock } from './plan.js';
 // bar does not make it, so the bar never holds that action.
 const NOT_IN_BAR = { 'fulfilment-checklist': false };
 
-/** The Insights card ids this record shows (its kind and the person's profiles). */
-export function cardsFor(record, eff, cards = INSIGHT_CARDS) {
-  const kind = record?.kind || 'other';
-  return (Array.isArray(cards) ? cards : [])
-    .filter((c) => c && typeof c.id === 'string' && (c.kinds || ['*']).some((k) => k === '*' || k === kind) && shownFor(c.profiles, eff))
-    .map((c) => c.id);
+/**
+ * The ids of the Insights cards this record shows: the very cards the Insights half draws (TicketInsights cardsFor: the record's
+ * kind, the person's profiles, a card's own `when`), as the ids the bar's card items name. The bar needs no order.
+ */
+export function cardIdsFor(record, header, eff) {
+  return cardsFor(INSIGHT_CARDS, record || {}, header, eff).map((c) => c.id);
 }
 
 export default function TicketQuickBar({ eff, record, header = null, busy = false, aiReady = true, onRun, onShowCard }) {
@@ -31,7 +32,7 @@ export default function TicketQuickBar({ eff, record, header = null, busy = fals
       kind={kind}
       stage={stageOf(record, header)}
       features={features}
-      cards={cardsFor(record, eff)}
+      cards={cardIdsFor(record, header, eff)}
       eff={eff}
       disabled={busy}
       aiReady={ai}

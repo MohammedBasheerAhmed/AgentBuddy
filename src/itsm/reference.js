@@ -10,6 +10,7 @@
 // is told about, so the model says it worked from the record alone instead of pretending.
 
 import { t } from '../i18n/index.js';
+import { SYS_ID_RE } from '../context/util.js';
 
 export const SIMILAR_LIMIT = 3;
 export const KNOWLEDGE_LIMIT = 3;
@@ -25,7 +26,7 @@ const namesOf = (list) =>
   (Array.isArray(list) ? list : [])
     .filter((n) => typeof n === 'string')
     .map((n) => text(n, 100))
-    .filter((n) => n && !/^[0-9a-f]{32}$/i.test(n))
+    .filter((n) => n && !SYS_ID_RE.test(n))
     .slice(0, MAX_HIT_PEOPLE);
 
 // A record number: letters then digits (INC0010123, KB0010004, SCTASK0000999, CS0001234).

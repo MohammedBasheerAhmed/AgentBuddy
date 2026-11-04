@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { usePending, clearPending, pendingFits, afterInsert, emailExpect, emailInserts } from './pendingDraft.js';
 import ResultView from './ResultView.jsx';
 import ReviewHints from './ReviewHints.jsx';
@@ -6,13 +6,14 @@ import InsertEditor from './ticket/assist/answers/InsertEditor.jsx';
 import { AiBadge } from './ui/primitives.jsx';
 import { SafeText } from '../render/SafeText.jsx';
 import { read } from './ask.js';
-import { applyFieldStates, createGuard, insertTargets, insertText, readFieldStates, reviewInsert } from './insertFlow.js';
+import { applyFieldStates, insertTargets, readFieldStates, reviewInsert } from './insertFlow.js';
+import { useInsertActions } from './useInsertActions.js';
+import InsertFindings from './InsertFindings.jsx';
 import { auditInsert } from '../lib/storage.js';
-import { EMAIL_NEXT, insertedNote, isCustomerVisible } from '../lib/fillable.js';
+import { EMAIL_NEXT, insertedNote } from '../lib/fillable.js';
 import { t, isolate, t as tr } from '../i18n/index.js';
 
 const NO_TEXTS = [];
-const sendToTab = (tabId, message) => chrome.tabs.sendMessage(tabId, message);
 
 /**
  * The draft the agent carried to another form: "Open a new article form" (a blank form of the table the feature names) or, for an
@@ -117,14 +118,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
     [draft, eff?.policy?.internalPhrases]
   );
   const [states, setStates] = useState(null); // are the subject and body boxes on this form (insertFlow readFieldStates)
-  const [note, setNote] = useState(null);
-  const [findings, setFindings] = useState(null); // { items, target, text, mode }: an insert the review stopped
-  const [editing, setEditing] = useState(null); // { key, text } while the edit box is open
-  const [done, setDone] = useState({}); // target keys that went in
   const [doneFields, setDoneFields] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const guard = useRef(null);
-  if (!guard.current) guard.current = createGuard();
 
   const baseTargets = useMemo(() => insertTargets(feature, { page }), [feature, page.surface]); // eslint-disable-line react-hooks/exhaustive-deps
   const targets = useMemo(() => applyFieldStates(baseTargets, states), [baseTargets, states]);
@@ -149,59 +143,23 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
   const audit = (outcome) =>
     auditInsert({ feature: draft.feature?.id || '', table: expect.table, sysId: expect.sysId, provider: draft.provider, model: draft.model, mode: eff?.values?.piiMode, outcome });
 
-  async function copy(why = '', value = draft.body) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setNote({ kind: 'ok', text: why ? t('{why} Copied to the clipboard instead.', { why }) : t('Copied to the clipboard.') });
-      audit('copied');
-    } catch {
-      setNote({ kind: 'danger', text: t('The browser blocked copying. Select the text and copy it by hand.') });
-    }
-  }
-
-  async function insert(target, text, mode, force = false) {
-    if (guard.current.busy) return null;
-    setNote(null);
-    setBusy(true);
-    let outcome;
-    try {
-      outcome = await guard.current.run(null, () => insertText({ page, target, text, mode, source, pinned: expect, review, force, send: sendToTab }));
-    } finally {
-      setBusy(false);
-    }
-    if (!outcome) return null;
-    if (outcome.status === 'findings') {
-      if (!editing) setFindings({ items: outcome.items, target, text, mode });
-      return outcome;
-    }
-    setFindings(null);
-    if (outcome.status === 'inserted') {
-      setNote({ kind: 'ok', text: outcome.note });
-      setDone((d) => ({ ...d, [target.key]: true }));
-      setEditing(null);
-      audit('inserted');
+  // Copy and Insert (useInsertActions), with the email form of THAT ticket as the only place the text may land.
+  const { note, findings, editing, setEditing, done, busy, copy, insert, insertNow, startEdit } = useInsertActions({
+    page,
+    source,
+    pinned: expect,
+    review,
+    audit,
+    copyValue: draft.body,
+    textFor,
+    emptyText: t('That part is not in the draft, so there is nothing to insert. Use Copy instead.'),
+    onInserted: (target) => {
       // Used up when the subject AND the body went in, not after the first one.
       const next = afterInsert(doneFields, target.spec, feature);
       setDoneFields(next.done);
       if (next.complete) onUsedUp();
-    } else if (outcome.status === 'blocked') {
-      setNote({ kind: 'warn', text: outcome.why });
-    } else if (outcome.status === 'empty') {
-      setNote({ kind: 'danger', text: t('That part is not in the draft, so there is nothing to insert. Use Copy instead.') });
-    } else {
-      await copy(outcome.why, text);
-    }
-    return outcome;
-  }
-
-  const insertNow = (target) => {
-    const text = textFor(target);
-    if (!text) {
-      setNote({ kind: 'danger', text: t('That part is not in the draft, so there is nothing to insert. Use Copy instead.') });
-      return;
-    }
-    insert(target, text, target.mode, false);
-  };
+    },
+  });
 
   const subject = targets.find((item) => item.field === 'subject') || null;
   const body = targets.find((item) => item.field === 'body') || null;
@@ -234,30 +192,13 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
         <SafeText text={draft.text} />
       </div>
       {findings && (
-        <div className="ab-note ab-note-warn" role="alert">
-          <strong>{isCustomerVisible(findings.target.field) ? t('Check before sending to the customer:') : t('Check before inserting:')}</strong>
-          <ul className="ab-findings">
-            {findings.items.map((f, i) => (
-              <li key={i}>{f.advice} <span className="ab-mono">{f.excerpt}</span></li>
-            ))}
-          </ul>
-          <div className="ab-row">
-            <button type="button" className="ab-btn ab-btn-sm" disabled={busy} onClick={() => insert(findings.target, findings.text, findings.mode, true)}>{t('Insert anyway')}</button>
-            <button
-              type="button"
-              className="ab-btn ab-btn-sm"
-              disabled={busy}
-              onClick={() => {
-                const { target, text } = findings;
-                setFindings(null);
-                setNote(null);
-                setEditing({ key: target.key, text });
-              }}
-            >
-              {t('Edit first')}
-            </button>
-          </div>
-        </div>
+        <InsertFindings
+          field={findings.target.field}
+          items={findings.items}
+          busy={busy}
+          onInsertAnyway={() => insert(findings.target, findings.text, findings.mode, true)}
+          onEditFirst={() => startEdit(findings.target, findings.text)}
+        />
       )}
       {!findings && !editing && <ReviewHints hints={hints} />}
       {note && <p className={`ab-note ab-note-${note.kind}`} role="status">{note.text}</p>}

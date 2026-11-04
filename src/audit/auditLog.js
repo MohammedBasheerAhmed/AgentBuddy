@@ -3,6 +3,8 @@
 // and the record id is stored as a salted hash, so the log can be exported for a security review without being a copy of
 // the data. Pure functions here; the panel persists the list (src/lib/storage.js) under a Web Lock.
 
+import { csvCell } from '../lib/export.js';
+
 export const AUDIT_KEY = 'agentbuddy_audit';
 export const AUDIT_SALT_KEY = 'agentbuddy_audit_salt';
 export const AUDIT_LIMIT = 1000;
@@ -55,12 +57,6 @@ export function appendAudit(log, entry, limit = AUDIT_LIMIT) {
   return next.length > limit ? next.slice(next.length - limit) : next;
 }
 
-const csvCell = (value) => {
-  const text = value == null ? '' : String(value);
-  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-};
-
 export function auditToCsv(log) {
   const header = ['time', 'feature', 'table', 'record', 'provider', 'model', 'host', 'pii_mode', 'preview', 'masked_items', 'masked_detail', 'input_tokens', 'output_tokens', 'outcome', 'reason', 'ms'];
   const rows = (Array.isArray(log) ? log : []).map((e) => [
@@ -68,5 +64,6 @@ export function auditToCsv(log) {
     Object.entries(e.counts || {}).map(([k, n]) => `${k}:${n}`).join(' '),
     e.inputTokens, e.outputTokens, e.outcome, e.reason, e.ms,
   ]);
-  return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+  // (every cell guarded against formulas, numbers too: src/lib/export.js guardFormula)
+  return [header, ...rows].map((row) => row.map((value) => csvCell(value)).join(',')).join('\r\n');
 }

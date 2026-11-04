@@ -68,19 +68,6 @@ export function maskMessage(out) {
   return tr(MASK_MESSAGES[out?.problem] || MASK_MESSAGES.FAILED);
 }
 
-/**
- * The record a run was started on, for binding its answer (Insert goes only into that record). It is taken ONCE, when the run
- * enters 'reading'; every later render keeps it, so a view that stays on screen while the person opens another record does not
- * re-bind the answer to whatever page is open when the answer arrives.
- * @param {string|null} previousPhase the phase at the last render (null before the first)
- * @param {string} phase the phase now
- * @param {*} current what was taken before
- * @param {() => *} take reads it from the page that is open now
- */
-export function startedOnAfter(previousPhase, phase, current, take) {
-  return phase === 'reading' && previousPhase !== 'reading' ? take() : current;
-}
-
 /** '' when the model's text is usable; otherwise what to tell the person. */
 export function answerProblem(text) {
   return typeof text === 'string' && text.trim() ? '' : tr(EMPTY_ANSWER);
@@ -116,6 +103,19 @@ export function previewStyle({ previewMode, feature, pack, seen = [], others = '
   if (previewMode !== 'first' || pack?.requirePreview !== true || !others) return 'full';
   const key = previewKeyFor(feature);
   return key && Array.isArray(seen) && seen.includes(key) ? 'short' : 'full';
+}
+
+/**
+ * The check for a run waiting on it (RunPanel and the Ticket screen's answer area): `others`, what of other records it uses ("3
+ * solved tickets", otherRecordsSummary), and `short`, whether the short check is the one to show (previewStyle).
+ * @param {{ p: object }|null} prepared the run's prepared request while its preview waits, else null
+ * @param {object} values the person's settings (previewMode, previewSeen)
+ */
+export function previewCheck(prepared, values) {
+  if (!prepared) return { others: '', short: false };
+  const others = otherRecordsSummary(prepared.p);
+  const style = previewStyle({ previewMode: values?.previewMode, feature: prepared.p.feature, pack: prepared.p.pack, seen: values?.previewSeen || [], others });
+  return { others, short: style === 'short' };
 }
 
 // The parts that carry text from other records, by their `field` (src/features/partColumns.js), and how to count them. A part per

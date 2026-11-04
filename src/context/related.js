@@ -11,7 +11,7 @@
 import { FEATURE_RELATED, FIELDS_BY_KIND, LIMITS } from './allowlists.js';
 import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, isSessionExpired, softRead } from './access.js';
 import { kindForTable } from './kinds.js';
-import { SYS_ID_RE, TABLE_RE, disp, formatSnTime, mapLimit, oneLine, parseSnTime, raw } from './util.js';
+import { SYS_ID_RE, TABLE_RE, disp, formatSnTime, mapLimit, oneLine, parseSnTime, raw, sameId } from './util.js';
 
 const CONCURRENCY = 3;
 
@@ -136,8 +136,6 @@ const SOURCES = {
     refs: (row) => [{ role: 'task_assignee', sysId: raw(row.assigned_to), name: text(row.assigned_to, 100) }],
   },
 };
-
-const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 
 async function readListSource(key, { sysId, table: ownTable }, deps, memo) {
   const spec = SOURCES[key];

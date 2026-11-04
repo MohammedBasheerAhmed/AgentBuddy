@@ -4,7 +4,8 @@ import { slaText, idleText, waitingText } from '../../mywork/time.js';
 import { priorityRank } from '../../mywork/rank.js';
 import { isolate, t, t as tr } from '../../i18n/index.js';
 
-// The small pieces the My work cards share: a ticket line, a fold, the filter chips, copying a template. Styles: src/ui/areas/mywork.css.
+// The small pieces the My work cards share: a ticket line, a fold, the filter chips. (Copying a template: src/sidepanel/reports/download.js
+// copyText.) Styles: src/ui/areas/mywork.css.
 
 /** The one status chip of a ticket: who it waits on, or its state. { text, tone: 'reply' | 'quiet' | 'plain' }. Pure. */
 export function statusChip(item) {
@@ -91,26 +92,4 @@ export function FilterChips({ chips, value, onChange, limit = 3 }) {
       )}
     </div>
   );
-}
-
-/** Put text on the clipboard; true when it worked. Falls back to a hidden text area where the clipboard API is not allowed. */
-export async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const area = document.createElement('textarea');
-      area.value = text;
-      area.setAttribute('readonly', '');
-      area.className = 'ab-mw-sr';
-      document.body.appendChild(area);
-      area.select();
-      const ok = document.execCommand('copy');
-      area.remove();
-      return ok;
-    } catch {
-      return false;
-    }
-  }
 }

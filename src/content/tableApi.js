@@ -6,15 +6,15 @@
 // "Insert" in the UI only fills a field on the open form; the agent presses the form's own Save.
 
 import { forgetSessionToken, sessionHeaders } from './sessionToken.js';
+import { TABLE_RE } from '../context/util.js';
 
 // Hard ceiling on rows per request. Guards against a mistyped query pulling tens of thousands of rows into memory.
 const MAX_LIMIT = 1000;
 
 // A table name is a plain identifier. Every caller validates it already; this is the last check before it becomes part of the
 // address, because encodeURIComponent leaves "." alone and "/api/now/table/.." would be a request for another path.
-const TABLE_NAME_RE = /^[a-z][a-z0-9_]{0,79}$/;
 function checkTable(table) {
-  if (typeof table !== 'string' || !TABLE_NAME_RE.test(table)) throw new Error('That is not a valid table name.');
+  if (typeof table !== 'string' || !TABLE_RE.test(table)) throw new Error('That is not a valid table name.');
 }
 
 // Rows per request: 1 to MAX_LIMIT. A negative, zero or non-numeric limit must never reach the instance as "no limit".

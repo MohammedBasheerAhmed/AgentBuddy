@@ -12,6 +12,7 @@
 // catastrophic backtracking; tests/pii-detectors.test.js feeds 200k characters of adversarial input to prove it.
 
 import { detectArabic, foldDigits } from './arabic.js';
+import { luhnOk } from './luhn.js';
 
 export const KINDS = Object.freeze([
   'EMAIL',
@@ -41,20 +42,7 @@ export const HIGH_CONFIDENCE = 0.85;
 // Validators (exported through `validators` for the tests)
 // ---------------------------------------------------------------------------------------------------------------
 
-function luhnOk(digits) {
-  let sum = 0;
-  let double = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let n = digits.charCodeAt(i) - 48;
-    if (double) {
-      n *= 2;
-      if (n > 9) n -= 9;
-    }
-    sum += n;
-    double = !double;
-  }
-  return digits.length > 0 && sum % 10 === 0;
-}
+// luhnOk: ./luhn.js (the Arabic detectors check the Emirates ID with it too)
 
 // IBAN length per country. A candidate with a country that is not listed is not reported (fewer false positives).
 const IBAN_LENGTH = {

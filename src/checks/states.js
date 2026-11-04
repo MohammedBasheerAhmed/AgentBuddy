@@ -63,8 +63,11 @@ export function ownerOf(item) {
   return person || group;
 }
 
-/** Whole days between `then` (a ServiceNow 'YYYY-MM-DD HH:MM:SS' time, UTC) and `now` (ms); NaN when the time cannot be read. */
-export function daysSince(then, now) {
+/**
+ * Days, with the fraction, between `then` (a ServiceNow 'YYYY-MM-DD HH:MM:SS' time, UTC) and `now` (ms); negative for a time ahead;
+ * NaN when the time cannot be read. (My work's wholeDaysSince, src/mywork/time.js, takes milliseconds and rounds down.)
+ */
+export function daysSinceSnTime(then, now) {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(text(then));
   if (!m) return NaN;
   const ms = Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));

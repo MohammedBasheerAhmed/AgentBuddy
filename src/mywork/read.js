@@ -24,7 +24,7 @@ import { normalizeGroups } from '../reports/engine/reader.js';
 import { SLA_COLUMNS } from '../reports/myDay.js';
 import { columnsFor, customerColumn, tablesForProfiles, readDecision, pluralOf, singularOf } from './tables.js';
 import { workState } from './states.js';
-import { pickSla } from './sla.js';
+import { mostPressingSla } from './sla.js';
 import { entriesByTicket, markerFor, windowStart, UNKNOWN_MARKER } from './markers.js';
 import { rankQueue } from './rank.js';
 import { say, tm } from '../reports/engine/say.js';
@@ -287,7 +287,7 @@ async function addSlas(deps, items, { run, now, limits }) {
     if (!byTask.has(task)) byTask.set(task, []);
     byTask.get(task).push(r);
   }
-  for (const item of items) item.sla = pickSla(byTask.get(item.sysId), now);
+  for (const item of items) item.sla = mostPressingSla(byTask.get(item.sysId), now);
   if (!rows.length) {
     // No SLA row at all: these tickets may have none, or an access rule hides every SLA from this person. Only the first is fine.
     const seen = await confirmEmptyIsReallyEmpty('task_sla', deps, new Map());

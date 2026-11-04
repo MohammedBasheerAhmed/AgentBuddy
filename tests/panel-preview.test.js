@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PreviewDialog, { maskSummary } from '../src/sidepanel/PreviewDialog.jsx';
 import { focusToRestore, outsideKeyAction, selectedTextIn, dialogKeyAction } from '../src/sidepanel/dialogKeys.js';
-import { maskMessage, startedOnAfter } from '../src/sidepanel/runLogic.js';
+import { maskMessage } from '../src/sidepanel/runLogic.js';
+import { createRunController } from '../src/sidepanel/useRun.js';
 import { sendFlow } from '../src/sidepanel/runFlow.js';
 import { executeRun, maskMore, prepareRun } from '../src/lib/pipeline.js';
 import { featureById } from '../src/features/registry.js';
@@ -133,26 +134,39 @@ test('what was masked reads as plain English: one, several, nothing', () => {
 
 // ---- the record an answer is bound to ----------------------------------------------------------------------------------------
 
-test('the record a run is about is taken once, as it starts reading, and kept while the person opens other records', () => {
-  let open = 'INC0010001';
-  const take = () => ({ number: open });
-  let previous = null;
-  let current = null;
-  const render = (phase) => {
-    current = startedOnAfter(previous, phase, current, take);
-    previous = phase;
-    return current;
+// RunPanel binds the answer to the run's `source` (src/sidepanel/useRun.js), which the run takes as it starts.
+test('the record a run is about is taken once, as it starts reading, and kept while the person opens other records', async () => {
+  const pageOf = (number, sysId) => ({ tabId: 7, href: `https://acme.service-now.com/incident.do?sys_id=${sysId}`, record: { table: 'incident', sysId, number } });
+  let open = pageOf('INC0010001', 'a'.repeat(32));
+  let release;
+  const reading = new Promise((resolve) => {
+    release = resolve;
+  });
+  const deps = {
+    ensureAiPermission: async () => {},
+    prepareRun: ({ feature, pack }) => ({ feature, pack, request: { preview: 'x' }, firewall: { scan: () => [] }, stats: { counts: {} } }),
+    previewRequired: () => false,
+    auditBlocked: async () => {},
+    auditCancelled: async () => {},
+    createFirewall: () => ({}),
+    logAudit: async () => {},
+    sendChat: async () => ({ content: 'ok' }),
+    executeRun: async () => ({ text: 'The answer.', notice: '' }),
   };
-  assert.equal(render('idle'), null);
-  assert.deepEqual(render('reading'), { number: 'INC0010001' });
-  open = 'INC0020002'; // the person opens another record while the ticket is read
-  assert.deepEqual(render('reading'), { number: 'INC0010001' }, 'a re-render while reading does not re-bind');
-  assert.deepEqual(render('preview'), { number: 'INC0010001' });
-  assert.deepEqual(render('sending'), { number: 'INC0010001' });
-  assert.deepEqual(render('done'), { number: 'INC0010001' }, 'the answer is for the record it was written for');
-  assert.deepEqual(render('reading'), { number: 'INC0020002' }, 'a new run takes the record open now');
-  // a panel that mounts while a run is already reading takes it then
-  assert.deepEqual(startedOnAfter(null, 'reading', null, take), { number: 'INC0020002' });
+  const eff = { values: { previewMode: 'never', previewSeen: [], provider: 'anthropic', models: {} }, policy: {}, apiKey: 'sk-ant-test' };
+  const ctl = createRunController({ getEnv: () => ({ page: open, eff, record: open.record }), deps, tokensUsed: async () => 0, rememberSeen: () => {} });
+  const pack = { table: 'incident', sysId: 'a'.repeat(32), fields: {}, people: [], journal: [], related: {}, access: [] };
+  assert.equal(ctl.getState().source, null);
+  const first = ctl.run({ id: 'record-summary' }, { getPack: () => reading.then(() => pack) });
+  assert.equal(ctl.getState().phase, 'reading');
+  assert.equal(ctl.getState().source.number, 'INC0010001');
+  open = pageOf('INC0020002', 'b'.repeat(32)); // the person opens another record while the ticket is read
+  release();
+  await first;
+  assert.equal(ctl.getState().phase, 'done');
+  assert.deepEqual(ctl.getState().source, { expect: { table: 'incident', sysId: 'a'.repeat(32) }, number: 'INC0010001' }, 'the answer is for the record it was written for');
+  await ctl.run({ id: 'record-summary' }, { getPack: async () => pack });
+  assert.deepEqual(ctl.getState().source, { expect: { table: 'incident', sysId: 'b'.repeat(32) }, number: 'INC0020002' }, 'a new run takes the record open now');
 });
 
 // ---- the send step: stop and notice ------------------------------------------------------------------------------------------

@@ -20,6 +20,7 @@ import { t, tm } from '../i18n/core.js'; // (the mechanism only: the Arabic text
 import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from '../reports/layoutFile.js';
 import { FORMAT_LIMITS, cleanFormats, normalizeFormat, readOrgFormats, specOf } from '../formats/formats.js';
+import { TABLE_RE } from '../context/util.js';
 
 export const PII_MODES = ['standard', 'strict', 'local-only'];
 export const PREVIEW_MODES = ['always', 'first', 'never'];
@@ -463,7 +464,6 @@ const KEY_TYPES = {
   defaultDashboard: 'layout',
   priorityAccounts: 'list',
 };
-const NAME_RE = /^[a-z][a-z0-9_]{0,79}$/;
 const FEATURE_RE = /^[a-z][a-z0-9-]{0,79}$/;
 const shown = (value) => {
   try {
@@ -602,7 +602,7 @@ export function policyProblems(raw, { providers, checkDashboard } = {}) {
       if (value.length && !list(value).map(normalizeAllowEntry).some(Boolean)) error(key, 'allowedInstances has no usable entry, so Agent Buddy cannot be turned on for any site.');
     }
     if (key === 'disabledFeatures' || key === 'blockedTables' || key === 'blockedFields') {
-      const re = key === 'disabledFeatures' ? FEATURE_RE : NAME_RE;
+      const re = key === 'disabledFeatures' ? FEATURE_RE : TABLE_RE; // (a column name follows the table-name rule)
       value.forEach((item, i) => {
         if (typeof item !== 'string' || !item.trim()) return;
         const read = item.trim().toLowerCase();

@@ -8,10 +8,16 @@ progress log). **Next session: start at "Where to pick up" just below.**
 (built, tested and pushed; waiting for you to see it working, best on the real instance in V1) · `Partly built` (the row says
 what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` (only you can do it) · `Dropped`.
 
-## Where to pick up (updated 2026-11-03)
+## Where to pick up (updated 2026-11-04)
 
-Everything planned is built and on GitHub (latest commit on `main`). Status: 84 ready for review, 3 need you (V1 to V3). Nothing has
-been seen on the real instance yet. Unit tests 2,805, end-to-end 1,128 checks (real Chrome, fake ServiceNow, fake AI).
+**Audit of 2026-11-04 (newest first):** seven read-only reviews found about 110 defects the tests did not catch; all are fixed in seven
+LOCAL commits on `main`, not pushed yet (your choice: push when you say). What was found, the commits, and what is still yours to
+decide (push; one meaning of a ticket's state across five classifiers; one reader of "Label: text" answers):
+`docs/review/audit-2026-11-04.md`. Unit tests 2,968 (3,022 before the unreachable code and its tests went), end-to-end 1,163 checks;
+`npm run verify` runs every gate CI runs, lint first.
+
+Everything planned before that is built and on GitHub. Status: 84 ready for review, 3 need you (V1 to V3). Nothing has been seen on
+the real instance yet.
 
 **Done since the last wrap-up (2026-11-01, one long session):**
 
@@ -418,3 +424,4 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-11-04 | **Audit phase 3: names, dates and numbers.** 33 findings fixed plus four found on the way. The worst: matching a note's author to the customer kept only a to z, so an Arabic, Cyrillic or Chinese name was never the customer ("Ready to resolve?" said nobody was waiting); now one shared module (`src/context/identity.js`) replaces six drifting copies. Also: two journal clocks sorted as one, the Workload widget breaking for teams over 12, the SLA radar counting tickets with no SLA problem, Quality and per-person Open disagreeing with the Open tile, averages drawn as shares, "List<String>" cut out as HTML, the snippet greeting's first name, "Use the standard format" not holding. Found on the way: the custom report editor crashed as it opened (a state variable hid the text function; scenario `s` now opens it), a quadratic slowdown in stripping HTML, and scenario `x` was not self-contained (without confirmed profiles it fell back to the set-up steps; it failed 2 in 10 run alone, on the phase 2 build too). Unit 3,022 of 3,022. |
 | 2026-11-04 | **Audit phase 5, first part: unreachable code removed** (3,645 lines: panel views no screen shows, the "myday" read, dollar spend caps nothing could set, provider tool-use code, about 25 unused exports, 133 Arabic entries). Unit 2,966. You asked why it was taking so long (about 4 hours); Claude explained (scale, two full checks per phase, about 40 minutes on flaky end-to-end runs) and you chose to finish all of it. |
 | 2026-11-04 | **Audit phase 4, second half: ESLint and a dependable end-to-end run.** `npm run lint` (in `verify` and CI), 302 findings fixed, build rule 2 checked by lint. Two scenario checks that could not fail (a backspace where a word boundary was meant) fixed. The coverage check's occasional failure: the harness dropped a read when Chrome used a request id again in a new renderer process (taken for a second report of an earlier request); fixed, and the fake instance keeps its connections open. Unit 2,968 of 2,968. |
+| 2026-11-04 | **Audit phase 5, second part: easier to work on.** `src/options/Options.jsx` split (1,484 lines to a 187-line root, folders `provider/`, `basics/`, `data/`, one `useSaveSetting` hook for six copies); one copy each of the Luhn check, the export formula guard, the id/table/field patterns, the group search, the copy helper, the preview style and the Insert findings; same-named functions with different meanings renamed; the audit written up (`docs/review/audit-2026-11-04.md`) with the decisions left to you. Unit 2,968 of 2,968. |

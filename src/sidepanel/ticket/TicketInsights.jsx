@@ -7,7 +7,10 @@ import { t } from '../../i18n/index.js';
 
 const NO_META = Object.freeze({});
 
-/** The cards for this record: its kind, the person's profiles, in order (`order` may be a number or a function of the record). */
+/**
+ * The cards for this record: its kind, the person's profiles, in order (`order` may be a number or a function of the record). The
+ * quick-actions bar offers the same cards, by id (TicketQuickBar cardIdsFor).
+ */
 export function cardsFor(cards, record, header, eff) {
   const kind = record.kind || 'other';
   return cards

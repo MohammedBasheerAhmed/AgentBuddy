@@ -14,20 +14,25 @@ export function useSection(sectionId, widget, env) {
   // allowSensitive: HR tables may be among env.tables (the HR profile, and the organisation allows HR content; the page checks too).
   const request = env.tables.length ? { kind: 'section', section: sectionId, scope: env.scope, tables: env.tables, params, blocked: env.blocked, ...(env.allowSensitive ? { allowSensitive: true } : {}) } : null;
   const state = useReport({ tabId: env.page.tabId, request, refreshKey: env.refreshKey, limiter: env.limiter });
+  useLoadedResult(env.loaded, widget?.id, sectionId, state.result);
+  return state;
+}
 
-  const loaded = env.loaded;
-  const id = widget?.id;
-  const result = state.result;
+/**
+ * Keep a widget's result in the dashboard's in-memory store of what is on screen (`env.loaded`, src/reports/ai/loaded.js) under the
+ * widget's id, with its `section` (a section id, or 'builder' for a custom report); take it out when there is none and when the widget
+ * goes away.
+ */
+export function useLoadedResult(loaded, id, section, result) {
   useEffect(() => {
     if (!loaded || !id) return;
-    if (result) loaded.set(id, sectionId, result);
+    if (result) loaded.set(id, section, result);
     else loaded.remove(id);
-  }, [loaded, id, sectionId, result]);
+  }, [loaded, id, section, result]);
   useEffect(
     () => () => {
       if (loaded && id) loaded.remove(id);
     },
     [loaded, id]
   );
-  return state;
 }

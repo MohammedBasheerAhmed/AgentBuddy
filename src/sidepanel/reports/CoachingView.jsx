@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { read } from '../ask.js';
+import { useGroupSearch } from './useGroupSearch.js';
 import ErrorNote from '../ErrorNote.jsx';
 import { useRun } from '../useRun.js';
 import { COACHING_LIMITS, COACHING_REMINDER, buildCoachingPack, checkCoachingAnswer, coachingBlockedBy, formatDay, rangeFromDays } from '../../reports/ai/coaching.js';
@@ -44,26 +45,7 @@ function Frame({ bare, children }) {
 
 /** One group: your own groups as choices, or a search by name. Calls `onPick({ id, name })`. */
 function OneGroupPicker({ tabId, blocked, myGroups, groupsNote, value, onPick }) {
-  const [text, setText] = useState('');
-  const [found, setFound] = useState({ groups: [], note: '' });
-
-  useEffect(() => {
-    const search = text.trim();
-    if (search.length < 2) {
-      setFound({ groups: [], note: '' });
-      return undefined;
-    }
-    let alive = true;
-    const timer = setTimeout(() => {
-      read(tabId, 'reportGroups', { search, blocked })
-        .then((answer) => alive && setFound(answer))
-        .catch((err) => alive && setFound({ groups: [], note: err.message }));
-    }, 350);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [tabId, text, blocked]);
+  const { text, setText, found } = useGroupSearch(tabId, blocked);
 
   const choice = (g) => (
     <button key={g.id} type="button" className="ab-btn ab-btn-sm ab-seg-btn" aria-pressed={value?.id === g.id} onClick={() => onPick(g)}>

@@ -16,7 +16,7 @@ import { checkOutgoing } from '../safeSend/index.js';
 import { LIMITS } from '../context/allowlists.js';
 import { authorRole, identities } from '../context/identity.js';
 import { clipText } from '../context/util.js';
-import { daysSince, isFinishedState, isOpenItem } from './states.js';
+import { daysSinceSnTime, isFinishedState, isOpenItem } from './states.js';
 import { isolate, t, tm, tn } from '../i18n/index.js';
 
 const text = (v) => String(v ?? '').trim();
@@ -191,7 +191,7 @@ function customerCheck(pack, now, waitDays) {
   if (role === 'unknown') {
     return check('customer', 'info', t('Could not tell who wrote the last message'), t('Its author is shown only as a user name. Read it and check whether the customer confirmed the fix.'));
   }
-  const days = daysSince(last.when, now);
+  const days = daysSinceSnTime(last.when, now);
   if (Number.isFinite(days) && days >= waitDays) {
     return check('customer', 'ok', tn(Math.floor(days), 'No reply for {n} day since your last message', 'No reply for {n} days since your last message'), t('That is a fair wait. Mention in the notes that you asked and heard nothing.'));
   }
