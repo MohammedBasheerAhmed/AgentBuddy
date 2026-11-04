@@ -112,7 +112,7 @@ export function ProfileHint({ kind, eff }) {
 export function SettingsButton() {
   return (
     <button type="button" className="ab-iconbtn" aria-label={t('Settings')} title={t('Settings')} onClick={() => chrome.runtime.openOptionsPage()}>
-      <Icon name="gear" size={16} />
+      <Icon name="gear" size={18} />
     </button>
   );
 }

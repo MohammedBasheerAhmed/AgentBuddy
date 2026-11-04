@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import { useGroupSearch } from './useGroupSearch.js';
 import ErrorNote from '../ErrorNote.jsx';
+import Summary from './Summary.jsx';
 import { useRun } from '../useRun.js';
 import { COACHING_LIMITS, COACHING_REMINDER, buildCoachingPack, checkCoachingAnswer, coachingBlockedBy, formatDay, rangeFromDays } from '../../reports/ai/coaching.js';
 import { PER_PERSON_NOTE, flagPerPersonScoring } from '../../reports/ai/scoring.js';
@@ -192,7 +193,7 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
     <Frame bare={bare}>
       <p className="ab-note ab-note-warn ab-coach-reminder">{shownText(COACHING_REMINDER)}</p>
       <details className="ab-details">
-        <summary>{t('What it reads and sends')}</summary>
+        <Summary>{t('What it reads and sends')}</Summary>
         <p className="ab-hint">
         {t("You pick one group and some days. Agent Buddy picks up to {sampleMax} resolved tickets by a fixed rule (evenly over the dates, whoever worked on them), reads only their close notes, close code and the customer-visible comments the group's agents wrote, and asks the AI to rate the writing and to find group-level themes. The AI is told not to name, score or rank people, and its answer is checked for that. Nothing is stored.", { sampleMax: COACHING_LIMITS.sampleMax })}
         </p>

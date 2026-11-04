@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { AiBadge } from '../../../ui/primitives.jsx';
+import { Icon } from '../../../ui/icons.jsx';
 import { featureById, isFeatureAvailable } from '../../../../features/registry.js';
 import { profilesOfFeature, shownFor } from '../../../../profiles/profiles.js';
 import { MAX_ASK_CHARS, askProblem, clipAsk, withQuestion } from '../../../../features/packs/assist.js';
@@ -37,16 +38,17 @@ export default function AskBox({ assist, eff, record }) {
     setText('');
   };
 
+  const hover = t('Your question and the ticket go to the AI, masked, after a preview.');
   return (
     <form className="ab-ask" onSubmit={submit} aria-label={t('Ask about this ticket')}>
       <label className="ab-ask-label" htmlFor={`${id}-q`}>
-        <AiBadge title={t('Your question and the ticket go to the AI, masked, after a preview.')} />
+        <AiBadge label="" title={hover} />
         <span>{t('Ask about this ticket')}</span>
       </label>
       <div className="ab-ask-row">
         <input
           id={`${id}-q`}
-          className="ab-input ab-ask-input"
+          className="ab-ask-input"
           type="text"
           value={text}
           maxLength={MAX_ASK_CHARS}
@@ -58,8 +60,8 @@ export default function AskBox({ assist, eff, record }) {
             if (problem) setProblem('');
           }}
         />
-        <button type="submit" className="ab-btn ab-btn-sm" data-feature="ask-ticket" disabled={assist.busy}>
-          {t('Ask')}
+        <button type="submit" className="ab-ask-send" data-feature="ask-ticket" disabled={assist.busy} aria-label={t('Ask')} title={hover}>
+          <Icon name="arrowUp" size={16} />
         </button>
       </div>
       {problem && (

@@ -5,13 +5,16 @@ import { t } from '../../i18n/index.js';
  * The one "⋯" menu of the Team dashboard's quiet top row: everything that is not a number (refresh, auto-refresh, customize, export,
  * print, full page) lives here, so the first thing on screen is the numbers (TRACKER.md 2.4).
  *
- *   label  the menu button's accessible name
- *   items  [{ id, label, onSelect(), checked?: boolean (a tick item), disabled?: boolean }]
+ *   label      the menu button's accessible name
+ *   items      [{ id, label, onSelect(), checked?: boolean (a tick item), disabled?: boolean }]
+ *   className  for the wrapper (a section's own quiet menu: 'ab-widget-more')
+ *
+ * Each section of the dashboard has a menu of its own too (SectionShell.jsx): the same component, drawn after the top row's.
  *
  * Keyboard: Enter/Space/ArrowDown open it and focus the first item; ArrowUp/ArrowDown/Home/End move; Escape closes and gives the focus
  * back to the button; Tab closes. A click outside closes it.
  */
-export default function MoreMenu({ label = t('More'), items }) {
+export default function MoreMenu({ label = t('More'), items, className = '' }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const button = useRef(null);
@@ -51,7 +54,7 @@ export default function MoreMenu({ label = t('More'), items }) {
   };
 
   return (
-    <div className="ab-more">
+    <div className={`ab-more${className ? ` ${className}` : ''}`}>
       <button
         ref={button}
         type="button"

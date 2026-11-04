@@ -1,7 +1,8 @@
-// x. The quick-actions bar in the ticket at a glance (round 3, TRACKER.md F6): it holds items from both halves for the ticket's state,
-//    each marked (AI items carry the AI mark; Insights items do not and open their card); an AI item behaves exactly like the same action
-//    in AI Assist (preview first, nothing sent before it is approved); no filled button (the screen's one primary is in AI Assist); it
-//    folds and remembers it; the person can choose what it holds; with AI skipped only the Insights items stay.
+// x. The quick actions under the Ticket screen's main step (round 3, TRACKER.md F6; the redesign: small round buttons, not tiles): it
+//    holds items from both halves for the ticket's state, each marked (AI items carry the small grey AI mark; Insights items do not and
+//    open their card); the main step (the action the state suggests first, the screen's one filled button) is not repeated in it; an AI
+//    item behaves exactly like the same action in AI Assist (preview first, nothing sent before it is approved); it folds and remembers
+//    it; the person can choose what it holds; with AI skipped only the Insights items stay.
 const { clickButton, textOf, waitForRecord, openHalf } = require('../ui.js');
 
 const barButtons = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).map((b) => b.innerText.trim()));
@@ -20,8 +21,12 @@ const choices = (p) =>
 const halfOn = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('[role=tab][id$="-half-tab-insights"], [role=tab][id$="-half-tab-assist"]')).find((t) => t.getAttribute('aria-selected') === 'true')?.id.replace(/.*-half-tab-/, '') || null);
 const settle = (ctx, ms = 400) => ctx.sleep(ms);
 
-// The fake incident is In Progress: reply first, then the summary and the next steps, and the Related tickets card.
+// The fake incident is In Progress: reply first, then the summary and the next steps, and the Related tickets card. The reply is the
+// screen's main step (the button above the bar), so the bar itself shows the other three.
 const WORKING = ['Draft a reply', 'Summarise', 'Next best action', 'Related tickets'];
+const BAR = WORKING.slice(1);
+const mainStep = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-next-btn')).map((b) => b.innerText.trim()));
+const filled = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-btn-primary, .ab-act-start')).length);
 
 module.exports = {
   id: 'x',
@@ -42,16 +47,18 @@ module.exports = {
     const panel = await ctx.openPanel();
     const p = panel.page;
     await waitForRecord(p);
-    await p.waitForFunction((n) => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === n, { timeout: 15000 }, WORKING.length);
+    await openHalf(p, 'insights');
+    await p.waitForFunction((n) => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === n, { timeout: 15000 }, BAR.length);
 
     // 1. What it holds, and how each item is marked.
-    // (Until the ticket's state has been read the bar shows the defaults for the kind, which are also four items in another order: on a slow
-    // runner the first look is of those. Wait for the list the state decides.)
-    await ctx.waitUntil('the bar to hold what fits a ticket in progress', async () => (await toggleState(p)) === 'true' && JSON.stringify(await barButtons(p)) === JSON.stringify(WORKING), { timeout: 15000 }).catch(() => {});
-    t.check('the bar is open and holds what fits an incident in progress, from both halves', (await toggleState(p)) === 'true' && JSON.stringify(await barButtons(p)) === JSON.stringify(WORKING), JSON.stringify(await barButtons(p)));
-    const marks = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).map((b) => ({ ai: Boolean(b.querySelector('.ab-ai-badge')), insight: b.classList.contains('ab-quick-insight'), primary: b.classList.contains('ab-btn-primary') })));
-    t.check('every AI item carries the AI mark, the Insights item does not', JSON.stringify(marks.map((m) => m.ai)) === JSON.stringify([true, true, true, false]) && marks[3].insight, JSON.stringify(marks));
-    t.check('no filled button in the bar (the screen\'s one primary is in AI Assist)', marks.every((m) => !m.primary));
+    // (Until the ticket's state has been read the bar shows the defaults for the kind, in another order: on a slow runner the first look
+    // is of those. Wait for the list the state decides.)
+    await ctx.waitUntil('the bar to hold what fits a ticket in progress', async () => (await toggleState(p)) === 'true' && JSON.stringify(await barButtons(p)) === JSON.stringify(BAR), { timeout: 15000 }).catch(() => {});
+    t.check('the bar is open and holds what fits an incident in progress, from both halves', (await toggleState(p)) === 'true' && JSON.stringify(await barButtons(p)) === JSON.stringify(BAR), JSON.stringify(await barButtons(p)));
+    t.check('the first of them, the reply, is the screen\'s main step above the bar, and is not repeated in it', JSON.stringify(await mainStep(p)) === JSON.stringify(['Draft a reply to the customer']), JSON.stringify(await mainStep(p)));
+    const marks = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).map((b) => ({ ai: Boolean(b.querySelector('.ab-ai-badge')), insight: b.classList.contains('ab-quick-insight'), primary: b.classList.contains('ab-btn-primary'), tile: b.classList.contains('ab-quick-tile') })));
+    t.check('every AI item carries the AI mark, the Insights item does not', JSON.stringify(marks.map((m) => m.ai)) === JSON.stringify([true, true, false]) && marks[2].insight, JSON.stringify(marks));
+    t.check('no filled button in the bar, and no big tiles (the screen\'s one filled button is its main step)', marks.every((m) => !m.primary && !m.tile) && (await filled(p)) === 1, `${JSON.stringify(marks)} / ${await filled(p)} filled`);
 
     // 2. An Insights item opens its card: the Insights half comes forward, nothing is sent.
     await clickButton(p, /^Related tickets$/);
@@ -64,17 +71,20 @@ module.exports = {
     const head = await textOf(p, '.ab-dialog-head');
     t.check('the preview is shown for the action (named as in AI Assist), in the AI Assist half', /Summarise this ticket/.test(head || '') && (await halfOn(p)) === 'assist', `${(head || '').replace(/\s+/g, ' ')} / ${await halfOn(p)}`);
     t.check('nothing has been sent to the AI yet', ai.requests.length === 0, String(ai.requests.length));
-    const whilePreview = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).map((b) => ({ ai: Boolean(b.querySelector('.ab-ai-badge')), off: b.disabled })));
-    t.check('while a run is open the AI items wait; the Insights item stays usable', whilePreview.filter((b) => b.ai).every((b) => b.off) && whilePreview.filter((b) => !b.ai).every((b) => !b.off), JSON.stringify(whilePreview));
+    // With AI Assist on show the top shrinks to the ticket's line (its own suggestions come first there): no main step, no bar.
+    t.check('AI Assist on show: the top is one line, without the main step and the bar', (await mainStep(p)).length === 0 && (await barButtons(p)).length === 0 && Boolean(await textOf(p, '.ab-glance-oneline')));
+    const whilePreview = await p.evaluate(() => [...document.querySelectorAll('[id$="-half-panel-assist"] .ab-acts .ab-act')].map((b) => b.disabled));
+    t.check('while a run is open the AI actions wait', whilePreview.length > 0 && whilePreview.every(Boolean), JSON.stringify(whilePreview));
     await clickButton(p, /^Send to AI/);
     await p.waitForSelector('.ab-output, .ab-note-danger', { timeout: 15000 });
     t.check('the answer appears, and exactly one request went out, only after approval', (await textOf(p, '.ab-output')) !== null && ai.requests.length === 1, String(ai.requests.length));
     const audit = await ctx.audit();
     t.check('the run is in the activity log under the same feature id as AI Assist', audit.some((e) => e.feature === 'record-summary' && e.outcome === 'sent'), audit.map((e) => `${e.feature}:${e.outcome}`).join(', '));
-    await p.waitForFunction(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).every((b) => !b.disabled), { timeout: 5000 });
-    t.check('once the answer is there the bar works again (answers are kept, the next one can start)', true);
     const assistText = await panel.text();
     t.check('AI Assist offers the same actions, suggested for the state, the rest under "More actions"', /suggested while you work on it/i.test(assistText) && /Draft a reply to the customer/.test(assistText) && /More actions \(\d+\)/.test(assistText), assistText.replace(/\s+/g, ' ').slice(-400));
+    await openHalf(p, 'insights');
+    await p.waitForFunction((n) => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === n && window.__vis(document.querySelectorAll('.ab-quick-actions button')).every((b) => !b.disabled), { timeout: 5000 }, BAR.length);
+    t.check('once the answer is there the bar works again (answers are kept, the next one can start)', true);
 
     // 4. Fold and open again; the choice is kept.
     await clickButton(p, /^Quick actions$/);
@@ -90,13 +100,13 @@ module.exports = {
     await clickButton(p, /^Quick actions$/);
     await p.waitForSelector('.ab-quick-actions button', { timeout: 5000 });
     const savedOpen = await ctx.waitUntil('the opened bar to be saved', async () => (await ctx.settings()).quickBarOpen === true, { timeout: 5000 }).then(() => true, () => false);
-    t.check('opened again, saved as open', savedOpen && (await barButtons(p)).length === WORKING.length);
+    t.check('opened again, saved as open', savedOpen && (await barButtons(p)).length === BAR.length);
 
     // 5. Choose what the bar holds (AI items marked in the list too).
     await clickButton(p, /^Choose$/);
     await p.waitForSelector('.ab-quick-choose label', { timeout: 5000 });
     let list = await choices(p);
-    t.check('Choose lists the actions this ticket offers and the Insights card, with the current ones ticked', list.length >= 6 && list.filter((c) => c.checked).map((c) => c.text).sort().join('|') === [...WORKING].sort().join('|'), list.map((c) => `${c.text}${c.checked ? '*' : ''}`).join('|'));
+    t.check('Choose lists the actions this ticket offers and the Insights card, with the current ones ticked (the main step too: it stays a choice)', list.length >= 6 && list.filter((c) => c.checked).map((c) => c.text).sort().join('|') === [...WORKING].sort().join('|'), list.map((c) => `${c.text}${c.checked ? '*' : ''}`).join('|'));
     // The Insights cards ("Related tickets", and "Ready to resolve?" since its item points at the card that exists) carry no mark.
     const CARDS = ['Related tickets', 'Ready to resolve?'];
     t.check('in the list the AI actions carry the mark and the cards do not', CARDS.every((name) => list.find((c) => c.text === name)?.ai === false) && list.filter((c) => !CARDS.includes(c.text)).every((c) => c.ai), list.map((c) => `${c.text}${c.ai ? '(AI)' : ''}`).join('|'));
@@ -109,20 +119,20 @@ module.exports = {
     t.check('the pins are saved for the incident kind only, in the order chosen (cards too)', JSON.stringify(pins) === JSON.stringify({ incident: ['reply-draft', 'record-summary', 'card:related', 'handoff-brief'] }), JSON.stringify(pins));
     await clickButton(p, /^Done$/);
     await p.waitForFunction(() => window.__vis(document.querySelectorAll('.ab-quick-actions button')).some((b) => b.innerText.trim() === 'Hand-off brief'), { timeout: 5000 });
-    t.check('the bar shows the chosen items, the new one last', JSON.stringify(await barButtons(p)) === JSON.stringify(['Draft a reply', 'Summarise', 'Related tickets', 'Hand-off brief']), JSON.stringify(await barButtons(p)));
+    t.check('the bar shows the chosen items, the new one last (the reply is the main step above it)', JSON.stringify(await barButtons(p)) === JSON.stringify(['Summarise', 'Related tickets', 'Hand-off brief']), JSON.stringify(await barButtons(p)));
     await clickButton(p, /^Choose$/);
     await p.waitForSelector('.ab-quick-choose label', { timeout: 5000 });
     await clickButton(p, /^Use the suggested ones/);
     await settle(ctx);
     t.check('"Use the suggested ones" removes the pins for this kind', (await ctx.settings()).quickPins.incident === undefined, JSON.stringify((await ctx.settings()).quickPins));
     await clickButton(p, /^Done$/);
-    await p.waitForFunction((n) => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === n, { timeout: 5000 }, WORKING.length);
-    t.check('the suggestions are back', JSON.stringify(await barButtons(p)) === JSON.stringify(WORKING));
+    await p.waitForFunction((n) => window.__vis(document.querySelectorAll('.ab-quick-actions button')).length === n, { timeout: 5000 }, BAR.length);
+    t.check('the suggestions are back', JSON.stringify(await barButtons(p)) === JSON.stringify(BAR));
 
     // 6. A pin this record does not offer is not a button: the bar falls back to the suggestions rather than showing nothing.
     await ctx.configure({ quickPins: { incident: ['change-cab-brief', 'not-a-feature'] } });
     await settle(ctx, 700);
-    t.check('a pin for an action this record does not have is not shown; the suggestions stand in', JSON.stringify(await barButtons(p)) === JSON.stringify(WORKING), JSON.stringify(await barButtons(p)));
+    t.check('a pin for an action this record does not have is not shown; the suggestions stand in', JSON.stringify(await barButtons(p)) === JSON.stringify(BAR), JSON.stringify(await barButtons(p)));
     await ctx.configure({ quickPins: {} });
 
     // 7. "Skip AI for now": no AI item at all, the Insights item stays.

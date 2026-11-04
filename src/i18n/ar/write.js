@@ -264,9 +264,7 @@ const REWRITE = {
   'No ticket is open.': 'لا توجد تذكرة مفتوحة.',
   'Open one to fill in its details.': 'افتح واحدة لتعبئة تفاصيلها.',
   'Rewrite and Notes to ticket': 'إعادة الصياغة وتحويل الملاحظات إلى تذكرة',
-  'Shorter, friendlier, plain, formal, translated': 'أقصر، أكثر ودا، بسيط، رسمي، مترجم',
   'Notes to ticket': 'من الملاحظات إلى تذكرة',
-  'Rough notes into a new ticket': 'ملاحظات أولية تتحول إلى تذكرة جديدة',
 };
 
 // ---- Safe-to-send check (sidepanel/write/SafeSendCheck.jsx) ----
@@ -345,7 +343,6 @@ const SNIPPETS = {
   'Title, search word or text': 'العنوان أو كلمة البحث أو النص',
   'No snippets yet. A snippet is a reply you write once and reuse, with values from the ticket filled in.': 'لا توجد مقتطفات بعد. المقتطف رد تكتبه مرة واحدة وتعيد استخدامه، مع تعبئة قيم من التذكرة.',
   'Add three examples': 'أضف ثلاثة أمثلة',
-  'Write my own': 'اكتب مقتطفا خاصا بي',
   'Nothing matches "{query}".': 'لا شيء يطابق "{query}".',
   'From your organisation': 'من مؤسستك',
   'Snippet: {title}': 'مقتطف: {title}',
@@ -631,6 +628,13 @@ const KNOWLEDGE = {
   'Searching…': 'جارٍ البحث…',
   'No published article you can read matches "{asked}". Try other words, or fewer.': 'لا يوجد مقال منشور يمكنك قراءته يطابق "{asked}". جرب كلمات أخرى، أو كلمات أقل.',
   'More articles match. Add a word to narrow it down.': 'مقالات أخرى مطابقة. أضف كلمة لتضييق النتائج.',
+  'Articles found': 'المقالات التي تم العثور عليها',
+  'Articles for {number}': 'مقالات لـ {number}',
+  'Articles for the open ticket': 'مقالات للتذكرة المفتوحة',
+  'Open a ticket to see the articles that match it here, or search below.': 'افتح تذكرة لترى هنا المقالات المطابقة لها، أو ابحث أدناه.',
+  "No published article you can read matches this ticket's title. Search with other words below.": 'لا يوجد مقال منشور يمكنك قراءته يطابق عنوان هذه التذكرة. ابحث بكلمات أخرى أدناه.',
+  "This ticket's title cannot be read here, so search with your own words below.": 'لا يمكن قراءة عنوان هذه التذكرة هنا، لذا ابحث بكلماتك أدناه.',
+  'Articles in the group': 'المقالات في المجموعة',
   Category: 'الفئة',
   'Could not tell which tickets had an article, so every recent resolved ticket is counted. The list ranks repeated wording, category and configuration item.':
     'تعذر معرفة التذاكر التي لها مقال، لذلك يتم احتساب كل تذكرة محلولة حديثا. تصنف القائمة حسب تكرار الصياغة والفئة وعنصر التهيئة.',

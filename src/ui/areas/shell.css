@@ -1,25 +1,26 @@
 /* The panel frame and the shared building blocks (src/sidepanel/ui/primitives.jsx, App.jsx). Owned by the lead (docs/round3.md).
-   Only --ab-* tokens. Inviting, not cluttered: one primary button per screen, quiet chrome, short lines (TRACKER.md 2.4). */
+   Only --ab-* tokens. Calm and focused: one primary button per screen, quiet chrome, short lines, space and dividers instead of boxes. */
 
-/* ---- header: the mark, the name and the instance it reads, then the palette, the colours, the privacy shield and Settings ---- */
-.ab-header { gap: 10px; padding: 8px 12px; background: var(--ab-bg); }
+/* ---- header: the mark, the name and the instance it reads, then three quiet icon buttons (the palette, the colours, Settings) ---- */
+.ab-header { gap: 10px; padding-block: 10px; padding-inline: 16px 10px; background: var(--ab-bg); }
 .ab-brandmark { flex: none; }
 .ab-brandmark-tile { fill: var(--ab-accent); }
 .ab-brandmark-bubble { fill: var(--ab-accent-fg); }
 .ab-brandmark-tick { stroke: var(--ab-accent); }
-.ab-brandtext { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
-.ab-brandtext .ab-brand { font-weight: 700; }
-.ab-instance { display: inline-flex; align-items: center; gap: 5px; font-family: var(--ab-mono); font-size: var(--ab-text-xs); color: var(--ab-fg-muted); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ab-instance::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ab-ok); }
-.ab-iconbtn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; border-radius: var(--ab-radius-sm); border: 1px solid transparent; background: transparent; color: var(--ab-fg-soft); cursor: pointer; }
+.ab-brandtext { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.ab-brandtext .ab-brand { font-weight: 600; font-size: var(--ab-text-lg); }
+.ab-instance { display: block; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-headtools { display: flex; align-items: center; gap: 2px; flex: none; }
+.ab-iconbtn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border-radius: var(--ab-radius); border: 1px solid transparent; background: transparent; color: var(--ab-fg-muted); cursor: pointer; }
 .ab-iconbtn:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
+.ab-iconbtn:focus-visible { border-radius: var(--ab-radius); }
 .ab-shield { display: inline-flex; color: var(--ab-ok); }
 
 /* ---- screens: a floating icon dock at the bottom centre of the panel (App.jsx ScreenTabs). One round icon per screen, the one on show
-   filled; the name of an icon shows above it on hover and on the keyboard. It sticks to the bottom edge while the screen scrolls
-   behind it, and sits after the last card when the screen is scrolled to the end. ---- */
-.ab-screens { position: sticky; bottom: 12px; z-index: 3; align-self: center; display: flex; gap: 4px; padding: 5px; margin: 4px 8px 12px; max-width: calc(100% - 16px); border: 1px solid var(--ab-border-strong); border-radius: 999px; background: var(--ab-bg); box-shadow: var(--ab-shadow); }
-.ab-screen-tab { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ab-fg-soft); cursor: pointer; }
+   filled with the accent; the name of an icon shows above it on hover and on the keyboard. It sticks to the bottom edge while the screen
+   scrolls behind it, and sits after the last section when the screen is scrolled to the end. ---- */
+.ab-screens { position: sticky; bottom: 12px; z-index: 3; align-self: center; display: flex; gap: 4px; padding: 5px; margin: 4px 8px 12px; max-width: calc(100% - 16px); border: 1px solid var(--ab-border); border-radius: 999px; background: var(--ab-bg-raised); box-shadow: var(--ab-shadow); }
+.ab-screen-tab { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ab-fg-muted); cursor: pointer; }
 .ab-screen-tab:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
 .ab-screen-tab[aria-selected='true'], .ab-screen-tab[aria-selected='true']:hover { background: var(--ab-accent); border-color: var(--ab-accent); color: var(--ab-accent-fg); }
 .ab-screen-tab:focus-visible { border-radius: 50%; }
@@ -31,60 +32,63 @@
 /* the name of a control for a screen reader, not drawn */
 .ab-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 
-/* ---- the Insights / AI Assist switch ---- */
-.ab-halfswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 3px; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); border: 1px solid var(--ab-border); }
-.ab-halfswitch-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; background: transparent; padding: 5px 8px; border-radius: var(--ab-radius-sm); font-weight: 600; color: var(--ab-fg-soft); cursor: pointer; min-width: 0; }
-.ab-halfswitch-tab.is-on { background: var(--ab-bg-raised); color: var(--ab-fg); border-color: var(--ab-border); box-shadow: 0 1px 1px var(--ab-border); }
-/* The selected tab has a shadow of its own, which would hide the focus ring of ui.css (:focus-visible is less specific). */
-.ab-halfswitch-tab:focus-visible, .ab-halfswitch-tab.is-on:focus-visible { box-shadow: var(--ab-ring); }
-.ab-halfswitch-insights.is-on { color: var(--ab-accent); }
-.ab-halfswitch-assist.is-on { color: var(--ab-ai); border-color: var(--ab-ai-line); }
-.ab-halfswitch-note { font-weight: 500; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
-.ab-halfrule { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
+/* ---- the Insights / AI Assist switch: two tabs on a divider line, the one on show underlined with the accent ---- */
+.ab-halfswitch { display: flex; gap: 20px; padding: 0; border-bottom: 1px solid var(--ab-divider); }
+/* Straight in a pane (every screen): the line runs across the whole panel. */
+.ab-pane > .ab-halfswitch { margin-inline: -16px; padding-inline: 16px; }
+.ab-halfswitch-tab { display: inline-flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: -1px; padding: 10px 0 9px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; font-weight: 500; color: var(--ab-fg-muted); cursor: pointer; }
+.ab-halfswitch-tab:hover { color: var(--ab-fg); }
+.ab-halfswitch-tab.is-on { color: var(--ab-fg); font-weight: 600; border-bottom-color: var(--ab-accent); }
+.ab-halfswitch-tab:focus-visible, .ab-halfswitch-tab.is-on:focus-visible { box-shadow: var(--ab-ring); border-radius: var(--ab-radius-xs); }
+.ab-halfswitch-tab .ab-ai-badge { color: inherit; }
+.ab-halfswitch-note { font-weight: 500; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+.ab-halfrule { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+.ab-halfrule .ab-shield { color: var(--ab-fg-muted); }
 
-/* ---- the AI mark ---- */
-.ab-ai-badge { display: inline-flex; align-items: center; gap: 3px; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-ai); letter-spacing: 0.02em; }
+/* ---- the AI mark: a small grey spark (its name, "AI", is for a screen reader) ---- */
+.ab-ai-badge { display: inline-flex; align-items: center; flex: none; color: var(--ab-ai); line-height: 1; vertical-align: -2px; }
 .ab-ai-spark { flex: none; }
+.ab-btn .ab-ai-badge, .ab-btn-primary .ab-ai-badge { color: inherit; }
 
-/* ---- cards that fold ---- */
-.ab-cardx { border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); }
-.ab-cardx-warn { border-color: var(--ab-warn-line); }
-.ab-cardx-danger { border-color: var(--ab-danger-line); }
-.ab-cardx-head { display: flex; align-items: center; gap: 6px; padding-block: 2px; padding-inline: 2px 6px; }
-.ab-cardx-toggle { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; text-align: start; border: 0; background: transparent; padding-block: 8px; padding-inline: 8px 6px; cursor: pointer; border-radius: var(--ab-radius-sm); }
-.ab-cardx-chevron { flex: none; width: 7px; height: 7px; border-right: 1.5px solid var(--ab-fg-muted); border-bottom: 1.5px solid var(--ab-fg-muted); transform: rotate(-45deg); margin-inline-end: 2px; align-self: center; transition: transform 120ms ease-out; }
-.ab-cardx-toggle[aria-expanded='true'] .ab-cardx-chevron { transform: rotate(45deg); }
-.ab-cardx-title { font-weight: 650; }
-.ab-cardx-summary { flex: 1; min-width: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---- cards that fold: a title row with a line under it, a chevron that points down (up when open), a divider between cards ---- */
+.ab-cardx { border: 0; border-radius: 0; background: transparent; }
+.ab-cardx + .ab-cardx { border-top: 1px solid var(--ab-divider); }
+.ab-cardx-head { display: flex; align-items: flex-start; gap: 6px; }
+.ab-cardx-toggle { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; text-align: start; border: 0; background: transparent; padding: 12px 0; cursor: pointer; border-radius: var(--ab-radius-sm); }
+.ab-cardx-toggle > .ab-dot { margin-top: 6px; }
+.ab-cardx-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ab-cardx-chevron { margin-top: 2px; }
+.ab-cardx-toggle:hover .ab-cardx-chevron { color: var(--ab-fg-muted); }
+.ab-cardx-title { font-weight: 500; overflow-wrap: anywhere; }
+.ab-cardx-summary { min-width: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ab-cardx-warn .ab-cardx-summary { color: var(--ab-warn); }
 .ab-cardx-danger .ab-cardx-summary { color: var(--ab-danger); }
-.ab-cardx-actions { display: inline-flex; gap: 4px; flex: none; }
-.ab-cardx-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ab-cardx-actions { display: inline-flex; align-items: center; gap: 4px; flex: none; padding-top: 7px; }
+.ab-cardx-body { padding: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
 .ab-cardx-body[hidden] { display: none; }
 
 /* ---- lists, show more, empty states ---- */
 .ab-list { display: flex; flex-direction: column; gap: 6px; }
 .ab-showmore { align-self: flex-start; }
 .ab-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 4px 0; }
-.ab-empty-text { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-empty-text { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 
 /* ---- the hint on a ticket outside the person's profiles ---- */
-.ab-profilehint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--ab-text-sm); padding: 6px 10px; border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); border: 1px dashed var(--ab-border-strong); }
+.ab-profilehint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--ab-text-md); padding: 10px 12px; border-radius: var(--ab-radius); background: var(--ab-surface); border: 0; }
 .ab-profilehint p { margin: 0; flex: 1 1 14em; min-width: 0; }
 
-@media (prefers-reduced-motion: reduce) { .ab-cardx-chevron { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ab-chevron { transition: none; } }
 
 /* ---- the Ticket screen ---- */
-.ab-ticket { gap: 10px; }
+.ab-ticket { gap: 12px; }
 .ab-halfrule-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: -4px; }
 .ab-halfrule-row .ab-halfrule { margin: 0; }
 .ab-model { max-width: 12rem; }
-.ab-cards { display: flex; flex-direction: column; gap: 8px; }
+.ab-cards { display: flex; flex-direction: column; gap: 0; }
 
-/* ---- AI buttons, one definition for every area: ab-btn-ai is the filled main AI button (one per screen at most), ab-btn-ai-quiet
-   an outlined one. Insights never uses either (TRACKER.md 2.3). ---- */
-.ab-btn-ai { background: var(--ab-ai); border-color: var(--ab-ai); color: var(--ab-ai-fg); }
-.ab-btn-ai:hover:not(:disabled) { background: var(--ab-ai-hover); border-color: var(--ab-ai-hover); }
-.ab-btn-ai .ab-ai-badge { color: var(--ab-ai-fg); }
-.ab-btn-ai-quiet { border-color: var(--ab-ai-line); color: var(--ab-ai); background: var(--ab-bg-raised); }
-.ab-btn-ai-quiet:hover:not(:disabled) { background: var(--ab-ai-soft); }
+/* ---- AI buttons, one definition for every area. Green is the only accent: ab-btn-ai is the filled main step (one per screen at most,
+   the same look as ab-btn-primary, with the grey spark in white), ab-btn-ai-quiet an outlined one. Insights never uses either. ---- */
+.ab-btn-ai { background: var(--ab-accent); border-color: var(--ab-accent); color: var(--ab-accent-fg); font-weight: 600; }
+.ab-btn-ai:hover:not(:disabled) { background: var(--ab-accent-hover); border-color: var(--ab-accent-hover); }
+.ab-btn-ai-quiet { border-color: var(--ab-border-strong); color: var(--ab-fg); background: var(--ab-bg-raised); }
+.ab-btn-ai-quiet:hover:not(:disabled) { background: var(--ab-bg-subtle); }

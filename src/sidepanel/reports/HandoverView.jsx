@@ -7,6 +7,7 @@ import { useRun } from '../useRun.js';
 import { HANDOVER_HOURS, HANDOVER_DEFAULT_HOURS } from '../../reports/engine/handover.js';
 import { HANDOVER_MAX_WORDS, NOTABLE_MAX, buildHandoverPack, checkHandoverNote } from '../../reports/ai/handover.js';
 import SectionShell from './SectionShell.jsx';
+import Summary from './Summary.jsx';
 import { useSection } from './useSection.js';
 import { AiBlocked, AiButton, AiResult, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { t, tn } from '../../i18n/index.js';
@@ -17,7 +18,7 @@ const FEATURE_ID = 'shift-handover';
 function Block({ title, children }) {
   return (
     <div className="ab-handover-block">
-      <h3 className="ab-h ab-handover-h">{title}</h3>
+      <h3 className="ab-handover-h">{title}</h3>
       {children}
     </div>
   );
@@ -99,7 +100,7 @@ export function HandoverBody({ d, env, now }) {
         {w.oldest.length > 0 && <TicketList caption={t('Waiting the longest')} items={w.oldest} env={env} meta={stateLine} />}
         {w.byState.length > 0 && (
           <details className="ab-details">
-            <summary>{t('Waiting by state')}</summary>
+            <Summary>{t('Waiting by state')}</Summary>
             <DataTable
               caption={t('Waiting by state')}
               columns={[{ key: 'label', label: t('State') }, { key: 'kind', label: t('Waiting for'), format: (v) => ({ customer: t('The customer'), approval: t('An approval'), other: t('Other') })[v] || v }, { key: 'count', label: t('Tickets'), align: 'right' }]}
@@ -206,7 +207,7 @@ export function HoursPicker({ hours, onChange, label = t('Period') }) {
 // F4 / N16. What a lead hands to the next shift: where the queue stands, what is at risk, what waits on others, what happened lately.
 // Insights only: no AI here. The period is a convenience of this view (the saved dashboard keeps no numbers and no period); the
 // result goes into env.loaded like every widget's, which is where the AI Assist half's hand-over note takes its figures from.
-export default function HandoverView({ widget, env }) {
+export default function HandoverView({ widget, env, tools }) {
   const [hours, setHours] = useState(HANDOVER_DEFAULT_HOURS);
   const state = useSection('handover', { ...widget, params: { ...(widget?.params || {}), hours } }, env);
   const d = state.result?.data;
@@ -219,6 +220,7 @@ export default function HandoverView({ widget, env }) {
       state={state}
       env={env}
       widgetId={widget?.id}
+      tools={tools}
       actions={<HoursPicker hours={hours} onChange={setHours} />}
       facts={ok ? [t('Last {hours} hours', { hours: d.hours })] : []}
     >

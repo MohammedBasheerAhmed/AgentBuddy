@@ -13,6 +13,11 @@ import { t } from '../../i18n/index.js';
  * HR or other sensitive record is not read (src/content/header.js) and the line shows the number only.
  */
 export function useTicketHeader(page, active, allowSensitive = false) {
+  return useTicketHeaderRead(page, active, allowSensitive).header;
+}
+
+/** The same read, and whether it is over: { header, done } (done and no header: the read failed or found nothing). */
+export function useTicketHeaderRead(page, active, allowSensitive = false) {
   const record = page?.record;
   const key = record?.table && record?.sysId ? `${record.table}:${record.sysId}:${allowSensitive ? 'hr' : ''}` : '';
   const [state, setState] = useState({ key: '', header: null });
@@ -28,14 +33,17 @@ export function useTicketHeader(page, active, allowSensitive = false) {
     // The record's identity decides when to read; the page object changes on every poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, key, page?.tabId]);
-  return state.key === key ? state.header : null;
+  const done = Boolean(key) && state.key === key;
+  return { header: done ? state.header : null, done };
 }
 
+/** The quiet context line at the top of a Write half. A long title is cut at the panel's edge; the whole line shows on hover. */
 export default function TicketLine({ page, header }) {
   const label = ticketLabel(page, header);
+  const text = label.kind === 'none' ? `${label.text} ${t('Open one to fill in its details.')}` : label.text;
   return (
-    <p className={`ab-write-for ab-write-for-${label.kind}`} aria-live="polite">
-      {label.kind === 'none' ? `${label.text} ${t('Open one to fill in its details.')}` : label.text}
+    <p className={`ab-write-for ab-write-for-${label.kind}`} aria-live="polite" title={label.kind === 'none' ? undefined : text}>
+      {text}
     </p>
   );
 }

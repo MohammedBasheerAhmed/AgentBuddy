@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { keyStore, readAudit } from '../../lib/storage.js';
 import { MSG } from '../../lib/messages.js';
 import { diagnosticsText } from '../diagnostics.js';
-import { Status } from '../fields.jsx';
+import { SectionHead, Status } from '../fields.jsx';
+import { Icon } from '../../sidepanel/ui/icons.jsx';
 import { t } from '../../i18n/index.js';
 
 /**
@@ -45,16 +46,17 @@ export function DiagnosticsSection({ eff }) {
   }
 
   return (
-    <section className="ab-section" aria-labelledby="h-diagnostics">
-      <h2 className="ab-h" id="h-diagnostics">{t('Help from support')}</h2>
-      <p className="ab-sub">{t("Copies the versions, your settings without any key, your organisation's policy in short and the last problems. No ticket content.")}</p>
-      <div className="ab-row">
+    <section className="ab-section ab-set-section" aria-labelledby="h-diagnostics">
+      <SectionHead id="h-diagnostics" title={t('Help from support')}>
+        {t("Copies the versions, your settings without any key, your organisation's policy in short and the last problems. No ticket content.")}
+      </SectionHead>
+      <div className="ab-set-actions">
         <button type="button" className="ab-btn" onClick={copy}>{t('Copy diagnostics')}</button>
       </div>
       <Status status={status} />
       {text && (
-        <details className="ab-more">
-          <summary>{t('What was copied')}</summary>
+        <details className="ab-more ab-set-fold">
+          <summary>{t('What was copied')}<Icon name="chevronDown" className="ab-chevron" /></summary>
           <pre className="ab-diagnostics" tabIndex={0}>{text}</pre>
         </details>
       )}

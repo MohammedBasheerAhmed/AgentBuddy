@@ -79,7 +79,7 @@ module.exports = {
     t.check('journal denied (403): the fallback text is masked too (no card, password, names, email, phone at the AI)', ai.requests.length === 1 && findLeaks(ai.requests[0].raw, data).critical.length === 0, findLeaks(ai.requests[0]?.raw || '', data).critical.join(' | '));
     t.check('journal denied (403): placeholders for the card and password are present in what was sent', /\[CARD_1\]/.test(ai.requests[0]?.raw || '') && /\[SECRET_1\]/.test(ai.requests[0]?.raw || ''));
     t.check('journal denied (403): no error is shown', (await textOf(p, '.ab-note-danger')) === null);
-    await clickButton(p, /^Close/);
+    await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close'))[0]?.click()); // (Close on an answer is an icon button: its name is its aria-label)
 
     // ---- 4. The record's own table answers 403 -----------------------------------------------------------------------
     inst.setBehaviour({ denied: ['incident'] });

@@ -1,4 +1,4 @@
-import { mount, click, choose, type, during, makeChrome, settle, deferred } from './fixtures/panel-dom.js';
+import { mount, click, choose, type, during, makeChrome, settle, deferred, document } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeIndexedDb, emptyFakeIndexedDb } from './fixtures/fake-indexeddb.js';
@@ -225,6 +225,53 @@ test('"Clear everything" turns off every site that was turned on, also one the o
   // The outcome stays on screen: the section is not rebuilt after the clearing (it read what is left itself), so a partial failure is
   // not silent.
   await until(() => ui.text().includes('Everything stored by Agent Buddy was removed.'), 'the outcome to be shown');
+  await ui.unmount();
+});
+
+// ---- The menu beside the pages, and the switches ------------------------------------------------------------------------------
+
+test('the menu: a section chosen is marked and its title takes the focus; the folded menu (narrow window) closes; each page has its own', async () => {
+  const fake = setup();
+  await saveRaw(fake, { provider: 'openai' });
+  const ui = await mount(<Options />);
+  await settle(6);
+  const toggle = ui.button('Go to a section');
+  const menu = ui.container.querySelector('#ab-set-menu');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(menu.getAttribute('data-open'), 'false');
+  await click(toggle);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(menu.getAttribute('data-open'), 'true');
+
+  const privacy = ui.container.querySelector('a[href="#h-privacy"]');
+  await click(privacy);
+  await settle(3);
+  assert.equal(privacy.getAttribute('aria-current'), 'location');
+  assert.equal(ui.$$('[aria-current="location"]').length, 1);
+  assert.equal(document.activeElement?.id, 'h-privacy', 'reading goes on from the section chosen');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'the folded menu closes once a section is chosen');
+
+  await click(ui.tab('AI Assist'));
+  assert.deepEqual(ui.$$('.ab-set-menu-link').map((a) => a.getAttribute('href')), ['#h-provider', '#h-key', '#h-formats', '#h-usage']);
+  assert.equal(ui.container.querySelector('a[href="#h-provider"]').getAttribute('aria-current'), 'location', 'the first section of the new page');
+  await ui.unmount();
+});
+
+test('a switch saves its choice like the tick box it is', async () => {
+  const fake = setup();
+  await saveRaw(fake, { provider: 'openai' });
+  const ui = await mount(<Options />);
+  await settle(6);
+  const saved = async () => (await fake.chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY];
+  const bar = ui.field('Keep the bar open at the top of the side panel.');
+  assert.equal(bar.getAttribute('role'), 'switch');
+  assert.equal(bar.checked, true);
+  await click(bar);
+  await settle(3);
+  assert.equal((await saved()).quickBarOpen, false);
+  await click(ui.field('Show everything: every card and action, whatever you work on.'));
+  await settle(3);
+  assert.equal((await saved()).showEverything, true);
   await ui.unmount();
 });
 

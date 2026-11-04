@@ -2,6 +2,7 @@
 //    Article checks   (Ticket screen, Insights card) checks on an open knowledge article (a password in the text is flagged by count,
 //                     never shown); then AI suggestions from AI Assist (Copy only, the password masked)
 //    Knowledge screen (round 3; Insights = no AI, AI Assist = the drafts):
+//    For the ticket   (everyone) with a ticket open, "Articles for INC..." first: the same search on the ticket's title, GET only, no AI
 //    Search           (everyone) published articles that match the words typed, best first, with freshness and a short excerpt; "Copy
 //                     link" copies the share address by article number; a result opens in this tab; no AI request
 //    Duplicates       (knowledge managers) knowledge bases and categories from the Aggregate API, a cluster of near-duplicate titles,
@@ -12,7 +13,7 @@
 //    Chat facts       (Ticket screen, Insights card) facts about a chat with no AI (who, how many, how long the customer waits); summary
 //                     and replies from AI Assist through the firewall, a chat that lives only in Connect Support tables, a chat with nothing readable and a denied table
 const { findLeaks } = require('../leaks.js');
-const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun, runAfter, waitPanel, captureClipboard, clipboardLog } = require('../common.js');
+const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun, runAfter, waitPanel, captureClipboard, clipboardLog, settleOnRecord } = require('../common.js');
 const { openHalf, openScreen, buttonShown, showAction } = require('../ui.js');
 const { openCard, showAllIn } = require('../insightsUi.js');
 
@@ -42,19 +43,22 @@ const text = (p) => p.evaluate(() => document.body.innerText);
 const tagsOf = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-tags .ab-tag')).map((x) => x.innerText.trim()));
 // The AI half of the Ticket screen holds the AI actions (Actions agent). A scenario part that needs one runs only when it is there.
 const assistOffers = (p, re) => showAction(p, re);
-// The Knowledge screen's folding cards (data-card="kb-search" | "kb-duplicates" | "kb-gaps" | "kb-merge" | "kb-outline").
+// The Knowledge screen's sections (data-card="kb-ticket" | "kb-search" | "kb-duplicates" | "kb-gaps" | "kb-merge" | "kb-outline"). The
+// duplicate finder and the gap radar open in place (their heading is a button with a chevron); the others are always open.
 async function openKb(p, half, cardId) {
   await openScreen(p, 'Knowledge');
   await openHalf(p, half);
   if (!cardId) return;
-  await p.waitForSelector(`[data-card="${cardId}"] .ab-cardx-toggle`, { timeout: 15000 });
-  await p.evaluate((id) => {
-    const b = document.querySelector(`[data-card="${id}"] .ab-cardx-toggle`);
+  await p.waitForSelector(`[id$="-half-panel-${half}"] [data-card="${cardId}"]`, { visible: true, timeout: 15000 });
+  await p.evaluate((h, id) => {
+    const section = document.querySelector(`[id$="-half-panel-${h}"] [data-card="${id}"]`);
+    const b = section?.querySelector('.ab-wk-toggle');
     if (b && b.getAttribute('aria-expanded') !== 'true') b.click();
-    b?.scrollIntoView({ block: 'start' });
-  }, cardId);
+    section?.scrollIntoView({ block: 'start' });
+  }, half, cardId);
 }
-const summaryIn = (p, id) => p.evaluate((cid) => document.querySelector(`[data-card="${cid}"] .ab-cardx-summary`)?.innerText || '', id);
+// (the Ticket screen's Insights cards are rows since the redesign: their one line is .ab-ins-card-summary; a folding card elsewhere keeps .ab-cardx-summary)
+const summaryIn = (p, id) => p.evaluate((cid) => document.querySelector(`[data-card="${cid}"] .ab-ins-card-summary, [data-card="${cid}"] .ab-cardx-summary`)?.textContent || '', id);
 
 module.exports = {
   id: 'r',
@@ -88,7 +92,7 @@ module.exports = {
       t.check('article-optimise: the password in the article text reached the AI only as a placeholder', req ? !req.raw.includes(data.MORE_SEED.articleSecret) && /\[SECRET_\d+\]/.test(req.raw) : false);
       const buttons = await p.evaluate(() => window.__vis(document.querySelectorAll('button')).map((b) => b.innerText.trim()));
       t.check('article-optimise: Copy only (the author edits the article in its own form): no Insert button', buttons.includes('Copy') && !buttons.some((b) => /^(Add|Insert)/.test(b)), buttons.join(' | '));
-      await clickButton(p, /^Close/).catch(() => {});
+      await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close'))[0]?.click()); // (Close on an answer is an icon button: its name is its aria-label)
     } catch (err) {
       t.check('the article AI action ran to the end', false, String(err?.message || err).slice(0, 200));
     }
@@ -121,7 +125,7 @@ module.exports = {
       await waitForText(p, /Inserted. Review it|Inserted into the form/, { timeout: 8000 });
       const wn = await ticket.evaluate(() => window.__gformCalls);
       t.check('the inserted notes are the "Suggested ticket notes" section only, below what was typed', wn.length === 1 && wn[0].name === 'work_notes' && wn[0].value.startsWith('Checking the gateway certificate now.\n\nCustomer reports VPN drops') && !/Outcome:|Follow-ups:/.test(wn[0].value), JSON.stringify(wn).slice(0, 160));
-      await clickButton(p, /^Close/);
+      await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close'))[0]?.click()); // (Close on an answer is an icon button: its name is its aria-label)
 
       b4 = ai.requests.length;
       const kbReadsBefore = inst.requests.length;
@@ -129,7 +133,7 @@ module.exports = {
       creq = await checkAiRun(t, ctx, p, 'chat-reply', chatRun, { before: b4, system: /answer a customer in a live chat/, userHas: [/still not working|Version 5\.2/] });
       const kbReads = inst.requests.slice(kbReadsBefore).filter((r) => r.path === '/api/now/table/kb_knowledge');
       t.check('chat-reply: it looked for knowledge articles that match the chat (one GET) before asking, and the answer is Copy only', kbReads.length >= 1 && !(await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()).some((x) => /^(Add|Insert)/.test(x)))));
-      await clickButton(p, /^Close/);
+      await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close'))[0]?.click()); // (Close on an answer is an icon button: its name is its aria-label)
     } catch (err) {
       t.check('the chat AI actions ran to the end', false, String(err?.message || err).slice(0, 200));
     }
@@ -157,6 +161,21 @@ module.exports = {
     await waitForText(p, /No chat messages are available to you/, { timeout: 20000 });
     t.check('the messages table denied: the same plain sentence, no error banner', (await p.$('.ab-note-danger')) === null && /cannot read|do not allow|may not allow|denied|roles/i.test(await text(p)));
     inst.setBehaviour();
+    await ticket.close();
+
+    // ============================== ARTICLES FOR THE OPEN TICKET (everyone) ========================================================
+    // With a ticket open the Knowledge screen starts with the knowledge search run once on the ticket's title: GET only, no AI.
+    ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-kb');
+    await settleOnRecord(ctx, data.INCIDENT_ID);
+    const ticketKbBase = ai.requests.length;
+    const ticketReadsBefore = inst.requests.length;
+    await openKb(p, 'insights', 'kb-ticket');
+    await waitForText(p, `Articles for ${data.INCIDENT_NUMBER}`, { timeout: 15000 });
+    const ticketKbText = () => p.evaluate(() => document.querySelector('[data-card="kb-ticket"]')?.innerText || '');
+    await waitPanel(ctx, p, 'the articles for the ticket', async () => !/Searching/.test(await ticketKbText()), { timeout: 15000 });
+    const ticketKbReads = inst.requests.slice(ticketReadsBefore).filter((r) => r.path === '/api/now/table/kb_knowledge');
+    t.check('Knowledge with a ticket open: starts with "Articles for INC0010001", searched on its title with GET reads only, no AI request and no AI mark', ticketKbReads.length >= 1 && ticketKbReads.every((r) => r.method === 'GET') && ai.requests.length === ticketKbBase && !(await p.$('[data-card="kb-ticket"] .ab-ai-badge')), (await ticketKbText()).replace(/\s+/g, ' ').slice(0, 160));
+    t.check('...and the search box is still there for other words, below it', Boolean(await p.$('[data-card="kb-search"] #ab-kb-search')));
     await ticket.close();
 
     // ============================== KNOWLEDGE SEARCH (everyone) =====================================================================

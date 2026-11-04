@@ -250,6 +250,10 @@ function auditPage(options) {
       tried += 1;
       const before = snap(el);
       const hadRing = ring(el);
+      // A field drawn inside its own box (a search or ask box: the input has no border, the box has) shows focus on that box
+      // (:focus-within). That is a visible indicator too (WCAG 2.4.7): the two nearest ancestors count, but only for a new ring.
+      const boxes = [el.parentElement, el.parentElement?.parentElement].filter(Boolean);
+      const boxesHadRing = boxes.map(ring);
       try {
         el.focus({ focusVisible: true, preventScroll: true });
       } catch {
@@ -257,7 +261,8 @@ function auditPage(options) {
       }
       if (document.activeElement !== el) continue;
       const after = snap(el);
-      if (after === before && !(ring(el) && !hadRing)) add('focus-visible', el, 'no change when it takes the focus');
+      const boxShowsIt = boxes.some((box, i) => ring(box) && !boxesHadRing[i]);
+      if (after === before && !(ring(el) && !hadRing) && !boxShowsIt) add('focus-visible', el, 'no change when it takes the focus');
       el.blur();
     }
     document.adoptedStyleSheets = sheetsBefore;

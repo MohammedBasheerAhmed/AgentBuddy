@@ -11,7 +11,6 @@ import { isAiReady } from './aiReady.js';
 import { planPanel, withVisited } from './sections.js';
 import { nextTabIndex, panelId, tabId } from './tabKeys.js';
 import { screensFor } from '../profiles/profiles.js';
-import { ShieldMark } from './ui/primitives.jsx';
 import { BrandMark, Icon, screenIcon } from './ui/icons.jsx';
 import { SettingsButton } from './shell/shellParts.jsx';
 import CommandPalette, { isPaletteKey, modalOnScreen, paletteShortcut } from './palette/CommandPalette.jsx';
@@ -61,32 +60,40 @@ function ThemeButton({ eff }) {
   const label = dark ? t('Switch to light colours') : t('Switch to dark colours');
   return (
     <button type="button" className="ab-iconbtn" aria-label={label} title={label} onClick={() => saveSettings({ theme: nextTheme(setting, systemIsDark()) }).catch(() => {})}>
-      <Icon name={dark ? 'sun' : 'moon'} size={16} />
+      <Icon name={dark ? 'sun' : 'moon'} size={18} />
     </button>
   );
 }
 
+/**
+ * The header: the mark, the name and the instance the panel reads, then three quiet icon buttons (the palette, the colours, Settings).
+ * The privacy promise that a shield used to carry here is said by the name block: on hover (its title) and to a screen reader (the
+ * same words, not drawn); the Insights and AI Assist halves say it again under their switch (HalfRule).
+ */
 function Header({ base, eff, onPalette }) {
   const instance = base ? instanceOf(base) : null;
   const search = t('Search commands');
+  const promise = t('Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
   return (
     <header className="ab-header">
       <BrandMark size={28} />
-      <div className="ab-brandtext">
+      <div className="ab-brandtext" title={promise}>
         <span className="ab-brand">{t('Agent Buddy')}</span>
         {instance && (
           <span className="ab-instance" title={t('Reading {host} with your own session', { host: isolate(instance.host) })}>
             {instance.short}
           </span>
         )}
+        <span className="ab-sr ab-promise">{promise}</span>
       </div>
       <span className="ab-spacer" />
-      <button type="button" className="ab-iconbtn" aria-label={search} title={`${search} (${paletteShortcut()})`} aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog" onClick={onPalette}>
-        <Icon name="command" size={16} />
-      </button>
-      <ThemeButton eff={eff} />
-      <ShieldMark />
-      <SettingsButton />
+      <div className="ab-headtools">
+        <button type="button" className="ab-iconbtn" aria-label={search} title={`${search} (${paletteShortcut()})`} aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog" onClick={onPalette}>
+          <Icon name="search" size={18} />
+        </button>
+        <ThemeButton eff={eff} />
+        <SettingsButton />
+      </div>
     </header>
   );
 }
@@ -125,7 +132,7 @@ function ScreenTabs({ screens, value, onChange }) {
           data-name={s.label}
           onClick={() => onChange(s.id)}
         >
-          <Icon name={screenIcon(s.id)} size={20} />
+          <Icon name={screenIcon(s.id)} size={18} />
           <span className="ab-sr">{s.label}</span>
         </button>
       ))}

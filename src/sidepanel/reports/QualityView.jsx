@@ -59,7 +59,7 @@ export function QualityBody({ d }) {
 }
 
 // F5. How work is going over the last weeks: volume, speed, repeat work and where the work comes from.
-export default function QualityView({ widget, env }) {
+export default function QualityView({ widget, env, tools }) {
   const state = useSection('quality', widget, env);
   const d = state.result?.data;
   const ok = d && d.available !== false;
@@ -70,6 +70,7 @@ export default function QualityView({ widget, env }) {
       state={state}
       env={env}
       widgetId={widget?.id}
+      tools={tools}
       facts={ok ? [shown(d.trend.label)] : []}
       actions={
         <label className="ab-widget-select">

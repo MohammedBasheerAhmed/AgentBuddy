@@ -147,6 +147,42 @@ export const PATTERNS = [
 
 export const patternFor = (index) => ({ ...PATTERNS[mod(index, PATTERNS.length)], index: mod(index, PATTERNS.length) });
 
+// The tone pairs that colour alone does not tell apart for everyone: OKLab Delta E (x100) under 8 with normal vision or with a
+// simulated protan or deutan view (Machado 2009, full severity), in the light theme or the dark one. tests/charts-contrast.test.js
+// works the distances out again from the tokens in theme.css and reports.css, so a retuned colour cannot slip past this list.
+export const CONFUSABLE = [
+  'c1-c3', 'c1-c5', 'c1-c6', 'c1-good', 'c1-bad', 'c1-warn', 'c1-neutral',
+  'c2-c4',
+  'c3-c6', 'c3-good', 'c3-warn', 'c3-bad',
+  'c4-c5',
+  'c5-good', 'c5-bad', 'c5-neutral',
+  'c6-good', 'c6-warn', 'c6-bad',
+  'good-warn', 'good-bad', 'good-neutral',
+  'warn-bad',
+  'bad-neutral',
+];
+const confusablePairs = new Set(CONFUSABLE.flatMap((pair) => [pair, pair.split('-').reverse().join('-')]));
+
+/** Whether two tones may look alike to someone (see CONFUSABLE). The same tone twice is alike too. Pure. */
+export const tonesConfusable = (a, b) => normTone(a) === normTone(b) || confusablePairs.has(`${normTone(a)}-${normTone(b)}`);
+
+/**
+ * The fill of each series of one chart: solid where its colour already tells it apart from every other series of that chart, a
+ * texture only where it does not (calm by default, and still readable without colour). Each series takes the first pattern that no
+ * earlier series it could be mistaken for has taken. `tones` are the series' tones, in order. Pure.
+ */
+export function fillPatterns(tones) {
+  const list = Array.isArray(tones) ? tones : [];
+  const taken = [];
+  return list.map((tone) => {
+    const clash = new Set(taken.filter((_, j) => tonesConfusable(list[j], tone)));
+    let index = 0;
+    while (clash.has(index) && index < PATTERNS.length - 1) index += 1;
+    taken.push(index);
+    return patternFor(index);
+  });
+}
+
 export const MARKERS = ['circle', 'square', 'diamond', 'triangle', 'cross', 'plus'];
 export const markerFor = (index) => MARKERS[mod(index, MARKERS.length)];
 

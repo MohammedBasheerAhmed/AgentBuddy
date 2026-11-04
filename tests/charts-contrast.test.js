@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { TONES } from '../src/sidepanel/charts/geometry.js';
+import { TONES, tonesConfusable } from '../src/sidepanel/charts/geometry.js';
 
 // A real WCAG 2.1 contrast test for the chart colours. It reads the CSS the way the browser would: the tokens in
 // src/ui/theme.css and src/ui/areas/reports.css, in three scopes (light, and the two ways the dark theme is switched on),
@@ -190,6 +190,46 @@ for (const name of SCOPES) {
     }
   });
 }
+
+// ---- which tones look alike: OKLab Delta E (x100) with normal vision and simulated protan / deutan vision ---------------------
+// (Machado, Oliveira & Fernandes 2009, full severity, in linear RGB). Under 8 two fills cannot be told apart by colour alone, so the
+// charts give one of them a texture (fillPatterns in charts/geometry.js); this test keeps the CONFUSABLE list true to the tokens.
+const MACHADO = {
+  protan: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+  deutan: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.01182, 0.04294, 0.968881]],
+};
+const linear = (hex) => rgb(hex).map((c) => channel(c));
+const oklab = ([r, g, b]) => {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+};
+const simulate = (lin, kind) => (kind ? MACHADO[kind].map((row) => Math.max(0, Math.min(1, row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2]))) : lin);
+const deltaE = (a, b, kind) => {
+  const x = oklab(simulate(linear(a), kind));
+  const y = oklab(simulate(linear(b), kind));
+  return 100 * Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+};
+
+test('every pair of chart tones that colour alone may not tell apart is on the CONFUSABLE list (light and dark)', () => {
+  const token = (tone) => `--ab-chart-${/^c\d$/.test(tone) ? tone.slice(1) : tone}`;
+  const missing = [];
+  for (const name of SCOPES) {
+    const vars = scope(name);
+    for (let i = 0; i < TONES.length; i += 1) {
+      for (let j = i + 1; j < TONES.length; j += 1) {
+        const [a, b] = [TONES[i], TONES[j]];
+        const worst = Math.min(...[null, 'protan', 'deutan'].map((kind) => deltaE(resolve(vars, token(a)), resolve(vars, token(b)), kind)));
+        if (worst < 8 && !tonesConfusable(a, b)) missing.push(`${a}-${b} (${name}: ${worst.toFixed(1)})`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], 'add these pairs to CONFUSABLE in src/sidepanel/charts/geometry.js');
+  // the maths itself: black and white are far apart, a colour and itself are not
+  assert.ok(deltaE('#000000', '#ffffff') > 99);
+  assert.equal(deltaE('#1f5fa8', '#1f5fa8', 'deutan'), 0);
+});
 
 test('the three scopes define the same chart tokens, and the two dark scopes are identical', () => {
   const light = [...pick(reports, ':root').keys()].filter((k) => k.startsWith('--ab-chart-')).sort();

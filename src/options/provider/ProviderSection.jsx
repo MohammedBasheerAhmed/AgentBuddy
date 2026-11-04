@@ -11,7 +11,8 @@ import { canListModels } from '../../providers/models.js';
 import { modelChoices } from '../../lib/modelChoices.js';
 import { KEY_STORAGE_MODES } from '../../policy/policy.js';
 import { allowedProviderIds } from '../policyNotes.js';
-import { DraftInput, FieldError, Locked, Status, describedBy, onEnter, useSaveSetting } from '../fields.jsx';
+import { DraftInput, FieldError, Locked, SectionHead, Status, describedBy, onEnter, useSaveSetting } from '../fields.jsx';
+import { Icon } from '../../sidepanel/ui/icons.jsx';
 import { AzureFields } from './AzureFields.jsx';
 import { SavedKeyLine } from './SavedKeyLine.jsx';
 import { useConnectionCheck } from './useConnectionCheck.js';
@@ -165,11 +166,10 @@ export function ProviderSection({ eff, reload }) {
   );
 
   return (
-    <section className="ab-section" aria-labelledby="h-provider">
-      <h2 className="ab-h" id="h-provider">{t('AI provider')}</h2>
-      <p className="ab-sub">{t('Use any provider you have a key for, Azure OpenAI, a company gateway, or a model on this computer.')}</p>
+    <section className="ab-section ab-set-section" aria-labelledby="h-provider">
+      <SectionHead id="h-provider" title={t('AI provider')}>{t('Use any provider you have a key for, Azure OpenAI, a company gateway, or a model on this computer.')}</SectionHead>
 
-      <div className="ab-field">
+      <div className="ab-field ab-set-pick">
         <label className="ab-label" htmlFor="provider">{t('Provider')}</label>
         <select id="provider" className="ab-select" value={v.provider} disabled={Boolean(eff.locked.provider)} aria-describedby={providerNote ? 'provider-note' : undefined} onChange={(e) => { setStatus(null); change({ provider: e.target.value }); }}>
           {offered.map((id) => <option key={id} value={id}>{PROVIDERS[id].label}</option>)}
@@ -185,8 +185,8 @@ export function ProviderSection({ eff, reload }) {
         <>
           {/* A provider with its own fixed address: that address is a technical detail, folded. */}
           {!def.userBaseUrl && def.baseUrl && (
-            <details className="ab-more">
-              <summary>{t('Technical details: the address requests go to')}</summary>
+            <details className="ab-more ab-set-fold">
+              <summary>{t('Technical details: the address requests go to')}<Icon name="chevronDown" className="ab-chevron" /></summary>
               <p className="ab-hint">
                 {tx("{address} (the provider's own address). Only masked text is sent there, after you have seen it.", { address: <span className="ab-mono">{def.baseUrl}</span> })}
               </p>
@@ -222,7 +222,7 @@ export function ProviderSection({ eff, reload }) {
             <DraftInput id="model" className="ab-input ab-mono" list="models" value={model} disabled={Boolean(eff.locked.model)} aria-describedby="model-hint" onSave={(text) => change({ models: { ...v.models, [v.provider]: text.trim() } })} />
             <datalist id="models">{choices.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</datalist>
             {listable && !eff.locked.model && (
-              <div className="ab-row" style={{ marginTop: 6 }}>
+              <div className="ab-set-actions">
                 {loadedModels.length > 0 && (
                   <select id="model-pick" className="ab-select" aria-label={t('Pick a model from the list')} value={choices.some((c) => c.id === model) ? model : ''} onChange={(e) => e.target.value && change({ models: { ...v.models, [v.provider]: e.target.value } })}>
                     {!choices.some((c) => c.id === model) && <option value="">{t('Pick a model…')}</option>}
@@ -243,14 +243,16 @@ export function ProviderSection({ eff, reload }) {
         </>
       )}
 
+      {/* The key, where it is kept, and the check that it works: a part of its own, which the menu beside the page names. */}
+      <h3 className="ab-set-subtitle" id="h-key" tabIndex={-1}>{t('Key and connection')}</h3>
       {eff.locked.apiKey ? (
         <>
           <p className="ab-note ab-note-ok">{t('The AI key is provided by your organisation. It is never shown here.')}</p>
-          <div className="ab-row" style={{ marginTop: 8 }}>{testButtons}</div>
+          <div className="ab-set-actions">{testButtons}</div>
         </>
       ) : (
         <>
-          <div className="ab-field">
+          <div className="ab-field ab-set-pick">
             <label className="ab-label" htmlFor="keystorage">{t('Where to keep the key')}</label>
             <select id="keystorage" className="ab-select" value={v.keyStorage} disabled={Boolean(eff.locked.keyStorage)} aria-describedby="keystorage-hint" onChange={(e) => changeKeyStorage(e.target.value)}>
               {KEY_STORAGE_MODES.map((m) => <option key={m} value={m}>{tr(KEY_MODE_LABEL[m])}</option>)}
@@ -262,7 +264,7 @@ export function ProviderSection({ eff, reload }) {
           {eff.keyLocked && (
             <div className="ab-field">
               <label className="ab-label" htmlFor="unlock">{needsEncryption ? t('Choose a passphrase to encrypt your saved key') : t('Passphrase to unlock the saved key')}</label>
-              <div className="ab-row">
+              <div className="ab-set-inputrow">
                 <input id="unlock" type="password" className="ab-input" value={unlockPass} onChange={(e) => setUnlockPass(e.target.value)} onKeyDown={onEnter(() => unlockPass && unlock())} autoComplete={needsEncryption ? 'new-password' : 'off'} aria-describedby={needsEncryption ? 'unlock-hint' : undefined} />
                 <button type="button" className="ab-btn" onClick={unlock} disabled={!unlockPass || Boolean(busy)}>{needsEncryption ? t('Encrypt') : t('Unlock')}</button>
               </div>
@@ -276,7 +278,7 @@ export function ProviderSection({ eff, reload }) {
 
           <div className="ab-field">
             <label className="ab-label" htmlFor="key">{def.keyLabel}</label>
-            <div className="ab-row">
+            <div className="ab-set-inputrow">
               <input
                 id="key"
                 type={showTyped ? 'text' : 'password'}
@@ -303,16 +305,16 @@ export function ProviderSection({ eff, reload }) {
                 {t('At least {MIN_PASSPHRASE} characters; a few words are easy to remember and hard to guess. There is no way to recover a forgotten passphrase: you would enter the key again.', { MIN_PASSPHRASE })}
               </span>
               {(keyMode === 'local' || keyMode === 'session') && !cleanKey(key) && (
-                <div className="ab-row" style={{ marginTop: 6 }}>
+                <div className="ab-set-actions">
                   <button type="button" className="ab-btn" onClick={encryptSaved} disabled={!passphrase || Boolean(busy)}>{t('Encrypt the saved key')}</button>
                 </div>
               )}
             </div>
           )}
-          <div className="ab-row">
+          <div className="ab-set-actions">
             <button type="button" className="ab-btn ab-btn-primary" onClick={saveKey} disabled={busy === 'key'}>{t('Save key')}</button>
             {keyMode !== 'none' && (
-              <button type="button" className="ab-btn" onClick={removeKey}>
+              <button type="button" className="ab-btn ab-set-danger" onClick={removeKey}>
                 {t('Remove saved key')}
               </button>
             )}

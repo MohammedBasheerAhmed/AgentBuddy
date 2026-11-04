@@ -11,7 +11,7 @@ import { t, t as tr } from '../../../i18n/index.js';
 // on the customer, an approval waiting, an SLA missed...) and a plain template for it, filled from the ticket, to copy. What only the
 // agent knows stays [in brackets]. No AI: an AI draft of the same email is in AI Assist.
 
-export default function EmailCard({ page, eff, record, active, setSummary }) {
+export default function EmailCard({ page, eff, record, active, setSummary, setAttention }) {
   const ticket = useTicketFacts({ page, record, eff, active });
   const answer = ticket.data;
   const rec = useMemo(() => {
@@ -28,6 +28,7 @@ export default function EmailCard({ page, eff, record, active, setSummary }) {
   const top = rec?.picks[0];
   const typeId = chosen || top?.id || '';
   useReport(setSummary, rec ? (top ? t('{label} fits best', { label: tr(top.label) }) : t('No email needed right now')) : '');
+  useReport(setAttention, rec && !top ? 'clear' : '');
 
   if (!rec) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   const filled = typeId ? fillEmailTemplate(typeId, { pack: rec.pack, agentName: page.user?.name || '', number: record.number }) : null;

@@ -4,12 +4,12 @@ import { useWidth } from './useWidth.js';
 import DrillLink, { hrefOf } from './DrillLink.jsx';
 import { t } from '../../i18n/index.js';
 
-const BAR_HEIGHT = 22;
+const BAR_HEIGHT = 20;
 
 /**
  * One stacked horizontal bar per row (for example one per person, split by state). All bars share one scale, so they can be
- * compared. Series differ by pattern as well as colour; the value is printed in a segment when it fits, and is always in the
- * tooltip, the accessible name and the table view.
+ * compared. Segments are solid fills parted by a thin gap; a series whose colour could be mistaken for another's also has a texture
+ * (PatternDefs). The value is printed in a segment when it fits, and is always in the tooltip, the accessible name and the table view.
  *
  *   rows     [{ key, label, parts: [{ key, value }], total? }]   (total: the number printed for the row, when not the sum of its parts)
  *   series   [{ key, label, tone }]   (tone defaults to the next categorical colour)

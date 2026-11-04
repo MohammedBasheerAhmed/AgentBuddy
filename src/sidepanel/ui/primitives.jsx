@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { Icon } from './icons.jsx';
 import { t } from '../../i18n/index.js';
 
 // Small building blocks every screen uses, so the panel looks and behaves the same everywhere (TRACKER.md 2.3 and 2.4):
@@ -8,14 +9,16 @@ import { t } from '../../i18n/index.js';
 //   HalfRule      the one line under the Insights / AI Assist switch that says where data goes
 // Styles: src/ui/areas/shell.css.
 
-/** The AI mark: a small spark and the letters "AI". Decorative where the text next to it already says AI. */
-export function AiBadge({ label = 'AI', title = t('Uses AI. Masked text goes to the AI you chose, after a preview.') }) {
+/**
+ * The AI mark: a small grey spark (no colour, no letters on screen: green is the panel's only accent). Its name, "AI", is there for a
+ * screen reader, and the hover text says what using AI means. Decorative (label="") where the text next to it already says AI.
+ *   size: the spark in px (14 by default; 16 in a main button)
+ */
+export function AiBadge({ label = 'AI', title = t('Uses AI. Masked text goes to the AI you chose, after a preview.'), size = 14 }) {
   return (
-    <span className="ab-ai-badge" title={title}>
-      <svg className="ab-ai-spark" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" focusable="false">
-        <path d="M6 0.5 L7.2 4.8 L11.5 6 L7.2 7.2 L6 11.5 L4.8 7.2 L0.5 6 L4.8 4.8 Z" fill="currentColor" />
-      </svg>
-      {label}
+    <span className="ab-ai-badge" title={title || undefined}>
+      <Icon name="spark" size={size} strokeWidth={2} className="ab-ai-spark" />
+      {label && <span className="ab-sr">{label}</span>}
     </span>
   );
 }
@@ -34,10 +37,10 @@ export function ShieldMark() {
 }
 
 /**
- * A card whose title folds it open and closed.
+ * A card whose title folds it open and closed: a row with the title, a line under it, and a chevron that points down (up when open).
  *   title      the card's name (a noun: "Related tickets")
- *   summary    one short line shown next to the title, open or folded ("10 earlier · 5 open"); '' for none
- *   attention  '' | 'warn' | 'danger': a coloured edge and dot, for a card that needs a look (an outage, a breached SLA)
+ *   summary    one short line under the title, open or folded ("10 earlier · 5 open"); '' for none
+ *   attention  '' | 'warn' | 'danger': a status dot before the title and the line in that colour, for a card that needs a look
  *   open / onToggle   controlled; leave out to let the card keep its own state, starting at `defaultOpen`
  *   actions    small controls drawn at the right of the title row (a Refresh button); keep to one or two
  */
@@ -53,9 +56,12 @@ export function CardFrame({ title, summary = '', attention = '', open, defaultOp
     <section className={`ab-cardx${attention ? ` ab-cardx-${attention}` : ''}`} data-card={id || undefined} aria-label={title}>
       <div className="ab-cardx-head">
         <button type="button" className="ab-cardx-toggle" aria-expanded={isOpen} aria-controls={bodyId} onClick={toggle}>
-          <span className="ab-cardx-chevron" aria-hidden="true" />
-          <span className="ab-cardx-title">{title}</span>
-          {summary && <span className="ab-cardx-summary">{summary}</span>}
+          {attention && <span className={`ab-dot ab-dot-${attention}`} aria-hidden="true" />}
+          <span className="ab-cardx-text">
+            <span className="ab-cardx-title">{title}</span>
+            {summary && <span className="ab-cardx-summary">{summary}</span>}
+          </span>
+          <Icon name="chevronDown" size={16} className="ab-chevron ab-cardx-chevron" />
         </button>
         {actions && <span className="ab-cardx-actions">{actions}</span>}
       </div>

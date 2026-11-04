@@ -12,6 +12,9 @@ import { addableSections, sectionById } from './sections.js';
 import { useDashboards, useReportContext } from './hooks.js';
 import { listUrl, openList, openTicket } from './drill.js';
 import { pageIdentity, visibleWidgets, widgetParams } from './dashboardEnv.js';
+import { drawnSections } from './onDashboard.js';
+import { Icon } from '../ui/icons.jsx';
+import Summary from './Summary.jsx';
 import { downloadText } from './download.js';
 import WidgetBoundary from './WidgetBoundary.jsx';
 import ErrorNote from '../ErrorNote.jsx';
@@ -22,7 +25,7 @@ import BuilderView from './BuilderView.jsx';
 import BuilderEditor from './BuilderEditor.jsx';
 import MoreMenu from './MoreMenu.jsx';
 import ExportPanel from './ExportPanel.jsx';
-import { dashboardNotes } from './SectionShell.jsx';
+import { WidgetHead, dashboardNotes } from './SectionShell.jsx';
 import { isolate, t, tm, tn } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 
@@ -65,15 +68,14 @@ function NameField({ value, onCommit, disabled }) {
   );
 }
 
-function WidgetTools({ index, count, onMove, onEdit, onRemove, label }) {
-  return (
-    <div className="ab-widget-tools" role="group" aria-label={t('Change {name}', { name: label })}>
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(-1)} disabled={index === 0}>{t('Move up')}</button>
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => onMove(1)} disabled={index === count - 1}>{t('Move down')}</button>
-      {onEdit && <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onEdit}>{t('Edit')}</button>}
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onRemove}>{t('Remove')}</button>
-    </div>
-  );
+/** While customizing, a section's own "⋯" menu (SectionShell.jsx) also moves, edits and removes it: these are its items. */
+export function widgetTools({ index, count, onMove, onEdit, onRemove }) {
+  return [
+    { id: 'up', label: t('Move up'), onSelect: () => onMove(-1), disabled: index === 0 },
+    { id: 'down', label: t('Move down'), onSelect: () => onMove(1), disabled: index === count - 1 },
+    onEdit && { id: 'edit', label: t('Edit'), onSelect: onEdit },
+    { id: 'remove', label: t('Remove'), onSelect: onRemove },
+  ].filter(Boolean);
 }
 
 /**
@@ -173,6 +175,8 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
 
   const groupsJson = JSON.stringify(context.data?.groups || []);
   const groupsNote = context.data?.groupsNote || '';
+  // The sections on screen, so one does not draw a number another one already shows (onDashboard.js).
+  const sectionsJson = JSON.stringify(dash ? drawnSections(visibleWidgets(dash.widgets, { policy }).shown) : []);
   const scopeJson = dash ? JSON.stringify(dash.scope) : '';
   const selectedJson = JSON.stringify(selected);
   // One "now" for every widget of one load (asOfFor in the engine): they ask the same questions, so the second widget's reads come from
@@ -209,10 +213,11 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       loaded,
       myGroups: JSON.parse(groupsJson),
       groupsNote,
+      sections: JSON.parse(sectionsJson),
     }),
     // The scope is compared by value so a re-render of the dashboard does not restart every widget's read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [stablePage, layout, scopeJson, selectedJson, blocked, hrOk, refreshKey, asOf, limiter, mask, maskMode, canEdit, dash?.id, focus, update, noteRead, onSessionLost, loaded, groupsJson, groupsNote]
+    [stablePage, layout, scopeJson, selectedJson, blocked, hrOk, refreshKey, asOf, limiter, mask, maskMode, canEdit, dash?.id, focus, update, noteRead, onSessionLost, loaded, groupsJson, groupsNote, sectionsJson]
   );
 
   // Tell the AI Assist half what is on screen (memory only).
@@ -334,8 +339,10 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
           </select>
         </label>
         <button type="button" className="ab-chip ab-scope-chip" aria-expanded={scopeOpen} aria-controls="ab-dash-scope" onClick={() => setScopeOpen((o) => !o)} title={t('Whose tickets, and which tables')}>
-          {scopeChipText(dash.scope, context.data)}
+          <span className="ab-scope-chip-text">{scopeChipText(dash.scope, context.data)}</span>
+          <Icon name="chevronDown" size={14} className="ab-chevron" />
         </button>
+        <span className="ab-spacer" />
         <MoreMenu label={t('More: refresh, customize, export, print')} items={menu} />
       </div>
       <p className="ab-statusline" role="status">
@@ -357,7 +364,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
 
       {notes.length > 0 && (
         <details className="ab-details ab-dash-notes">
-          <summary>{tn(notes.length, '{n} note about these numbers', '{n} notes about these numbers')}</summary>
+          <Summary>{tn(notes.length, '{n} note about these numbers', '{n} notes about these numbers')}</Summary>
           <ul className="ab-dash-notes-list">
             {notes.map((n) => (
               <li key={n}>{n}</li>
@@ -369,7 +376,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       {exporting && <ExportPanel name={dash.name} entries={loadedEntries} order={widgetIds} mask={mask} setMask={setMask} maskMode={maskMode} onClose={() => setExporting(false)} />}
 
       {customize && canEdit && (
-        <section className="ab-card ab-customize" aria-label={t('Customize this dashboard')}>
+        <section className="ab-surface ab-customize" aria-label={t('Customize this dashboard')}>
           <NameField value={dash.name} onCommit={(name) => update((s) => renameDashboard(s, dash.id, name))} />
           <div className="ab-row">
             <label className="ab-widget-select">
@@ -386,7 +393,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
           </div>
           <p className="ab-hint">{shown(sectionById(adding)?.description)}</p>
           <details className="ab-details">
-            <summary>{t('More')}</summary>
+            <Summary>{t('More')}</Summary>
             <div className="ab-row">
               <button type="button" className="ab-btn ab-btn-sm" onClick={() => update((s) => addDashboard(s, { name: tm('New dashboard'), scope: dash.scope }))} disabled={state.dashboards.length >= CAPS.dashboards}>{t('New dashboard')}</button>
               {missingPresets.map((p) => (
@@ -437,16 +444,16 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
           {widgets.map((w) => {
             const section = w.type === 'section' ? sectionById(w.section) : null;
             const label = w.type === 'builder' ? w.builder.title || t('custom report') : section ? shown(section.label) : t('section');
-            const tools = customize && canEdit && (
-              <WidgetTools
-                index={dash.widgets.indexOf(w)}
-                count={dash.widgets.length}
-                label={label}
-                onMove={(delta) => update((s) => moveWidget(s, dash.id, w.id, delta))}
-                onEdit={w.type === 'builder' ? () => setEditing({ widgetId: w.id }) : undefined}
-                onRemove={() => update((s) => removeWidget(s, dash.id, w.id))}
-              />
-            );
+            const tools =
+              customize && canEdit
+                ? widgetTools({
+                    index: dash.widgets.indexOf(w),
+                    count: dash.widgets.length,
+                    onMove: (delta) => update((s) => moveWidget(s, dash.id, w.id, delta)),
+                    onEdit: w.type === 'builder' ? () => setEditing({ widgetId: w.id }) : undefined,
+                    onRemove: () => update((s) => removeWidget(s, dash.id, w.id)),
+                  })
+                : [];
             if (editingWidget && editingWidget.id === w.id) {
               return (
                 <BuilderEditor
@@ -466,19 +473,18 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
               // Only in Customize (visibleWidgets leaves AI sections out otherwise): a place-holder that can be removed, never the AI itself.
               return (
                 <div key={w.id} className="ab-widget-slot">
-                  {tools}
-                  <section className="ab-card ab-widget" aria-label={shown(section.label)}>
-                    <h2 className="ab-h">{shown(section.label)}</h2>
-                    <p className="ab-hint">{t('This is under AI Assist now. Remove it from this dashboard.')}</p>
+                  <section className="ab-widget" aria-label={shown(section.label)}>
+                    <WidgetHead title={shown(section.label)} tools={tools}>
+                      {() => <p className="ab-hint">{t('This is under AI Assist now. Remove it from this dashboard.')}</p>}
+                    </WidgetHead>
                   </section>
                 </div>
               );
             }
             return (
               <div key={w.id} className="ab-widget-slot">
-                {tools}
-                <WidgetBoundary title={label} resetKey={`${refreshKey}|${scopeJson}|${selectedJson}`}>
-                  {w.type === 'builder' ? <BuilderView widget={w} env={env} /> : section ? <section.View widget={w} env={env} eff={eff} /> : null}
+                <WidgetBoundary title={label} tools={tools} resetKey={`${refreshKey}|${scopeJson}|${selectedJson}`}>
+                  {w.type === 'builder' ? <BuilderView widget={w} env={env} tools={tools} /> : section ? <section.View widget={w} env={env} eff={eff} tools={tools} /> : null}
                 </WidgetBoundary>
               </div>
             );

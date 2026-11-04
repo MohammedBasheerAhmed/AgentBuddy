@@ -118,7 +118,7 @@ async function insightsChrome() {
   return fake;
 }
 
-const summaryOf = (ui, id) => ui.container.querySelector(`[data-card="${id}"] .ab-cardx-summary`)?.textContent || '';
+const summaryOf = (ui, id) => ui.container.querySelector(`[data-card="${id}"] .ab-ins-card-summary`)?.textContent || '';
 
 test('Insights opened after the Glance has read the facts (AI Assist was the half on show): the folded cards keep their summary', async () => {
   await insightsChrome();

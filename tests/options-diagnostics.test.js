@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { browserName, diagnosticsText } from '../src/options/diagnostics.js';
-import { DiagnosticsSection, ProfilesSection, SettingsPages, SITE_REFUSED_TEXT, settingsPageFromHash } from '../src/options/Options.jsx';
+import { DiagnosticsSection, ProfilesSection, SettingsPages, SITE_REFUSED_TEXT, settingsMenu, settingsPageFromHash } from '../src/options/Options.jsx';
+import { QuickBarSection } from '../src/options/basics/QuickBarSection.jsx';
 import { effectiveSettings } from '../src/policy/policy.js';
 
-// F8 "Copy diagnostics": what support needs, and never a key (not the key, not its preview, not its length). F2: Settings in two pages.
+// F8 "Copy diagnostics": what support needs, and never a key (not the key, not its preview, not its length). F2: Settings in two pages,
+// with a menu of the sections beside them.
 
 const KEY = 'sk-personal-0123456789abcdefXYZW';
 const ORG_KEY = 'sk-org-SUPPLIED-0123456789abcdef';
@@ -92,6 +94,63 @@ test('Settings has two pages, Basics and AI Assist; the address picks the page',
   assert.match(markup, /id="provider"/, 'the AI page is in the page too, hidden');
   const ai = draw(SettingsPages, { eff: effOf(), reload: () => {}, initial: 'ai' });
   assert.match(ai, /id="ab-settings-panel-basics"[^>]*hidden=""/);
+});
+
+test('an address that names a section of AI Assist opens that page; any other section is on Basics', () => {
+  for (const hash of ['#h-provider', '#h-key', '#h-formats', '#H-Usage', '#h-ai-off']) assert.equal(settingsPageFromHash(hash), 'ai', hash);
+  for (const hash of ['#h-privacy', '#h-stored', '#h-provider-x']) assert.equal(settingsPageFromHash(hash), 'basics', hash);
+});
+
+test('the menu beside the pages lists the sections of the page on show, in order, and every link leads to a section on that page', () => {
+  const cases = [
+    ['basics', effOf()],
+    ['basics', effOf({}, { disabledFeatures: ['reply-draft'] })],
+    ['ai', effOf()],
+    ['ai', effOf({}, { aiEnabled: false })],
+  ];
+  for (const [page, e] of cases) {
+    const markup = draw(SettingsPages, { eff: e, reload: () => {}, initial: page });
+    const links = [...markup.matchAll(/<a href="#(h-[a-z-]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(links, settingsMenu(page, e).map((m) => m.id), page);
+    assert.ok(links.length > 0, page);
+    // Every link points at a title on the page it belongs to (not at the other, hidden one).
+    const panel = markup.split(`id="ab-settings-panel-${page}"`)[1].split('id="ab-settings-panel-')[0];
+    for (const id of links) assert.match(panel, new RegExp(`<h[23][^>]*id="${id}"`), `${page}: ${id}`);
+    // The first section is marked until the page is scrolled; only one is.
+    assert.equal((markup.match(/aria-current="location"/g) || []).length, 1);
+    assert.match(markup, new RegExp(`<a href="#${links[0]}"[^>]*aria-current="location"`));
+  }
+  assert.ok(settingsMenu('basics', effOf({}, { disabledFeatures: ['reply-draft'] })).some((m) => m.id === 'h-policy'), 'the policy, when it switches something off');
+  assert.ok(!settingsMenu('basics', effOf()).some((m) => m.id === 'h-policy'), 'and only then');
+  assert.deepEqual(settingsMenu('ai', effOf({}, { aiEnabled: false })).map((m) => m.id), ['h-ai-off']);
+});
+
+test('the two pages are tabs, not filled buttons; a section has at most one filled button', () => {
+  for (const page of ['basics', 'ai']) {
+    const markup = draw(SettingsPages, { eff: effOf(), reload: () => {}, initial: page });
+    const tabs = markup.split('role="tablist"')[1].split('</div>')[0];
+    assert.equal((tabs.match(/role="tab"/g) || []).length, 2);
+    assert.ok(!/ab-btn-primary/.test(tabs), 'the page on show is marked by aria-selected, not by a filled button');
+    // (How AI answers are written holds one editor per action, each folded with its own Save: not counted.)
+    for (const section of markup.split('<section').slice(1).filter((s) => !/aria-labelledby="h-formats"/.test(s))) {
+      assert.ok((section.match(/ab-btn-primary/g) || []).length <= 1, section.slice(0, 80));
+    }
+  }
+});
+
+test('on/off choices are switches: a real check box with role="switch", inside its label; a locked one is off and says why', () => {
+  const quick = draw(QuickBarSection, { eff: effOf(), reload: () => {} });
+  for (const id of ['page-bar', 'panel-bar']) {
+    assert.match(quick, new RegExp(`<label class="ab-set-switch" for="${id}"><span class="ab-set-switch-text">[^<]+</span><input id="${id}" type="checkbox" role="switch"[^>]*checked=""`), id);
+  }
+  const locked = draw(QuickBarSection, { eff: effOf({}, { disablePageBar: true }), reload: () => {} });
+  assert.match(locked, /<input id="page-bar" type="checkbox" role="switch"[^>]*disabled=""/);
+  assert.ok(!/<input id="page-bar"[^>]*checked=""/.test(locked));
+  assert.match(locked, /Switched off by your organisation\./);
+  const profiles = draw(ProfilesSection, { eff: effOf({ profiles: ['it'], profilesConfirmed: true, showEverything: true }), reload: () => {} });
+  assert.match(profiles, /<input id="show-everything" type="checkbox" role="switch"[^>]*checked=""/);
+  assert.match(profiles, /<input id="ai-skipped" type="checkbox" role="switch"/);
+  assert.match(profiles, /<input id="profile-it" type="checkbox" checked=""/, 'the work profiles stay tick boxes: several can be chosen');
 });
 
 test('AI switched off by the organisation: the AI page says so and shows no provider, key or model', () => {

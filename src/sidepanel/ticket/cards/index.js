@@ -1,11 +1,15 @@
 // The Ticket screen's Insights half: its cards and the ticket-at-a-glance header (owner: Insights agent, docs/round3.md).
 //
 // INSIGHT_CARDS: [{ id, title, kinds, profiles, order(record, header), defaultOpen, openWhen(record, header), Card }]
-//   Card props: { page, eff, record, header, active, setSummary(text), setAttention('' | 'warn' | 'danger'), onShowCard? }
+//   Card props: { page, eff, record, header, active, open, setSummary(text), setAttention(status), onShowCard? }
+//     setSummary: the card's one-line answer, shown on its row without opening it
+//     setAttention: the card's status: 'danger' | 'warn' (it needs a look: its row comes first, and "Needs you now" at the top of the
+//       screen names it), 'ok' (good news: a fix was found), 'clear' (nothing to report: it waits under "All clear in ..."), '' (plain)
 //   order: a function of the ticket's state (src/insights/order.js): New tickets put missing details and routing first, resolved ones
 //          "Ready to resolve?", tickets on hold the right email.
-//   defaultOpen: the open state when the shell does not use openWhen; openWhen: the cards worth opening for the ticket's state.
-// Glance props: { page, eff, record, header, headPhase, quickBar, onShowCard? }   (quickBar: the node to draw inside the header)
+//   defaultOpen: a card that is the record's own main view (request status, the checklist, article checks, chat facts) opens on first
+//     view where openWhen says it is worth it for the ticket's state; every other row starts folded, its one line showing.
+// Glance props: { page, eff, record, header, headPhase, onShowCard?, active?, compact?, needs? }
 //
 // No card carries an AI mark or sends anything anywhere: every read is a GET with the agent's own session, kept in panel memory.
 import { openFor, rankFor } from '../../../insights/order.js';
@@ -66,7 +70,7 @@ export const INSIGHT_CARDS = Object.freeze([
   card('account', () => t('Account at a glance'), ['case'], ['csm'], AccountCard), // N28
   card('missing', () => t('Missing details'), FAULTS, ['it', 'csm'], MissingCard), // N11
   card('routing', () => t('Where similar tickets went'), ['incident', 'case'], ['it', 'csm'], RoutingCard), // N10
-  card('steps', () => t('Steps that worked before'), ['incident', 'problem', 'case', 'requested_item', 'catalog_task', 'task'], ['it', 'csm', 'req'], StepsCard, true), // N12
+  card('steps', () => t('Steps that worked before'), ['incident', 'problem', 'case', 'requested_item', 'catalog_task', 'task'], ['it', 'csm', 'req'], StepsCard), // N12
   card('related', () => t('Related tickets'), TICKETS, ['all'], RelatedCard), // N2
   card('knowledge', () => t('Knowledge for this ticket'), TICKETS.filter((k) => k !== 'change'), ['all'], KnowledgeCard), // N3
   card('changes', () => t('Recent changes on this CI or service'), WITH_CI, ['it', 'mpc'], ChangesCard), // N25

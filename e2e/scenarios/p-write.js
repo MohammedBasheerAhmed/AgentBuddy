@@ -213,7 +213,8 @@ module.exports = {
     await ctx.ext((key) => chrome.storage.local.remove(key), 'agentbuddy_snippets');
     await write('insights');
     await waitForText(p, 'No snippets yet', { timeout: 8000 });
-    await clickButton(p, /^Write my own/);
+    // (the empty state offers one step, "Add three examples"; a snippet of one's own starts from "New snippet" under the list)
+    await clickButton(p, /^New snippet/);
     await p.type('#ab-snip-title', 'Certificate follow-up');
     await p.type('#ab-snip-shortcut', 'cert');
     const secret = 'Passw0rd!Snip#6';

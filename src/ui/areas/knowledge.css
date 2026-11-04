@@ -1,53 +1,65 @@
-/* Styles for the knowledge area (article checks, the Knowledge screen's tools, chats). Use the --ab-* tokens from theme.css only. */
+/* Styles for the knowledge area (article checks and chat facts on the Ticket screen, the Knowledge screen's tools). Use the --ab-*
+   tokens from theme.css only. Calm and focused: rows parted by one divider, no boxes inside boxes; colour only backs up a word. The
+   sections and rows themselves are the shared ones (ui.css, and compose.css for the Write and Knowledge screens' sections). */
 
 .ab-kb-notes { margin: 6px 0 0; }
 
-/* ---- findings on an article ---- */
-.ab-kb-findings { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ab-kb-finding { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
-.ab-kb-finding.ab-kb-problem { background: var(--ab-danger-soft); border-color: var(--ab-danger-line); }
-.ab-kb-finding.ab-kb-warn { background: var(--ab-warn-soft); border-color: var(--ab-warn-line); }
-.ab-kb-level { flex: none; min-width: 58px; font-size: var(--ab-text-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ab-fg-soft); }
+/* ---- findings on an article: rows, the level ("Fix", "Check") a coloured word in front ---- */
+.ab-kb-findings { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.ab-kb-finding { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; }
+.ab-kb-finding + .ab-kb-finding { border-top: 1px solid var(--ab-divider); }
+.ab-kb-level { flex: none; min-width: 52px; padding-top: 1px; font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-muted); }
 .ab-kb-problem .ab-kb-level { color: var(--ab-danger); }
 .ab-kb-warn .ab-kb-level { color: var(--ab-warn); }
 .ab-kb-finding-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
-.ab-kb-detail { color: var(--ab-fg-soft); font-size: var(--ab-text-sm); }
-.ab-kb-problem .ab-kb-detail { color: var(--ab-fg); }
-.ab-kb-warn .ab-kb-detail { color: var(--ab-fg); }
+.ab-kb-detail { color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 
-/* ---- groups of duplicate articles and of ticket topics ---- */
-.ab-kb-cluster { display: flex; flex-direction: column; gap: 6px; padding: 8px; margin-top: 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg); }
-.ab-kb-cluster.ab-kb-picked { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
-.ab-kb-articles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.ab-kb-articles li { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
-.ab-kb-open { justify-content: flex-start; text-align: start; height: auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
-.ab-kb-pairs { margin: 8px 0 0; padding-inline-start: 18px; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); }
+/* ---- groups of duplicate articles and of ticket topics: one row each ---- */
+.ab-kb-cluster-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; min-width: 0; }
+.ab-kb-cluster-head .ab-row-title { flex: 1 1 10em; min-width: 0; }
+.ab-kb-cluster-head .ab-btn { flex: none; }
+.ab-kb-cluster .ab-row-main { gap: 6px; }
+.ab-kb-cluster .ab-row-main > p { margin: 0; }
+.ab-kb-count { flex: none; }
+.ab-rows > .ab-kb-picked { background: var(--ab-bg-subtle); }
+/* the articles (or example tickets) of a group: links, one per line, each with its views and last change under it */
+.ab-kb-articles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ab-kb-articles > li { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.ab-kb-open { display: inline-block; max-width: 100%; padding-block: 2px; line-height: 1.45; color: var(--ab-fg); text-decoration: none; overflow-wrap: anywhere; }
+.ab-kb-open:hover { text-decoration: underline; }
+.ab-kb-choose > li { padding: 2px 0; }
+.ab-kb-pairs { margin: 0; padding-inline-start: 18px; font-size: var(--ab-text-md); color: var(--ab-fg-soft); }
+.ab-kb-pairs li + li { margin-top: 4px; }
 
-/* ---- the chat tab ---- */
-.ab-kb-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: var(--ab-text-sm); }
+/* ---- the chat facts (Ticket screen) ---- */
+.ab-kb-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: var(--ab-text-md); }
 .ab-kb-facts dt { color: var(--ab-fg-muted); }
 .ab-kb-facts dd { margin: 0; overflow-wrap: anywhere; }
-.ab-kb-quote { margin: 8px 0 0; padding: 6px 10px; border-inline-start: 3px solid var(--ab-border-strong); background: var(--ab-bg-subtle); color: var(--ab-fg); overflow-wrap: anywhere; white-space: pre-wrap; }
-.ab-kb-quote-head { display: block; margin-bottom: 2px; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-fg-muted); }
+.ab-kb-quote { margin: 10px 0 0; padding: 10px 12px; border: 0; border-radius: var(--ab-radius-lg); background: var(--ab-surface); color: var(--ab-fg); overflow-wrap: anywhere; white-space: pre-wrap; }
+.ab-kb-quote-head { display: block; margin-bottom: 4px; font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-muted); }
 
-/* ---- The Knowledge screen (round 3) ---- */
-.ab-kbx { display: flex; flex-direction: column; gap: 8px; }
-.ab-kbx-tool { display: flex; flex-direction: column; gap: 6px; }
-.ab-kbx-tool .ab-field { margin-bottom: 0; }
-.ab-kbx-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: 8px; }
-.ab-kbx-results, .ab-kbx-compare { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--ab-border); }
-.ab-kbx-topics { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; }
+/* ---- The Knowledge screen ---- */
+.ab-kbx-tool { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ab-kbx-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: 10px; }
+.ab-kbx-tool .ab-fieldset { margin: 0; }
+/* what a tool found: under one divider, no box */
+/* a text button that starts a line (Export) sits in line with the text above it */
+:where(.ab-kbx-results, .ab-kbx-compare) > .ab-row > .ab-btn-quiet:first-child { margin-inline-start: -10px; }
+.ab-kbx-results, .ab-kbx-compare { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--ab-divider); min-width: 0; }
+.ab-kbx-topics { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.ab-kbx-topic .ab-check { flex: 1; min-width: 0; align-items: flex-start; cursor: pointer; }
+.ab-kbx-topic .ab-check input { margin-top: 4px; }
 
-/* knowledge search */
-.ab-kbx-search { display: flex; flex-direction: column; gap: 6px; }
-.ab-kbx-searchrow { align-items: center; flex-wrap: nowrap; }
+/* knowledge search, and the articles for the open ticket: one row per article */
+.ab-kbx-search { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ab-kbx-searchrow { flex-wrap: nowrap; }
 .ab-kbx-searchrow .ab-input { flex: 1 1 auto; min-width: 0; }
+.ab-kbx-searchrow .ab-btn { flex: none; }
 .ab-offscreen-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.ab-kbx-hits { gap: 8px; }
-.ab-kbx-hit { display: flex; flex-direction: column; gap: 3px; padding: 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg); min-width: 0; }
-.ab-kbx-hit-title { font-weight: 600; color: var(--ab-fg); text-decoration: none; overflow-wrap: anywhere; }
+.ab-kbx-number { font-family: var(--ab-mono); font-size: var(--ab-text-md); font-weight: 500; color: var(--ab-fg-muted); }
+.ab-kbx-hit-title { color: var(--ab-fg); text-decoration: none; }
 .ab-kbx-hit-title:hover { text-decoration: underline; }
-.ab-kbx-hit-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
-.ab-kbx-excerpt { margin: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); overflow-wrap: anywhere; }
-.ab-kbx-fresh-stale, .ab-kbx-fresh-expiring { background: var(--ab-warn-soft); border-color: var(--ab-warn-line); color: var(--ab-fg); }
-.ab-kbx-fresh-fresh { background: var(--ab-ok-soft); border-color: var(--ab-ok-line); color: var(--ab-fg); }
+.ab-kbx-hit-meta .ab-chip { padding: 0 8px; margin-inline-start: 6px; vertical-align: 1px; }
+.ab-kbx-hit-meta .ab-chip:first-child { margin-inline-start: 0; }
+.ab-kbx-excerpt { margin: 2px 0 0; font-size: var(--ab-text-md); color: var(--ab-fg-soft); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ab-kbx-copy { flex: none; margin-top: -3px; }

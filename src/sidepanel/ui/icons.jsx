@@ -1,22 +1,15 @@
-import { PATHS, SPARK } from './iconPaths.js';
+import { PATHS } from './iconPaths.js';
 
 // One small icon set for the whole panel (stroke icons on a 24 px grid, drawn in the text colour so they follow light and dark and
 // the accent of whatever holds them). Always decorative: the words next to an icon, or the aria-label of its button, are the name.
 // The drawing data is in iconPaths.js (shared with the bar on the ServiceNow page); to add an icon, add one entry there.
 
-/** An icon by name. size in px (the grid is 24, drawn at 16 by default). Unknown names draw nothing. */
-export function Icon({ name, size = 16, className = '' }) {
-  if (name === 'spark') {
-    return (
-      <svg className={`ab-icon${className ? ` ${className}` : ''}`} viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" focusable="false">
-        <path d={SPARK} fill="currentColor" />
-      </svg>
-    );
-  }
-  const d = PATHS[name];
+/** An icon by name. size in px (the grid is 24, drawn at 16 by default). Unknown names draw nothing. 'spark' is the AI mark. */
+export function Icon({ name, size = 16, className = '', strokeWidth = 1.8 }) {
+  const d = PATHS[name === 'spark' ? 'sparkle' : name];
   if (!d) return null;
   return (
-    <svg className={`ab-icon${className ? ` ${className}` : ''}`} viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <svg className={`ab-icon${className ? ` ${className}` : ''}`} viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <path d={d} />
     </svg>
   );

@@ -73,16 +73,20 @@ test('several answers per ticket: the newest is open, the earlier ones fold to o
     assert.equal(answers(ui).length, 1);
     const summary = answers(ui)[0];
     assert.match(summary.textContent, /Summarise this ticket/);
-    assert.match(summary.textContent, /AI/, 'the AI mark is on the answer');
-    const main = summary.querySelector('.ab-btn-ai');
+    assert.ok(summary.querySelector('.ab-answer-head .ab-ai-badge'), 'the AI mark is on the answer');
+    assert.ok(/(^|\s)ab-surface(\s|$)/.test(summary.getAttribute('class')), 'a soft panel, no border');
+    const main = summary.querySelector('.ab-answer-main');
     assert.equal(main.textContent, 'Copy', 'a summary is a note to self');
+    assert.ok(!/ab-btn-primary/.test(main.getAttribute('class')), 'Copy is outlined');
     await click(ui.button('Draft reply'));
     await settle(6);
     assert.equal(answers(ui).length, 2);
     assert.equal(openAnswers(ui).length, 1, 'only the newest is open');
     assert.match(openAnswers(ui)[0].textContent, /please restart/);
     assert.match(ui.text(), /Earlier: Summarise this ticket · just now/);
-    assert.match(openAnswers(ui)[0].querySelector('.ab-btn-ai').textContent, /customer/i, 'a reply leads with Insert');
+    assert.match(openAnswers(ui)[0].querySelector('.ab-answer-main').textContent, /customer/i, 'a reply leads with Insert');
+    assert.ok(/ab-btn-primary/.test(openAnswers(ui)[0].querySelector('.ab-answer-main').getAttribute('class')), 'Insert on the newest answer is the screen\'s main button');
+    assert.equal(openAnswers(ui)[0].querySelectorAll('.ab-btn-primary').length, 1);
     // at most four buttons in the row
     assert.ok(openAnswers(ui)[0].querySelectorAll('.ab-answer-actions > button').length <= 4);
     // the earlier one opens with one click
@@ -218,7 +222,7 @@ test('Ask about this ticket: the question goes out as data (masked), the answer 
     assert.match(ui.text(), /Answer to your question/);
     assert.match(ui.text(), /You asked: Did Abel Tuter already try the new client\?/);
     assert.match(ui.text(), /Yes, on 29 October/);
-    assert.equal(answers(ui)[0].querySelector('.ab-btn-ai').textContent, 'Copy');
+    assert.equal(answers(ui)[0].querySelector('.ab-answer-main').textContent, 'Copy');
     assert.equal(box.value, '', 'the box is ready for the next question');
   } finally {
     await ui.unmount();
@@ -258,7 +262,7 @@ test('Refine > Shorter rewrites the answer with names masked again; the result i
     const refined = openAnswers(ui)[0];
     assert.match(refined.textContent, /· Shorter/);
     assert.match(refined.textContent, /please restart the client/);
-    await click(refined.querySelector('.ab-btn-ai'));
+    await click(refined.querySelector('.ab-answer-main'));
     const fills = fake.fills();
     assert.equal(fills.length, 1);
     assert.equal(fills[0].field, 'comments', 'still a reply to the customer');
@@ -326,7 +330,8 @@ test('the check before sending, inside the answer area: ticket data first, then 
     await settle(4);
     assert.ok(ui.$('.ab-dialog'), 'the check comes first');
     assert.equal(globalThis.fetch.calls.length, 0, 'nothing sent yet');
-    assert.match(ui.$('.ab-preview').textContent, /^<ticket_data/, 'the ticket data is what shows');
+    assert.match(ui.$('.ab-sent').textContent, /^Ticket/, 'the ticket data is what shows, as a person reads it');
+    assert.equal(ui.$('.ab-preview'), null, 'the exact text is folded');
     await click(ui.button('Show the exact text'));
     assert.match(ui.$('.ab-preview').textContent, /^\[system\]/);
     await click(ui.button('Send to AI'));

@@ -28,7 +28,8 @@ export function Hints({ lines }) {
   );
 }
 
-/** A short coloured word: the state is always written out, colour only backs it up. */
+/** A short coloured word (a chip): the state is always written out, colour only backs it up. tone: '' | 'ok' | 'warn' | 'danger'. */
 export function Tag({ tone, children }) {
-  return <span className={`ab-tag${tone ? ` ab-chk-tag-${tone}` : ''}`}>{children}</span>;
+  const known = tone === 'ok' || tone === 'warn' || tone === 'danger';
+  return <span className={`ab-chip ab-chip-${known ? tone : 'neutral'} ab-chk-tag`}>{children}</span>;
 }

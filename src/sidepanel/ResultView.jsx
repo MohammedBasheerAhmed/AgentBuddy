@@ -10,12 +10,16 @@ import { choicesOf, createGuard, insertTargets, insertText, insertsForKind, perf
 import ReviewHints from './ReviewHints.jsx';
 import InsertFindings from './InsertFindings.jsx';
 import InsertEditor from './ticket/assist/answers/InsertEditor.jsx';
+import { AiBadge } from './ui/primitives.jsx';
 import { t, isolate } from '../i18n/index.js';
 
 const NO_TEXTS = []; // (one array, so the memoised review below is not redone on every render)
 
 /**
- * A finished answer with its Insert and Copy buttons.
+ * A finished answer with its Insert and Copy buttons (the answer on the Write and Knowledge screens, and a draft waiting on a blank
+ * form). The calm answer look, as on the Ticket screen: a soft surface with no border, the grey AI spark and the title, the text,
+ * then the buttons. One button is filled only when it is the step this answer is for: the first Insert of an answer that goes into a
+ * form. An answer that is only copied fills none: the screen around it has its own next step (Add below, Fill the form).
  *
  * props:
  *   feature, text            the feature and the answer (real names back in, locally)
@@ -53,7 +57,8 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   // The boxes this kind of record has (an insert may name its kinds: the problem form has no resolution-notes box).
   const kind = page.record?.kind;
   const inserts = kind ? insertsForKind(feature, kind) : insertsFor(feature);
-  // A note to self (a summary) leads with Copy; text that belongs on the form leads with its first Insert.
+  // Text that belongs on the form leads with its first Insert, filled. A note to self (a summary) leads with Copy, which is never
+  // filled here: the one filled button of these screens is their own next step.
   const copyFirst = primaryOf(feature, kind) === 'copy';
   const [editing, setEditing] = useState(null); // { key, text }: "Edit first" opened the text in a box before it goes in
 
@@ -182,10 +187,13 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   const writtenFor = !inserts.length ? '' : target?.newRecord ? t('For a new {form} form', { form: target.table === 'kb_knowledge' ? t('knowledge article') : target.table }) : source?.number ? t('Written for {number}', { number: isolate(source.number) }) : '';
 
   return (
-    <section className="ab-card ab-result" aria-labelledby={headingId}>
-      <h2 className="ab-h" id={headingId} ref={heading} tabIndex={-1}>{feature.title}</h2>
+    <section className="ab-surface ab-result" aria-labelledby={headingId}>
+      <div className="ab-result-head">
+        <AiBadge label="" />
+        <h2 className="ab-result-title" id={headingId} ref={heading} tabIndex={-1}>{feature.title}</h2>
+      </div>
       {writtenFor && <p className="ab-sub ab-result-for">{writtenFor}</p>}
-      <div className="ab-output">
+      <div className="ab-output ab-result-body">
         {choices.length ? (
           // A set of choices (the chat replies): each with its own Copy, since only one of them is sent.
           <ol className="ab-answer-choices">
@@ -200,13 +208,12 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
           <SafeText text={text} />
         )}
       </div>
-      {madeWithout && <p className="ab-hint ab-answer-gaps" style={{ marginTop: 8 }}>{madeWithout}</p>}
+      {madeWithout && <p className="ab-hint ab-answer-gaps">{madeWithout}</p>}
       {findings && (
         <InsertFindings
           field={findings.spec.field}
           items={findings.items}
           busy={busy}
-          style={{ marginTop: 8 }}
           onInsertAnyway={() => insert(findings.spec, findings.key, true)}
           // The part that was about to be inserted, not the whole answer, in a box to change before it goes in.
           onEditFirst={() => {
@@ -231,9 +238,9 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
           onCancel={() => setEditing(null)}
         />
       )}
-      {wrongRecord && <p className="ab-note ab-note-warn" role="status" style={{ marginTop: 8 }}>{wrongRecordText(source)}</p>}
-      {note && <p className={`ab-note ab-note-${note.kind}`} role="status" style={{ marginTop: 8 }}>{note.text}</p>}
-      <div className="ab-row" style={{ marginTop: 8 }}>
+      {wrongRecord && <p className="ab-note ab-note-warn" role="status">{wrongRecordText(source)}</p>}
+      {note && <p className={`ab-note ab-note-${note.kind}`} role="status">{note.text}</p>}
+      <div className="ab-row ab-result-actions">
         {inserts.map((spec, i) => {
           const key = `${spec.field}:${i}`;
           const inserted = Boolean(done[key]);
@@ -241,7 +248,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             <button
               key={key}
               type="button"
-              className={`ab-btn ab-btn-sm${i === 0 && !copyFirst ? ' ab-btn-primary' : ''}`}
+              className={`ab-btn${i === 0 && !copyFirst ? ' ab-btn-primary' : ''}`}
               disabled={busy || inserted || (wrongRecord && !spec.table)}
               onClick={() => insert(spec, key, false)}
             >
@@ -252,7 +259,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
         {feature.open?.table && page.newRecord?.table !== feature.open.table && (
           <button
             type="button"
-            className="ab-btn ab-btn-sm"
+            className="ab-btn"
             onClick={() => {
               // The tab is about to leave this record, which resets the panel: keep the draft (in memory, for this site only,
               // for 15 minutes) for the blank form.
@@ -268,12 +275,12 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
             {feature.open.label || t('Open a new form')}
           </button>
         )}
-        <button type="button" className={`ab-btn ab-btn-sm${copyFirst ? ' ab-btn-primary' : ''}`} onClick={() => copy()}>{t('Copy')}</button>
-        {onAgain && <button type="button" className="ab-btn ab-btn-sm" onClick={onAgain}>{t('Try again')}</button>}
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>{t('Close')}</button>
+        <button type="button" className="ab-btn" onClick={() => copy()}>{t('Copy')}</button>
+        {onAgain && <button type="button" className="ab-btn" onClick={onAgain}>{t('Try again')}</button>}
+        <button type="button" className="ab-btn ab-btn-quiet" onClick={onClose}>{t('Close')}</button>
       </div>
-      {replacing && <p className="ab-hint" style={{ marginTop: 8 }}>{t('A one-line field such as a title is replaced, not added to.')}</p>}
-      <p className="ab-hint" style={{ marginTop: 8 }}>{t('AI can be wrong. Check the text before you use it.')}</p>
+      {replacing && <p className="ab-hint ab-result-foot">{t('A one-line field such as a title is replaced, not added to.')}</p>}
+      <p className="ab-hint ab-result-foot">{t('AI can be wrong. Check the text before you use it.')}</p>
     </section>
   );
 }

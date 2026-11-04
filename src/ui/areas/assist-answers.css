@@ -1,70 +1,78 @@
 /* assist-answers: the answer area of the Ticket screen's AI Assist half, the question box, the check of what is sent and the
-   edit box before Insert (owner: Answers agent, docs/round3.md). Only --ab-* tokens; AI elements use --ab-ai*. Panel 320 to 480 px. */
+   edit box before Insert (owner: Answers agent, docs/round3.md). Only --ab-* tokens; the AI mark is the small grey spark. An answer is
+   a soft panel with no border (.ab-surface). Panel 320 to 480 px. */
 
 /* ---- the area ---- */
-.ab-answers { display: flex; flex-direction: column; gap: 8px; }
-.ab-answers-elsewhere { margin: 0; padding-inline-start: 16px; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-answers { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ab-answers-elsewhere { margin: 0; padding-inline-start: 16px; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 
 /* ---- progress and errors ---- */
-.ab-runstatus { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; border-color: var(--ab-ai-line); background: var(--ab-ai-soft); color: var(--ab-fg); }
+.ab-runstatus { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; background: var(--ab-surface); color: var(--ab-fg); }
 .ab-runstatus-text { flex: 1 1 14em; min-width: 0; overflow-wrap: anywhere; }
 .ab-runerror .ab-row { gap: 6px; }
 
 /* ---- one answer ---- */
-.ab-answer { border: 1px solid var(--ab-ai-line); border-radius: var(--ab-radius); background: var(--ab-bg-raised); padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.ab-answer.is-folded { padding: 0; border-color: var(--ab-border); background: var(--ab-bg-subtle); }
-.ab-answer-head { display: flex; align-items: center; gap: 4px; margin: 0 -6px; }
-.ab-answer-toggle, .ab-answer-fold { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: start; border: 0; background: transparent; padding: 8px 6px; cursor: pointer; border-radius: var(--ab-radius-sm); color: var(--ab-fg); }
-.ab-answer-fold { padding: 6px 10px; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); }
-.ab-answer-toggle[aria-expanded='true'] .ab-cardx-chevron, .ab-answer-fold[aria-expanded='true'] .ab-cardx-chevron { transform: rotate(45deg); }
-.ab-answer-title { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-answer { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ab-answer-head { display: flex; align-items: center; gap: 8px; min-width: 0; margin-block: -4px -2px; }
+.ab-answer-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 2px 0; border: 0; background: transparent; text-align: start; cursor: pointer; border-radius: var(--ab-radius-xs); color: var(--ab-fg); }
+.ab-answer-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ab-answer-when { flex: none; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-answer-close { margin-inline-end: -6px; }
+/* an earlier answer, folded to one quiet line */
+.ab-answer.is-folded { padding: 0; }
+.ab-answer-fold { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 0; border: 0; background: transparent; text-align: start; cursor: pointer; border-radius: var(--ab-radius-xs); font-size: var(--ab-text-md); color: var(--ab-fg-soft); }
+.ab-answer-fold:hover { color: var(--ab-fg); }
 .ab-answer-fold-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ab-answer-when { flex: none; color: var(--ab-fg-muted); font-size: var(--ab-text-xs); margin-inline-start: auto; }
-.ab-answer-fold .ab-answer-when { margin-inline-start: 0; }
-.ab-answer-close { flex: none; }
-.ab-answer-q { margin: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); overflow-wrap: anywhere; }
-.ab-answer .ab-output { overflow-wrap: anywhere; }
-.ab-answer-gaps { margin: 0; }
-.ab-answer-hint { margin: 0; }
+.ab-answer-fold .ab-chevron { margin-inline-start: auto; }
+.ab-answer-q { margin: 0; font-size: var(--ab-text-md); color: var(--ab-fg-soft); overflow-wrap: anywhere; }
+/* the answer itself: on the panel's own surface, no second box */
+.ab-answer .ab-output { padding: 0; border: 0; border-radius: 0; background: transparent; overflow-wrap: anywhere; }
+.ab-answer-gaps, .ab-answer-hint { margin: 0; }
 .ab-answer-choices { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 8px; }
 .ab-answer-choices li > .ab-btn { margin-top: 2px; }
 .ab-findings { margin: 4px 0 6px; padding-inline-start: 18px; }
+/* what stays masked in the answer: one quiet line with a shield */
+.ab-answer-mask { margin: 0; display: flex; align-items: flex-start; gap: 6px; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-answer-mask-icon { flex: none; margin-top: 2px; }
 
-/* the row of at most four buttons, and the AI's main button */
+/* the row of at most four buttons: the one that leads (filled when it is Insert on the newest answer), then outlined ones */
 .ab-answer-actions { gap: 6px; }
-/* ab-btn-ai is defined once in shell.css. */
-.ab-menu-toggle { display: inline-flex; align-items: center; gap: 6px; }
-.ab-menu-caret { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translate(-1px, -1px); transition: transform 120ms ease-out; }
-.ab-menu-toggle[aria-expanded='true'] .ab-menu-caret { transform: rotate(-135deg) translate(-1px, -1px); }
-.ab-menu { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
+.ab-answer-actions > .ab-btn { padding-inline: 12px; }
+.ab-menu-toggle { display: inline-flex; align-items: center; gap: 4px; }
+.ab-menu-toggle .ab-chevron { color: currentColor; }
+.ab-menu { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 0; border-radius: var(--ab-radius); background: var(--ab-bg); }
 .ab-menu-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ab-menu-item { text-align: start; border: 1px solid transparent; background: transparent; padding: 5px 8px; border-radius: var(--ab-radius-xs); color: var(--ab-fg); cursor: pointer; font-size: var(--ab-text-sm); }
+.ab-menu-item { min-height: 32px; text-align: start; border: 0; background: transparent; padding: 5px 8px; border-radius: var(--ab-radius-sm); color: var(--ab-fg); cursor: pointer; font-size: var(--ab-text-md); }
 .ab-menu-item:hover:not(:disabled) { background: var(--ab-bg-sunken); }
 .ab-menu-item:disabled { color: var(--ab-fg-muted); cursor: default; }
 .ab-refine-lang { width: auto; flex: 0 1 11rem; min-width: 0; }
 .ab-refine-own { flex: 1 1 12rem; width: auto; min-width: 0; }
 
 /* ---- edit before Insert ---- */
-.ab-insert-editor { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--ab-ai-line); border-radius: var(--ab-radius-sm); background: var(--ab-bg); }
+.ab-insert-editor { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 0; border-radius: var(--ab-radius); background: var(--ab-bg); }
 .ab-insert-editor .ab-field { margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .ab-insert-text { min-height: 120px; font: inherit; }
 .ab-insert-modes { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .ab-insert-modes legend { padding: 0; margin-bottom: 2px; }
-.ab-radio { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ab-text-sm); }
+.ab-radio { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ab-text-md); }
 
-/* ---- "Ask about this ticket" ---- */
-.ab-ask { display: flex; flex-direction: column; gap: 4px; }
-.ab-ask-label { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--ab-text-sm); }
-.ab-ask-row { display: flex; gap: 6px; align-items: center; }
-.ab-ask-input { flex: 1 1 auto; width: auto; min-width: 0; }
+/* ---- "Ask about this ticket": a box with the send button inside it ---- */
+.ab-ask { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ab-ask-label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg-soft); }
+.ab-ask-row { display: flex; align-items: center; gap: 6px; min-height: 42px; padding-block: 4px; padding-inline: 12px 4px; border: 1px solid var(--ab-input-border); border-radius: 10px; background: var(--ab-bg); }
+.ab-ask-row:focus-within { box-shadow: var(--ab-ring); }
+.ab-ask-input { flex: 1 1 auto; width: auto; min-width: 0; min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--ab-fg); font-size: var(--ab-text-base); }
+.ab-ask-input:focus-visible { box-shadow: none; outline: none; }
+.ab-ask-input::placeholder { color: var(--ab-fg-muted); }
+.ab-ask-send { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); color: var(--ab-fg); cursor: pointer; }
+.ab-ask-send:hover:not(:disabled) { background: var(--ab-border); }
+.ab-ask-send:disabled { opacity: 0.55; cursor: not-allowed; }
 .ab-ask-why { margin: 0; }
 
-/* ---- the check of what is sent ---- */
-.ab-preview-h { margin: 8px 0 4px; font-size: var(--ab-text-sm); font-weight: 650; }
+/* ---- the check of what is sent (its new look is in preview.css, owned by the preview's own agent) ---- */
 .ab-preview-rules { margin-top: 8px; font-size: var(--ab-text-sm); }
 .ab-preview-rules summary { cursor: pointer; color: var(--ab-fg-soft); }
 .ab-preview-rules-text { font-family: var(--ab-mono); font-size: var(--ab-text-xs); white-space: pre-wrap; word-break: break-word; background: var(--ab-bg-subtle); border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); padding: 8px; color: var(--ab-fg-soft); }
-.ab-preview-switch { margin-top: 6px; }
 .ab-confirm-short { margin: 0; overflow-wrap: anywhere; }
 
-@media (prefers-reduced-motion: reduce) { .ab-menu-caret { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ab-answer .ab-chevron, .ab-ask .ab-chevron { transition: none; } }

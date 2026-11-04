@@ -2,6 +2,8 @@ import { FORMAT_FEATURES, orgFormatOf, resolveFormat } from '../formats/formats.
 import { saveFormat } from '../formats/saveFormat.js';
 import FormatEditor from '../formats/FormatEditor.jsx';
 import { featureById, isFeatureAvailable } from '../features/registry.js';
+import { SectionHead } from './fields.jsx';
+import { Icon } from '../sidepanel/ui/icons.jsx';
 import { t, tm, t as tr } from '../i18n/index.js';
 
 /**
@@ -20,21 +22,23 @@ const STATE_TEXT = {
   default: '',
 };
 
+/** The actions whose format can change, as the policy leaves them (the section is on the page, and in the menu beside it, when any). */
+export const formatItems = (eff) => FORMAT_FEATURES.map((spec) => ({ spec, feature: featureById(spec.id) })).filter((x) => x.feature && isFeatureAvailable(x.feature, eff.policy));
+
 export function FormatsSection({ eff, reload }) {
   const mine = eff.values.formats || {};
   const org = eff.policy?.orgFormats || [];
-  const items = FORMAT_FEATURES.map((spec) => ({ spec, feature: featureById(spec.id) })).filter((x) => x.feature && isFeatureAvailable(x.feature, eff.policy));
+  const items = formatItems(eff);
   const groups = [
     { id: 'sections', title: t('Summaries and notes you can lay out'), items: items.filter((x) => x.spec.kind === 'sections') },
     { id: 'extras', title: t('Other AI actions: extra instructions'), items: items.filter((x) => x.spec.kind === 'extras') },
   ].filter((g) => g.items.length);
   if (!items.length) return null;
   return (
-    <section className="ab-section" aria-labelledby="h-formats">
-      <h2 className="ab-h" id="h-formats">{t('How AI answers are written')}</h2>
-      <p className="ab-sub">
+    <section className="ab-section ab-set-section" aria-labelledby="h-formats">
+      <SectionHead id="h-formats" title={t('How AI answers are written')}>
         {t('Choose the sections, the style and the length of a summary, or add a few sentences of your own to any action. You can read exactly what is sent, and the rules about facts, privacy and customers always stay on.')}
-      </p>
+      </SectionHead>
       {groups.map((g) => (
         <div key={g.id} className="ab-fmt-group" role="group" aria-label={g.title}>
           <h3 className="ab-fmt-grouphead">{g.title}</h3>
@@ -43,10 +47,11 @@ export function FormatsSection({ eff, reload }) {
             // The organisation's format whatever is in force, so the editor can offer it back after the person chose another one.
             const inherited = orgFormatOf(feature.id, org);
             return (
-              <details key={feature.id} className="ab-more ab-fmt-item" data-feature={feature.id}>
+              <details key={feature.id} className="ab-more ab-set-fold ab-fmt-item" data-feature={feature.id}>
                 <summary>
                   <span className="ab-fmt-title">{tr(feature.title)}</span>
                   {source !== 'default' && <span className={`ab-fmt-state ab-fmt-state-${source}`}>{tr(STATE_TEXT[source])}</span>}
+                  <Icon name="chevronDown" className="ab-chevron" />
                 </summary>
                 <p className="ab-hint">{tr(feature.description)}</p>
                 <FormatEditor

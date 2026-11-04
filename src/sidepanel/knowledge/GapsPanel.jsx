@@ -3,7 +3,8 @@ import { read } from '../ask.js';
 import RecordLink from '../RecordLink.jsx';
 import { toCsv } from '../../lib/export.js';
 import { downloadText } from '../reports/download.js';
-import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
+import { EmptyNote } from '../ui/primitives.jsx';
+import { MoreRows } from '../write/Section.jsx';
 import Notes from './Notes.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { TOPIC_COLUMNS, exportFileName, topicRows } from '../knowledgeScreen/articleInfo.js';
@@ -133,13 +134,13 @@ function GapsRadar({ page, active = true, onFound = () => {} }) {
     <div className="ab-kbx-tool">
       <p className="ab-hint">{t('Topics that keep coming up in resolved tickets without an article. Looks at titles, categories and items only; at most the newest 500.')}</p>
       <div className="ab-kbx-controls">
-        <div className="ab-field">
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-gap-days">{t('Resolved in the last')}</label>
           <select id="ab-gap-days" className="ab-select" value={days} disabled={loading} onChange={(e) => setDays(Number(e.target.value))}>
             {DAYS.map((d) => <option key={d} value={d}>{tn(d, '{n} day', '{n} days')}</option>)}
           </select>
         </div>
-        <div className="ab-field">
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-gap-scope">{t('Whose tickets')}</label>
           <select id="ab-gap-scope" className="ab-select" value={scope} disabled={loading} onChange={(e) => setScope(e.target.value)}>
             <option value="all">{Number.isFinite(scopes.total) ? t('Everything I can see ({count})', { count: n(scopes.total) }) : t('Everything I can see')}</option>
@@ -177,31 +178,34 @@ function GapsRadar({ page, active = true, onFound = () => {} }) {
           <Notes access={data.access} />
           {data.clusters.length === 0 && data.scanned > 0 && <EmptyNote>{t('No topic came up more than once. Try a longer window or a wider scope.')}</EmptyNote>}
           {data.scanned === 0 && <EmptyNote>{t('No resolved tickets were found in that window and scope.')}</EmptyNote>}
-          <ShowMore
+          <MoreRows
             items={data.clusters}
-            className="ab-list"
+            label={t('Topics without an article')}
             render={(c) => (
-              <div key={c.id} className="ab-kb-cluster">
-                <div className="ab-row">
-                  <strong>{shownText(c.label)}</strong>
-                  <span className="ab-spacer" />
-                  <span className="ab-tag">{tn(c.count, '{n} ticket', '{n} tickets')}</span>
+              <li key={c.id} className="ab-row ab-kb-cluster">
+                <div className="ab-row-main">
+                  <div className="ab-kb-cluster-head">
+                    <span className="ab-row-title">{shownText(c.label)}</span>
+                    <span className="ab-row-sub ab-kb-count">{tn(c.count, '{n} ticket', '{n} tickets')}</span>
+                  </div>
+                  {(c.withFix > 0 || c.category || c.ci) && (
+                    <div className="ab-chips">
+                      {c.withFix > 0 && <span className="ab-chip ab-chip-neutral">{t('{withFix} with a written fix', { withFix: c.withFix })}</span>}
+                      {c.category && <span className="ab-chip ab-chip-neutral">{c.category}</span>}
+                      {c.ci && <span className="ab-chip ab-chip-neutral">{c.ci}</span>}
+                    </div>
+                  )}
+                  <ul className="ab-kb-articles">
+                    {c.examples.map((e) => (
+                      <li key={e.sysId}>
+                        <RecordLink page={page} item={{ table: e.table, sysId: e.sysId }} className="ab-kb-open">
+                          <span className="ab-kbx-number">{e.number}</span> {e.title}
+                        </RecordLink>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="ab-tags">
-                  {c.withFix > 0 && <span className="ab-tag">{t('{withFix} with a written fix', { withFix: c.withFix })}</span>}
-                  {c.category && <span className="ab-tag">{c.category}</span>}
-                  {c.ci && <span className="ab-tag">{c.ci}</span>}
-                </div>
-                <ul className="ab-kb-articles">
-                  {c.examples.map((e) => (
-                    <li key={e.sysId}>
-                      <RecordLink page={page} item={{ table: e.table, sysId: e.sysId }} className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open">
-                        <span className="ab-record-number">{e.number}</span> {e.title}
-                      </RecordLink>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              </li>
             )}
           />
           {data.clusters.length > 0 && (

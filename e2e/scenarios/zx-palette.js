@@ -50,9 +50,11 @@ module.exports = {
       name: document.querySelector('.ab-header .ab-brand')?.innerText,
       instance: document.querySelector('.ab-header .ab-instance')?.innerText,
       buttons: [...document.querySelectorAll('.ab-header button')].map((b) => b.getAttribute('aria-label')),
+      promise: [document.querySelector('.ab-header .ab-brandtext')?.title || '', document.querySelector('.ab-header .ab-promise')?.textContent || ''],
     }));
     t.check('header: the mark, the name and the instance it reads', header.mark && header.name === 'Agent Buddy' && Boolean(header.instance), JSON.stringify(header));
     t.check('header: buttons for the palette, the colours and Settings, each with a name', ['Search commands', 'Switch to dark colours', 'Settings'].every((n) => header.buttons.includes(n)), JSON.stringify(header.buttons));
+    t.check('header: no more than those three buttons, and the privacy promise is still said there (on hover and to a screen reader)', header.buttons.length === 3 && header.promise.every((x) => /Personal data is masked before any AI call/.test(x)), JSON.stringify(header));
 
     // ---- opening, searching, running --------------------------------------------------------------------------------------------------
     await openPalette();

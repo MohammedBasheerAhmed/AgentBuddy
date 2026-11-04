@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { activeProfiles } from '../../profiles/profiles.js';
 import { isFeatureEnabled } from '../../policy/policy.js';
-import { AiBadge, CardFrame } from '../ui/primitives.jsx';
+import { CardFrame } from '../ui/primitives.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { instanceKey } from '../../reports/dashboards.js';
 import { createLimiter } from '../../reports/engine/cache.js';
@@ -45,7 +45,8 @@ function Headless({ section, widget, env }) {
 
 /**
  * The Team screen's AI Assist half (AI28-AI30): the hand-over note, "Explain this dashboard" and the coaching snapshot. Every AI call
- * goes through useRun (preview, masking, policy); every button and answer carries the AI mark. It works from the numbers the Insights
+ * goes through useRun (preview, masking, policy); every AI button and answer carries the AI mark (the small grey spark: no mark in the
+ * corner of the sections, TRACKER.md 2.3). Calm: sections parted by dividers, each answer on a soft surface. It works from the numbers the Insights
  * half loaded (teamShare.js). When the Insights half has not been opened in this panel, this half reads the same dashboard itself,
  * through the same GET-only reads, so it never explains numbers nobody looked up.
  * Props: { page, eff, active }.
@@ -147,7 +148,7 @@ export default function TeamAssist({ page, eff, active }) {
         </div>
       )}
 
-      <CardFrame id="team-handover" title={t('Hand-over note')} summary={`${t('Last {hours} hours', { hours })} · ${scopeText}`} actions={<AiBadge />}>
+      <CardFrame id="team-handover" title={t('Hand-over note')} summary={`${t('Last {hours} hours', { hours })} · ${scopeText}`}>
         <HoursPicker hours={hours} onChange={setHours} label={t('Period of the hand-over')} />
         {handover ? (
           handover.data?.available === false ? (
@@ -165,7 +166,7 @@ export default function TeamAssist({ page, eff, active }) {
         <HandoverAi result={handover?.data?.available === false ? null : handover} page={page} eff={eff} hours={hours} primary={handoverOn} />
       </CardFrame>
 
-      <CardFrame id="team-explain" title={t('Explain this dashboard')} summary={`${shown(dash.name)} · ${scopeText}`} actions={<AiBadge />}>
+      <CardFrame id="team-explain" title={t('Explain this dashboard')} summary={`${shown(dash.name)} · ${scopeText}`}>
         <ExplainBody entries={explainEntries(entries)} page={page} eff={eff} primary={!handoverOn} />
       </CardFrame>
 
@@ -174,7 +175,7 @@ export default function TeamAssist({ page, eff, active }) {
           {gate === 'off' ? t('Coaching snapshot: turned off by your organisation.') : t('Coaching snapshot: off until your organisation switches coaching on.')}
         </p>
       ) : (
-        <CardFrame id="team-coaching" title={t('Coaching snapshot')} summary={t('One group, a sample of resolved tickets')} actions={<AiBadge />} defaultOpen={false}>
+        <CardFrame id="team-coaching" title={t('Coaching snapshot')} summary={t('One group, a sample of resolved tickets')} defaultOpen={false}>
           <CoachingTool env={{ page, tables, blocked, myGroups: context.data?.groups || [], groupsNote: context.data?.groupsNote || '' }} eff={eff} needs={coachingNeeds(eff)} bare />
         </CardFrame>
       )}

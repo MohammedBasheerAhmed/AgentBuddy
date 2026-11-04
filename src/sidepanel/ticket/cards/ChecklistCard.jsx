@@ -5,7 +5,7 @@ import { Facts, Hints } from '../../checks/Bits.jsx';
 import { ProgressBar, StepList } from '../../checks/ChecklistSteps.jsx';
 import { panelChecklistStore } from '../../checks/panelStore.js';
 import { allowSensitiveOf, read } from './data.js';
-import { recordKey, useInsight, useReport } from './useInsight.js';
+import { readFully, recordKey, useInsight, useReport } from './useInsight.js';
 import { Group, QuietButton, ReadState } from './bits.jsx';
 import { t } from '../../../i18n/index.js';
 
@@ -13,7 +13,7 @@ import { t } from '../../../i18n/index.js';
 // The ONLY thing kept is which steps are ticked, as short hashes in the browser's session storage next to a salted record hash, never
 // the step text (src/checks/checklistStore.js). No AI here: a proposed list is in AI Assist.
 
-export default function ChecklistCard({ page, eff, record, active, setSummary }) {
+export default function ChecklistCard({ page, eff, record, active, setSummary, setAttention }) {
   const store = useMemo(() => panelChecklistStore(), []);
   const allowSensitive = allowSensitiveOf(eff);
   const state = useInsight({
@@ -44,6 +44,7 @@ export default function ChecklistCard({ page, eff, record, active, setSummary })
   const progress = checklistProgress(steps, done);
   const answers = useMemo(() => (data ? answersModel(data.parent || data.own) : null), [data]);
   useReport(setSummary, data ? (steps.length ? progress.text : t('No written steps found')) : '');
+  useReport(setAttention, data && !steps.length && readFully(data.access) ? 'clear' : '');
 
   async function toggle(step, on) {
     const before = done;

@@ -33,7 +33,7 @@ const checkRows = async (p) => {
   await showAllIn(p, 'resolve');
   return p.evaluate(() => window.__vis(document.querySelectorAll('[data-card="resolve"] .ab-chk-item')).map((li) => ({ status: li.getAttribute('data-status'), text: li.innerText.replace(/\s+/g, ' ').trim() })));
 };
-const summaryIn = (p, id) => p.evaluate((cid) => document.querySelector(`[data-card="${cid}"] .ab-cardx-summary`)?.innerText || '', id);
+const summaryIn = (p, id) => p.evaluate((cid) => document.querySelector(`[data-card="${cid}"] .ab-ins-card-summary`)?.textContent || '', id);
 // The AI half holds the AI actions. A part that needs one runs only when AI Assist offers it.
 const assistOffers = (p, re) => showAction(p, re);
 const findCheck = (rows, re) => rows.find((r) => re.test(r.text));
@@ -80,7 +80,7 @@ module.exports = {
       const req = await checkAiRun(t, ctx, p, 'request-explain', ran, { before, system: /tell a requester where their service request stands/, userHas: [/Status worked out from the records/i] });
       t.check('request-explain: the answers to the request questions (Windows 11, the justification, the secrets) did NOT go to the AI', req ? !/Windows 11|Business justification|hunter2|charlie\.w@example/i.test(req.raw) : false);
       t.check('request-explain: the requester (Charlie) and the approver (Dave) are masked in what was sent', req ? !/Charlie|Whitherspoon|Dave|Loftus/i.test(req.raw) : false);
-      await clickButton(p, /^Close/);
+      await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close'))[0]?.click()); // (Close on an answer is an icon button: its name is its aria-label)
     } else t.warning('request-explain is not offered in AI Assist yet: its checks did not run (Actions agent)');
     await ticket.close();
 
@@ -206,7 +206,7 @@ module.exports = {
       const improved = await runAfter(p, () => clickButton(p, /^Improve my resolution notes/));
       const imp = await checkAiRun(t, ctx, p, 'resolution-improve', improved, { before: before3, system: /improve the resolution notes they are writing/, userHas: [/Replaced the expired gateway certificate on EU-2/, /\[EMAIL_\d+\]/] });
       t.check('resolution-improve: the AI got the notes as typed RIGHT NOW (unsaved), and the typed email address did not travel', imp ? !imp.raw.includes("priya.raman@example.com") : false);
-      await clickButton(p, /^Close/);
+      await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close'))[0]?.click()); // (Close on an answer is an icon button: its name is its aria-label)
     } else t.warning('"Improve my resolution notes" is not offered in AI Assist yet: its checks did not run (Actions agent)');
     t.check('nothing was written to the form by any of this', (await ticket.evaluate(() => window.__gformCalls.length)) === 0);
 

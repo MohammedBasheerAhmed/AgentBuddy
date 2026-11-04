@@ -39,9 +39,11 @@ export const PATHS = {
   keyboard: 'M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
   mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6',
   clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2',
+  // the AI mark of the panel: an outlined four-point spark (a filled one this small read as a "+")
+  sparkle: 'M12 4l2.2 5.8L20 12l-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2z',
 };
 
-// The AI spark is a filled shape (as the AI mark has always been), so it is drawn apart from the stroke icons.
+// A filled spark: what the bar on the ServiceNow page draws for an action it has no icon for. The panel draws the outlined `sparkle`.
 export const SPARK = 'M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z';
 
 // The product's mark: a rounded tile, a speech bubble and a tick (the extension's own icon), as three paths on a 32 px grid. BrandMark

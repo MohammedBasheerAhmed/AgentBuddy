@@ -87,14 +87,15 @@ test('a rewrite made on one ticket is not offered for another: the buttons are o
   await ui.unmount();
 });
 
-test('what was typed in Rewrite and Notes survives folding their cards', async () => {
+// (Rewrite and Notes are open sections now, nothing folds them away: what was typed must survive the page moving on instead, as it
+// does when "Open a blank incident" changes the tab.)
+test('what was typed in Rewrite and Notes survives another record opening in the tab; both stay on screen as sections', async () => {
   setup();
   const ui = await mount(<WriteAssist page={pageOf(A, 'INC0010001')} eff={eff()} active />);
+  assert.deepEqual(ui.$$('[data-card]').map((s) => s.getAttribute('data-card')), ['write-rewrite', 'write-notes']);
   await type(ui.field('Text to rewrite'), 'half a draft');
   await type(ui.field('Rough notes from the call, chat or visit'), 'vpn down since 9');
-  const toggles = ui.$$('.ab-cardx-toggle');
-  for (const t of toggles) await click(t);
-  for (const t of ui.$$('.ab-cardx-toggle')) await click(t);
+  await ui.rerender(<WriteAssist page={pageOf(B, 'INC0010002')} eff={eff()} active />);
   assert.equal(ui.field('Text to rewrite').value, 'half a draft');
   assert.equal(ui.field('Rough notes from the call, chat or visit').value, 'vpn down since 9');
   await ui.unmount();
@@ -282,11 +283,30 @@ test('snippets are added from a file: checked, merged, and every skipped entry n
 test('the snippet editor takes the focus when it opens and gives it back when it closes; "Shortcut" is now "Search word"', async () => {
   setup();
   const ui = await mount(<WriteInsights page={pageOf(A, 'INC0010001')} eff={eff()} active />);
-  await click(ui.button('Write my own'));
+  // No snippets yet: the empty state says what a snippet is for and offers one step (three examples); "New snippet" is below it.
+  assert.match(ui.text(), /No snippets yet\. A snippet is a reply you write once and reuse/);
+  assert.ok(ui.hasButton('Add three examples'));
+  await click(ui.button('New snippet'));
   assert.equal(focused().id, 'ab-snip-title', 'the focus is in the Title box');
   assert.ok(ui.field('Search word (optional)'));
   await click(ui.button('Cancel'));
-  assert.equal(focused().textContent, 'Write my own', 'the focus is back where the editor was opened from');
+  assert.equal(focused().textContent, 'New snippet', 'the focus is back where the editor was opened from');
+  await ui.unmount();
+});
+
+test('snippets are rows that open in place: the row says it is open, the snippet\'s part is under it, a second click closes it', async () => {
+  setup();
+  const policy = { orgSnippets: [{ title: 'Password reset steps', body: 'Hello {{caller.first_name | there}},\nopen the portal.', shortcut: 'pw' }] };
+  const ui = await mount(<WriteInsights page={pageOf(A, 'INC0010001')} eff={eff(undefined, policy)} active />);
+  const row = ui.$('[data-snippet]');
+  assert.equal(row.getAttribute('aria-expanded'), 'false');
+  assert.match(row.textContent, /Hello \{\{caller\.first_name \| there\}\},$/, 'the row shows the first line of the text');
+  await click(row);
+  assert.equal(ui.$('[data-snippet]').getAttribute('aria-expanded'), 'true');
+  const part = ui.$('[aria-label="Snippet: Password reset steps"]');
+  assert.ok(part && part.parentNode === ui.$('[data-snippet]').parentNode, 'the snippet opens under its own row');
+  await click(ui.$('[data-snippet]'));
+  assert.equal(ui.$('[aria-label="Snippet: Password reset steps"]'), null);
   await ui.unmount();
 });
 

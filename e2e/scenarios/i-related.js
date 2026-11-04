@@ -3,36 +3,8 @@
 //    plain note instead of an error. Tickets in the cards are real links that open in a NEW tab: the ticket being worked on stays.
 const { waitForText, textOf, waitForRecord, openScreen, openHalf } = require('../ui.js');
 const { prepare } = require('../common.js');
-
-/** Open an Insights card by its title (the CardFrame toggle) if it is folded. */
-async function openCard(p, title) {
-  await p.waitForFunction(
-    (t) => [...document.querySelectorAll('.ab-cardx-toggle')].some((b) => b.getClientRects().length > 0 && b.querySelector('.ab-cardx-title')?.innerText.trim() === t),
-    { timeout: 15000 },
-    title
-  );
-  await p.evaluate((t) => {
-    const b = [...document.querySelectorAll('.ab-cardx-toggle')].find((x) => x.getClientRects().length > 0 && x.querySelector('.ab-cardx-title')?.innerText.trim() === t);
-    if (b && b.getAttribute('aria-expanded') !== 'true') b.click();
-    b?.scrollIntoView({ block: 'start' });
-  }, title);
-}
-
-/** Open a group inside a card (a folded list with a count) by the start of its title. */
-const openGroup = (p, re) =>
-  p.evaluate((src) => {
-    const rx = new RegExp(src);
-    const b = [...document.querySelectorAll('.ab-ins-group-toggle')].find((x) => x.getClientRects().length > 0 && rx.test(x.innerText.trim()));
-    if (b && b.getAttribute('aria-expanded') !== 'true') b.click();
-    return Boolean(b);
-  }, re.source);
-
-/** The summary line next to a card's title. */
-const summaryOf = (p, title) =>
-  p.evaluate((t) => {
-    const b = [...document.querySelectorAll('.ab-cardx-toggle')].find((x) => x.getClientRects().length > 0 && x.querySelector('.ab-cardx-title')?.innerText.trim() === t);
-    return b?.querySelector('.ab-cardx-summary')?.innerText.trim() || '';
-  }, title);
+// The redesign: the cards are one list of rows; a row shows the card's one line without being opened (e2e/insightsUi.js).
+const { openCard, openGroup, summaryOf } = require('../insightsUi.js');
 
 module.exports = {
   id: 'i',
@@ -50,16 +22,16 @@ module.exports = {
     await waitForRecord(p);
     await openScreen(p, 'Ticket');
 
-    // ---- N1: the ticket at a glance, over both halves -----------------------------------------------------------------------------
+    // ---- N1: the ticket at the top (no box); with AI Assist on show it shrinks to one line, so look at it with Insights on show ------
+    await openHalf(p, 'insights');
     await p.waitForSelector('.ab-glance', { timeout: 15000 });
     await waitForText(p, /Beth Anglin/, { timeout: 15000 });
     const glance = (await textOf(p, '.ab-glance')) || '';
     t.check('the glance shows the number, the title, the state and the priority', /INC0010001/.test(glance) && /VPN keeps disconnecting/.test(glance) && /In Progress/.test(glance) && /High/.test(glance), glance.replace(/\s+/g, ' ').slice(0, 200));
     t.check('...the owner and when it was last updated (read with the glance read, no AI)', /Beth Anglin/.test(glance) && /Updated /.test(glance), glance.replace(/\s+/g, ' ').slice(0, 240));
     const glanceLines = await p.$$eval('.ab-glance > p.ab-glance-line, .ab-glance > .ab-glance-head', (els) => els.filter((e) => e.getClientRects().length > 0).length);
-    t.check('the glance is calm: three short lines at most', glanceLines <= 3, String(glanceLines));
+    t.check('the glance is calm: the number and title, the chips, one line of who and when', glanceLines <= 3, String(glanceLines));
 
-    await openHalf(p, 'insights');
     t.check('the Insights half carries no AI mark', (await p.evaluate(() => [...document.querySelectorAll('[id$="-half-panel-insights"] .ab-ai-badge')].filter((e) => e.getClientRects().length > 0).length)) === 0);
 
     // ---- N2: related tickets ----------------------------------------------------------------------------------------------------------
@@ -89,11 +61,14 @@ module.exports = {
 
     // ---- a table the user may not read ------------------------------------------------------------------------------------------------
     inst.setBehaviour({ denied: ['kb_knowledge'] });
+    // (The cards are rows that open in place: its Refresh button is in the card's body, on screen once the row is open.)
+    await openCard(p, 'Knowledge for this ticket');
     await p.evaluate(() => {
       const card = document.querySelector('[data-card="knowledge"]');
       [...(card?.querySelectorAll('button') || [])].find((b) => /^Refresh/.test(b.innerText.trim()))?.click();
     });
-    await waitForText(p, /Knowledge articles: .*cannot read/i, { timeout: 15000 });
+    // (The note's label and its sentence are on separate lines in the card.)
+    await waitForText(p, /Knowledge articles:\s*[^\n]*cannot read/i, { timeout: 15000 });
     t.check('knowledge table denied (403): a plain note, not an error', (await textOf(p, '[data-card="knowledge"] .ab-note-danger')) === null);
     t.check('the other cards still show', (await panel.text()).includes('Earlier tickets from Abel Tuter'));
     inst.setBehaviour();

@@ -97,8 +97,8 @@ function AiAnswer({ run, eff, featureId, heading, notice = [], withhold = null }
   }
 
   return (
-    <section className="ab-card ab-ai-result" aria-live="polite" aria-label={heading}>
-      <h3 className="ab-h ab-ai-result-h">
+    <section className="ab-surface ab-ai-result" aria-live="polite" aria-label={heading}>
+      <h3 className="ab-ai-result-h">
         <AiBadge />
         <span>{heading}</span>
       </h3>
@@ -140,11 +140,11 @@ function AiAnswer({ run, eff, featureId, heading, notice = [], withhold = null }
 /** The card a section without engine data sits in (coaching, explain). */
 export function AiShell({ title, help, children }) {
   return (
-    <section className="ab-card ab-widget" aria-label={title}>
+    <section className="ab-widget" aria-label={title}>
       <div className="ab-widget-head">
-        <h2 className="ab-h">{title}</h2>
+        <h2 className="ab-widget-title">{title}</h2>
       </div>
-      {help && <p className="ab-sub ab-widget-help">{help}</p>}
+      {help && <p className="ab-widget-help">{help}</p>}
       <div className="ab-widget-body">{children}</div>
     </section>
   );

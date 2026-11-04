@@ -45,11 +45,11 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
   const tableChoices = usableTables.length ? usableTables : [draft.table];
 
   return (
-    <section className="ab-card ab-widget ab-builder" aria-label={t('Report builder')}>
+    <section className="ab-surface ab-builder" aria-label={t('Report builder')}>
       <div className="ab-widget-head">
-        <h2 className="ab-h">{initial ? t('Edit custom report') : t('New custom report')}</h2>
+        <h2 className="ab-widget-title">{initial ? t('Edit custom report') : t('New custom report')}</h2>
       </div>
-      <p className="ab-sub">{t('Pick a table, filter it, group it and choose how to draw it. Nothing is typed into a query.')}</p>
+      <p className="ab-widget-help">{t('Pick a table, filter it, group it and choose how to draw it. Nothing is typed into a query.')}</p>
 
       <div className="ab-field">
         <label className="ab-label" htmlFor="ab-b-title">{t('Title (optional)')}</label>

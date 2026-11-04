@@ -1,0 +1,173 @@
+/* The Settings page (src/options/Options.jsx and its sections). Only --ab-* tokens. Everything is under .ab-set, the page's root, so
+   it wins over the general rules of ui.css and the areas (setup.css, reports.css...) without touching the side panel.
+   Layout: a menu (the two pages, the sections of the page on show) beside a centred column of sections separated by dividers; under
+   880 px the menu stacks above the sections, folded under "Go to a section". */
+
+/* ---- the page ---- */
+.ab-page.ab-set { max-width: 768px; padding: 24px 24px 64px; font-size: var(--ab-text-base); }
+.ab-set-top { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.ab-set .ab-page-title { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
+.ab-set .ab-page-intro { margin: 0 0 4px; font-size: var(--ab-text-base); color: var(--ab-fg-muted); }
+.ab-set-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.ab-set-main { min-width: 0; container: ab-set / inline-size; }
+.ab-set-panel[hidden] { display: none; }
+
+/* ---- the menu: the two pages, then the sections of the one on show ---- */
+.ab-set-nav { min-width: 0; }
+.ab-set-pages { display: flex; gap: 2px; padding: 3px; border-radius: var(--ab-radius-lg); background: var(--ab-bg-sunken); }
+.ab-set-page { flex: 1 1 0; min-width: 0; min-height: 34px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--ab-radius); background: transparent; color: var(--ab-fg-soft); font-weight: 500; cursor: pointer; }
+.ab-set-page:hover { color: var(--ab-fg); }
+.ab-set-page[aria-selected='true'] { background: var(--ab-bg-raised); border-color: var(--ab-border); color: var(--ab-fg); font-weight: 600; }
+.ab-set .ab-set-page:focus-visible { border-radius: var(--ab-radius); }
+.ab-set-menu-toggle { width: 100%; justify-content: space-between; margin-top: 8px; min-height: 36px; color: var(--ab-fg-soft); }
+.ab-set-menu { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ab-set-menu-link { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 6px 10px; border-radius: var(--ab-radius); color: var(--ab-fg-soft); text-decoration: none; }
+.ab-set-menu-link .ab-icon { flex: none; color: var(--ab-fg-muted); }
+.ab-set-menu-link:hover { background: var(--ab-bg-subtle); color: var(--ab-fg); }
+.ab-set-menu-link[aria-current='location'] { background: var(--ab-accent-soft); color: var(--ab-fg); font-weight: 600; }
+.ab-set-menu-link[aria-current='location'] .ab-icon { color: var(--ab-accent); }
+.ab-set .ab-set-menu-link:focus-visible { border-radius: var(--ab-radius); }
+
+@media (max-width: 879px) {
+  .ab-set-menu[data-open='false'] { display: none; }
+}
+@media (min-width: 880px) {
+  .ab-page.ab-set { max-width: 1040px; }
+  .ab-set-layout { grid-template-columns: 220px minmax(0, 720px); column-gap: 48px; justify-content: center; align-items: start; }
+  /* The menu stays in view while the sections scroll; on a short window it scrolls itself (the padding keeps focus rings whole). */
+  .ab-set-nav { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding: 4px; margin: -4px; }
+  .ab-set-menu-toggle { display: none; }
+}
+@media (max-width: 600px) {
+  .ab-page.ab-set { padding: 16px 16px 48px; }
+}
+
+/* ---- sections: a title, a line that says what it is for, then the choices; dividers between them, no boxes ---- */
+.ab-set .ab-set-section { margin: 0; padding: 28px 0; border: 0; border-top: 1px solid var(--ab-divider); border-radius: 0; background: none; }
+.ab-set .ab-page-intro + .ab-set-section, .ab-set .ab-set-panel > .ab-set-section:first-child { border-top: 0; padding-top: 16px; }
+.ab-set-head { margin-bottom: 16px; }
+.ab-set .ab-set-title { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35; scroll-margin-top: 20px; }
+.ab-set .ab-set-title:focus { outline: none; }
+.ab-set .ab-set-title:focus:not(:focus-visible) { box-shadow: none; }
+.ab-set .ab-set-desc { margin: 4px 0 0; font-size: var(--ab-text-md); line-height: 1.5; color: var(--ab-fg-muted); max-width: 64ch; }
+/* a part of a long section with a heading of its own (the key, in AI provider) */
+.ab-set .ab-set-subtitle { margin: 24px 0 14px; padding-top: 20px; border-top: 1px solid var(--ab-divider); font-size: 15px; font-weight: 600; scroll-margin-top: 20px; }
+.ab-set .ab-set-subtitle:focus { outline: none; }
+.ab-set .ab-set-subtitle:focus:not(:focus-visible) { box-shadow: none; }
+.ab-set .ab-set-section > :last-child { margin-bottom: 0; }
+
+/* ---- fields ---- */
+.ab-set .ab-field { gap: 6px; margin-bottom: 18px; }
+.ab-set .ab-label { font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg); }
+.ab-set .ab-hint { font-size: var(--ab-text-md); line-height: 1.45; }
+.ab-set p.ab-note { margin: 12px 0; }
+.ab-set .ab-set-empty { margin: 0 0 16px; padding: 0; border: 0; background: none; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
+/* A choice from a list: the label and its hint on one side, the list on the other, when the column is wide enough. */
+@container ab-set (min-width: 520px) {
+  .ab-set .ab-set-pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(14rem, 42%); column-gap: 24px; row-gap: 4px; align-items: start; }
+  .ab-set .ab-set-pick > * { grid-column: 1; }
+  .ab-set .ab-set-pick > .ab-select { grid-column: 2; grid-row: 1 / span 2; }
+}
+.ab-set-inputrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.ab-set-inputrow > .ab-input { flex: 1 1 14rem; min-width: 0; }
+.ab-set-inputrow > .ab-btn { flex: none; }
+.ab-set-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0 24px; margin-top: 16px; }
+.ab-set-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 16px 0; }
+.ab-set-head + .ab-set-actions { margin-top: 0; }
+.ab-set .ab-field > .ab-set-actions { margin: 4px 0 0; }
+.ab-set-actions > .ab-select { width: auto; flex: 1 1 12rem; min-width: 0; }
+.ab-set-actions > .ab-hint { flex: 1 1 14rem; min-width: 0; }
+
+/* ---- switches: a real check box (role="switch") drawn as a switch, its label beside it ---- */
+.ab-set-switches { display: flex; flex-direction: column; margin-top: 16px; }
+.ab-set-switch { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 10px 0; cursor: pointer; }
+.ab-set-switch-text { flex: 1 1 auto; min-width: 0; padding-top: 1px; }
+.ab-set-switches .ab-locked { display: block; margin: -4px 0 6px; }
+/* The thumb is drawn with a border, not a background, so it stays visible with the system's forced colours too. */
+.ab-set-switch-input {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  border: 2px solid var(--ab-fg-muted);
+  border-radius: 999px;
+  background: var(--ab-bg);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.ab-set-switch-input::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  inset-inline-start: 4px;
+  width: 0;
+  height: 0;
+  border: 6px solid var(--ab-fg-muted);
+  border-radius: 50%;
+  transition: inset-inline-start 0.15s ease, border-width 0.15s ease, top 0.15s ease;
+}
+.ab-set-switch-input:checked { background: var(--ab-accent); border-color: var(--ab-accent); }
+.ab-set-switch-input:checked::before { top: 2px; inset-inline-start: 18px; border-width: 8px; border-color: var(--ab-accent-fg); }
+.ab-set .ab-set-switch-input:focus-visible { border-radius: 999px; }
+.ab-set-switch-input:disabled { opacity: 0.55; cursor: not-allowed; }
+.ab-set-switch:has(.ab-set-switch-input:disabled) { cursor: not-allowed; }
+
+/* ---- lists with a line between the rows (sites, shortcuts, what is stored) ---- */
+.ab-set-list { list-style: none; margin: 0 0 16px; padding: 0; border-top: 1px solid var(--ab-divider); }
+.ab-set-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 0; border-bottom: 1px solid var(--ab-divider); }
+.ab-set-item-main { flex: 1 1 12rem; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.ab-set-item-title { font-weight: 500; }
+.ab-set-item > .ab-chip { flex: none; }
+.ab-set-site .ab-dot { flex: none; }
+.ab-set-kbd { flex: none; padding: 2px 6px; border: 1px solid var(--ab-border); border-bottom-width: 2px; border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); color: var(--ab-fg); font-size: var(--ab-text-sm); white-space: nowrap; }
+
+/* ---- what you work on (ProfilePicker), in Settings ---- */
+.ab-set .ab-profiles { gap: 16px; margin-top: 0; }
+.ab-set .ab-profiles .ab-fieldset legend { margin-bottom: 4px; font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg); }
+.ab-set .ab-profile { gap: 12px; padding: 8px 0; }
+.ab-set .ab-profile input { width: 16px; height: 16px; margin-top: 3px; accent-color: var(--ab-accent); }
+.ab-set .ab-profile-name { font-weight: 500; }
+.ab-set .ab-profile-desc { font-size: var(--ab-text-md); }
+.ab-set .ab-profiles + .ab-set-switches { padding-top: 8px; border-top: 1px solid var(--ab-divider); }
+
+/* ---- destructive actions: quiet until confirmed ---- */
+.ab-set .ab-set-danger { color: var(--ab-danger); border-color: var(--ab-danger-line); background: var(--ab-bg); }
+.ab-set .ab-set-danger:hover:not(:disabled) { background: var(--ab-danger-soft); }
+.ab-set-confirm { margin: 16px 0 0; padding: 14px 16px; border-radius: var(--ab-radius-lg); background: var(--ab-danger-soft); }
+.ab-set-confirm-title { display: block; color: var(--ab-fg); font-weight: 600; }
+.ab-set-confirm-text { margin: 4px 0 12px; color: var(--ab-fg); font-size: var(--ab-text-md); }
+.ab-set-confirm .ab-set-actions { margin: 0; }
+
+/* ---- what opens in place: a chevron that points down, and up when open (.ab-chevron, ui.css, turns it) ---- */
+.ab-set .ab-set-fold > summary { list-style: none; display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 0; color: var(--ab-fg-soft); font-size: var(--ab-text-md); cursor: pointer; }
+.ab-set .ab-set-fold > summary::-webkit-details-marker { display: none; }
+.ab-set .ab-set-fold > summary .ab-chevron { flex: none; }
+.ab-set .ab-set-fold > summary:focus-visible { border-radius: var(--ab-radius-xs); }
+
+/* ---- how AI answers are written: the actions as rows that open into their editor ---- */
+.ab-set .ab-fmt-group { margin: 20px 0 0; }
+.ab-set .ab-fmt-grouphead { margin: 0 0 6px; font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg-soft); }
+.ab-set .ab-fmt-item { margin: 0; border-bottom: 1px solid var(--ab-divider); }
+.ab-set .ab-fmt-grouphead + .ab-fmt-item { border-top: 1px solid var(--ab-divider); }
+.ab-set .ab-fmt-item > summary { flex-wrap: wrap; gap: 4px 8px; min-height: 44px; padding: 10px 0; color: var(--ab-fg); font-size: var(--ab-text-base); }
+.ab-set .ab-fmt-item > summary .ab-chevron { margin-inline-start: auto; }
+.ab-set .ab-fmt-item[open] { padding-bottom: 16px; }
+.ab-set .ab-fmt-item[open] > summary { margin-bottom: 0; }
+.ab-set .ab-fmt-title { font-weight: 500; }
+.ab-set .ab-fmt-state { padding: 3px 8px; border: 0; border-radius: 999px; background: var(--ab-bg-sunken); color: var(--ab-fg-soft); font-size: var(--ab-text-sm); font-weight: 500; }
+.ab-set .ab-fmt-state-mine { background: var(--ab-accent-soft); color: var(--ab-fg); }
+.ab-set .ab-fmt-state-locked { background: var(--ab-warn-soft); color: var(--ab-warn); }
+
+/* ---- the activity log ---- */
+.ab-set .ab-set-table { margin-top: 4px; font-size: var(--ab-text-md); }
+.ab-set .ab-set-table th, .ab-set .ab-set-table td { padding: 8px; border-bottom-color: var(--ab-divider); }
+.ab-set .ab-set-table th { white-space: nowrap; }
+.ab-set .ab-set-table td { overflow-wrap: anywhere; }
+.ab-set .ab-set-table th:first-child, .ab-set .ab-set-table td:first-child { padding-inline-start: 0; }
+.ab-set .ab-set-table code { font-size: var(--ab-text-sm); }
+@container ab-set (max-width: 479px) {
+  .ab-set .ab-set-table { font-size: var(--ab-text-sm); }
+  .ab-set .ab-set-table th, .ab-set .ab-set-table td { padding: 6px 4px; }
+}

@@ -14,7 +14,8 @@ const html = (props = {}) => {
   return renderToStaticMarkup(React.createElement(QuickBar, { kind, features: featuresFor(kind, normalizePolicy(props.policy || {})), eff: eff(props.values, props.policy), disabled: false, onRun: () => {}, ...props.over }));
 };
 
-// Round 3: the bar holds no filled button (the screen's one primary is the first AI Assist suggestion), and every AI item is marked.
+// Round 3: the bar holds no filled button (the screen's one primary is its main step), and every AI item is marked.
+// The redesign: small round buttons (an icon and a short name), the AI mark a small grey spark after the name, never a tile.
 const labels = (markup) => [...markup.matchAll(/<button[^>]*data-quick="[^"]+"[^>]*>.*?<span class="ab-quick-label">([^<]*)/g)].map((m) => m[1]);
 
 test('open: the three main actions of an incident, each with the AI mark, none filled, a toggle that says it is open', () => {
@@ -25,6 +26,13 @@ test('open: the three main actions of an incident, each with the AI mark, none f
   assert.equal((markup.match(/class="ab-ai-badge"/g) || []).length, 3);
   assert.match(markup, /aria-label="Summarise \(AI\)"/);
   assert.match(markup, />Choose</);
+  assert.ok(!markup.includes('ab-quick-tile'), 'no big tiles');
+  assert.equal((markup.match(/class="ab-quick-pill ab-quick-ai"/g) || []).length, 3);
+});
+
+test('the screen\'s main step is not shown twice: left out of the row, still one of the person\'s choices', () => {
+  const markup = html({ over: { exclude: ['reply-draft'] } });
+  assert.deepEqual(labels(markup), ['Summarise', 'Resolution notes']);
 });
 
 // `cards` are INSIGHT_CARDS ids: "Ready to resolve?" is the card 'resolve' (audit P2.4: these tests used to pass 'ready', a card that
@@ -32,7 +40,7 @@ test('open: the three main actions of an incident, each with the AI mark, none f
 test('state-aware: a resolved incident offers "Ready to resolve?" (Insights, no AI mark) first, then the resolution notes', () => {
   const markup = html({ over: { stage: 'resolve', cards: ['resolve', 'related'], onShowCard: () => {} } });
   assert.deepEqual(labels(markup), ['Ready to resolve?', 'Resolution notes', 'Knowledge article', 'Draft a reply']);
-  assert.match(markup, /data-quick="card:ready" class="ab-btn ab-quick-tile ab-quick-insight"/);
+  assert.match(markup, /data-quick="card:ready" class="ab-quick-pill ab-quick-insight"/);
   assert.equal((markup.match(/class="ab-ai-badge"/g) || []).length, 3, 'only the AI items carry the mark');
 });
 
@@ -82,7 +90,7 @@ test('an action the policy switched off is not shown', () => {
 
 test('buttons are off while the AI is not ready or an answer is on screen', () => {
   const markup = html({ over: { disabled: true } });
-  assert.equal((markup.match(/<button[^>]*class="ab-btn [^"]*ab-quick-tile[^"]*"[^>]*disabled=""/g) || []).length, 3);
+  assert.equal((markup.match(/<button[^>]*class="ab-quick-pill[^"]*"[^>]*disabled=""/g) || []).length, 3);
 });
 
 test('another kind of record has its own defaults', () => {

@@ -1,31 +1,30 @@
-/* setup: see docs/round3.md for who owns this file. Only --ab-* tokens. */
+/* setup: see docs/round3.md for who owns this file. Only --ab-* tokens. Calm: soft panels, no borders, one filled button. */
 
-/* Getting started (src/sidepanel/FirstRun.jsx) and the turn-on help (SetupView.jsx) */
-.ab-firstrun-act { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+/* Getting started (src/sidepanel/FirstRun.jsx) and the turn-on help (SetupView.jsx): soft panels (.ab-card), the steps parted by dividers */
+.ab-firstrun .ab-h, .ab-setup-open .ab-h, .ab-setup-site .ab-h { margin-bottom: 2px; }
+.ab-firstrun > .ab-sub { margin: 0; }
+.ab-firstrun-act { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .ab-firstrun-act .ab-row { flex-wrap: wrap; }
-.ab-turnon { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.ab-turnon { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .ab-turnon .ab-sub, .ab-turnon .ab-hint { margin: 0; overflow-wrap: anywhere; }
 .ab-turnon-anyway .ab-btn { margin-inline-start: 2px; }
-.ab-setup-open .ab-row, .ab-setup-site .ab-row { margin-top: 6px; }
+.ab-setup-open .ab-sub, .ab-setup-site .ab-sub { margin: 4px 0 0; }
+.ab-setup-open .ab-row, .ab-setup-site .ab-row { margin-top: 10px; }
 
 /* What you work on (src/options/ProfilePicker.jsx): in the first-run card and in Settings */
 .ab-profiles { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .ab-profiles .ab-fieldset { border: 0; padding: 0; margin: 0; }
-.ab-profile { padding: 4px 0; cursor: pointer; }
-.ab-profile input { margin-top: 3px; flex: none; }
-.ab-profile-name { display: block; font-weight: 600; }
+.ab-profile { padding: 6px 0; cursor: pointer; }
+.ab-profile input { margin-top: 3px; flex: none; accent-color: var(--ab-accent); }
+.ab-profile-name { display: block; font-weight: 500; }
 .ab-profile-desc { display: block; }
 
 /* Settings (src/options/Options.jsx): two pages, plain words first, technical details folded */
 .ab-page-title { font-size: var(--ab-text-xl); margin-bottom: 12px; }
-.ab-settings-tabs { margin-bottom: 16px; gap: 6px; }
 .ab-page-intro { margin: 0 0 20px; }
 .ab-more { margin: 6px 0 10px; }
-.ab-more > summary { cursor: pointer; color: var(--ab-fg-soft); font-size: var(--ab-text-sm); padding: 4px 0; min-height: 24px; }
+.ab-more > summary { cursor: pointer; color: var(--ab-fg-soft); font-size: var(--ab-text-md); padding: 4px 0; min-height: 24px; }
 .ab-more > summary:focus-visible { outline: none; box-shadow: var(--ab-ring); border-radius: var(--ab-radius-xs); }
 .ab-more[open] > summary { margin-bottom: 6px; }
-.ab-sites { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
-.ab-site { justify-content: space-between; flex-wrap: wrap; gap: 6px; }
-.ab-site .ab-mono { overflow-wrap: anywhere; min-width: 0; }
-.ab-diagnostics { margin: 6px 0 0; padding: 8px 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--ab-mono); font-size: var(--ab-text-xs); color: var(--ab-fg); background: var(--ab-bg-sunken); border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); }
+.ab-diagnostics { margin: 6px 0 0; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--ab-mono); font-size: var(--ab-text-xs); color: var(--ab-fg); background: var(--ab-surface); border: 0; border-radius: var(--ab-radius); }
 .ab-diagnostics:focus-visible { outline: none; box-shadow: var(--ab-ring); }

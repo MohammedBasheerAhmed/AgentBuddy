@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ErrorNote from '../ErrorNote.jsx';
+import { Icon } from '../ui/icons.jsx';
 import { openRecord } from '../openRecord.js';
 import { sharedCis } from '../../mywork/rank.js';
 import { readText, readWhen } from '../../mywork/time.js';
@@ -13,9 +14,10 @@ import { isolate, t, t as tr } from '../../i18n/index.js';
 // The My work screen (TRACKER.md 3.6: N13 My queue, N14 Unassigned in my groups, N27 Follow-ups due). Insights only: it reads with
 // the person's own session (src/content/ops/mywork.js), nothing is sent anywhere and there is no AI half.
 //
-// Calm by design (TRACKER.md 2.4): one status line on top (when it was read, Refresh), then the queue, most urgent first, with the
+// Calm by design (TRACKER.md 2.4, the 2026 redesign): one status line on top (when it was read, Refresh), a quiet attention line when
+// several of my tickets share one configuration item, then sections parted by dividers: the queue, most urgent first, with the
 // waiting and the resolved tickets folded; the approvals only when there are some; follow-ups; the unassigned tickets of my groups;
-// one line at the bottom for anything that could not be read.
+// one line at the bottom for anything that could not be read. Every ticket is a row (status dot, number, title, chips).
 //
 // props: { page, eff, active, onOpenTicket() }. A plain click on a ticket opens it in this tab and calls onOpenTicket, so the shell
 // switches to the Ticket screen.
@@ -87,13 +89,18 @@ export default function MyWorkView({ page, eff, active, onOpenTicket }) {
       {data && (
         <>
           {outage && (
-            <div className="ab-note ab-note-warn ab-mw-outage">
-              <span>
-                {t('{count} of your tickets are on {name}. One cause?', { count: outage.count, name: isolate(tr(outage.name)) })}
+            <div className="ab-mw-attn">
+              <span className="ab-mw-attn-icon" aria-hidden="true">
+                <Icon name="alert" size={14} />
               </span>
-              <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => setFilter(`ci:${outage.id}`)}>
-                {t('Show them')}
-              </button>
+              <span className="ab-mw-attn-body">
+                <span className="ab-mw-attn-text">
+                  {t('{count} of your tickets are on {name}. One cause?', { count: outage.count, name: isolate(tr(outage.name)) })}
+                </span>
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-mw-attn-act" onClick={() => setFilter(`ci:${outage.id}`)}>
+                  {t('Show them')}
+                </button>
+              </span>
             </div>
           )}
           <QueueCard page={page} data={data} now={now} filter={filter} setFilter={setFilter} onOpen={openTicket} />

@@ -60,6 +60,16 @@ export function useInsight({ key, load, active = true, maxAgeMs = 120000, refres
   return { ...state, reload };
 }
 
+// A read that could not see everything it asked for: denied, failed, blocked by the policy, or zero rows that may be hidden rows.
+const NOT_SEEN = new Set(['denied', 'error', 'blocked', 'empty-or-hidden']);
+
+/**
+ * Did a read see everything it looked at (no access entry says otherwise)? A card says "nothing to report" ('clear', which files it
+ * under "All clear in ...") only then: "you cannot read knowledge articles" is not "no article matches".
+ * @param {...(object[]|undefined)} lists access entries ({ status }) of the reads the card relies on
+ */
+export const readFully = (...lists) => lists.every((list) => !Array.isArray(list) || !list.some((a) => NOT_SEEN.has(a?.status)));
+
 /** Call fn(value) whenever value changes (for setSummary / setAttention, whose identity is stable). */
 export function useReport(fn, value) {
   const fnRef = useRef(fn);

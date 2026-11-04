@@ -28,7 +28,7 @@ export function InsightsInputs({ entries }) {
   }
   return (
     <>
-      <p className="ab-note ab-note-ok">
+      <p className="ab-explain-basis">
         {inputs.readAt
           ? t('Based on what is on this dashboard now: {list}, read at {time}.', { list: andList(inputs.used.map(shownText)), time: readLabel(inputs.readAt) })
           : t('Based on what is on this dashboard now: {list}.', { list: andList(inputs.used.map(shownText)) })}

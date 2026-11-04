@@ -1,8 +1,10 @@
 import { Tile, StackedBar } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
+import Summary from './Summary.jsx';
 import TicketList from './TicketList.jsx';
 import { useSection } from './useSection.js';
 import { useMinuteClock } from './hooks.js';
+import { shownElsewhere } from './onDashboard.js';
 import { dueText } from './format.js';
 import { t } from '../../i18n/index.js';
 import { placeholderName } from '../../reports/shown.js';
@@ -22,18 +24,22 @@ export const slaFacts = (item, now) => [
   item.priority,
 ];
 
-/** The radar for one SLA result (`d` is result.data, with d.available true). `now` is for tests; the panel uses a minute clock. */
+/**
+ * The radar for one SLA result (`d` is result.data, with d.available true). `now` is for tests; the panel uses a minute clock. When
+ * the dashboard also draws Overview (env.sections), its Breached and Due soon tiles (the same SLA read) are not drawn again here.
+ */
 export function SlaBody({ d, env, now }) {
   const clock = useMinuteClock();
   const at = Number.isFinite(now) ? now : clock;
   const owners = env.scopeKind !== 'mine' ? rows(d.byOwner) : [];
   const groups = env.scopeKind !== 'mine' ? rows(d.byGroup) : [];
+  const inOverview = shownElsewhere(env, 'overview');
   return (
     <>
       <div className="ab-tiles">
-        <Tile label={t('Breached')} value={d.counts.breached} tone={d.counts.breached > 0 ? 'bad' : 'neutral'} hint={t('SLA already breached')} />
+        {!inOverview && <Tile label={t('Breached')} value={d.counts.breached} tone={d.counts.breached > 0 ? 'bad' : 'neutral'} hint={t('SLA already breached')} />}
         <Tile label={t('At risk')} value={d.counts.atRisk} tone={d.counts.atRisk > 0 ? 'warn' : 'neutral'} hint={t('{percent}% or more of the time used', { percent: d.atRiskPercent })} />
-        <Tile label={t('Due soon')} value={d.counts.dueSoon} tone={d.counts.dueSoon > 0 ? 'warn' : 'neutral'} hint={t('Ends within {hours} hours', { hours: d.dueSoonHours })} />
+        {!inOverview && <Tile label={t('Due soon')} value={d.counts.dueSoon} tone={d.counts.dueSoon > 0 ? 'warn' : 'neutral'} hint={t('Ends within {hours} hours', { hours: d.dueSoonHours })} />}
       </div>
 
       <TicketList
@@ -46,7 +52,7 @@ export function SlaBody({ d, env, now }) {
 
       {(owners.length > 0 || groups.length > 1) && (
         <details className="ab-details">
-          <summary>{t('Who holds the risk')}</summary>
+          <Summary>{t('Who holds the risk')}</Summary>
           {owners.length > 0 && <StackedBar title={t('SLA risk by owner')} rows={owners} series={slaSeries()} labelHeader={t('Owner')} />}
           {groups.length > 1 && <StackedBar title={t('SLA risk by group')} rows={groups} series={slaSeries()} labelHeader={t('Group')} />}
         </details>
@@ -56,7 +62,7 @@ export function SlaBody({ d, env, now }) {
 }
 
 // F3. Which tickets are about to break or have broken their SLA, and who holds them.
-export default function SlaView({ widget, env }) {
+export default function SlaView({ widget, env, tools }) {
   const state = useSection('sla', widget, env);
   const d = state.result?.data;
   const ok = d && d.available !== false;
@@ -67,6 +73,7 @@ export default function SlaView({ widget, env }) {
       state={state}
       env={env}
       widgetId={widget?.id}
+      tools={tools}
       facts={ok ? [t('{n} tickets at issue out of {total} active SLAs', { n: d.ticketsAtIssue, total: d.activeSlas })] : []}
     >
       {ok && <SlaBody d={d} env={env} />}

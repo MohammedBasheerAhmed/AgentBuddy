@@ -1,9 +1,37 @@
-// The small pieces every section of the Settings page is built from: the note that a setting is locked, a field's error, a section's
-// status line, a text box that saves a moment after typing, and useSaveSetting(), the one way a section saves a choice. Kept here so a
-// section file holds only what that section says and does.
+// The small pieces every section of the Settings page is built from: a section's title and one-line explanation, a switch, the note
+// that a setting is locked, a field's error, a section's status line, a text box that saves a moment after typing, and
+// useSaveSetting(), the one way a section saves a choice. Kept here so a section file holds only what that section says and does.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { saveSettings } from '../lib/storage.js';
 import { t } from '../i18n/index.js';
+
+/**
+ * A section's title and its one-line explanation. The title's id is what the section's aria-labelledby and the menu beside the page
+ * point at; the menu moves the focus to it (tabIndex -1), so reading goes on from the section that was chosen.
+ *   descId   an id for the explanation, when a field names it in its aria-describedby
+ */
+export function SectionHead({ id, title, descId, children }) {
+  return (
+    <div className="ab-set-head">
+      <h2 className="ab-h ab-set-title" id={id} tabIndex={-1}>{title}</h2>
+      {children ? <p className="ab-sub ab-set-desc" id={descId}>{children}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * A choice that turns something on or off: a real check box with its label (so it is found, said and pressed like one), shown as a
+ * switch. role="switch" lets a screen reader say "on" and "off" instead of "ticked".
+ *   onChange(checked)
+ */
+export function Switch({ id, checked, disabled = false, onChange, describedBy, children }) {
+  return (
+    <label className="ab-set-switch" htmlFor={id}>
+      <span className="ab-set-switch-text">{children}</span>
+      <input id={id} type="checkbox" role="switch" className="ab-set-switch-input" checked={checked} disabled={disabled} aria-describedby={describedBy} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
+}
 
 /** Why a setting cannot be changed (the organisation set it), or nothing. */
 export function Locked({ why }) {

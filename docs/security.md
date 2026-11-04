@@ -98,7 +98,7 @@ build refuses to write into `dist/`. Enforced by `tests/policy-enterprise.test.j
    "Regards, Anna Schmidt", "Dr. Priya Raman", "my manager is ...", "spoke with ...", "cc:", "per ...", @mentions). A name with
    nothing around it ("Carol Diaz joined") still passes in Standard mode, and a name made only of IT vocabulary, a weekday or a month
    ("June", "Teams") is left alone on purpose. The detector is a guess, measured on our own corpus rather than customer data.
-   Mitigations: the preview, where the person can mask anything still visible ("Mask this too"); Strict mode, which also masks
+   Mitigations: the preview, where the person can mask anything still visible ("Hide something else"); Strict mode, which also masks
    capitalised full names with no cue; a local model.
 2. **The key is on disk unless it is memory-only.** "This browser" (the default) keeps it in Agent Buddy's own database in the
    browser profile: ServiceNow pages and Agent Buddy's content scripts cannot read it, but anyone or any malware that can read the
@@ -232,7 +232,7 @@ loaded in a real browser.
 
 | Control | What it does | Tests |
 |---|---|---|
-| Insights and AI Assist | Every screen is split: the Insights half reads with the person's session and sends nothing anywhere; the AI Assist half carries the AI mark on every button, tab and answer and names where masked text goes. `aiEnabled: false` removes every AI Assist half and every AI item of the bar on the page. | `tests/panel-sections.test.js`, `tests/profiles.test.js`, e2e m |
+| Insights and AI Assist | Every screen is split: the Insights half reads with the person's session and sends nothing anywhere; the AI Assist half carries the AI mark (a grey sparkle) on every AI button, tab and answer; where masked text goes is named in the check before sending, before every send ("to <provider> (<model>)"), and in the AI Assist half on hover. `aiEnabled: false` removes every AI Assist half and every AI item of the bar on the page. | `tests/panel-sections.test.js`, `tests/profiles.test.js`, e2e m |
 | Work profiles | Decide what is shown, never what is allowed: a ticket outside the person's profiles still works. The HR profile is offered only when the organisation approved it (`allowedProfiles` names `hr`, or `allowHrContent`). `lockedProfiles` / `allowedProfiles` limit the choice. | `tests/profiles.test.js`, `tests/panel-first-run.test.js` |
 | Turning a site on | "Turn on" is offered only on a ServiceNow page (address or page marks, through `activeTab`; "Turn on anyway" for a custom domain). Exact addresses in `allowedInstances` whose host permission the browser already granted turn on by themselves; wildcard entries never do. | `tests/background-instances.test.js`, `tests/panel-first-run.test.js` |
 | The bar on the page, round 3 | Sits below ServiceNow's dialog layers (z-index 1000) and hides while a page dialog is open; an icon and the word "Buddy"; draggable (the place is kept in the page's `localStorage` with `open` and `side`). It may also launch an Insights card (`card:ready`, `card:related`): that only brings the card forward in the panel; nothing is read for it beyond the card's own reads. | `tests/bar-*.test.js`, `tests/quick-*.test.js`, e2e y and z |

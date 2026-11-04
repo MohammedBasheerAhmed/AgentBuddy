@@ -92,15 +92,23 @@ test('the short check only in "first time" mode, for other records, once the ful
 const dialog = (props) =>
   renderToStaticMarkup(<PreviewDialog feature={{ title: 'Next best actions' }} config={{ provider: 'anthropic', baseUrl: '' }} canSkipNext onSend={() => {}} onCancel={() => {}} onMask={() => ({ ok: true, masked: 1 })} {...props} />);
 
-test('the full check shows the ticket data first, the rules folded, a way to the exact text, and Mask this too', () => {
+test('the full check: where it goes, what was hidden, the ticket data to read, the rules and the exact text folded, Hide something else', () => {
   const prepared = prepare('record-summary');
-  const markup = dialog({ prepared });
-  assert.match(markup, /<h3 class="ab-preview-h">Ticket data<\/h3><pre class="ab-preview ab-preview-data"/);
-  assert.match(markup, /<details class="ab-preview-rules"><summary>Rules sent with it<\/summary>/);
-  assert.ok(markup.indexOf('ab-preview-data') < markup.indexOf('Rules sent with it'), 'data first');
-  assert.ok(markup.indexOf('Rules set by the application') > markup.indexOf('Rules sent with it'), 'the fixed rules are inside the fold');
-  assert.match(markup, />Show the exact text<\/button>/);
-  assert.match(markup, /Mask this too/);
+  const markup = dialog({ prepared, config: { provider: 'deepseek', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' } });
+  assert.match(markup, /<h2 class="ab-sheet-title" id="ab-prev-title-[\w-]+">Check before sending<\/h2><p class="ab-sheet-sub">Next best actions · to DeepSeek \(deepseek-chat\)<\/p>/);
+  assert.match(markup, /Personal details are hidden before anything leaves:/);
+  assert.match(markup, /class="ab-chip ab-check-count">\d+ names?</);
+  // the ticket data as a person reads it: the fields under "Ticket", the hidden values as chips, nothing of the wrappers
+  assert.match(markup, /<div class="ab-sent" role="region" aria-label="What will be sent" tabindex="0"><section class="ab-sent-section"><h4 class="ab-sent-title">Ticket<\/h4><dl class="ab-sent-fields">/);
+  assert.match(markup, /<dt>Short description<\/dt><dd>VPN drops every hour<\/dd>/);
+  assert.match(markup, /<span class="ab-mask-chip" title="\[PERSON_1\]">Person 1<\/span>/);
+  assert.ok(!markup.includes('&lt;ticket_data') && !markup.includes('<ticket_data'), 'no markup of the request in the readable view');
+  // the rules and the exact text are folded: their buttons point down, their text is not there until opened
+  assert.match(markup, /<button type="button" class="ab-disclosure-toggle" aria-expanded="false"><svg[^>]*class="ab-icon ab-chevron"[\s\S]*?<\/svg>The rules sent with it<\/button>/);
+  assert.match(markup, /aria-expanded="false"><svg[^>]*class="ab-icon ab-chevron"[\s\S]*?<\/svg>Show the exact text<\/button>/);
+  assert.ok(markup.indexOf('ab-sent') < markup.indexOf('The rules sent with it'), 'data first');
+  assert.ok(!markup.includes('Rules set by the application') && !markup.includes('ab-preview-exact'), 'nothing of the folded text is drawn');
+  assert.match(markup, /Hide something else/);
   assert.match(markup, />Send to AI<\/button>/);
   assert.ok(!markup.includes('Abel Tuter'));
 });
@@ -113,9 +121,10 @@ test('the short check names the other records and offers the full text; Send and
   assert.match(markup, />Show what is sent<\/button>/);
   assert.match(markup, />Cancel<\/button>/);
   assert.match(markup, />Send to AI<\/button>/);
-  assert.ok(!markup.includes('ab-preview'), 'no text until asked for');
+  assert.ok(!markup.includes('ab-preview') && !markup.includes('ab-sent'), 'no text until asked for');
+  assert.match(markup, /Personal details are hidden before anything leaves:/, 'what was hidden is said here too');
   // short asked for but nothing to name: the full check
-  assert.match(dialog({ prepared, short: true, others: '' }), /Check what will be sent/);
+  assert.match(dialog({ prepared, short: true, others: '' }), /Check before sending/);
 });
 
 // ---- around an answer ------------------------------------------------------------------------------------------------------

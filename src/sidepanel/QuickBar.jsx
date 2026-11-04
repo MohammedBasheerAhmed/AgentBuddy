@@ -7,12 +7,15 @@ import { t, t as tr } from '../i18n/index.js';
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const NO_PINS = {}; // (one object, so the catch-up check below does not run again on every render)
+const NONE = [];
 
 /**
- * The few actions worth one click, in the ticket at a glance. It holds items from both halves of the Ticket screen, each marked:
- * AI actions (the AI mark; they start the action exactly like a click in AI Assist does, preview first) and Insights items (no mark;
- * they open that card of the Insights half, nothing is sent). It folds down to one strip (the choice is remembered) and the person
- * can choose which items it holds, per kind of record. The same choice feeds the bar on the ServiceNow page (AI items only there).
+ * The few actions worth one click, under the Ticket screen's main step: a row of small buttons (an icon and a short name) behind a
+ * "Quick actions" disclosure. It holds items from both halves of the Ticket screen, each marked: AI actions (the small grey AI mark;
+ * they start the action exactly like a click in AI Assist does, preview first) and Insights items (no mark; they open that card of
+ * the Insights half, nothing is sent). It folds down to its heading (the choice is remembered) and the person can choose which items
+ * it holds, per kind of record. The same choice feeds the bar on the ServiceNow page (AI items only there). The screen's main step
+ * is not shown again here (`exclude`), though it stays one of the person's choices.
  *
  * What the person changes shows at once and is saved behind the scenes: the saved settings come back a moment later (storage, then
  * the panel's settings reload), and two ticks in that moment must both count, so the bar works from its own copy until the saved one
@@ -21,9 +24,9 @@ const NO_PINS = {}; // (one object, so the catch-up check below does not run aga
  * props: kind (of the open record), stage (src/features/stages.js; null when unknown), features (the AI actions this record offers
  *        right now: only these can show), cards (the ids of the Insights cards this record shows: 'resolve', 'related'), eff,
  *        disabled (an answer is on its way: the AI items wait), aiReady (false: AI cannot be used now, so no AI items at all),
- *        onRun(feature), onShowCard(cardId)
+ *        exclude (ids not to draw: the screen's main step), onRun(feature), onShowCard(cardId)
  */
-export default function QuickBar({ kind, stage = null, features = [], cards = [], eff, disabled = false, aiReady = true, onRun, onShowCard }) {
+export default function QuickBar({ kind, stage = null, features = [], cards = [], eff, disabled = false, aiReady = true, exclude = NONE, onRun, onShowCard }) {
   const bodyId = useId();
   const AI_HOVER = t('Uses AI. Masked text goes to the AI you chose, after a preview.');
   const [choosing, setChoosing] = useState(false);
@@ -50,11 +53,12 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
   const itemsFor = (own) => quickItems({ kind, stage, pins: own, policy: eff.policy, offered: aiFeatures.map((f) => f.id), cards: shownCards, ai: aiReady });
   const items = itemsFor(pins);
   const shownIds = items.map((a) => a.id);
+  const drawn = items.filter((a) => !exclude.includes(a.id));
   const pinnable = [
     ...aiFeatures.filter((f) => isQuickId(f.id)).map((f) => ({ id: f.id, label: QUICK_LABELS[f.id], ai: true })),
     ...shownCards.map((c) => ({ id: quickCardItem(c), label: QUICK_CARDS[quickCardItem(c)].label, ai: false })),
   ];
-  if (!items.length && !pinnable.length) return null;
+  if (!drawn.length && pinnable.length < 2) return null;
 
   const save = (patch, local) => {
     setProblem('');
@@ -77,11 +81,11 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
     <section className="ab-quick" aria-label={t('Quick actions')}>
       <div className="ab-quick-head">
         <button type="button" className="ab-quick-toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
-          <span className={`ab-quick-chevron${open ? ' ab-quick-chevron-open' : ''}`} aria-hidden="true" />
           {t('Quick actions')}
+          <Icon name="chevronDown" size={14} className="ab-chevron" />
         </button>
         {open && pinnable.length > 1 && (
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-pressed={choosing} aria-label={choosing ? t('Done choosing quick actions') : t('Choose quick actions')} onClick={() => setChoosing((on) => !on)}>
+          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-quick-choose-btn" aria-pressed={choosing} aria-label={choosing ? t('Done choosing quick actions') : t('Choose quick actions')} onClick={() => setChoosing((on) => !on)}>
             {choosing ? t('Done') : t('Choose')}
           </button>
         )}
@@ -89,18 +93,18 @@ export default function QuickBar({ kind, stage = null, features = [], cards = []
 
       {open && (
         <div id={bodyId}>
-          {!choosing && (
+          {!choosing && drawn.length > 0 && (
             <div className="ab-quick-actions" role="group" aria-label={t('Quick actions')}>
-              {items.map((a) =>
+              {drawn.map((a) =>
                 a.ai ? (
-                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-btn-ai-quiet ab-quick-tile ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={t('{label} (AI)', { label: tr(a.label) })} onClick={() => onRun(byId.get(a.id))}>
-                    <span className="ab-quick-icon"><Icon name={featureIcon(a.id)} size={16} /></span>
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-quick-pill ab-quick-ai" disabled={disabled} title={AI_HOVER} aria-label={t('{label} (AI)', { label: tr(a.label) })} onClick={() => onRun(byId.get(a.id))}>
+                    <span className="ab-quick-icon"><Icon name={featureIcon(a.id)} size={14} /></span>
                     <span className="ab-quick-label">{tr(a.label)}</span>
                     <AiBadge label="" title={AI_HOVER} />
                   </button>
                 ) : (
-                  <button key={a.id} type="button" data-quick={a.id} className="ab-btn ab-quick-tile ab-quick-insight" title={t('Opens the card in Insights. Stays in ServiceNow.')} onClick={() => onShowCard(a.card)}>
-                    <span className="ab-quick-icon"><Icon name={featureIcon(a.id)} size={16} /></span>
+                  <button key={a.id} type="button" data-quick={a.id} className="ab-quick-pill ab-quick-insight" title={t('Opens the card in Insights. Stays in ServiceNow.')} onClick={() => onShowCard(a.card)}>
+                    <span className="ab-quick-icon"><Icon name={featureIcon(a.id)} size={14} /></span>
                     <span className="ab-quick-label">{tr(a.label)}</span>
                   </button>
                 )

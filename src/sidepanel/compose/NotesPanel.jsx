@@ -161,7 +161,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
       {showKeyNote && <AiKeyNote eff={eff} what={tm('this')} />}
 
       <section className="ab-compose-input" aria-label={t('Rough notes')}>
-        <div className="ab-field">
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-notes-text">{t('Rough notes from the call, chat or visit')}</label>
           <textarea
             id="ab-notes-text"
@@ -172,14 +172,14 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
             placeholder={t('vpn down since this morning, error 809, tried restart, urgent for sales team...')}
           />
         </div>
-        <div className="ab-field">
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-notes-names">{t('Names to hide from the AI (optional)')}</label>
           <input id="ab-notes-names" className="ab-input" value={names} onChange={(e) => setNames(e.target.value)} placeholder={t('Abel Tuter, Priya Raman')} autoComplete="off" />
           <span className="ab-hint">{t('Emails, phone numbers and card numbers are hidden automatically. A name written only in the notes cannot be found by pattern, so list it here. Check the preview before sending.')}</span>
         </div>
-        <div className="ab-row">
+        <div className="ab-row ab-write-notes-go">
           {/* filled only while it is the next step (notes typed, no proposal yet): one filled button on the screen at a time */}
-          <button type="button" className={notes.trim() && !values ? 'ab-btn ab-wk-aibtn' : 'ab-btn ab-wk-aibtn-quiet'} disabled={!aiReady || !available || !notes.trim() || run.busy} onClick={write} title={available ? t('Sends the masked notes to the AI you chose, after a preview.') : t('Switched off by your organisation.')}>
+          <button type="button" className={notes.trim() && !values ? 'ab-btn ab-btn-ai' : 'ab-btn ab-btn-ai-quiet'} disabled={!aiReady || !available || !notes.trim() || run.busy} onClick={write} title={available ? t('Sends the masked notes to the AI you chose, after a preview.') : t('Switched off by your organisation.')}>
             <AiBadge label="" title="" /> {t('Write the ticket')}
           </button>
         </div>
@@ -189,18 +189,18 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
       <RunPanel run={run} eff={eff} page={page} readingText={t('Getting ready…')} />
 
       {showReview && (
-        <section className="ab-card ab-compose-actions" aria-label={t('Review before filling the form')}>
-          <h3 className="ab-h">{t('Review, then fill the form')}</h3>
-          <div className="ab-field">
+        <section className="ab-wk-block ab-compose-actions" aria-label={t('Review before filling the form')}>
+          <h3 className="ab-wk-subtitle">{t('Review, then fill the form')}</h3>
+          <div className="ab-field ab-wk-field">
             <label className="ab-label" htmlFor="ab-notes-short">{t('Short description')}</label>
             <input id="ab-notes-short" className="ab-input" maxLength={160} value={values.shortDescription} onChange={set('shortDescription')} />
           </div>
-          <div className="ab-field">
+          <div className="ab-field ab-wk-field">
             <label className="ab-label" htmlFor="ab-notes-desc">{t('Description')}</label>
             <textarea id="ab-notes-desc" className="ab-textarea ab-compose-text" value={values.description} onChange={set('description')} />
           </div>
           <div className="ab-compose-grid">
-            <div className="ab-field">
+            <div className="ab-field ab-wk-field">
               <label className="ab-label" htmlFor="ab-notes-impact">{t('Impact')}</label>
               <select id="ab-notes-impact" className="ab-select" value={values.impact} onChange={set('impact')}>
                 <option value="">{t('Leave as is')}</option>
@@ -209,7 +209,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
                 ))}
               </select>
             </div>
-            <div className="ab-field">
+            <div className="ab-field ab-wk-field">
               <label className="ab-label" htmlFor="ab-notes-urgency">{t('Urgency')}</label>
               <select id="ab-notes-urgency" className="ab-select" value={values.urgency} onChange={set('urgency')}>
                 <option value="">{t('Leave as is')}</option>
@@ -218,7 +218,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
                 ))}
               </select>
             </div>
-            <div className="ab-field">
+            <div className="ab-field ab-wk-field">
               <label className="ab-label" htmlFor="ab-notes-contact">{t('Contact type')}</label>
               <select id="ab-notes-contact" className="ab-select" value={values.contactType} onChange={set('contactType')}>
                 <option value="">{t('Leave as is')}</option>
@@ -281,10 +281,10 @@ ${values.description}`.trim(), { people: run.people, scan: run.scan }).hints} />
             <button type="button" className="ab-btn ab-btn-sm ab-btn-primary" disabled={!plan?.canFill || filling || filled} onClick={() => fillForm(false)}>
               {filled ? t('Filled') : t('Fill the form')}
             </button>
-            <button type="button" className="ab-btn ab-btn-sm" disabled={!values.shortDescription.trim()} onClick={() => fill.copy(values.shortDescription)}>
+            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={!values.shortDescription.trim()} onClick={() => fill.copy(values.shortDescription)}>
               {t('Copy short description')}
             </button>
-            <button type="button" className="ab-btn ab-btn-sm" disabled={!values.description.trim()} onClick={() => fill.copy(values.description)}>
+            <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" disabled={!values.description.trim()} onClick={() => fill.copy(values.description)}>
               {t('Copy description')}
             </button>
             <button type="button" className="ab-btn ab-btn-sm" onClick={() => fill.copy(allText)}>{t('Copy all')}</button>

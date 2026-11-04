@@ -66,6 +66,8 @@ function Screen({ page, eff }) {
 }
 
 const maskBox = (ui) => ui.$('input.ab-input[id^="ab-mask-text-"]');
+// The ticket data as the check shows it first (the readable view; the exact text is folded under "Show the exact text").
+const sentView = (ui) => ui.$('.ab-sent');
 
 // Both tickets have a check waiting: going from one to the other is where one dialog used to serve both.
 test('a first-time full check on ticket A, met again after B\'s short one, is the full check and is audited as shown', async () => {
@@ -75,7 +77,7 @@ test('a first-time full check on ticket A, met again after B\'s short one, is th
   try {
     await click(ui.button('Summarise'));
     await settle(6);
-    assert.match(ui.text(), /Check what will be sent/, 'A: the full check, the first time');
+    assert.match(ui.text(), /Check before sending/, 'A: the full check, the first time');
     // the agent opens ticket B while A's check waits, and asks for next best actions: the short check
     await ui.rerender(<Screen page={pageOf(INC_B)} eff={eff} />);
     await click(ui.button('Next best'));
@@ -84,9 +86,9 @@ test('a first-time full check on ticket A, met again after B\'s short one, is th
     assert.match(ui.text(), /Uses 3 solved tickets from other records/);
     // back on A
     await ui.rerender(<Screen page={pageOf(INC)} eff={eff} />);
-    assert.match(ui.text(), /Check what will be sent/, 'A: still the full check');
+    assert.match(ui.text(), /Check before sending/, 'A: still the full check');
     assert.ok(!/Send to the AI\?|from other records/.test(ui.text()), 'not B\'s one-liner');
-    assert.match(ui.$('pre.ab-preview').textContent, /INC0010001/, 'A\'s data');
+    assert.match(sentView(ui).textContent, /INC0010001/, 'A\'s data');
     await click(ui.button('Send to AI'));
     await settle(6);
     const log = fake.chrome.storage.local.data[AUDIT_KEY] || [];
@@ -101,36 +103,40 @@ test('a first-time full check on ticket A, met again after B\'s short one, is th
   }
 });
 
-test('what was typed in B\'s "Mask this too" box never shows in A\'s check, and what one check said stays with it', async () => {
+test('what was typed in B\'s "Hide something else" box never shows in A\'s check, and what one check said stays with it', async () => {
   setup();
   const eff = effOf({ previewMode: 'always' });
   const ui = await mount(<Screen page={pageOf(INC)} eff={eff} />);
   try {
     await click(ui.button('Summarise'));
     await settle(6);
-    assert.match(ui.$('pre.ab-preview').textContent, /INC0010001/);
+    assert.match(sentView(ui).textContent, /INC0010001/);
     await ui.rerender(<Screen page={pageOf(INC_B)} eff={eff} />);
     await click(ui.button('Summarise'));
     await settle(6);
-    assert.match(ui.$('pre.ab-preview').textContent, /INC0010002/);
+    assert.match(sentView(ui).textContent, /INC0010002/);
     await type(maskBox(ui), 'typed on B');
     await click(ui.button('Show the exact text'));
     assert.ok(ui.$('pre.ab-preview-exact'), 'B: the exact text');
+    assert.match(ui.$('pre.ab-preview').textContent, /^\[system\][\s\S]*INC0010002/, 'B: the request character for character');
     // back on A, whose check was waiting
     await ui.rerender(<Screen page={pageOf(INC)} eff={eff} />);
     assert.equal(maskBox(ui).value, '', 'A\'s box is empty');
-    assert.ok(ui.$('pre.ab-preview-data') && !ui.$('pre.ab-preview-exact'), 'A shows the ticket data first, not where B was left');
-    assert.match(ui.$('pre.ab-preview').textContent, /INC0010001/);
-    // "Mask this too" on A: the same run sealed again keeps its dialog (what it said stays), and the masked text is gone
+    assert.ok(sentView(ui) && !ui.$('pre.ab-preview-exact'), 'A shows the ticket data first, not where B was left');
+    assert.match(sentView(ui).textContent, /INC0010001/);
+    // "Hide something else" on A: the same run sealed again keeps its dialog (what it said stays), and the hidden text is gone
     await type(maskBox(ui), 'VPN drops on INC0010001');
-    await click(ui.button('Mask'));
+    await click(ui.button('Hide'));
     assert.match(ui.text(), /Masked in 1 place/);
     assert.equal(maskBox(ui).value, '');
-    assert.ok(!ui.$('pre.ab-preview').textContent.includes('VPN drops on INC0010001'));
+    assert.ok(!sentView(ui).textContent.includes('VPN drops on INC0010001'));
+    assert.match(sentView(ui).textContent, /Hidden 1/, 'what the person hid is a chip like the others');
+    await click(ui.button('Show the exact text'));
+    assert.ok(!ui.$('pre.ab-preview').textContent.includes('VPN drops on INC0010001') && /\[MASKED_1\]/.test(ui.$('pre.ab-preview').textContent), 'and gone from the exact text');
     // B's check: nothing of A's in it
     await ui.rerender(<Screen page={pageOf(INC_B)} eff={eff} />);
     assert.ok(!/Masked in 1 place/.test(ui.text()), 'A\'s status is not shown on B');
-    assert.match(ui.$('pre.ab-preview').textContent, /INC0010002/);
+    assert.match(sentView(ui).textContent, /INC0010002/);
   } finally {
     await ui.unmount();
   }
@@ -171,7 +177,7 @@ test('RunPanel: a new run opens a new check, never the last one\'s box', async (
     await settle(6);
     await click(ui.button('Summarise'));
     await settle(6);
-    assert.match(ui.text(), /Check what will be sent/);
+    assert.match(ui.text(), /Check before sending/);
     assert.equal(maskBox(ui).value, '');
   } finally {
     await ui.unmount();

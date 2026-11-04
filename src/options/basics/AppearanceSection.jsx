@@ -1,7 +1,7 @@
 // Settings, Basics: light, dark, or the computer's own setting (src/ui/useTheme.js). The panel, this page, the team page and the bar on
 // the ServiceNow page follow it.
 import { THEMES } from '../../ui/useTheme.js';
-import { Status, useSaveSetting } from '../fields.jsx';
+import { SectionHead, Status, useSaveSetting } from '../fields.jsx';
 import { t, tm } from '../../i18n/index.js';
 
 const THEME_WORDS = { system: tm('Same as the computer'), light: tm('Light'), dark: tm('Dark') };
@@ -10,9 +10,9 @@ const THEME_WORDS = { system: tm('Same as the computer'), light: tm('Light'), da
 export function AppearanceSection({ eff, reload }) {
   const { status, save } = useSaveSetting(reload);
   return (
-    <section className="ab-section" aria-labelledby="h-appearance">
-      <h2 className="ab-h" id="h-appearance">{t('Appearance')}</h2>
-      <div className="ab-field">
+    <section className="ab-section ab-set-section" aria-labelledby="h-appearance">
+      <SectionHead id="h-appearance" title={t('Appearance')}>{t('Light, dark, or the same as your computer.')}</SectionHead>
+      <div className="ab-field ab-set-pick">
         <label className="ab-label" htmlFor="theme-choice">{t('Colours')}</label>
         <select id="theme-choice" className="ab-select" value={eff.values.theme} aria-describedby="theme-hint" onChange={(e) => save({ theme: e.target.value })}>
           {THEMES.map((id) => (

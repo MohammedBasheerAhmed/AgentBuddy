@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { validateBaseUrl, splitAzureAddress, azureOptions, isAzureHost, AZURE_DEFAULT_API_VERSION } from '../../lib/aiUsage.js';
 import { parseDeployments } from '../policyNotes.js';
 import { DraftInput, FieldError, Locked, describedBy } from '../fields.jsx';
+import { Icon } from '../../sidepanel/ui/icons.jsx';
 import { t } from '../../i18n/index.js';
 
 /**
@@ -75,8 +76,8 @@ export function AzureFields({ eff, change, model, setStatus }) {
       </div>
 
       {/* Technical details, folded: most resources use the recommended form. Open when the older form is chosen or its version is wrong. */}
-      <details className="ab-more" open={az.form === 'deployment' && !az.apiVersionOk}>
-        <summary>{t('Technical details: how Agent Buddy calls Azure')}</summary>
+      <details className="ab-more ab-set-fold" open={az.form === 'deployment' && !az.apiVersionOk}>
+        <summary>{t('Technical details: how Agent Buddy calls Azure')}<Icon name="chevronDown" className="ab-chevron" /></summary>
         <div className="ab-field">
           <label className="ab-label" htmlFor="azure-form">{t('How to call it')}</label>
           <select id="azure-form" className="ab-select" value={az.form} aria-describedby="azure-form-hint" onChange={(e) => change({ azure: { ...(v.azure || {}), form: e.target.value } })}>

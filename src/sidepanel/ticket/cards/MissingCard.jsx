@@ -15,7 +15,7 @@ export default function MissingCard({ page, eff, record, header, active, setSumm
   const result = pack ? missingDetails(pack) : null;
   const n = result?.items.length || 0;
   useReport(setSummary, result ? (n ? t('{n} to ask about: {list}', { n, list: `${result.items.slice(0, 2).map((i) => i.short).join(t(', '))}${n > 2 ? '…' : ''}` }) : t('Nothing obvious missing')) : '');
-  useReport(setAttention, n >= 2 && stateBucket(header?.state) === 'new' ? 'warn' : '');
+  useReport(setAttention, n >= 2 && stateBucket(header?.state) === 'new' ? 'warn' : result && !n ? 'clear' : '');
 
   if (!result) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   return (

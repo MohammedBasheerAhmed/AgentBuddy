@@ -95,6 +95,7 @@ export default function AnswerArea({ assist, page, eff, record, active = true })
           eff={eff}
           record={record}
           busy={busy}
+          lead={i === 0}
           now={now}
           onRefine={assist.refine}
           onAgain={assist.retryAnswer}

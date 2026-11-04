@@ -5,6 +5,30 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### A calmer, clearer panel (the redesign you approved as a mockup)
+- You said the UI/UX and layout were not great. Claude photographed every screen at the panel's real width, wrote down what made it
+  unattractive (a wall of boxes, the important facts hidden, two accent colours, technical text, thin screens), made a mockup, and you
+  chose "calm and focused". Built by six agents in parallel from one written spec; the before, the mockup and the built screens sit side
+  by side on the design canvas.
+- **One look everywhere:** green is the only accent; AI is a small grey sparkle (no purple, no "+"); sections are separated by space
+  and thin lines instead of boxes inside boxes; body text 14px; every arrow on something that opens points down. The header has three
+  buttons (search, colours, Settings); the screens' dock is a white pill with the screen on show in green.
+- **Ticket:** "Needs you now" at the top (the SLA, the customer waiting, an outage or a card that needs a look, in plain sentences, from
+  what the panel already read), then ONE next step ("Draft a reply to the customer"), then the quick actions as small pills. Insights is
+  one list: a dot, the card's name and its answer visible without opening, the cards that need a look first and the ones with nothing to
+  report under "All clear in ...". A card that could not read its data no longer says "all clear", and a card you opened stays where it
+  is. AI Assist: an ask box, the suggested actions as rows with Start, the answer as a quiet panel, more actions as pills; the endpoint
+  line is gone from the top (the destination is named in the check before sending).
+- **The check before sending** reads like the ticket: how many names, emails, phone numbers, cards and passwords are hidden, the
+  ticket's fields, the description and the notes as text, every hidden value as a green chip; the exact text and the rules one click
+  away; "Hide something else" instead of "Mask this too".
+- **My work** without the red alarm frame, tickets as rows with status dots and two-line titles; **Team** shows each number once (Workload
+  and the SLA radar no longer repeat Overview's tiles), calm tiles and bars, one "..." menu per section; **Write** as calm sections with
+  snippets as rows and a real empty state; **Knowledge** starts with the articles for the open ticket; **Settings** has a menu of its
+  sections, switches, and quiet red buttons for what removes data.
+- Unit 3,007; the full end-to-end run 1,169 of 1,169, with the accessibility audit of every screen in light, dark and Arabic (it now
+  also accepts a focus ring drawn on a field's own box).
+
 ### The page dock without the corner mark
 - You asked why the icons of the bar on the ServiceNow page carried a "+". It was the AI spark in the corner of each AI action, too small
   to read as anything but a plus. It is gone; an AI action still says so in its name on hover (the AI badge) and to a screen reader.

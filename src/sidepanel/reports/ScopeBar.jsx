@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useGroupSearch } from './useGroupSearch.js';
+import Summary from './Summary.jsx';
 import { isolate, t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 
@@ -103,7 +104,7 @@ export default function ScopeBar({ scope, tables, selected, context, tabId, bloc
       {showPicker && <GroupPicker tabId={tabId} blocked={blocked} chosen={chosen} myGroups={context?.groups} onAdd={add} />}
 
       <details className="ab-details">
-        <summary>{selected.length ? t('Tables: {n} of {total} available', { n: selected.length, total: tables.filter((x) => x.usable).length }) : t('Tables: none available')}</summary>
+        <Summary>{selected.length ? t('Tables: {n} of {total} available', { n: selected.length, total: tables.filter((x) => x.usable).length }) : t('Tables: none available')}</Summary>
         <ul className="ab-table-list">
           {tables.map((tbl) => (
             <li key={tbl.table}>

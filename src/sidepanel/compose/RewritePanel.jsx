@@ -8,7 +8,6 @@ import { FORM_FIELDS, MAX_FORM_TEXT, formFieldByName } from '../../compose/formF
 import { LANGUAGES, REWRITE_PRESETS, buildComposePack, formReadRefusal, mergePeople, pageTable, peopleFromNames, withLanguage } from '../../compose/rewrite.js';
 import { currentFromPage, expectFromPage, matchesExpect, wrongRecordText } from '../../lib/fillable.js';
 import { FillFeedback, ReviewHints, featureState, hintsFor, isAiReady, readRecordPeople, useFill } from './shared.js';
-import { AiBadge } from '../ui/primitives.jsx';
 import { formatNumber, isolate, t, tm, t as tr } from '../../i18n/index.js';
 
 const isRewriteFeature = (feature) => Boolean(feature?.id) && REWRITE_PRESETS.some((p) => p.featureId === feature.id);
@@ -102,15 +101,16 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
     });
   }
 
+  // The presets are pills: several equal choices, none of them the screen's main step.
   const button = (preset, label) => {
     const { available } = featureState(preset.featureId, eff.policy);
     return (
       <button
         key={preset.id}
         type="button"
-        className="ab-btn ab-btn-sm"
+        className="ab-btn ab-btn-sm ab-wk-pill"
         disabled={!aiReady || !hasText || !available || run.busy}
-        title={available ? '' : t('Switched off by your organisation.')}
+        title={available ? t('Sends the masked text to the AI you chose, after a preview.') : t('Switched off by your organisation.')}
         onClick={() => go(preset)}
       >
         {label || tr(preset.label)}
@@ -128,7 +128,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
       {showKeyNote && <AiKeyNote eff={eff} what={tm('this')} />}
 
       <section className="ab-compose-input" aria-label={t('Text to rewrite')}>
-        <div className="ab-field">
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-rewrite-text">{t('Text to rewrite')}</label>
           <textarea
             id="ab-rewrite-text"
@@ -148,13 +148,13 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
             }}
             placeholder={t('Paste or type the text here')}
           />
-          <span className="ab-hint">{t('{count} of {max} characters', { count: formatNumber(text.length), max: formatNumber(MAX_FORM_TEXT) })}</span>
+          <span className="ab-hint ab-wk-count">{t('{count} of {max} characters', { count: formatNumber(text.length), max: formatNumber(MAX_FORM_TEXT) })}</span>
         </div>
 
-        <div className="ab-field">
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-rewrite-field">{t('Form field')}</label>
-          <div className="ab-row">
-            <select id="ab-rewrite-field" className="ab-select ab-compose-select" value={target} onChange={(e) => setTarget(e.target.value)}>
+          <div className="ab-wk-inline">
+            <select id="ab-rewrite-field" className="ab-select ab-wk-grow" value={target} onChange={(e) => setTarget(e.target.value)}>
               {FORM_FIELDS.map((f) => (
                 <option key={f.name} value={f.name}>{tr(f.label)}</option>
               ))}
@@ -167,7 +167,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
           {status && <p className={`ab-note ab-note-${status.kind}`} role="status">{status.text}</p>}
         </div>
 
-        <div className="ab-field">
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-rewrite-names">{t('Names to hide from the AI (optional)')}</label>
           <input id="ab-rewrite-names" className="ab-input" value={names} onChange={(e) => setNames(e.target.value)} placeholder={t('Abel Tuter, Priya Raman')} autoComplete="off" />
           <span className="ab-hint">
@@ -175,15 +175,15 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
           </span>
         </div>
 
-        <div className="ab-label ab-write-ailabel">
-          {t('Rewrite it')} <AiBadge title={t('Sends the masked text to the AI you chose, after a preview.')} />
+        <div className="ab-wk-field">
+          <p className="ab-label ab-write-ailabel">{t('Rewrite it')}</p>
+          <div className="ab-wk-pills ab-compose-presets" role="group" aria-label={t('Rewrite presets')}>
+            {SIMPLE.map((p) => button(p))}
+          </div>
         </div>
-        <div className="ab-row ab-compose-presets" role="group" aria-label={t('Rewrite presets')}>
-          {SIMPLE.map((p) => button(p))}
-        </div>
-        <div className="ab-row ab-compose-presets" role="group" aria-label={t('Translate')}>
-          <label className="ab-sub" htmlFor="ab-rewrite-language">{t('Language')}</label>
-          <select id="ab-rewrite-language" className="ab-select ab-compose-select" value={language} onChange={(e) => setLanguage(e.target.value)}>
+        <div className="ab-wk-pills ab-compose-presets" role="group" aria-label={t('Translate')}>
+          <label className="ab-label" htmlFor="ab-rewrite-language">{t('Language')}</label>
+          <select id="ab-rewrite-language" className="ab-select ab-wk-language" value={language} onChange={(e) => setLanguage(e.target.value)}>
             {LANGUAGES.map((l) => (
               <option key={l.code} value={l.code}>{tr(l.name)}</option>
             ))}
@@ -243,8 +243,8 @@ export function stillFromForm(readText, value) {
 
 export function RewriteResultActions({ field, fill, made, wrongRecord, hints, onPut, onUseAsText }) {
   return (
-    <section className="ab-card ab-compose-actions" aria-label={t('Use the rewrite')}>
-      <h3 className="ab-h">{t('Use it in the form')}</h3>
+    <section className="ab-wk-block ab-compose-actions" aria-label={t('Use the rewrite')}>
+      <h3 className="ab-wk-subtitle">{t('Use it in the form')}</h3>
       <p className="ab-hint">
         {made?.number
           ? t('Goes into: {field} of {number}. Change the field above if you need another one.', { field: tr(field.label), number: isolate(made.number) })

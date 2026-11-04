@@ -13,13 +13,13 @@
 /* Slanted Arabic letters look wrong; emphasis in Arabic is the weight. */
 :root[dir='rtl'] em, :root[dir='rtl'] i, :root[dir='rtl'] cite { font-style: normal; font-weight: 600; }
 
-/* A chevron is a corner drawn by rotating a square: folded, it points the way the text goes (right in English, left in Arabic);
-   open it points down in both. Only the folded state turns. */
-:root[dir='rtl'] .ab-act-chevron:not(.is-open),
-:root[dir='rtl'] .ab-quick-chevron:not(.ab-quick-chevron-open),
-:root[dir='rtl'] [aria-expanded='false'] .ab-cardx-chevron,
-:root[dir='rtl'] [aria-expanded='false'] .ab-mw-fold-chevron,
-:root[dir='rtl'] .ab-mw-fold-toggle:not([aria-expanded='true']) .ab-mw-fold-chevron { transform: rotate(135deg); }
+/* The shared chevron (.ab-chevron, ui.css) points down on whatever opens in place and up when it is open, in every language: it is
+   never turned here. The older chevrons, a corner drawn by rotating a square, point the way the text goes when folded (right in English,
+   left in Arabic) and down when open: only their folded state turns, and not once they have become an .ab-chevron icon. */
+:root[dir='rtl'] .ab-act-chevron:not(.is-open):not(.ab-chevron),
+:root[dir='rtl'] .ab-quick-chevron:not(.ab-quick-chevron-open):not(.ab-chevron),
+:root[dir='rtl'] [aria-expanded='false'] .ab-mw-fold-chevron:not(.ab-chevron),
+:root[dir='rtl'] .ab-mw-fold-toggle:not([aria-expanded='true']) .ab-mw-fold-chevron:not(.ab-chevron) { transform: rotate(135deg); }
 
 /* Any other mark that points forwards or back: put the class on it. */
 :root[dir='rtl'] .ab-flip { transform: scaleX(-1); }

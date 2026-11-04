@@ -5,11 +5,12 @@ import { stageOf } from '../../../../features/stages.js';
 import { aiAvailable } from '../../../../profiles/profiles.js';
 import { featureBlock, offeredFeatures, recordBlock } from './plan.js';
 
-// The quick-actions bar of the Ticket screen, drawn inside the ticket at a glance (TRACKER.md F6). State-aware: what fits the
-// ticket's stage comes first. Both halves: AI actions (only when AI can be used now, and only those that can run on this record) and
-// Insights cards (opened with onShowCard; their ids are the Insights agent's INSIGHT_CARDS ids, 'resolve' and 'related').
+// The quick-actions bar of the Ticket screen, under its main step (TRACKER.md F6). State-aware: what fits the ticket's stage comes
+// first. Both halves: AI actions (only when AI can be used now, and only those that can run on this record) and Insights cards
+// (opened with onShowCard; their ids are the Insights agent's INSIGHT_CARDS ids, 'resolve' and 'related').
 //
-// props: { page, eff, record, header, busy, aiReady, onRun(feature), onShowCard(cardId) }
+// props: { page, eff, record, header, busy, aiReady, exclude, onRun(feature), onShowCard(cardId) }
+//   exclude: ids the screen already offers as its main step (that step is not shown twice)
 
 // The checklist action needs a read to know whether it is offered (src/sidepanel/ticket/assist/actions/useChecklistNeed.js): the
 // bar does not make it, so the bar never holds that action.
@@ -23,7 +24,7 @@ export function cardIdsFor(record, header, eff) {
   return cardsFor(INSIGHT_CARDS, record || {}, header, eff).map((c) => c.id);
 }
 
-export default function TicketQuickBar({ eff, record, header = null, busy = false, aiReady = true, onRun, onShowCard }) {
+export default function TicketQuickBar({ eff, record, header = null, busy = false, aiReady = true, exclude = [], onRun, onShowCard }) {
   const kind = record?.kind || 'other';
   const ai = Boolean(aiReady) && aiAvailable(eff) && !recordBlock({ record, eff });
   const features = ai ? offeredFeatures({ record, header, eff, gates: NOT_IN_BAR }).filter((f) => !featureBlock(f, eff, record)) : [];
@@ -36,6 +37,7 @@ export default function TicketQuickBar({ eff, record, header = null, busy = fals
       eff={eff}
       disabled={busy}
       aiReady={ai}
+      exclude={exclude}
       onRun={onRun}
       onShowCard={onShowCard}
     />

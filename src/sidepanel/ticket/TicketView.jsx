@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { headerPhase } from '../recordHeader.js';
@@ -7,23 +7,28 @@ import { launchIsForPage } from '../../lib/launch.js';
 import { QUICK_CARDS, isQuickCard } from '../../features/quick.js';
 import { aiAvailable, aiOffByPolicy } from '../../profiles/profiles.js';
 import { HalfPanel, HalfRule, HalfSwitch } from '../ui/primitives.jsx';
-import { ModelSwitch, ProfileHint, destinationOf, useHalf } from '../shell/shellParts.jsx';
-import { Glance } from './cards/index.js';
+import { ModelSwitch, ProfileHint, useHalf } from '../shell/shellParts.jsx';
+import { Glance, INSIGHT_CARDS } from './cards/index.js';
 import { QuickBar } from './assist/actions/index.js';
-import { offeredFeatures } from './assist/actions/plan.js';
+import { nextStep, offeredFeatures } from './assist/actions/plan.js';
 import { useAnswers } from './assist/answers/index.js';
-import TicketInsights from './TicketInsights.jsx';
+import { useCardReports } from './cardReports.js';
+import NextStep from './NextStep.jsx';
+import TicketInsights, { cardsFor } from './TicketInsights.jsx';
 import TicketAssist from './TicketAssist.jsx';
 import { t } from '../../i18n/index.js';
 
 export const SAVE_SETTLE_MS = 1500;
 
 /**
- * The Ticket screen for an open record (TRACKER.md 2.1): the ticket at a glance (with the quick-actions bar), then the Insights /
- * AI Assist switch and the two halves. Owner: the lead; the cards, the actions and the answers plug in (docs/round3.md).
+ * The Ticket screen for an open record (TRACKER.md 2.1). From the top: the ticket (no box), "Needs you now" when something does, the
+ * one main step (the action the ticket's state suggests first) and the quick actions; then the Insights / AI Assist tabs and the two
+ * halves. While AI Assist is on show the top shrinks to the number, the title and the chips (AI Assist has its own first step).
+ * Owner: the lead; the cards, the actions and the answers plug in (docs/round3.md).
  *
- * The answers belong to the screen, not to a half: an action started from the quick bar or the bar on the ServiceNow page shows its
- * answer in AI Assist, which comes forward. A half that was opened stays mounted while the other one shows.
+ * The answers belong to the screen, not to a half: an action started from the main step, the quick bar or the bar on the ServiceNow
+ * page shows its answer in AI Assist, which comes forward. A half that was opened stays mounted while the other one shows. What the
+ * Insights cards report (their one line, their status) is kept here, per record, so "Needs you now" and the Insights rows say the same.
  *
  * props: page (a record page), eff, active (the Ticket screen is on show), launch / onLaunchDone (an action the bar on the
  * ServiceNow page asked for; used once)
@@ -38,6 +43,7 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   const [head, setHead] = useState(() => ({ key, phase: 'loading', header: null }));
   const { phase, header } = head.key === key ? head : { phase: 'loading', header: null };
   const assist = useAnswers({ page, eff, record });
+  const reports = useCardReports(key);
   const aiOn = !aiOffByPolicy(eff);
   const [half, setHalf] = useHalf('ticket', eff);
   const shown = aiOn ? half : 'insights';
@@ -136,33 +142,48 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launch, page.tabId, key]);
 
-  const quickBar = <QuickBar page={page} eff={eff} record={record} header={header} busy={assist.busy} aiReady={ready} onRun={(f) => runAi(f)} onShowCard={showCard} />;
+  // The one main step: the action the ticket's state suggests first (the first row of AI Assist, the quick bar's first AI item).
+  // Nothing when AI cannot be used now: the note in AI Assist says how to set it up.
+  const step = useMemo(() => (ready ? nextStep({ record, header, eff }) : null), [ready, record, header, eff]);
+  // While AI Assist is on show the top shrinks: AI Assist starts with its own suggestions, the first of them this same step.
+  const compact = shown === 'assist';
+  // The Insights cards of this record (their titles and ids), for "Needs you now" to name the card an item came from.
+  const cards = cardsFor(INSIGHT_CARDS, record, header, eff).map((c) => ({ id: c.id, title: c.title }));
 
   return (
     <div className="ab-pane ab-ticket">
       <ErrorBoundary resetKey={key}>
-        <Glance page={page} eff={eff} record={record} header={header} headPhase={phase} quickBar={quickBar} active={active} onShowCard={showCard} />
+        <Glance page={page} eff={eff} record={record} header={header} headPhase={phase} active={active} compact={compact} onShowCard={showCard} needs={compact ? null : { cards, reports: reports.cards }} />
       </ErrorBoundary>
+      {!compact && step && <NextStep feature={step} eff={eff} busy={assist.busy} onRun={(f) => runAi(f)} />}
+      {!compact && (
+        <ErrorBoundary resetKey={`${key}:quick`}>
+          <QuickBar page={page} eff={eff} record={record} header={header} busy={assist.busy} aiReady={ready} exclude={step ? [step.id] : []} onRun={(f) => runAi(f)} onShowCard={showCard} />
+        </ErrorBoundary>
+      )}
       <ProfileHint kind={kind} eff={eff} />
       {launchNote && <p className="ab-note ab-note-warn" role="status">{launchNote}</p>}
 
-      {aiOn && <HalfSwitch idBase="ab-ticket-half" value={shown} onChange={choose} assistNote={eff.values?.aiSkipped ? 'off' : ''} />}
-      {aiOn && (
-        <div className="ab-halfrule-row">
-          <HalfRule half={shown} destination={destinationOf(eff)} />
-          {shown === 'assist' && ready && <ModelSwitch eff={eff} />}
-        </div>
-      )}
+      {aiOn && <HalfSwitch idBase="ab-ticket-half" value={shown} onChange={choose} assistNote={eff.values?.aiSkipped ? t('off') : ''} />}
 
       <HalfPanel idBase="ab-ticket-half" half="insights" hidden={shown !== 'insights'} switched={Boolean(aiOn)}>
         {(visited.has('insights') || shown === 'insights') && (
-          <TicketInsights page={page} eff={eff} record={record} header={header} active={active && shown === 'insights'} openCard={openCard} onShowCard={showCard} />
+          <TicketInsights page={page} eff={eff} record={record} header={header} active={active && shown === 'insights'} openCard={openCard} onShowCard={showCard} reports={reports} />
         )}
+        {aiOn && <HalfRule half="insights" />}
       </HalfPanel>
       {aiOn && (
         <HalfPanel idBase="ab-ticket-half" half="assist" hidden={shown !== 'assist'}>
           {(visited.has('assist') || shown === 'assist') && (
             <TicketAssist page={page} eff={eff} record={record} header={header} assist={assist} ready={ready} active={active && shown === 'assist'} onRun={runAi} />
+          )}
+          {/* At the end, out of the way: where text goes, in one sentence without the address (the check before sending names the
+              destination), and the model in use, to switch without opening Settings. */}
+          {!eff.values?.aiSkipped && (
+            <div className="ab-halfrule-row ab-ticket-foot">
+              <HalfRule half="assist" />
+              {ready && <ModelSwitch eff={eff} />}
+            </div>
           )}
         </HalfPanel>
       )}

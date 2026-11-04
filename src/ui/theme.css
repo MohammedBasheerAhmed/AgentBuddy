@@ -1,6 +1,9 @@
 /* Agent Buddy theme: the same forest palette as NowBuddy, applied to :root because the side panel and the settings page are
    extension pages (no shadow root needed). Every text/background pair is meant to pass WCAG AA (4.5:1). Do not use comma
-   lists such as `background: var(--ab-canvas), var(--ab-bg)`: tokens hold plain colours, so that renders transparent. */
+   lists such as `background: var(--ab-canvas), var(--ab-bg)`: tokens hold plain colours, so that renders transparent.
+   Calm and focused (the 2026 redesign): green (--ab-accent) is the only accent. The AI tokens are neutral greys (AI is marked by a small
+   grey spark, never by a colour), sections are parted by space and --ab-divider lines instead of boxes, and --ab-surface is a soft
+   panel with no border. This file is also put in front of the bar on the ServiceNow page (src/content/bar.css), as :host. */
 
 :root {
   --ab-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -10,16 +13,21 @@
   --ab-text-md: 13px;
   --ab-text-lg: 14px;
   --ab-text-xl: 16px;
+  --ab-text-base: 14px; /* the body text of the panel; 13px (--ab-text-md) is secondary text, 12px (--ab-text-sm) labels and chips */
 
   --ab-bg: #ffffff;
-  --ab-bg-subtle: #f5f8f6;
-  --ab-bg-sunken: #ebf1ee;
+  --ab-bg-subtle: #f5f7f6;
+  --ab-bg-sunken: #ecefed;
   --ab-bg-raised: #ffffff;
-  --ab-fg: #16191d;
-  --ab-fg-soft: #3b424a;
-  --ab-fg-muted: #5a636d;
-  --ab-border: #d9e3de;
-  --ab-border-strong: #b1beb7;
+  --ab-fg: #1b1f1d;
+  --ab-fg-soft: #3f4844;
+  --ab-fg-muted: #5b6460;
+  --ab-fg-faint: #9aa39f; /* chevrons and neutral status dots: a mark beside words, never text */
+  --ab-border: #e3e7e5;
+  --ab-border-strong: #c4cbc7;
+  --ab-input-border: #8c9590; /* the edge of a text box or a select: 3:1 on the page, so the field can be seen */
+  --ab-divider: #eef0ef; /* one-pixel lines between rows and between sections */
+  --ab-surface: #f7f8f7; /* a soft panel without a border (an answer, a summary strip) */
   --ab-accent: #1b6b4f;
   --ab-accent-hover: #14573f;
   --ab-accent-fg: #ffffff;
@@ -36,11 +44,19 @@
   --ab-ok: #14743a;
   --ab-ok-soft: #e9f6ee;
   --ab-ok-line: #b3dfc4;
-  --ab-ai: #5a3fb5;
-  --ab-ai-hover: #4a2f9f;
+  /* AI is neutral: the mark is the muted grey, its soft fill the subtle background, its line the border */
+  --ab-ai: #5b6460;
+  --ab-ai-hover: #3f4844;
   --ab-ai-fg: #ffffff;
-  --ab-ai-soft: #f2eefc;
-  --ab-ai-line: #d3c8f3;
+  --ab-ai-soft: #f5f7f6;
+  --ab-ai-line: #e3e7e5;
+  /* "Needs you now": a warm block, its heading, and the round icon behind an item (a danger item uses --ab-danger-soft) */
+  --ab-attn-bg: #fff7ed;
+  --ab-attn-fg: #9a3412;
+  --ab-attn-icon-bg: #fcebd3;
+  /* a masked value in the check before sending */
+  --ab-mask-bg: #e3f1ea;
+  --ab-mask-fg: #135c43;
   --ab-shadow: 0 1px 2px rgba(16, 21, 28, 0.08), 0 6px 16px rgba(16, 21, 28, 0.1);
   --ab-ring: 0 0 0 2px rgba(27, 107, 79, 0.92), 0 0 0 5px rgba(27, 107, 79, 0.16);
   --ab-backdrop: rgba(10, 14, 12, 0.56);
@@ -48,7 +64,7 @@
   --ab-radius-xs: 4px;
   --ab-radius-sm: 6px;
   --ab-radius: 8px;
-  --ab-radius-lg: 10px;
+  --ab-radius-lg: 12px;
 
   color-scheme: light;
 }
@@ -62,8 +78,12 @@
     --ab-fg: #e6ebe8;
     --ab-fg-soft: #c3cbc6;
     --ab-fg-muted: #8f9a94;
+    --ab-fg-faint: #66706b;
     --ab-border: #2a322e;
     --ab-border-strong: #414b45;
+    --ab-input-border: #69736e;
+    --ab-divider: #232a27;
+    --ab-surface: #1a1f1d;
     --ab-accent: #4fc08d;
     --ab-accent-hover: #6fcfa2;
     --ab-accent-fg: #06180f;
@@ -80,11 +100,16 @@
     --ab-ok: #7ddaa2;
     --ab-ok-soft: #16291e;
     --ab-ok-line: #2c4f39;
-    --ab-ai: #b8a6ff;
-    --ab-ai-hover: #cbbdff;
-    --ab-ai-fg: #160f2e;
-    --ab-ai-soft: #221c3a;
-    --ab-ai-line: #3d3366;
+    --ab-ai: #8f9a94;
+    --ab-ai-hover: #c3cbc6;
+    --ab-ai-fg: #131716;
+    --ab-ai-soft: #171c1a;
+    --ab-ai-line: #2a322e;
+    --ab-attn-bg: #2a2018;
+    --ab-attn-fg: #f2b27f;
+    --ab-attn-icon-bg: #3e2d1c;
+    --ab-mask-bg: #16332a;
+    --ab-mask-fg: #8ee0b9;
     --ab-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.4);
     --ab-ring: 0 0 0 2px rgba(79, 192, 141, 0.95), 0 0 0 5px rgba(79, 192, 141, 0.2);
     --ab-backdrop: rgba(0, 0, 0, 0.66);
@@ -100,8 +125,12 @@
   --ab-fg: #e6ebe8;
   --ab-fg-soft: #c3cbc6;
   --ab-fg-muted: #8f9a94;
+  --ab-fg-faint: #66706b;
   --ab-border: #2a322e;
   --ab-border-strong: #414b45;
+  --ab-input-border: #69736e;
+  --ab-divider: #232a27;
+  --ab-surface: #1a1f1d;
   --ab-accent: #4fc08d;
   --ab-accent-hover: #6fcfa2;
   --ab-accent-fg: #06180f;
@@ -118,11 +147,16 @@
   --ab-ok: #7ddaa2;
   --ab-ok-soft: #16291e;
   --ab-ok-line: #2c4f39;
-  --ab-ai: #b8a6ff;
-  --ab-ai-hover: #cbbdff;
-  --ab-ai-fg: #160f2e;
-  --ab-ai-soft: #221c3a;
-  --ab-ai-line: #3d3366;
+  --ab-ai: #8f9a94;
+  --ab-ai-hover: #c3cbc6;
+  --ab-ai-fg: #131716;
+  --ab-ai-soft: #171c1a;
+  --ab-ai-line: #2a322e;
+  --ab-attn-bg: #2a2018;
+  --ab-attn-fg: #f2b27f;
+  --ab-attn-icon-bg: #3e2d1c;
+  --ab-mask-bg: #16332a;
+  --ab-mask-fg: #8ee0b9;
   --ab-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.4);
   --ab-ring: 0 0 0 2px rgba(79, 192, 141, 0.95), 0 0 0 5px rgba(79, 192, 141, 0.2);
   --ab-backdrop: rgba(0, 0, 0, 0.66);

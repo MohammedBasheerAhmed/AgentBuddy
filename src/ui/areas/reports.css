@@ -1,11 +1,14 @@
 /* Styles for the reports area. Use the --ab-* tokens from theme.css only; the chart colours below are derived from them.
-   Part 1: the chart kit (src/sidepanel/charts). The dashboard layout, the builder and the print styles follow the marker line. */
+   Part 1: the chart kit (src/sidepanel/charts). The dashboard layout, the builder and the print styles follow the marker line.
+   Calm (the 2026 redesign): solid fills parted by thin gaps, a texture only where colour alone would not tell two series apart
+   (fillPatterns in charts/geometry.js), recessive axes, big numbers with small labels, no coloured card edges. */
 
 /* ---- chart colour tokens ----------------------------------------------------------------------------------------------
    Meaning comes first: good, warn and bad reuse the theme's ok, warning and danger colours. The six categorical colours tell
-   unrelated series apart (they are never the only cue: every series also has a pattern or a marker). The sequential scale
-   shades the heat strip. tests/charts-contrast.test.js checks every pair below in the light and in both dark scopes:
-   graphics against the card background >= 3:1, text >= 4.5:1. Plain colours only, never comma-layered backgrounds. */
+   unrelated series apart (they are never the only cue: the legend names every series, and series whose colours could be mistaken
+   for each other also get a pattern). The sequential scale shades the heat strip. tests/charts-contrast.test.js checks every pair
+   below in the light and in both dark scopes: graphics against the chart background >= 3:1, text >= 4.5:1. Plain colours only,
+   never comma-layered backgrounds. The chart background is the page's: sections sit on the page, not on cards. */
 :root {
   --ab-chart-1: var(--ab-accent);
   --ab-chart-2: #1f5fa8;
@@ -30,7 +33,7 @@
   --ab-chart-label-muted: var(--ab-fg-muted);
   --ab-chart-label-on-fill: var(--ab-accent-fg);
   --ab-chart-pattern: var(--ab-bg-raised);
-  --ab-chart-surface: var(--ab-bg-raised);
+  --ab-chart-surface: var(--ab-bg);
   --ab-chart-focus-a: var(--ab-fg);
   --ab-chart-focus-b: var(--ab-bg-raised);
 }
@@ -60,7 +63,7 @@
     --ab-chart-label-muted: var(--ab-fg-muted);
     --ab-chart-label-on-fill: var(--ab-accent-fg);
     --ab-chart-pattern: var(--ab-bg-raised);
-    --ab-chart-surface: var(--ab-bg-raised);
+    --ab-chart-surface: var(--ab-bg);
     --ab-chart-focus-a: var(--ab-fg);
     --ab-chart-focus-b: var(--ab-bg-raised);
   }
@@ -90,7 +93,7 @@
   --ab-chart-label-muted: var(--ab-fg-muted);
   --ab-chart-label-on-fill: var(--ab-accent-fg);
   --ab-chart-pattern: var(--ab-bg-raised);
-  --ab-chart-surface: var(--ab-bg-raised);
+  --ab-chart-surface: var(--ab-bg);
   --ab-chart-focus-a: var(--ab-fg);
   --ab-chart-focus-b: var(--ab-bg-raised);
 }
@@ -107,16 +110,17 @@
 .ab-tone-c5 { --tone: var(--ab-chart-5); }
 .ab-tone-c6 { --tone: var(--ab-chart-6); }
 
-/* ---- the frame every chart sits in ---- */
+/* ---- the frame every chart sits in: a quiet title (a section title inside the section), the picture, the legend ---- */
 .ab-chart, .ab-tile { position: relative; } /* anchors the visually hidden text, so it can never add scroll */
 .ab-chart { min-width: 0; }
-.ab-chart-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 6px; }
-.ab-chart-title { margin: 0; font-size: var(--ab-text-md); font-weight: 650; min-width: 0; overflow-wrap: anywhere; }
+.ab-chart-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 10px; }
+.ab-chart-title { margin: 0; font-size: var(--ab-text-md); font-weight: 600; line-height: 1.4; color: var(--ab-fg-soft); min-width: 0; overflow-wrap: anywhere; }
 .ab-chart-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-inline-start: auto; }
-.ab-chart-toggle[aria-pressed='true'] { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); color: var(--ab-fg); }
+.ab-chart-toggle { font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+.ab-chart-toggle[aria-pressed='true'] { background: var(--ab-accent-soft); color: var(--ab-fg); }
 .ab-chart-visual { min-width: 0; }
-.ab-chart-empty { margin: 0; padding: 8px 10px; border: 1px dashed var(--ab-border-strong); border-radius: var(--ab-radius-sm); color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
-.ab-chart-note { margin: 6px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-chart-empty { margin: 0; padding: 2px 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
+.ab-chart-note { margin: 8px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
 .ab-chart-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .ab-chart-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 
@@ -129,42 +133,43 @@
 .ab-chart-align-center { text-align: center !important; }
 .ab-chart-link { background: none; border: 0; padding: 0; font: inherit; color: var(--ab-accent); text-align: start; text-decoration: underline; cursor: pointer; border-radius: var(--ab-radius-xs); }
 
-/* ---- tiles ---- */
-.ab-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
-.ab-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 10px; text-align: start; border: 1px solid var(--ab-border); border-inline-start: 4px solid var(--tone, var(--ab-chart-neutral)); border-radius: var(--ab-radius); background: var(--ab-bg-raised); color: var(--ab-fg); font: inherit; }
+/* ---- tiles: a small label, the number large, a short hint; a status dot by the label only where the number is a problem ---- */
+.ab-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 4px 12px; margin-inline: -10px; }
+.ab-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 10px; text-align: start; border: 0; border-radius: var(--ab-radius); background: transparent; color: var(--ab-fg); font: inherit; }
 .ab-tile-button { cursor: pointer; width: 100%; }
-.ab-tile-button:hover { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); border-inline-start-color: var(--tone, var(--ab-chart-neutral)); }
-.ab-tile-label { color: var(--ab-chart-label); font-size: var(--ab-text-sm); font-weight: 550; overflow-wrap: anywhere; }
-.ab-tile-value { font-size: 24px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ab-tile-button:hover { background: var(--ab-bg-subtle); }
+.ab-tile-label { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.ab-tile-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--tone); }
+.ab-tile-value { font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .ab-tile-loading { color: var(--ab-fg-muted); }
-.ab-tile-unavailable { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); font-weight: 600; padding: 4px 0; }
-.ab-tile-hint { color: var(--ab-fg-muted); font-size: var(--ab-text-xs); overflow-wrap: anywhere; }
-.ab-tile-delta { font-size: var(--ab-text-xs); font-weight: 600; color: var(--ab-fg-soft); }
+.ab-tile-unavailable { color: var(--ab-fg-muted); font-size: var(--ab-text-md); font-weight: 500; padding: 4px 0; }
+.ab-tile-hint { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); line-height: 1.35; overflow-wrap: anywhere; }
+.ab-tile-delta { font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-soft); }
 .ab-tile-delta-good { color: var(--ab-ok); }
 .ab-tile-delta-bad { color: var(--ab-danger); }
 
 /* ---- horizontal bars ---- */
-.ab-hbar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ab-hbar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .ab-hbar-row { display: block; width: 100%; padding: 2px 0; margin: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; }
 button.ab-hbar-row { cursor: pointer; border-radius: var(--ab-radius-xs); }
 button.ab-hbar-row:hover { background: var(--ab-bg-subtle); }
 .ab-hbar-text { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.ab-hbar-label { min-width: 0; color: var(--ab-chart-label); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
-.ab-hbar-value { flex: none; font-weight: 650; font-variant-numeric: tabular-nums; }
-.ab-hbar-pct { color: var(--ab-fg-muted); font-weight: 500; font-size: var(--ab-text-xs); }
-.ab-hbar-hint { display: block; color: var(--ab-fg-muted); font-size: var(--ab-text-xs); overflow-wrap: anywhere; }
-.ab-hbar-svg { display: block; width: 100%; height: 10px; margin-top: 3px; overflow: visible; }
+.ab-hbar-label { min-width: 0; color: var(--ab-chart-label); font-size: var(--ab-text-md); overflow-wrap: anywhere; }
+.ab-hbar-value { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ab-hbar-pct { color: var(--ab-fg-muted); font-weight: 500; font-size: var(--ab-text-sm); }
+.ab-hbar-hint { display: block; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+.ab-hbar-svg { display: block; width: 100%; height: 10px; margin-top: 4px; overflow: visible; }
 .ab-bar-track { fill: var(--ab-chart-track); }
 .ab-bar-fill { fill: var(--tone); }
 
-/* ---- stacked bars ---- */
-.ab-stack { display: flex; flex-direction: column; gap: 10px; }
-.ab-stack-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
-.ab-stack-label { min-width: 0; color: var(--ab-chart-label); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
-.ab-stack-total { flex: none; font-weight: 650; font-variant-numeric: tabular-nums; }
-.ab-stack-svg { display: block; width: 100%; height: 22px; overflow: visible; }
-.ab-seg-shape { stroke: var(--ab-chart-surface); stroke-width: 1; }
-.ab-seg-text { font-size: 11px; font-weight: 700; text-anchor: middle; fill: var(--ab-chart-label-on-fill); paint-order: stroke; stroke: var(--tone); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+/* ---- stacked bars: solid segments parted by a 2px gap in the page colour ---- */
+.ab-stack { display: flex; flex-direction: column; gap: 12px; }
+.ab-stack-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.ab-stack-label { min-width: 0; color: var(--ab-chart-label); font-size: var(--ab-text-md); overflow-wrap: anywhere; }
+.ab-stack-total { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ab-stack-svg { display: block; width: 100%; height: 20px; overflow: visible; }
+.ab-seg-shape { stroke: var(--ab-chart-surface); stroke-width: 2; }
+.ab-seg-text { font-size: 11px; font-weight: 600; text-anchor: middle; fill: var(--ab-chart-label-on-fill); paint-order: stroke; stroke: var(--tone); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 .ab-ring-a, .ab-ring-b { fill: none; stroke: transparent; pointer-events: none; }
 .ab-seg { cursor: pointer; outline: none; }
 .ab-seg:focus-visible { box-shadow: none; }
@@ -172,113 +177,146 @@ button.ab-hbar-row:hover { background: var(--ab-bg-subtle); }
 .ab-seg:focus-visible .ab-ring-a { stroke: var(--ab-chart-focus-a); stroke-width: 3px; }
 .ab-seg:focus-visible .ab-ring-b { stroke: var(--ab-chart-focus-b); stroke-width: 1px; }
 
-/* ---- patterns, swatches, legends ---- */
+/* ---- patterns (only where colour alone is not enough), swatches, legends ---- */
 .ab-pat-bg { fill: var(--tone); }
-.ab-pat-line { fill: none; stroke: var(--ab-chart-pattern); stroke-width: 1.4; }
+.ab-pat-line { fill: none; stroke: var(--ab-chart-pattern); stroke-width: 1.2; }
 .ab-pat-dot { fill: var(--ab-chart-pattern); }
 .ab-swatch { flex: none; }
-.ab-swatch-box { stroke: var(--ab-chart-axis); stroke-width: 1; }
-.ab-legend { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--ab-text-sm); color: var(--ab-chart-label); }
+.ab-swatch-box { stroke: none; }
+.ab-legend { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--ab-text-sm); color: var(--ab-chart-label); }
 .ab-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.ab-legend-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.ab-legend-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; padding: 3px 4px; margin: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; font-size: var(--ab-text-sm); }
+.ab-legend-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ab-legend-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; padding: 3px 4px; margin: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; font-size: var(--ab-text-md); }
 button.ab-legend-item { cursor: pointer; border-radius: var(--ab-radius-xs); }
 button.ab-legend-item:hover { background: var(--ab-bg-subtle); }
 .ab-legend-label { min-width: 0; color: var(--ab-chart-label); overflow-wrap: anywhere; }
-.ab-legend-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.ab-legend-value { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ab-legend-pct { min-width: 3.2em; text-align: end; color: var(--ab-fg-muted); font-variant-numeric: tabular-nums; }
 
-/* ---- trend chart ---- */
+/* ---- trend chart: hairline grid and axes, 2px lines ---- */
 .ab-trend { width: 100%; min-width: 0; }
 .ab-trend-svg { display: block; max-width: 100%; height: auto; overflow: visible; }
 .ab-chart-gridline { stroke: var(--ab-chart-grid); stroke-width: 1; }
-.ab-chart-axisline { stroke: var(--ab-chart-axis); stroke-width: 1; }
+.ab-chart-axisline { stroke: var(--ab-chart-grid); stroke-width: 1; }
 .ab-chart-tick { fill: var(--ab-chart-label-muted); font-size: 11px; }
 .ab-line { fill: none; stroke: var(--tone); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .ab-line-s0 { stroke-dasharray: none; }
 .ab-line-s1 { stroke-dasharray: 7 4; }
 .ab-line-s2 { stroke-dasharray: 2 4; }
-.ab-area { fill: var(--tone); fill-opacity: 0.14; stroke: none; }
-.ab-marker { fill: var(--tone); stroke: var(--ab-chart-surface); stroke-width: 1; }
+.ab-area { fill: var(--tone); fill-opacity: 0.1; stroke: none; }
+.ab-marker { fill: var(--tone); stroke: var(--ab-chart-surface); stroke-width: 2; }
 .ab-marker-line { fill: none; stroke: var(--tone); stroke-width: 2; stroke-linecap: round; }
-.ab-point-label { fill: var(--ab-chart-label); font-size: 11px; font-weight: 650; paint-order: stroke; stroke: var(--ab-chart-surface); stroke-width: 3px; stroke-linejoin: round; }
+.ab-point-label { fill: var(--ab-chart-label); font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--ab-chart-surface); stroke-width: 3px; stroke-linejoin: round; }
 .ab-line-sample { flex: none; }
 
 /* ---- donut ---- */
 .ab-donut { display: flex; justify-content: center; }
 .ab-donut-svg { display: block; width: 120px; max-width: 100%; height: auto; }
-.ab-donut-seg { stroke: var(--ab-chart-surface); stroke-width: 1.5; fill-rule: nonzero; }
-.ab-donut-total { font-size: 22px; font-weight: 700; fill: var(--ab-fg); }
+.ab-donut-seg { stroke: var(--ab-chart-surface); stroke-width: 2; fill-rule: nonzero; }
+.ab-donut-total { font-size: 22px; font-weight: 600; fill: var(--ab-fg); }
 .ab-donut-sub { font-size: 10px; fill: var(--ab-chart-label-muted); }
 
-/* ---- heat strip ---- */
-.ab-heat { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(46px, 1fr)); gap: 4px; }
-.ab-heat-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; height: 100%; padding: 6px 2px; margin: 0; border: 1px solid var(--ab-chart-axis); border-radius: var(--ab-radius-sm); color: var(--ab-chart-seq-label); font: inherit; text-align: center; }
+/* ---- heat strip: soft cells; the lightest step keeps a hairline so its shape shows ---- */
+.ab-heat { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(46px, 1fr)); gap: 6px; }
+.ab-heat-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; height: 100%; padding: 8px 2px; margin: 0; border: 1px solid transparent; border-radius: var(--ab-radius); color: var(--ab-chart-seq-label); font: inherit; text-align: center; }
 button.ab-heat-cell { cursor: pointer; }
-button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
-.ab-heat-1 { background: var(--ab-chart-seq-1); }
+button.ab-heat-cell:hover { border-color: var(--ab-chart-axis); }
+.ab-heat-1 { background: var(--ab-chart-seq-1); border-color: var(--ab-chart-axis); }
 .ab-heat-2 { background: var(--ab-chart-seq-2); }
 .ab-heat-3 { background: var(--ab-chart-seq-3); }
 .ab-heat-4 { background: var(--ab-chart-seq-4); }
 .ab-heat-5 { background: var(--ab-chart-seq-5); }
-.ab-heat-label { font-size: var(--ab-text-xs); font-weight: 600; }
-.ab-heat-value { font-size: var(--ab-text-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
-.ab-heat-share { font-size: var(--ab-text-xs); }
+.ab-heat-label { font-size: var(--ab-text-sm); font-weight: 500; }
+.ab-heat-value { font-size: var(--ab-text-xl); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ab-heat-share { font-size: var(--ab-text-sm); }
 
 /* ==== end of charts css ==== */
 
-/* Part 2: the Team dashboard (src/sidepanel/reports), the report builder, and printing. Tokens from theme.css only. */
+/* Part 2: the Team dashboard (src/sidepanel/reports), the report builder, and printing. Tokens from theme.css only.
+   The dashboard is a column of sections (no boxes): each widget is a section with its title, its quiet "⋯" menu and its numbers,
+   parted from the next by space and one divider. Panels that open in place (scope, customize, export, the builder) are soft
+   surfaces without a border. */
 
-/* ---- dashboard frame ---- */
-.ab-dash { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* ---- dashboard frame and the top row: which dashboard, whose tickets, one menu ---- */
+.ab-dash { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .ab-dash-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ab-dash-select { flex: 1 1 140px; min-width: 0; }
+/* on one line where it fits; on a narrow panel the scope chip and the menu go under the name rather than cut it short */
+.ab-dash-top { flex-wrap: wrap; gap: 4px 8px; min-width: 0; min-height: 36px; }
+/* the name takes the room that is left (up to a point): a select sized to its own text cuts a large name short in Chrome */
+.ab-dash-select { flex: 1 1 auto; min-width: 0; max-width: 18rem; }
 .ab-dash-select .ab-select { width: 100%; }
+.ab-dash-top > .ab-more { margin-inline-start: auto; }
+.ab-select-quiet { border-color: transparent; background-color: transparent; font-size: var(--ab-text-xl); font-weight: 600; padding-inline: 6px; margin-inline-start: -6px; min-width: 0; text-overflow: ellipsis; }
+.ab-select-quiet:hover { border-color: var(--ab-border); }
+.ab-scope-chip { flex: 0 1 auto; min-width: 0; min-height: 28px; border: 0; padding-block: 3px; padding-inline: 10px 8px; color: var(--ab-fg-soft); background: var(--ab-bg-sunken); font: inherit; font-size: var(--ab-text-sm); font-weight: 500; cursor: pointer; }
+.ab-scope-chip:hover { color: var(--ab-fg); }
+.ab-scope-chip[aria-expanded='true'] { background: var(--ab-accent-soft); color: var(--ab-accent); }
+.ab-scope-chip .ab-chevron { color: currentColor; }
+.ab-scope-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ab-btn[aria-pressed='true']:not(.ab-btn-primary) { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); }
 .ab-statusline { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
 .ab-inline-check { display: inline-flex; vertical-align: middle; margin-inline-start: 4px; }
 .ab-offscreen { position: fixed; inset-inline-start: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
-.ab-details > summary { cursor: pointer; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); padding: 4px 0; min-height: 24px; }
-.ab-details[open] > summary { margin-bottom: 4px; }
-.ab-fieldset { border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); padding: 8px 10px; margin: 0 0 12px; min-width: 0; }
-.ab-fieldset legend { padding: 0 4px; }
 
-/* ---- scope and tables ---- */
-.ab-scope { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-subtle); }
-.ab-seg { display: flex; flex-wrap: wrap; gap: 4px; }
-.ab-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
-.ab-chip { display: inline-flex; align-items: center; gap: 2px; padding-block: 2px; padding-inline: 8px 4px; border: 1px solid var(--ab-accent-line); border-radius: 999px; background: var(--ab-accent-soft); font-size: var(--ab-text-sm); max-width: 100%; overflow-wrap: anywhere; }
-.ab-chip-add { padding: 2px 8px; cursor: pointer; color: var(--ab-fg); }
-.ab-chip-x { border: 0; background: transparent; cursor: pointer; font-size: var(--ab-text-lg); line-height: 1; padding: 0 6px; color: var(--ab-fg); border-radius: 999px; }
+/* ---- folds (<details>): the words, then a chevron that points down (up when open); the browser's triangle is hidden ---- */
+.ab-details > summary { display: flex; align-items: center; gap: 6px; width: fit-content; max-width: 100%; list-style: none; cursor: pointer; font-size: var(--ab-text-md); color: var(--ab-fg-soft); padding: 4px 0; min-height: 28px; border-radius: var(--ab-radius-xs); }
+.ab-details > summary::-webkit-details-marker { display: none; }
+.ab-details > summary:hover { color: var(--ab-fg); }
+.ab-details[open] > summary { margin-bottom: 6px; }
+
+/* ---- the scope panel: whose tickets (one segmented line), the chosen groups, the tables ---- */
+.ab-scope { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 0; border-radius: var(--ab-radius-lg); background: var(--ab-surface); }
+div.ab-seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; gap: 2px; padding: 2px; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); }
+div.ab-seg .ab-seg-btn { border-color: transparent; background: transparent; color: var(--ab-fg-soft); }
+div.ab-seg .ab-seg-btn:hover:not(:disabled) { background: var(--ab-bg-subtle); border-color: transparent; color: var(--ab-fg); }
+div.ab-seg .ab-seg-btn[aria-pressed='true'] { background: var(--ab-bg-raised); border-color: var(--ab-border); color: var(--ab-fg); font-weight: 600; }
+.ab-scope .ab-chips, .ab-picker .ab-chips { list-style: none; margin: 0; padding: 0; align-items: center; }
+.ab-scope .ab-chip { padding-inline: 10px 2px; }
+.ab-chip-add { min-height: 28px; padding: 3px 10px; border: 0; cursor: pointer; font: inherit; font-size: var(--ab-text-sm); }
+.ab-chip-add:hover { color: var(--ab-fg); }
+.ab-chip-x { min-width: 24px; min-height: 24px; border: 0; background: transparent; cursor: pointer; font-size: var(--ab-text-lg); line-height: 1; padding: 0 6px; color: var(--ab-fg-soft); border-radius: 999px; }
 .ab-chip-x:disabled { cursor: not-allowed; color: var(--ab-fg-muted); }
-.ab-picker { display: flex; flex-direction: column; gap: 4px; }
-.ab-picker-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
-.ab-table-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ab-picker { display: flex; flex-direction: column; gap: 6px; }
+.ab-picker-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ab-table-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 
-/* ---- widgets ---- */
-.ab-widgets { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.ab-widget-slot { min-width: 0; }
-.ab-widget-tools { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 4px; }
+/* ---- sections (widgets): a title, its controls and a quiet "⋯", one line of help, the numbers; a divider to the next ---- */
+.ab-widgets { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.ab-widget-slot { min-width: 0; padding-block: 16px 20px; }
+.ab-widget-slot + .ab-widget-slot { border-top: 1px solid var(--ab-divider); }
+.ab-widgets > .ab-widget-slot:first-child { padding-top: 8px; }
 .ab-widget { min-width: 0; }
-.ab-widget-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-.ab-widget-head .ab-h { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.ab-widget-help { margin: 2px 0 8px; }
-.ab-widget-note { margin: 6px 0 0; }
-.ab-widget-body { margin-top: 8px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.ab-widget-body.ab-is-busy { outline: 1px dashed var(--ab-border-strong); outline-offset: 4px; }
-.ab-widget-foot { margin: 10px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-xs); overflow-wrap: anywhere; }
-.ab-widget-select .ab-select { width: auto; max-width: 100%; padding: 3px 6px; font-size: var(--ab-text-sm); }
-.ab-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ab-export-mask { font-size: var(--ab-text-sm); align-items: center; }
-.ab-customize { display: flex; flex-direction: column; gap: 8px; }
+.ab-widget-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 32px; }
+.ab-widget-title { flex: 1 1 auto; margin: 0; min-width: 0; font-size: var(--ab-text-xl); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.ab-widget-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.ab-widget-more .ab-more-btn { width: 32px; height: 32px; color: var(--ab-fg-muted); }
+.ab-widget-help { margin: 2px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
+.ab-widget-loading { margin: 12px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
+.ab-widget-note { margin: 12px 0 0; }
+.ab-widget-body { margin-top: 14px; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.ab-widget-body.ab-is-busy { opacity: 0.6; transition: opacity 120ms ease-out; }
+.ab-widget-foot { margin: 14px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+.ab-widget-select .ab-select { width: auto; max-width: 100%; min-height: 32px; padding: 3px 8px; font-size: var(--ab-text-md); }
+.ab-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -10px; }
+.ab-export-mask { font-size: var(--ab-text-md); align-items: center; }
+.ab-customize { display: flex; flex-direction: column; gap: 10px; }
+.ab-customize .ab-field { margin-bottom: 0; }
 .ab-builder { display: flex; flex-direction: column; }
+.ab-builder .ab-widget-head { margin-bottom: 2px; }
+.ab-builder .ab-widget-help { margin-bottom: 12px; }
 
-/* ---- the full-page dashboard: more room, widgets side by side ---- */
-.ab-dash-page .ab-widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); align-items: start; }
+/* ---- the full-page dashboard: more room, sections side by side ---- */
+.ab-dash-page .ab-widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); align-items: start; column-gap: 48px; }
+.ab-dash-page .ab-widget-slot { border-top: 1px solid var(--ab-divider); padding-block: 20px 28px; }
+.ab-dash-page .ab-widgets > .ab-widget-slot:first-child { padding-top: 20px; }
 .ab-dash-page .ab-tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.ab-dashboard-page { max-width: 1280px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.ab-dashboard-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
-.ab-dashboard-head h1 { margin: 0; font-size: var(--ab-text-xl); }
+.ab-dashboard-page { max-width: 1280px; margin: 0 auto; padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 16px; }
+.ab-dashboard-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding-bottom: 4px; }
+.ab-dashboard-head h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.ab-dashboard-page .ab-dash-top .ab-select-quiet { font-size: 18px; }
+.ab-dashboard-head .ab-sub { margin: 0; }
+.ab-dashboard-alone { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; max-width: 40rem; }
+.ab-dashboard-alone .ab-widget-help { margin: 0; }
 
 /* ---- printing: only the dashboard, on white, in dark text, one widget never split across pages ---- */
 @media print {
@@ -287,12 +325,14 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
     --ab-bg-subtle: Canvas;
     --ab-bg-sunken: Canvas;
     --ab-bg-raised: Canvas;
+    --ab-surface: Canvas;
     --ab-accent: LinkText;
     --ab-fg: CanvasText;
     --ab-fg-soft: CanvasText;
     --ab-fg-muted: CanvasText;
     --ab-border: GrayText;
     --ab-border-strong: GrayText;
+    --ab-divider: GrayText;
     --ab-chart-label: CanvasText;
     --ab-chart-label-muted: CanvasText;
     --ab-chart-axis: CanvasText;
@@ -300,38 +340,37 @@ button.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
     --ab-chart-surface: Canvas;
   }
   body { background: Canvas; color: CanvasText; font-size: 11px; }
-  .ab-header, .ab-nav, .ab-footer, .ab-dash-toolbar, .ab-statusline, .ab-scope, .ab-customize, .ab-widget-tools, .ab-export, .ab-chart-toggle, .ab-builder, .ab-pick, .ab-widget-select, .ab-dashboard-head .ab-btn { display: none !important; }
+  .ab-header, .ab-nav, .ab-footer, .ab-dash-toolbar, .ab-statusline, .ab-scope, .ab-customize, .ab-widget-more, .ab-export, .ab-chart-toggle, .ab-builder, .ab-pick, .ab-widget-select, .ab-dashboard-head .ab-btn { display: none !important; }
   .ab-app { display: block; min-height: 0; }
   .ab-main, .ab-dashboard-page { padding: 0; max-width: none; }
-  .ab-card, .ab-widget { break-inside: avoid; box-shadow: none; border-color: GrayText; }
+  .ab-card, .ab-widget { break-inside: avoid; box-shadow: none; }
   .ab-widgets, .ab-dash-page .ab-widgets { display: block; }
   .ab-widget-slot { break-inside: avoid; margin-bottom: 10px; }
-  .ab-tile, .ab-heat-cell, .ab-seg-shape { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .ab-tile, .ab-heat-cell, .ab-seg-shape, .ab-pat-bg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .ab-chart-table-wrap { overflow: visible; }
 }
 
-/* ---- narrow widgets (the side panel at 320 px): two tiles per row, and tables become one card per row ---- */
-.ab-widget .ab-tiles { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
+/* ---- narrow widgets (the side panel at 320 px): two tiles per row, and tables become one block per row ---- */
+.ab-widget .ab-tiles { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .ab-chart-table-wrap { container-type: inline-size; }
 @container (max-width: 460px) {
   .ab-chart-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .ab-chart-table, .ab-chart-table tbody, .ab-chart-table tr, .ab-chart-table th, .ab-chart-table td { display: block; }
   .ab-chart-table caption { display: block; width: 100%; }
-  .ab-chart-table tr { padding: 6px 0; border-bottom: 1px solid var(--ab-border); }
-  .ab-chart-table tbody th { padding: 0 0 2px; border: 0; font-weight: 650; }
+  .ab-chart-table tr { padding: 8px 0; border-bottom: 1px solid var(--ab-divider); }
+  .ab-chart-table tbody th { padding: 0 0 2px; border: 0; font-weight: 600; }
   .ab-chart-table td { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; border: 0; text-align: start; }
-  .ab-chart-table td::before { content: attr(data-label); flex: 0 0 40%; color: var(--ab-fg-muted); font-weight: 600; }
+  .ab-chart-table td::before { content: attr(data-label); flex: 0 0 40%; color: var(--ab-fg-muted); font-weight: 500; }
   .ab-chart-table td.ab-chart-align-right { text-align: start !important; }
 }
 .ab-chart-table tbody th { overflow-wrap: break-word; } /* a ticket number keeps its digits together; long titles still wrap in the other cells */
 
-/* ---- the AI sections: shift handover, coaching snapshot, explain this dashboard (src/sidepanel/reports/*View.jsx) ---- */
+/* ---- the AI sections: shift handover (its tables and its note), coaching snapshot, explain this dashboard ---- */
 .ab-handover-block { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.ab-handover-h { margin: 0; font-size: var(--ab-text-md); }
-.ab-handover-ai { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--ab-border); min-width: 0; }
-.ab-ai-result { box-shadow: none; }
+.ab-handover-h { margin: 0; font-size: var(--ab-text-md); font-weight: 600; line-height: 1.4; color: var(--ab-fg-soft); }
+.ab-handover-ai { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .ab-ai-result .ab-output { overflow-wrap: anywhere; }
-.ab-ai-actions { margin-top: 4px; }
+.ab-ai-actions { margin-top: 2px; }
 .ab-ai-findings { margin: 4px 0 8px; padding-inline-start: 18px; overflow-wrap: anywhere; }
 .ab-coach-reminder { margin: 0; font-weight: 600; }
 .ab-coach-controls { align-items: flex-end; gap: 6px 12px; }
@@ -349,14 +388,15 @@ a.ab-tile-link, a.ab-hbar-row, a.ab-legend-item, a.ab-heat-cell, a.ab-stack-link
 a.ab-hbar-row, a.ab-legend-item, a.ab-stack-link { border-radius: var(--ab-radius-xs); }
 a.ab-hbar-row:hover, a.ab-legend-item:hover, a.ab-stack-link:hover { background: var(--ab-bg-subtle); }
 a.ab-hbar-row:hover .ab-hbar-label, a.ab-legend-item:hover .ab-legend-label, a.ab-stack-link:hover .ab-stack-label, a.ab-tile-link:hover .ab-tile-label { text-decoration: underline; }
-a.ab-heat-cell:hover { border-width: 2px; padding: 5px 1px; }
+a.ab-heat-cell:hover { border-color: var(--ab-chart-axis); }
 a.ab-heat-cell, a.ab-heat-cell .ab-heat-label { color: var(--ab-chart-seq-label); }
 a.ab-stack-link { display: block; }
 .ab-pick-link { display: inline-flex; align-items: center; }
 
 /* ---- a widget whose read failed: the reason, then "Try again" ---- */
-.ab-widget-error { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
+.ab-widget-error { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 12px; }
 .ab-widget-error .ab-note { margin: 0; }
+.ab-widget > .ab-note, .ab-widget > .ab-row { margin-top: 12px; }
 
 .ab-dash-help { margin: 0; }
 @media print {
@@ -365,60 +405,57 @@ a.ab-stack-link { display: block; }
 }
 
 /* ==== The Team screen, round 3 (src/sidepanel/team, ReportsDashboard.jsx): a quiet top row, short lists, one export menu, one
-   session banner; the AI Assist half uses the --ab-ai* tokens and the Insights half never does. Tokens from theme.css only. ==== */
+   session banner. AI marks only in the AI Assist half (the small grey spark), never on Insights. Tokens from theme.css only. ==== */
 
-/* ---- the quiet top row: which dashboard, whose tickets, one menu ---- */
-.ab-dash-top { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; }
-.ab-dash-top .ab-dash-select { flex: 1 1 auto; min-width: 0; }
-.ab-select-quiet { border-color: transparent; background-color: transparent; font-weight: 650; padding-inline-start: 4px; min-width: 0; text-overflow: ellipsis; }
-.ab-select-quiet:hover { border-color: var(--ab-border); }
-.ab-scope-chip { flex: none; cursor: pointer; padding: 2px 10px; color: var(--ab-fg); max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ab-scope-chip[aria-expanded='true'] { border-color: var(--ab-accent); }
-.ab-seg-btn[aria-pressed='true'] { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); color: var(--ab-fg); }
-
-/* ---- the "⋯" menu ---- */
+/* ---- the "⋯" menus (the dashboard's, and each section's) ---- */
 .ab-more { position: relative; flex: none; }
 .ab-more-btn { font-size: var(--ab-text-lg); line-height: 1; }
 .ab-more-btn[aria-expanded='true'] { background: var(--ab-bg-sunken); color: var(--ab-fg); }
-.ab-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column; min-width: 13rem; max-width: min(18rem, 90vw); padding: 4px; border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius); background: var(--ab-bg-raised); box-shadow: var(--ab-shadow); }
-.ab-menu-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-fg); font: inherit; text-align: start; cursor: pointer; }
-.ab-menu-item:hover, .ab-menu-item:focus-visible { background: var(--ab-accent-soft); }
+.ab-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column; min-width: 13rem; max-width: min(18rem, 90vw); padding: 4px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); box-shadow: var(--ab-shadow); }
+.ab-menu-item { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-fg); font: inherit; text-align: start; cursor: pointer; }
+.ab-menu-item:hover, .ab-menu-item:focus-visible { background: var(--ab-bg-subtle); }
 .ab-menu-item:disabled { color: var(--ab-fg-muted); cursor: not-allowed; }
 .ab-menu-tick { display: inline-block; width: 1em; color: var(--ab-accent); font-weight: 700; }
 
 /* ---- notes said once, the session banner, the export panel ---- */
-.ab-dash-notes > summary { color: var(--ab-fg-muted); }
+.ab-dash-notes > summary { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
 .ab-dash-notes-list { margin: 0; padding-inline-start: 18px; color: var(--ab-fg-soft); font-size: var(--ab-text-sm); display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
 .ab-dash-session { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
 .ab-dash-session p { margin: 0; flex: 1 1 14em; }
-.ab-export-panel { display: flex; flex-direction: column; gap: 8px; }
-.ab-export-panel .ab-sub { margin: 0; }
-.ab-export-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.ab-export-item { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
-.ab-export-name { flex: 1 1 10em; min-width: 0; font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+.ab-export-panel { display: flex; flex-direction: column; gap: 10px; }
+.ab-export-panel .ab-widget-help { margin: -6px 0 0; }
+.ab-export-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ab-export-item { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; padding: 4px 0; }
+.ab-export-item + .ab-export-item { border-top: 1px solid var(--ab-divider); }
+.ab-export-name { flex: 1 1 10em; min-width: 0; font-size: var(--ab-text-md); overflow-wrap: anywhere; }
 
-/* ---- short ticket lists instead of label/value tables ---- */
+/* ---- short ticket lists: rows parted by dividers (number, title on up to two lines, facts under them) ---- */
 .ab-tlist-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ab-tlist-caption { margin: 0; font-size: var(--ab-text-sm); font-weight: 650; color: var(--ab-fg-soft); }
+.ab-tlist-caption { margin: 0 0 2px; font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg-soft); }
 .ab-tlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-width: 0; }
-.ab-tlist-row { display: flex; flex-direction: column; gap: 1px; padding: 5px 0; border-bottom: 1px solid var(--ab-border); min-width: 0; }
-.ab-tlist-row:last-child { border-bottom: 0; }
-.ab-tlist-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.ab-tlist-number { flex: none; font-weight: 650; font-variant-numeric: tabular-nums; }
-.ab-tlist-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ab-fg); }
-.ab-tlist-meta { color: var(--ab-fg-muted); font-size: var(--ab-text-xs); overflow-wrap: anywhere; }
+.ab-tlist-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; min-width: 0; }
+.ab-tlist-row + .ab-tlist-row { border-top: 1px solid var(--ab-divider); }
+.ab-tlist-row:first-child { padding-top: 4px; }
+.ab-tlist-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-width: 0; overflow-wrap: anywhere; }
+.ab-tlist-number { font-family: var(--ab-mono); font-size: var(--ab-text-md); font-weight: 500; }
+.ab-tlist-title { color: var(--ab-fg); font-weight: 500; }
+.ab-tlist-meta { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+.ab-tlist-wrap > .ab-showmore { margin-inline-start: -10px; }
+.ab-tlist-empty { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 
-/* ---- the AI Assist half: AI buttons and answers carry the AI colour (never used on Insights) ---- */
-.ab-team-assist { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* ---- the AI Assist half: sections parted by dividers, each answer on a soft surface without a border ---- */
+.ab-team-assist { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.ab-team-assist > .ab-dash-session { margin-bottom: 8px; }
 /* The AI buttons (ab-btn-ai, ab-btn-ai-quiet) are defined once in shell.css. */
 .ab-btn-ai:disabled, .ab-btn-ai-quiet:disabled { opacity: 0.55; cursor: not-allowed; }
-.ab-ai-result-h { display: flex; align-items: center; gap: 6px; }
-.ab-ai-result { border-color: var(--ab-ai-line); }
-.ab-team-assist .ab-handover-ai { border-top: 0; padding-top: 0; }
-.ab-team-coach-off { margin: 2px 0 0; }
+.ab-ai-result { display: flex; flex-direction: column; gap: 10px; }
+.ab-ai-result-h { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--ab-text-base); font-weight: 600; }
+.ab-ai-result > .ab-hint { margin: 0; }
+.ab-explain-basis { margin: 0; color: var(--ab-fg-soft); font-size: var(--ab-text-md); }
+.ab-team-coach-off { margin: 12px 0 0; }
 .ab-coach { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 
 @media print {
   .ab-dash-top, .ab-more, .ab-menu, .ab-export-panel, .ab-dash-session, .ab-showmore, .ab-team-assist .ab-btn-ai, .ab-team-assist .ab-btn-ai-quiet { display: none !important; }
-  .ab-tlist-title { white-space: normal; }
+  .ab-tlist-line { display: block; }
 }

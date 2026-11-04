@@ -145,12 +145,18 @@ test('"Show as table" gives the same numbers as an accessible table', () => {
   assert.match(trend, /<th scope="row"[^>]*>Tue<\/th><td[^>]*>9<\/td><td[^>]*>2<\/td>/);
 });
 
-test('series differ by pattern and marker, not only by colour; ids are unique per chart', () => {
+test('series differ by more than colour where colour could mislead (a texture), and by marker; ids are unique per chart', () => {
   const stack = html(StackedBar, { title: 'W', rows: ROWS, series: SERIES });
   const ids = attr(stack, 'id');
   assert.equal(ids.length, 2);
   assert.notEqual(ids[0], ids[1]);
-  assert.match(stack, /<pattern[^>]*id="[^"]+-p1"[^>]*>.*?<path class="ab-pat-line" d="M-1 1/); // series 2 has stripes
+  // Green and blue are told apart by colour alone (with red-green colour blindness too, light and dark): solid fills, no hatching.
+  assert.ok(!/ab-pat-line|ab-pat-dot/.test(stack), 'calm: two distinct colours are drawn solid');
+  // Red and orange (breached, at risk) are not: the second series has stripes, in the bar and in its legend swatch.
+  const risk = html(StackedBar, { title: 'R', rows: [{ key: 'a', label: 'A', parts: [{ key: 'b', value: 1 }, { key: 'w', value: 2 }] }], series: [{ key: 'b', label: 'Breached', tone: 'bad' }, { key: 'w', label: 'At risk', tone: 'warn' }] });
+  assert.match(risk, /<pattern[^>]*id="[^"]+-p1"[^>]*>.*?<path class="ab-pat-line" d="M-1 1/); // series 2 has stripes
+  assert.match(risk, /<pattern[^>]*id="[^"]+-p0"[^>]*><rect class="ab-pat-bg"[^>]*><\/rect><\/pattern>/, 'series 1 stays solid');
+  assert.equal(count(risk, /fill="url\(#[^"]+-p1\)"/g), 2, 'the striped fill is used by the segment and by the legend swatch');
   // every fill points at a pattern that exists
   for (const ref of attr(stack, 'fill').filter((f) => f.startsWith('url(#'))) assert.ok(ids.includes(ref.slice(5, -1)), `${ref} is defined`);
 
@@ -240,6 +246,11 @@ test('Tile: change shown with an arrow and a word, and whether it is better or w
   assert.ok(!/better|worse/.test(flat));
   assert.match(html(Tile, { label: 'Open', value: 9, delta: { text: 'x', direction: 'sideways' } }), /▬/);
   assert.match(html(Tile, { label: 'Open', value: 9, tone: 'bad' }), /ab-tone-bad/);
+  // Calm tiles: no coloured edge; a status dot by the label only where the number is a problem (and never in place of the words).
+  assert.match(html(Tile, { label: 'Breached', value: 2, tone: 'bad' }), /<span class="ab-tile-label"><span class="ab-dot ab-dot-danger ab-tile-dot" aria-hidden="true"><\/span>Breached<\/span>/);
+  assert.match(html(Tile, { label: 'Due soon', value: 1, tone: 'warn' }), /ab-dot-warn/);
+  for (const tone of ['neutral', 'good', 'c1']) assert.ok(!/ab-dot/.test(html(Tile, { label: 'Open', value: 9, tone })), tone);
+  assert.ok(!/ab-dot/.test(html(Tile, { label: 'Breached', value: 2, tone: 'bad', unavailable: true })), 'no dot on a number that could not be read');
   assert.match(html(Tile, { label: 'Open', value: 9, tone: '"><script>' }), /ab-tone-neutral/);
 });
 

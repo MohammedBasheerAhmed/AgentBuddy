@@ -14,7 +14,8 @@ import { t, t as tr } from '../i18n/index.js';
 //
 // props: feature (the registry action), saved (the person's own entry: a format, the standard choice, or null), source
 //   ('default'|'mine'|'org'|'locked'|'standard', from resolveFormat), inherited (the organisation's format for this action or null; the
-//   Settings page passes it whatever is in force, so it can be offered back), onSave(format|STANDARD_CHOICE|null) => Promise, idBase
+//   Settings page passes it whatever is in force, so it can be offered back), onSave(format|STANDARD_CHOICE|null) => Promise, idBase,
+//   inPanel (under an action in the side panel: the screen's one filled button is its main step, so "Save format" is outlined there)
 
 let rowCounter = 0;
 const newRow = (s = {}) => ({ key: `r${++rowCounter}`, name: s.name || '', hint: s.hint || '' });
@@ -30,7 +31,7 @@ function draftOf(id, format) {
 
 const sameFormat = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
 
-export default function FormatEditor({ feature, saved = null, source = 'default', inherited = null, onSave, idBase }) {
+export default function FormatEditor({ feature, saved = null, source = 'default', inherited = null, onSave, idBase, inPanel = false }) {
   const spec = specOf(feature.id);
   const sectioned = spec.kind === 'sections';
   const locked = source === 'locked';
@@ -162,7 +163,7 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
   const noteFor = { 'reads-back': t('The panel reads this answer back, so its headings stay as they are. Extra instructions can still change the tone and the length.'), customer: t("The customer reads this text. Agent Buddy's rules about internal notes, names and gaps to fill in stay on, whatever you add.") }[spec.note] || '';
 
   return (
-    <div className="ab-fmt" ref={root}>
+    <div className={`ab-fmt${inPanel ? ' ab-fmt-inpanel' : ''}`} ref={root}>
       {locked && <p className="ab-note ab-note-warn">{t('Set by your organisation. You can read this format, but not change it.')}</p>}
       {source === 'org' && <p className="ab-note">{t("This is your organisation's format. Save your own to use it instead.")}</p>}
       {source === 'standard' && <p className="ab-note">{t("You chose the standard format over your organisation's.")}</p>}
@@ -243,7 +244,7 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
 
       {!locked && (
         <div className="ab-row ab-fmt-actions">
-          <button type="button" className="ab-btn ab-btn-primary" disabled={busy || !dirty || problems.length > 0} onClick={save}>{t('Save format')}</button>
+          <button type="button" className={`ab-btn ab-fmt-save${inPanel ? '' : ' ab-btn-primary'}`} disabled={busy || !dirty || problems.length > 0} onClick={save}>{t('Save format')}</button>
           <button type="button" className="ab-btn" disabled={resetOff} onClick={reset}>{orgStandard ? t("Use my organisation's format") : t('Use the standard format')}</button>
           <button type="button" className="ab-btn ab-btn-quiet" disabled={!candidate || problems.length > 0} onClick={copy}>{t('Copy for your administrator')}</button>
         </div>

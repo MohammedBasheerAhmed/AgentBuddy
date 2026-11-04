@@ -341,7 +341,7 @@ test('an email answer offers Open the email form and Copy body (Copy subject and
     const card = ui.$('section.ab-answer');
     const row = [...card.querySelectorAll('.ab-answer-actions button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim());
     assert.deepEqual(row, ['Open the email form', 'Copy body', 'Refine', 'More'], 'four buttons at most; Refine and More stay');
-    assert.ok(card.querySelector('.ab-btn-ai').textContent.includes('Open the email form'), 'the main button');
+    assert.ok(card.querySelector('.ab-answer-main').textContent.includes('Open the email form'), 'the main button');
     assert.match(card.textContent, /Nothing is sent until you press Send/);
     await click(ui.button('Copy body'));
     assert.match(copied[0], /^Hello Abel Tuter,/);
@@ -412,7 +412,7 @@ test('without a ticket to bind to the answer offers Copy body as its main button
     const card = ui.$('section.ab-answer');
     const row = [...card.querySelectorAll('.ab-answer-actions button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim());
     assert.deepEqual(row, ['Copy body', 'Refine', 'More']);
-    assert.ok(card.querySelector('.ab-btn-ai').textContent.includes('Copy body'));
+    assert.ok(card.querySelector('.ab-answer-main').textContent.includes('Copy body'));
     assert.equal(getPending(), null);
   } finally {
     await ui.unmount();

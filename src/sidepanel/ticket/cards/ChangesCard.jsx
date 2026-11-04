@@ -15,7 +15,7 @@ export default function ChangesCard({ page, eff, record, active, setSummary, set
   const known = Boolean(data) && (status === 'ok' || status === 'empty');
   const { items, recent, summary } = arrangeChanges(data?.items, Date.now());
   useReport(setSummary, data ? (items.length ? summary : known ? t('None in the last 7 days') : status === 'skipped' ? t('No CI or service on this ticket') : '') : '');
-  useReport(setAttention, recent > 0 ? 'warn' : '');
+  useReport(setAttention, recent > 0 ? 'warn' : data && !items.length && (known || status === 'skipped') ? 'clear' : '');
 
   if (!data) return <ReadState state={state} what={t('changes')} onRetry={state.reload} />;
   return (

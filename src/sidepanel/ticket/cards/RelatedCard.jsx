@@ -3,7 +3,7 @@ import { outageSignal } from '../../../insights/outage.js';
 import { historyLine, relatedSummary } from '../../../insights/related.js';
 import { firstSentences } from '../../../insights/steps.js';
 import { useHistory, useLookalikes, useTicketFacts } from './data.js';
-import { useReport } from './useInsight.js';
+import { readFully, useReport } from './useInsight.js';
 import { Group, ItemLink, Notes, QuietButton, ReadState } from './bits.jsx';
 import { t, isolate } from '../../../i18n/index.js';
 
@@ -24,7 +24,11 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
   const hits = list(look.data?.hits);
   const sum = relatedSummary({ history: history.data && !history.error ? history.data : null, lookalikes: look.data && !look.error ? hits : null, open: outage?.readable ? outage.hits : null });
   useReport(setSummary, sum.line);
-  useReport(setAttention, sum.repeat ? 'warn' : '');
+  // Nothing earlier from this person, no solved look-alike and nothing else open on the item: nothing to report. Only when both reads
+  // came back whole: a person's history that could not be read is not "no earlier tickets".
+  const bothRead = Boolean(history.data && !history.error && look.data && !look.error) && readFully(history.data?.access, look.data?.access);
+  const none = bothRead && sum.earlier === 0 && sum.solved === 0 && (!outage?.readable || !outage.hits.length);
+  useReport(setAttention, sum.repeat ? 'warn' : none ? 'clear' : '');
 
   const sig = history.data?.signals;
   const name = history.data?.callerName;

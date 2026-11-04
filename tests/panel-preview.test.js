@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import PreviewDialog, { maskSummary } from '../src/sidepanel/PreviewDialog.jsx';
+import PreviewDialog, { hiddenWords } from '../src/sidepanel/PreviewDialog.jsx';
 import { focusToRestore, outsideKeyAction, selectedTextIn, dialogKeyAction } from '../src/sidepanel/dialogKeys.js';
 import { maskMessage } from '../src/sidepanel/runLogic.js';
 import { createRunController } from '../src/sidepanel/useRun.js';
@@ -78,26 +78,26 @@ test('what "Mask" says: plain, short, never the text itself', () => {
 const prepared = (over = {}) => ({ preview: 'Summarise [PERSON_1]', stats: { counts: { PERSON: 1 } }, ...over });
 const dialog = (props) => renderToStaticMarkup(<PreviewDialog feature={{ title: 'Summarise this ticket' }} prepared={prepared()} config={{ provider: 'anthropic', baseUrl: '' }} canSkipNext={false} onSend={() => {}} onCancel={() => {}} {...props} />);
 
-test('with onMask the dialog offers "Mask this too": a labelled box, a hint, a button and a status line', () => {
+test('with onMask the dialog offers "Hide something else": a labelled box, a hint, a button and a status line', () => {
   const markup = dialog({ onMask: () => ({ ok: true, masked: 1 }) });
   // (the ids are the dialog's own, see the test below: the label, the hint and the status line point at this dialog's box)
-  const box = markup.match(/<label class="ab-label" for="(ab-mask-text-[\w-]+)">Mask this too<\/label>/)?.[1];
+  const box = markup.match(/<label class="ab-label" for="(ab-mask-text-[\w-]+)">Hide something else<\/label>/)?.[1];
   assert.ok(box, 'a labelled box');
   const described = markup.match(new RegExp(`<input id="${box}" class="ab-input" type="text"[^>]*aria-describedby="(ab-mask-hint-[\\w-]+) (ab-mask-status-[\\w-]+)"`));
   assert.ok(described, 'the box is described by the hint and the status line');
-  assert.ok(markup.includes(`id="${described[1]}">Select words above, or type them here. Every place they appear is masked.`));
-  assert.match(markup, /<button type="button" class="ab-btn" disabled="">Mask<\/button>/, 'nothing to mask yet');
+  assert.ok(markup.includes(`id="${described[1]}">Select words above, or type them here. Every place they appear is hidden too.`));
+  assert.match(markup, /<button type="button" class="ab-btn ab-check-hide-btn" disabled="">Hide<\/button>/, 'nothing to hide yet');
   assert.ok(markup.includes(`id="${described[2]}" role="status"`));
-  assert.match(markup, /mask anything you still see/);
-  // narrow panels: the box shrinks and the row and the footer wrap
-  assert.match(markup, /min-width:0/);
-  assert.match(markup, /class="ab-dialog-foot" style="flex-wrap:wrap"/);
+  assert.match(markup, /Hide anything you still see/);
+  // narrow panels: the box shrinks beside its button (preview.css), and Cancel and Send share the footer of the sheet
+  assert.match(markup, /class="ab-check-hide-row"><input id=/);
+  assert.match(markup, /class="ab-dialog-foot"><div class="ab-sheet-actions"><button type="button" class="ab-btn ab-btn-lg ab-sheet-cancel">Cancel<\/button><button type="button" class="ab-btn ab-btn-primary ab-btn-lg ab-sheet-send"><span class="ab-ai-badge"><svg[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/span>Send to AI<\/button>/, 'Send carries the AI mark and says nothing more');
 });
 
 test('without onMask there is no box (a caller that cannot re-seal never pretends it can)', () => {
   const markup = dialog();
   assert.ok(!markup.includes('ab-mask-text'));
-  assert.ok(!markup.includes('mask anything you still see'));
+  assert.ok(!markup.includes('Hide anything you still see'));
 });
 
 test('two dialogs on the page never share an id, and each one\'s label and descriptions point into itself', () => {
@@ -121,15 +121,21 @@ test('the dialog shows the sealed request\'s own preview (what Send sends) and c
   const markup = dialog({ prepared: prepared({ preview: 'STALE COPY', request: { preview: 'Exact [MASKED_1] text' }, stats: { counts: { PERSON: 1, MANUAL: 2 } } }), onMask: () => ({}) });
   assert.ok(markup.includes('Exact <span class="ab-ph">[MASKED_1]</span> text'));
   assert.ok(!markup.includes('STALE COPY'));
-  assert.match(markup, /masked: 1 name, 2 added by you/);
+  assert.match(markup, /Personal details are hidden before anything leaves:/);
+  assert.match(markup, /<li class="ab-chip ab-check-count">1 name<\/li><li class="ab-chip ab-check-count">2 added by you<\/li>/);
 });
 
-test('what was masked reads as plain English: one, several, nothing', () => {
-  assert.equal(maskSummary({ counts: { PERSON: 12, EMAIL: 1, PHONE: 3, EMPLOYEE_ID: 1, CARD: 1, SECRET: 1 } }), '12 names, 1 email address, 3 phone numbers, 1 employee ID, 1 card number, 1 secret');
-  assert.equal(maskSummary({ counts: { EMAIL: 2, MANUAL: 1 } }), '2 email addresses, 1 added by you');
-  assert.equal(maskSummary({ counts: { WHATEVER: 1 } }), '1 whatever');
-  assert.equal(maskSummary({ counts: {} }), 'nothing needed masking');
-  assert.equal(maskSummary(null), 'nothing needed masking');
+test('what was hidden reads as plain English, one chip per kind: one, several, nothing', () => {
+  assert.deepEqual(hiddenWords({ counts: { PERSON: 12, EMAIL: 1, PHONE: 3, EMPLOYEE_ID: 1, CARD: 1, SECRET: 1 } }), ['12 names', '1 email address', '3 phone numbers', '1 employee ID', '1 card number', '1 password or key']);
+  assert.deepEqual(hiddenWords({ counts: { EMAIL: 2, MANUAL: 1 } }), ['2 email addresses', '1 added by you']);
+  assert.deepEqual(hiddenWords({ counts: { NATIONAL_ID: 1, ID: 2, URL_CREDENTIALS: 1, SECRET: 1, PHONE: 0 } }), ['3 ID numbers', '2 passwords or keys'], 'kinds that read the same are added up; none of a kind is no chip');
+  assert.deepEqual(hiddenWords({ counts: { WHATEVER: 1 } }), ['1 whatever']);
+  assert.deepEqual(hiddenWords({ counts: {} }), []);
+  assert.deepEqual(hiddenWords(null), []);
+  // nothing found: the strip says so, without chips
+  const none = dialog({ prepared: prepared({ stats: { counts: {} } }) });
+  assert.match(none, /No personal details were found to hide\./);
+  assert.ok(!none.includes('ab-check-count'));
 });
 
 // ---- the record an answer is bound to ----------------------------------------------------------------------------------------

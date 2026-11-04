@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { MSG } from '../../lib/messages.js';
 import { instancePattern, normalizeInstance, isInstanceAllowed } from '../../policy/policy.js';
 import { hostAccessMode } from '../policyNotes.js';
-import { FieldError, Locked, onEnter } from '../fields.jsx';
+import { FieldError, Locked, SectionHead, onEnter } from '../fields.jsx';
 import { t, tm, isolate, t as tr } from '../../i18n/index.js';
 
 // What Settings says when the browser did not turn a site on: the next step, for a refused question and for one that never appeared.
@@ -84,45 +84,49 @@ export function InstancesSection({ eff, reload }) {
   }
 
   return (
-    <section className="ab-section" aria-labelledby="h-instances">
-      <h2 className="ab-h" id="h-instances">{t('ServiceNow instances')}</h2>
-      <p className="ab-sub">
+    <section className="ab-section ab-set-section" aria-labelledby="h-instances">
+      <SectionHead id="h-instances" title={t('ServiceNow instances')}>
         {hostAccess() === 'granted'
           ? t('Agent Buddy only runs on instances you turn on. This build was given access to the instances your organisation approved when it was installed, so the browser does not ask.')
           : t('Agent Buddy only runs on instances you turn on. The browser asks you to confirm each one the first time.')}
-      </p>
-      {instances.length === 0 && managed.length === 0 && <p className="ab-note">{t('No instance is turned on yet.')}</p>}
-      <ul className="ab-sites">
-        {instances.map((o) => (
-          <li key={o} className="ab-row ab-site">
-            <span className="ab-mono">{o}</span>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => remove(o)} aria-label={t('Turn off {site}', { site: o })}>{t('Turn off')}</button>
-          </li>
-        ))}
-        {managed.map((o) => (
-          <li key={o} className="ab-row ab-site">
-            <span className="ab-mono">{o}</span>
-            <span className="ab-locked">{t('Turned on by your organisation')}</span>
-          </li>
-        ))}
-      </ul>
-      <label className="ab-label" htmlFor="instance">{t('Instance address')}</label>
-      <div className="ab-row">
-        <input
-          id="instance"
-          className="ab-input ab-mono"
-          style={{ flex: 1 }}
-          placeholder={t('https://yourcompany.service-now.com')}
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          onKeyDown={onEnter(() => !busy && add())}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? 'instance-error' : undefined}
-        />
-        <button type="button" className="ab-btn ab-btn-primary" onClick={add} disabled={busy}>{t('Turn on')}</button>
+      </SectionHead>
+      {instances.length === 0 && managed.length === 0 && <p className="ab-note ab-set-empty">{t('No instance is turned on yet.')}</p>}
+      {instances.length + managed.length > 0 && (
+        <ul className="ab-set-list">
+          {instances.map((o) => (
+            <li key={o} className="ab-set-item ab-set-site">
+              <span className="ab-dot ab-dot-ok" aria-hidden="true" />
+              <span className="ab-mono ab-set-item-main">{o}</span>
+              <button type="button" className="ab-btn ab-btn-sm" onClick={() => remove(o)} aria-label={t('Turn off {site}', { site: o })}>{t('Turn off')}</button>
+            </li>
+          ))}
+          {managed.map((o) => (
+            <li key={o} className="ab-set-item ab-set-site">
+              <span className="ab-dot ab-dot-ok" aria-hidden="true" />
+              <span className="ab-mono ab-set-item-main">{o}</span>
+              <span className="ab-locked">{t('Turned on by your organisation')}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="ab-field">
+        <label className="ab-label" htmlFor="instance">{t('Instance address')}</label>
+        <div className="ab-set-inputrow">
+          <input
+            id="instance"
+            className="ab-input ab-mono"
+            placeholder={t('https://yourcompany.service-now.com')}
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            onKeyDown={onEnter(() => !busy && add())}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'instance-error' : undefined}
+          />
+          <button type="button" className="ab-btn ab-btn-primary" onClick={add} disabled={busy}>{t('Turn on')}</button>
+        </div>
+        {eff.locked.instances && <Locked why={eff.locked.instances} />}
+        <FieldError id="instance-error" text={error} />
       </div>
-      {eff.locked.instances && <Locked why={eff.locked.instances} />}
-      <FieldError id="instance-error" text={error} />
     </section>
   );
 }

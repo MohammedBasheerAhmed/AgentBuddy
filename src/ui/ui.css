@@ -1,10 +1,11 @@
-/* Agent Buddy components: side panel (narrow, 320-480px) and settings page. Plain CSS, no frameworks. */
+/* Agent Buddy components: side panel (narrow, 320-480px) and settings page. Plain CSS, no frameworks.
+   Calm and focused: few boxes, one accent, space and one-pixel dividers between sections instead of borders around them. */
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--ab-font);
-  font-size: var(--ab-text-md);
+  font-size: var(--ab-text-base);
   line-height: 1.45;
   color: var(--ab-fg);
   background: var(--ab-bg);
@@ -14,68 +15,130 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---- layout ---- */
 .ab-app { display: flex; flex-direction: column; min-height: 100vh; }
-.ab-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--ab-border); background: var(--ab-bg-subtle); position: sticky; top: 0; z-index: 2; }
-.ab-brand { font-weight: 650; font-size: var(--ab-text-lg); letter-spacing: 0; }
+.ab-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--ab-divider); background: var(--ab-bg); position: sticky; top: 0; z-index: 2; }
+.ab-brand { font-weight: 600; font-size: var(--ab-text-lg); letter-spacing: 0; }
 .ab-spacer { flex: 1; }
-.ab-main { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-.ab-footer { padding: 8px 12px; border-top: 1px solid var(--ab-border); color: var(--ab-fg-muted); font-size: var(--ab-text-xs); background: var(--ab-bg-subtle); }
+/* The panel's side padding is 16px. A section, a list of rows or the half switch reaches the panel's edges (its own 16px padding brings
+   its content back in line), so the dividers between them run across the whole panel (see .ab-section below, .ab-halfswitch in shell.css). */
+.ab-main { flex: 1; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.ab-footer { padding: 8px 12px; border-top: 1px solid var(--ab-divider); color: var(--ab-fg-muted); font-size: var(--ab-text-xs); background: var(--ab-bg-subtle); }
 
 /* ---- text ---- */
-.ab-h { margin: 0 0 4px; font-size: var(--ab-text-lg); font-weight: 650; }
-.ab-sub { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-h { margin: 0 0 4px; font-size: var(--ab-text-xl); font-weight: 600; line-height: 1.35; }
+.ab-sub { color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 .ab-mono { font-family: var(--ab-mono); font-size: var(--ab-text-sm); }
 .ab-muted { color: var(--ab-fg-muted); }
 
-/* ---- cards ---- */
-.ab-card { border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); padding: 10px 12px; }
+/* ---- cards: a quiet surface, no border (the screens that keep .ab-card look calm without a change of their own) ---- */
+.ab-card { border: 0; border-radius: var(--ab-radius-lg); background: var(--ab-surface); padding: 14px; }
 .ab-card + .ab-card { margin-top: 0; }
 .ab-record-number { font-family: var(--ab-mono); font-size: var(--ab-text-sm); color: var(--ab-accent); font-weight: 600; }
-.ab-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.ab-tag { font-size: var(--ab-text-xs); padding: 1px 6px; border-radius: var(--ab-radius-xs); background: var(--ab-bg-sunken); color: var(--ab-fg-soft); border: 1px solid var(--ab-border); }
+.ab-tags { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; }
+.ab-tag { font-size: var(--ab-text-sm); font-weight: 500; padding: 1px 8px; border-radius: 999px; background: var(--ab-bg-sunken); color: var(--ab-fg-soft); border: 1px solid transparent; }
+
+/* ---- the shared building blocks of the calm look (docs: the redesign spec) ---- */
+/* A block of the screen: no border; the next block is parted from it by one divider. */
+.ab-section { padding: 12px 16px; }
+.ab-section + .ab-section { border-top: 1px solid var(--ab-divider); }
+.ab-section-title { margin: 0 0 6px; font-size: var(--ab-text-md); font-weight: 600; line-height: 1.4; color: var(--ab-fg-soft); }
+/* In the side panel (.ab-main pads 16px at the sides) a section or a list of rows that is not inside a panel of its own reaches the
+   panel's edges, so its dividers run across; its own 16px padding keeps the text in line with the rest. Straight in a pane, the pane's
+   gap is taken back, so the divider sits in the middle of the space between two blocks. */
+.ab-main .ab-section:not(:is(.ab-section, .ab-surface, .ab-card, .ab-cardx, .ab-output, .ab-note, .ab-dialog, .ab-rows) .ab-section),
+.ab-main .ab-rows:not(:is(.ab-section, .ab-surface, .ab-card, .ab-cardx, .ab-output, .ab-note, .ab-dialog, .ab-rows) .ab-rows) { margin-inline: -16px; }
+.ab-pane > .ab-section + .ab-section, .ab-pane > .ab-rows + .ab-section, .ab-pane > .ab-section + .ab-rows { margin-top: -12px; }
+.ab-section + .ab-rows, .ab-rows + .ab-section { border-top: 1px solid var(--ab-divider); }
+/* The settings page has its own margins: its sections keep them and are parted by the divider. */
+.ab-page .ab-section { padding: 20px 0; }
+.ab-page .ab-section:first-child { padding-top: 0; }
+
+/* A list of rows, parted by dividers, no border around it. A row is a flex line: an icon or a dot, the main text (a title and a line
+   under it that may wrap), then what the row offers. On its own, .ab-row stays what it always was: a row of buttons. */
+.ab-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ab-rows > * + * { border-top: 1px solid var(--ab-divider); }
+.ab-section > .ab-rows { margin-inline: -16px; }
+.ab-rows > .ab-row, .ab-rows > li > .ab-row, .ab-row:has(> .ab-row-main) { display: flex; flex-wrap: nowrap; gap: 12px; align-items: flex-start; padding: 12px 16px; }
+.ab-rows > li > .ab-row { width: 100%; }
+/* a whole row that is one button or link: no box of its own, the row is the target */
+button.ab-row, a.ab-row { border: 0; border-radius: 0; background: transparent; color: inherit; text-align: start; text-decoration: none; cursor: pointer; }
+button.ab-row:hover, a.ab-row:hover { background: var(--ab-bg-subtle); }
+.ab-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ab-row-title { font-size: var(--ab-text-base); font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
+.ab-row-sub { font-size: var(--ab-text-md); color: var(--ab-fg-muted); line-height: 1.45; overflow-wrap: anywhere; }
+
+/* A soft panel without a border (an answer, a summary strip). */
+.ab-surface { background: var(--ab-surface); border: 0; border-radius: var(--ab-radius-lg); padding: 14px; }
+
+/* A small round label: a state, a priority, a count. Neutral unless it says something is wrong. An area file (joined after this one)
+   can change a chip of its own with one class of its own, as reports.css does for its scope chip. */
+.ab-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; font-size: var(--ab-text-sm); font-weight: 500; line-height: 1.35; padding: 3px 8px; border: 0; border-radius: 999px; background: var(--ab-bg-sunken); color: var(--ab-fg-soft); overflow-wrap: anywhere; }
+.ab-chip-neutral { background: var(--ab-bg-sunken); color: var(--ab-fg-soft); }
+.ab-chip-danger { background: var(--ab-danger-soft); color: var(--ab-danger); }
+.ab-chip-warn { background: var(--ab-warn-soft); color: var(--ab-warn); }
+.ab-chip-ok { background: var(--ab-ok-soft); color: var(--ab-ok); }
+.ab-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+
+/* A chevron (the chevronDown icon): it points down on whatever opens in place, and turns up when that is open. It does not turn in
+   right-to-left: down is down in every language. */
+.ab-chevron { flex: none; color: var(--ab-fg-faint); transition: transform 120ms ease-out; }
+[aria-expanded='true'] .ab-chevron, details[open] > summary .ab-chevron { transform: rotate(180deg); }
+
+/* An 8px status dot, in place of a coloured border around a card. */
+.ab-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ab-fg-faint); }
+.ab-dot-neutral { background: var(--ab-fg-faint); }
+.ab-dot-danger { background: var(--ab-danger); }
+.ab-dot-warn { background: var(--ab-warn); }
+.ab-dot-ok { background: var(--ab-ok); }
+.ab-row > .ab-dot { margin-top: 6px; }
 
 /* ---- feature list ---- */
-.ab-feature { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: start; width: 100%; padding: 8px 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); cursor: pointer; }
-.ab-feature:hover:not(:disabled) { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
+.ab-feature { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: start; width: 100%; padding: 10px 12px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); cursor: pointer; }
+.ab-feature:hover:not(:disabled) { border-color: var(--ab-border-strong); background: var(--ab-bg-subtle); }
 .ab-feature:disabled { opacity: 0.55; cursor: not-allowed; }
-.ab-feature-title { font-weight: 600; }
-.ab-feature-desc { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-feature-title { font-weight: 500; }
+.ab-feature-desc { color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 /* A record in a list is a real link (so Ctrl+click and the right-click menu open a new tab) that looks like the button it replaced. */
 a.ab-feature { box-sizing: border-box; color: inherit; text-decoration: none; }
 a.ab-btn { text-decoration: none; }
 /* the model switch in the panel header: as wide as its text, not the whole row */
-.ab-select-sm { width: auto; max-width: 11rem; padding: 2px 6px; font-size: var(--ab-text-sm); text-overflow: ellipsis; }
+.ab-select-sm { width: auto; max-width: 11rem; min-height: 28px; padding: 2px 6px; font-size: var(--ab-text-sm); text-overflow: ellipsis; }
 
 .ab-risk-breached { background: var(--ab-danger-soft); color: var(--ab-danger); border-color: var(--ab-danger-line); }
 .ab-risk-at-risk { background: var(--ab-warn-soft); color: var(--ab-warn); border-color: var(--ab-warn-line); }
 
-/* ---- buttons ---- */
-.ab-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border-radius: var(--ab-radius-sm); border: 1px solid var(--ab-border-strong); background: var(--ab-bg-raised); cursor: pointer; font-weight: 550; }
-.ab-btn:hover:not(:disabled) { background: var(--ab-bg-sunken); }
+/* ---- buttons: 36px; the screen's main step 44px (.ab-btn-lg); one filled (accent) button per screen ---- */
+.ab-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 14px; border-radius: var(--ab-radius); border: 1px solid var(--ab-border-strong); background: var(--ab-bg-raised); cursor: pointer; font-weight: 500; line-height: 1.3; }
+.ab-btn:hover:not(:disabled) { background: var(--ab-bg-subtle); }
 .ab-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.ab-btn-primary { background: var(--ab-accent); color: var(--ab-accent-fg); border-color: var(--ab-accent); }
-.ab-btn-primary:hover:not(:disabled) { background: var(--ab-accent-hover); }
+.ab-btn-primary { background: var(--ab-accent); color: var(--ab-accent-fg); border-color: var(--ab-accent); font-weight: 600; }
+.ab-btn-primary:hover:not(:disabled) { background: var(--ab-accent-hover); border-color: var(--ab-accent-hover); }
 .ab-btn-danger { background: var(--ab-danger-solid); color: var(--ab-on-danger); border-color: var(--ab-danger-solid); }
+.ab-btn-danger:hover:not(:disabled) { background: var(--ab-danger-solid); border-color: var(--ab-danger-solid); }
 .ab-btn-quiet { border-color: transparent; background: transparent; color: var(--ab-fg-soft); }
-.ab-btn-sm { padding: 3px 8px; font-size: var(--ab-text-sm); }
+.ab-btn-quiet:hover:not(:disabled) { border-color: transparent; background: var(--ab-bg-sunken); }
+.ab-btn-sm { min-height: 28px; padding: 3px 10px; font-size: var(--ab-text-md); border-radius: var(--ab-radius-sm); }
+.ab-btn-lg { min-height: 44px; padding: 8px 16px; border-radius: 10px; font-size: var(--ab-text-base); font-weight: 600; }
+.ab-btn-block { display: flex; width: 100%; }
 .ab-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* ---- notices ---- */
-.ab-note { padding: 8px 10px; border-radius: var(--ab-radius-sm); border: 1px solid var(--ab-border); background: var(--ab-bg-subtle); font-size: var(--ab-text-sm); }
-.ab-note-warn { background: var(--ab-warn-soft); border-color: var(--ab-warn-line); color: var(--ab-warn); }
-.ab-note-danger { background: var(--ab-danger-soft); border-color: var(--ab-danger-line); color: var(--ab-danger); }
-.ab-note-ok { background: var(--ab-ok-soft); border-color: var(--ab-ok-line); color: var(--ab-ok); }
+.ab-note { padding: 10px 12px; border-radius: var(--ab-radius); border: 0; background: var(--ab-bg-subtle); font-size: var(--ab-text-md); }
+.ab-note-warn { background: var(--ab-warn-soft); color: var(--ab-warn); }
+.ab-note-danger { background: var(--ab-danger-soft); color: var(--ab-danger); }
+.ab-note-ok { background: var(--ab-ok-soft); color: var(--ab-ok); }
 
 /* ---- forms ---- */
 .ab-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.ab-label { font-weight: 600; font-size: var(--ab-text-sm); }
-.ab-input, .ab-select, .ab-textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius-sm); background: var(--ab-bg); }
+.ab-label { font-weight: 600; font-size: var(--ab-text-md); }
+.ab-input, .ab-select, .ab-textarea { width: 100%; padding: 7px 10px; border: 1px solid var(--ab-input-border); border-radius: var(--ab-radius); background: var(--ab-bg); }
+.ab-input, .ab-select { min-height: 36px; }
 .ab-textarea { min-height: 90px; resize: vertical; }
 .ab-check { display: flex; gap: 8px; align-items: flex-start; }
-.ab-hint { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-hint { color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 .ab-locked { font-size: var(--ab-text-xs); color: var(--ab-warn); }
 
-/* ---- output (safe text) ---- */
-.ab-output { border: 1px solid var(--ab-border); border-radius: var(--ab-radius); padding: 10px 12px; background: var(--ab-bg-raised); }
+/* ---- output (safe text): the answer reads as a soft panel ---- */
+.ab-output { border: 0; border-radius: var(--ab-radius-lg); padding: 12px 14px; background: var(--ab-surface); }
 .ab-safe-text p { margin: 0 0 8px; }
 .ab-safe-text h1, .ab-safe-text h2, .ab-safe-text h3 { margin: 8px 0 4px; font-size: var(--ab-text-lg); }
 .ab-safe-text ul, .ab-safe-text ol { margin: 0 0 8px; padding-inline-start: 20px; }
@@ -87,17 +150,16 @@ a.ab-btn { text-decoration: none; }
 /* ---- preview dialog ---- */
 .ab-backdrop { position: fixed; inset: 0; background: var(--ab-backdrop); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
 .ab-dialog { width: 100%; max-height: 88vh; display: flex; flex-direction: column; background: var(--ab-bg); border-radius: var(--ab-radius-lg) var(--ab-radius-lg) 0 0; box-shadow: var(--ab-shadow); }
-.ab-dialog-head { padding: 12px 12px 8px; border-bottom: 1px solid var(--ab-border); }
-.ab-dialog-body { padding: 10px 12px; overflow: auto; }
-.ab-dialog-foot { padding: 10px 12px; border-top: 1px solid var(--ab-border); display: flex; gap: 8px; justify-content: flex-end; }
-.ab-preview { font-family: var(--ab-mono); font-size: var(--ab-text-sm); white-space: pre-wrap; word-break: break-word; background: var(--ab-bg-sunken); border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); padding: 8px; }
-.ab-ph { background: var(--ab-accent-soft); color: var(--ab-accent); border-radius: var(--ab-radius-xs); padding: 0 2px; font-weight: 600; }
+.ab-dialog-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--ab-divider); }
+.ab-dialog-body { padding: 12px 16px; overflow: auto; }
+.ab-dialog-foot { padding: 12px 16px; border-top: 1px solid var(--ab-divider); display: flex; gap: 8px; justify-content: flex-end; }
+.ab-preview { font-family: var(--ab-mono); font-size: var(--ab-text-sm); white-space: pre-wrap; word-break: break-word; background: var(--ab-bg-subtle); border: 1px solid var(--ab-border); border-radius: var(--ab-radius); padding: 10px; }
+.ab-ph { background: var(--ab-mask-bg); color: var(--ab-mask-fg); border-radius: var(--ab-radius-xs); padding: 0 3px; font-weight: 600; }
 
 /* ---- settings page ---- */
 .ab-page { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
-.ab-section { margin-bottom: 28px; }
-.ab-table { width: 100%; border-collapse: collapse; font-size: var(--ab-text-sm); }
-.ab-table th, .ab-table td { text-align: start; padding: 4px 8px; border-bottom: 1px solid var(--ab-border); vertical-align: top; }
+.ab-table { width: 100%; border-collapse: collapse; font-size: var(--ab-text-md); }
+.ab-table th, .ab-table td { text-align: start; padding: 6px 8px; border-bottom: 1px solid var(--ab-divider); vertical-align: top; }
 .ab-table th { color: var(--ab-fg-muted); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
@@ -117,13 +179,12 @@ a.ab-btn { text-decoration: none; }
 .ab-header { flex-wrap: wrap; row-gap: 6px; }
 .ab-select-sm { min-width: 0; flex: 0 1 auto; }
 @media (max-width: 360px) {
-  .ab-main { padding: 10px; }
   .ab-nav { padding: 6px 10px 0; gap: 4px; }
   .ab-nav .ab-btn { padding: 3px 6px; }
 }
 
 /* ---- a note with its next step: the text and the button wrap at 320px ---- */
-.ab-keynote, .ab-errnote { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ab-keynote, .ab-errnote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .ab-keynote-text, .ab-errnote-text { margin: 0; flex: 1 1 14em; min-width: 0; overflow-wrap: anywhere; }
 /* A locked key unlocked where it is needed (AiKeyNote.jsx KeyUnlock): the passphrase box takes the row, the button stays beside it. */
 .ab-unlock-row { display: flex; gap: 6px; flex: 1 1 100%; min-width: 0; }
@@ -140,12 +201,15 @@ a.ab-btn { text-decoration: none; }
 .ab-result .ab-h:focus-visible { box-shadow: var(--ab-ring); }
 
 /* ---- first run: three numbered steps, each one says Done / Next / Later in words ---- */
-.ab-firstrun-steps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.ab-firstrun-step { display: flex; gap: 8px; align-items: flex-start; }
-.ab-firstrun-num { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: var(--ab-text-sm); font-weight: 650; border: 1px solid var(--ab-border-strong); color: var(--ab-fg-soft); background: var(--ab-bg-sunken); }
-.ab-firstrun-next .ab-firstrun-num { background: var(--ab-accent); color: var(--ab-accent-fg); border-color: var(--ab-accent); }
-.ab-firstrun-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ab-firstrun-label { font-weight: 600; overflow-wrap: anywhere; }
-.ab-firstrun-done .ab-firstrun-label { color: var(--ab-fg-muted); font-weight: 500; }
-.ab-firstrun-tag-done { background: var(--ab-ok-soft); color: var(--ab-ok); border-color: var(--ab-ok-line); }
-.ab-firstrun-tag-next { background: var(--ab-accent-soft); color: var(--ab-accent); border-color: var(--ab-accent-line); }
+.ab-firstrun-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; }
+.ab-firstrun-step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; }
+.ab-firstrun-step + .ab-firstrun-step { border-top: 1px solid var(--ab-divider); }
+.ab-firstrun-num { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: var(--ab-text-sm); font-weight: 600; border: 0; color: var(--ab-fg-soft); background: var(--ab-bg-sunken); }
+.ab-firstrun-next .ab-firstrun-num { background: var(--ab-accent); color: var(--ab-accent-fg); }
+.ab-firstrun-done .ab-firstrun-num { background: var(--ab-ok-soft); color: var(--ab-ok); }
+.ab-firstrun-body { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ab-firstrun-label { font-weight: 500; overflow-wrap: anywhere; }
+.ab-firstrun-next .ab-firstrun-label { font-weight: 600; }
+.ab-firstrun-done .ab-firstrun-label { color: var(--ab-fg-muted); font-weight: 400; }
+.ab-firstrun-tag-done { background: var(--ab-ok-soft); color: var(--ab-ok); border-color: transparent; }
+.ab-firstrun-tag-next { background: var(--ab-accent-soft); color: var(--ab-accent); border-color: transparent; }

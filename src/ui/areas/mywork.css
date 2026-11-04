@@ -1,69 +1,76 @@
 /* mywork: the My work screen (src/sidepanel/mywork). Owner: My work agent (docs/round3.md). Only --ab-* tokens.
-   Calm list: each ticket one or two lines (number, title; one status chip, the SLA, priority), groups folded, filters as small chips.
-   Colour pairs are the ones tests/panel-contrast.test.js checks (accent on accent-soft, danger on danger-soft, warn on warn-soft,
-   fg-soft on bg-sunken, fg-muted on bg-raised). */
+   Calm (the 2026 redesign): sections (the shared CardFrame) parted by dividers, each with its title and counts; tickets are rows (the
+   shared .ab-rows / .ab-row / .ab-dot / .ab-chip of ui.css): a status dot, the number in mono, the title on up to two lines, chips
+   under it. No red frame around the queue: a breached SLA is a dot and a chip on its own row. Colour pairs are the ones
+   tests/panel-contrast.test.js checks (accent on accent-soft, danger on danger-soft, warn on warn-soft, fg-soft on bg-sunken,
+   fg-muted on bg-raised, attn-fg on attn-icon-bg). */
 
-.ab-mywork { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ab-mywork { display: flex; flex-direction: column; min-width: 0; }
 
 /* ---- the status line: when it was read, auto-refresh, Refresh / Stop ---- */
-.ab-mw-bar { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+.ab-mw-bar { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: var(--ab-text-md); color: var(--ab-fg-muted); }
 .ab-mw-read { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ab-mw-auto { display: inline-flex; align-items: center; gap: 4px; font-size: var(--ab-text-xs); white-space: nowrap; cursor: pointer; }
+.ab-mw-auto { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; font-size: var(--ab-text-sm); white-space: nowrap; cursor: pointer; }
 .ab-mw-auto input { margin: 0; }
-.ab-mw-stopped,
-.ab-mw-outage { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-.ab-mw-stopped span,
-.ab-mw-outage span { flex: 1 1 14em; min-width: 0; }
+.ab-mw-stopped { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-block: 4px; }
+.ab-mw-stopped span { flex: 1 1 14em; min-width: 0; }
+.ab-mywork > .ab-note, .ab-mywork > .ab-errnote { margin-block: 4px; }
 
-/* ---- a ticket ---- */
-.ab-mw-list { gap: 4px; }
-.ab-mw-row { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ab-mw-link { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-raised); color: var(--ab-fg); text-decoration: none; }
-.ab-mw-link:hover { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
-/* the focus ring is the theme's box-shadow (--ab-ring is a list of shadows, not a colour), as everywhere else */
+/* ---- the attention line: several of my tickets on one configuration item. A line, not a box. ---- */
+.ab-mw-attn { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0 4px; font-size: var(--ab-text-md); color: var(--ab-fg); }
+.ab-mw-attn-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ab-attn-icon-bg); color: var(--ab-attn-fg); }
+.ab-mw-attn-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding-top: 2px; }
+.ab-mw-attn-text { overflow-wrap: anywhere; }
+.ab-mw-attn-act { margin-inline-start: -10px; color: var(--ab-accent); font-weight: 500; }
+
+/* ---- the sections: the shared CardFrame; the first one sits right under the status line ---- */
+.ab-mywork > .ab-cardx:first-of-type { border-top: 1px solid var(--ab-divider); }
+
+/* ---- rows: they reach the panel's edges (.ab-main pads 16px), so the dividers run across and the text lines up ---- */
+.ab-mywork .ab-mw-rows { margin-inline: -16px; }
+.ab-mw-rows > .ab-mw-row { display: flex; flex-direction: column; min-width: 0; }
 .ab-mw-link:focus-visible { outline: none; box-shadow: var(--ab-ring); }
-.ab-mw-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.ab-mw-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
-.ab-mw-sub { flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
+.ab-mw-head { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--ab-fg); }
+.ab-mw-num { font-family: var(--ab-mono); font-size: var(--ab-text-md); font-weight: 500; color: var(--ab-fg-soft); }
+.ab-mw-title { font-weight: 500; }
+.ab-mw-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+.ab-mw-sub .ab-chip { max-width: 100%; }
+.ab-mw-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ab-mw-meta { color: var(--ab-fg-muted); }
 
-/* one status chip */
-.ab-mw-chip { display: inline-block; max-width: 100%; padding: 0 6px; border-radius: 999px; border: 1px solid var(--ab-border); background: var(--ab-bg-sunken); color: var(--ab-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ab-mw-chip-reply { background: var(--ab-accent-soft); color: var(--ab-accent); border-color: var(--ab-accent-line); font-weight: 600; }
-
-/* the SLA: a pill when it needs a look, plain text otherwise */
+/* the SLA: a chip when it needs a look (breached, at risk), plain text otherwise */
 .ab-mw-sla { white-space: nowrap; }
-.ab-mw-sla-breached,
-.ab-mw-sla-at-risk { padding: 0 6px; border-radius: 999px; border: 1px solid; font-weight: 600; }
-.ab-mw-sla-breached { background: var(--ab-danger-soft); color: var(--ab-danger); border-color: var(--ab-danger-line); }
-.ab-mw-sla-at-risk { background: var(--ab-warn-soft); color: var(--ab-warn); border-color: var(--ab-warn-line); }
 .ab-mw-sla-paused { font-style: italic; }
 
-/* ---- filters with counts ---- */
-.ab-mw-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.ab-mw-filter { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ab-border); background: var(--ab-bg-raised); color: var(--ab-fg-soft); font-size: var(--ab-text-sm); cursor: pointer; }
-.ab-mw-filter:hover { border-color: var(--ab-accent-line); }
+/* a row's quiet action (Copy status update), under its text, in line with the title */
+.ab-mw-row-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: -6px; padding-block: 0 8px; padding-inline: 36px 16px; }
+.ab-mw-row-act .ab-btn { margin-inline-start: -10px; }
+.ab-mw-row-act .ab-hint:empty { display: none; }
+
+/* "Show all (12)" and the cap line under a list */
+.ab-mw-more { margin-top: 2px; margin-inline-start: -10px; }
+.ab-mw-cap { margin: 0; }
+.ab-mw-more-link { color: var(--ab-accent); font-weight: 600; }
+
+/* ---- filters with counts: chips that can be pressed ---- */
+.ab-mw-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ab-mw-filter { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 10px; border: 1px solid transparent; border-radius: 999px; background: var(--ab-bg-sunken); color: var(--ab-fg-soft); font-size: var(--ab-text-sm); font-weight: 500; cursor: pointer; }
+.ab-mw-filter:hover { color: var(--ab-fg); }
 .ab-mw-filter:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 .ab-mw-filter[aria-pressed='true'] { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); color: var(--ab-accent); font-weight: 600; }
 .ab-mw-count { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ab-mw-filter-more { min-height: 28px; }
 
-/* ---- folded groups inside a card ---- */
-.ab-mw-fold { display: flex; flex-direction: column; gap: 6px; }
-.ab-mw-fold-toggle { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; border: 0; background: transparent; padding: 4px 2px; color: var(--ab-fg-soft); font-weight: 600; font-size: var(--ab-text-sm); cursor: pointer; border-radius: var(--ab-radius-xs); }
+/* ---- folded groups inside the queue: a quiet line with a chevron that points down (up when open) ---- */
+.ab-mw-fold { display: flex; flex-direction: column; }
+.ab-mw-fold-toggle { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 32px; border: 0; background: transparent; padding: 4px 0; color: var(--ab-fg-soft); font: inherit; font-weight: 500; font-size: var(--ab-text-md); cursor: pointer; border-radius: var(--ab-radius-xs); }
 .ab-mw-fold-toggle:hover { color: var(--ab-fg); }
 .ab-mw-fold-toggle:focus-visible { outline: none; box-shadow: var(--ab-ring); }
-.ab-mw-fold-chevron { width: 6px; height: 6px; border-right: 1.5px solid var(--ab-fg-muted); border-bottom: 1.5px solid var(--ab-fg-muted); transform: rotate(-45deg); transition: transform 120ms ease-out; }
-.ab-mw-fold-toggle[aria-expanded='true'] .ab-mw-fold-chevron { transform: rotate(45deg); }
 .ab-mw-fold-body[hidden] { display: none; }
 
-/* ---- "Showing 200 of 340. Open the full list", follow-up actions, the access line ---- */
-.ab-mw-cap { margin: 0; }
-.ab-mw-more-link { color: var(--ab-accent); font-weight: 600; }
-.ab-mw-follow-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-inline-start: 2px; }
-.ab-mw-follow-act .ab-hint:empty { display: none; }
-.ab-mw-access { margin: 0; }
+/* ---- the follow-up period, the access line ---- */
+.ab-mw-days { max-width: 9rem; }
+.ab-mw-access { margin: 8px 0 0; }
 
 /* text for screen readers only (the follow-up period's label) */
 .ab-mw-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-
-@media (prefers-reduced-motion: reduce) { .ab-mw-fold-chevron { transition: none; } }

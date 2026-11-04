@@ -2,6 +2,7 @@ import { Tile, StackedBar, HeatStrip } from '../charts/index.js';
 import TicketList from './TicketList.jsx';
 import SectionShell from './SectionShell.jsx';
 import { useSection } from './useSection.js';
+import { shownElsewhere } from './onDashboard.js';
 import { t, tn } from '../../i18n/index.js';
 import { placeholderName, shown } from '../../reports/shown.js';
 
@@ -31,8 +32,13 @@ function openBiggest(env, byTable, queries) {
 // The address a row or cell opens, when the dashboard can build one (env.listHref); '' otherwise.
 const hrefTo = (env, target) => (target && env.listHref ? env.listHref(target.table, target.query) || '' : '');
 
-/** The board for one Workload result (`d` is result.data). */
+/**
+ * The board for one Workload result (`d` is result.data). When the dashboard also draws Overview (env.sections), the counts Overview
+ * already shows (open, unassigned, no update, resolved but not closed) are left out here: one number is said once on a dashboard.
+ * Only what is drawn changes; the result (and so the export and "Explain this dashboard") keeps every number.
+ */
 export function WorkloadBody({ d, env }) {
+  const inOverview = shownElsewhere(env, 'overview');
   const series = (d.classes || []).map((c) => ({ key: c.key, label: shown(c.label), tone: CLASS_TONE[c.key] }));
   const find = (list, key) => (list || []).find((r) => r.key === key);
   const age = d.ageing;
@@ -51,16 +57,21 @@ export function WorkloadBody({ d, env }) {
     return row && !row.others ? biggest(row.byTable, row.queries) : null;
   };
   const links = Boolean(env.listHref);
+  const pingTile = d.pingPong.available && <Tile label={t('Reassigned {n}+ times', { n: d.pingPong.threshold })} value={d.pingPong.count} tone={d.pingPong.count > 0 ? 'warn' : 'neutral'} hint={t('Handed from group to group')} />;
 
   return (
     <>
-      <div className="ab-tiles">
-        <Tile label={shown('Open')} value={d.totals.open} unavailable={d.totals.open === null} hint={d.totals.openPartial ? t('Some tables could not be counted') : t('Active tickets')} />
-        {d.totals.unassigned !== null && <Tile label={t('Unassigned')} value={d.totals.unassigned} tone={d.totals.unassigned > 0 ? 'warn' : 'neutral'} hint={t('Nobody owns them')} />}
-        <Tile label={t('No update in {days}+ days', { days: d.staleDays })} value={d.totals.stale} unavailable={d.totals.stale === null} tone={d.totals.stale > 0 ? 'warn' : 'neutral'} hint={t('Open and untouched')} />
-        {d.pingPong.available && <Tile label={t('Reassigned {n}+ times', { n: d.pingPong.threshold })} value={d.pingPong.count} tone={d.pingPong.count > 0 ? 'warn' : 'neutral'} hint={t('Handed from group to group')} />}
-        {d.totals.resolvedActive > 0 && <Tile label={t('Resolved, not closed')} value={d.totals.resolvedActive} hint={t('Waiting to close. Not counted as open.')} />}
-      </div>
+      {inOverview ? (
+        pingTile && <div className="ab-tiles">{pingTile}</div>
+      ) : (
+        <div className="ab-tiles">
+          <Tile label={shown('Open')} value={d.totals.open} unavailable={d.totals.open === null} hint={d.totals.openPartial ? t('Some tables could not be counted') : t('Active tickets')} />
+          {d.totals.unassigned !== null && <Tile label={t('Unassigned')} value={d.totals.unassigned} tone={d.totals.unassigned > 0 ? 'warn' : 'neutral'} hint={t('Nobody owns them')} />}
+          <Tile label={t('No update in {days}+ days', { days: d.staleDays })} value={d.totals.stale} unavailable={d.totals.stale === null} tone={d.totals.stale > 0 ? 'warn' : 'neutral'} hint={t('Open and untouched')} />
+          {pingTile}
+          {d.totals.resolvedActive > 0 && <Tile label={t('Resolved, not closed')} value={d.totals.resolvedActive} hint={t('Waiting to close. Not counted as open.')} />}
+        </div>
+      )}
 
       {age.open > 0 ? (
         <HeatStrip title={t('How long tickets have been open')} cells={age.buckets.map((b) => ({ key: b.key, label: shown(b.label), value: b.count }))} total={age.open} unit={t('tickets')} onDrill={ageDrill} hrefFor={links ? (cell) => hrefTo(env, ageTarget(cell)) : undefined} labelHeader={t('Age')} valueHeader={t('Open tickets')} />
@@ -105,11 +116,11 @@ export function WorkloadBody({ d, env }) {
 }
 
 // F2. Who has how much, in which state, how old it is, what nobody owns, what nobody touched, what keeps being handed over.
-export default function WorkloadView({ widget, env }) {
+export default function WorkloadView({ widget, env, tools }) {
   const state = useSection('workload', widget, env);
   const d = state.result?.data;
   return (
-    <SectionShell title={t('Workload and ageing')} help={t('Open work by person and group, how old it is, and where it is stuck.')} state={state} env={env} widgetId={widget?.id}>
+    <SectionShell title={t('Workload and ageing')} help={t('Open work by person and group, how old it is, and where it is stuck.')} state={state} env={env} widgetId={widget?.id} tools={tools}>
       {d && <WorkloadBody d={d} env={env} />}
     </SectionShell>
   );

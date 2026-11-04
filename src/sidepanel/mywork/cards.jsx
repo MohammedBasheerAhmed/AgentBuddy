@@ -1,27 +1,31 @@
 import { useId, useMemo, useState } from 'react';
 import RecordLink from '../RecordLink.jsx';
-import { CardFrame, ShowMore, EmptyNote } from '../ui/primitives.jsx';
+import { CardFrame, EmptyNote } from '../ui/primitives.jsx';
 import { groupQueue, filterChips, passes } from '../../mywork/rank.js';
 import { followUps, followUpReason, followUpText, followUpAction, FOLLOW_UP_DAY_CHOICES } from '../../mywork/followups.js';
 import { fullListUrl } from '../../mywork/links.js';
 import { askedText, dueAgoText, dueInText, spanText, dueToday } from '../../mywork/time.js';
-import { TicketRow, Fold, FilterChips } from './parts.jsx';
+import { Row, RowList, TicketRow, Fold, FilterChips } from './parts.jsx';
 import { copyText } from '../reports/download.js';
 import { shown as shownText } from '../../reports/shown.js';
 import { isolate, t, tn } from '../../i18n/index.js';
 
-// The four cards of the My work screen (N13 My queue, approvals waiting on me, N27 Follow-ups due, N14 Unassigned in my groups).
-// Every one is Insights: facts read with the person's own session, nothing sent anywhere, no AI.
+// The four sections of the My work screen (N13 My queue, approvals waiting on me, N27 Follow-ups due, N14 Unassigned in my groups).
+// Every one is Insights: facts read with the person's own session, nothing sent anywhere, no AI. Calm: a section title with its counts,
+// then rows parted by dividers; what needs a look carries a status dot and a chip on its own row, never a red frame around the queue.
 
 const NO_ITEMS = []; // (one array, so the queue's filtered list and chips are not worked out again on every render)
 
-/** The queue card's one-line summary: "12 open · 2 SLA breached · 3 replied". Pure. */
+/** Counts as one line, in the panel's language: "12 open, 2 SLA breached, 3 replied". Empty parts are left out. */
+const countLine = (parts) => parts.filter(Boolean).join(t(', '));
+
+/** The queue section's one-line summary: "12 open, 2 SLA breached, 3 replied". Pure. */
 export function queueSummary(queue, items) {
   const total = Number.isFinite(queue?.total) && queue.total > items.length ? queue.total : items.length;
   if (!total) return '';
   const breached = items.filter((i) => i.sla?.risk === 'breached' && i.work !== 'resolved').length;
   const replied = items.filter((i) => i.marker?.replied && i.work !== 'resolved').length;
-  return [t('{count} open', { count: total }), breached ? t('{count} SLA breached', { count: breached }) : '', replied ? t('{count} replied', { count: replied }) : ''].filter(Boolean).join(' · ');
+  return countLine([t('{count} open', { count: total }), breached ? t('{count} SLA breached', { count: breached }) : '', replied ? t('{count} replied', { count: replied }) : '']);
 }
 
 /** What an empty "waiting on you" list says, with what the group queue adds ("3 tickets in your groups are due today"). Pure. */
@@ -56,22 +60,20 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
   const g = useMemo(() => groupQueue(shown, now), [shown, now]);
   const chips = useMemo(() => {
     const list = filterChips(items, { classNames: queue.names || {} });
-    // A filter set from the outage note (one CI) shows as a chip of its own while it is on.
+    // A filter set from the outage line (one CI) shows as a chip of its own while it is on.
     if (filter.startsWith('ci:') && !list.some((c) => c.id === filter)) {
       const ci = items.find((i) => i.ci && `ci:${i.ci.id}` === filter)?.ci;
       if (ci) list.unshift({ id: filter, label: t('On {name}', { name: isolate(ci.name) }), count: items.filter((i) => passes(i, filter)).length });
     }
     return list;
   }, [items, filter, queue.names]);
-  const breached = items.some((i) => i.sla?.risk === 'breached' && i.work !== 'resolved');
-  const atRisk = items.some((i) => i.sla?.risk === 'at-risk' && i.work !== 'resolved');
   const row = (item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} />;
 
   return (
-    <CardFrame id="mywork-queue" title={t('My queue')} summary={queueSummary(queue, items)} attention={breached ? 'danger' : atRisk ? 'warn' : ''}>
+    <CardFrame id="mywork-queue" title={t('My queue')} summary={queueSummary(queue, items)}>
       {chips.length > 0 && <FilterChips chips={chips} value={filter} onChange={setFilter} />}
       {g.now.length > 0 ? (
-        <ShowMore items={g.now} limit={5} render={row} className="ab-list ab-mw-list" />
+        <RowList items={g.now} limit={5} render={row} />
       ) : filter ? (
         <EmptyNote
           action={
@@ -93,12 +95,12 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
       )}
       {g.waiting.length > 0 && (
         <Fold title={t('Waiting on the customer or others')} count={g.waiting.length}>
-          <ShowMore items={g.waiting} limit={5} render={row} className="ab-list ab-mw-list" />
+          <RowList items={g.waiting} limit={5} render={row} />
         </Fold>
       )}
       {g.resolved.length > 0 && (
         <Fold title={t('Resolved, awaiting closure')} count={g.resolved.length}>
-          <ShowMore items={g.resolved} limit={5} render={row} className="ab-list ab-mw-list" />
+          <RowList items={g.resolved} limit={5} render={row} />
         </Fold>
       )}
     </CardFrame>
@@ -110,23 +112,18 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
 export function ApprovalsCard({ page, approvals, now }) {
   const items = approvals.items || [];
   if (!items.length) return null;
-  const overdue = items.some((a) => a.dueAt && a.dueAt < now);
-  const row = (a) => (
-    <div className="ab-mw-row" key={a.sysId}>
-      <RecordLink page={page} item={{ table: 'sysapproval_approver', sysId: a.sysId }} className="ab-mw-link">
-        <span className="ab-mw-line">
-          <span className="ab-record-number">{a.number || t('Approval')}</span>
-          {a.title && <span className="ab-mw-title">{a.title}</span>}
-        </span>
-        <span className="ab-mw-line ab-mw-sub">
-          <span className="ab-mw-meta">{[a.requestedAt ? askedText(a.requestedAt, now) : '', a.dueAt ? (a.dueAt < now ? dueAgoText(a.dueAt, now) : dueInText(a.dueAt - now)) : ''].filter(Boolean).join(' · ')}</span>
-        </span>
-      </RecordLink>
-    </div>
-  );
+  const row = (a) => {
+    const overdue = a.dueAt && a.dueAt < now;
+    const facts = [a.requestedAt ? askedText(a.requestedAt, now) : '', a.dueAt ? (overdue ? dueAgoText(a.dueAt, now) : dueInText(a.dueAt - now)) : ''].filter(Boolean).join(' · ');
+    return (
+      <Row key={a.sysId} page={page} item={{ table: 'sysapproval_approver', sysId: a.sysId }} number={a.number || t('Approval')} title={a.title || ''} dot={overdue ? 'warn' : 'neutral'}>
+        {facts && <span className="ab-mw-meta">{facts}</span>}
+      </Row>
+    );
+  };
   return (
-    <CardFrame id="mywork-approvals" title={t('Approvals waiting on you')} summary={String(approvals.total || items.length)} attention={overdue ? 'warn' : ''}>
-      <ShowMore items={items} limit={3} render={row} className="ab-list ab-mw-list" />
+    <CardFrame id="mywork-approvals" title={t('Approvals waiting on you')} summary={String(approvals.total || items.length)}>
+      <RowList items={items} limit={3} render={row} />
       {approvals.total > items.length && (
         <p className="ab-hint ab-mw-cap">
           {t('Showing {shown} of {total}.', { shown: items.length, total: approvals.total })} <FullList page={page} table="sysapproval_approver" query={approvals.listQuery} />
@@ -141,32 +138,26 @@ export function ApprovalsCard({ page, approvals, now }) {
 function FollowUpRow({ page, entry, onOpen }) {
   const [note, setNote] = useState('');
   const action = followUpAction(entry);
+  const replied = entry.kind === 'replied';
   const copy = async () => {
     const ok = await copyText(followUpText(entry));
     setNote(ok ? t('Copied. Paste it into the customer comment of the ticket.') : t('Could not copy. Your browser did not allow it.'));
   };
-  return (
-    <div className="ab-mw-row ab-mw-follow">
-      <RecordLink page={page} item={entry.item} onOpen={() => onOpen(entry.item)} className="ab-mw-link">
-        <span className="ab-mw-line">
-          <span className="ab-record-number">{entry.item.number}</span>
-          <span className="ab-mw-title">{entry.item.title || t('No title')}</span>
-        </span>
-        <span className="ab-mw-line ab-mw-sub">
-          <span className={`ab-mw-chip ab-mw-chip-${entry.kind === 'replied' ? 'reply' : 'quiet'}`}>{followUpReason(entry)}</span>
-        </span>
-      </RecordLink>
-      {action && (
-        <div className="ab-mw-follow-act">
-          <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={copy} title={t('Copies a short text with the ticket number and title. Nothing is sent.')}>
-            {action}
-          </button>
-          <span className="ab-hint" role="status">
-            {note}
-          </span>
-        </div>
-      )}
+  // The copy is a quiet action of the row, under its text and outside the link (a button inside a link would open the ticket too).
+  const after = action ? (
+    <div className="ab-mw-row-act">
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={copy} title={t('Copies a short text with the ticket number and title. Nothing is sent.')}>
+        {action}
+      </button>
+      <span className="ab-hint" role="status">
+        {note}
+      </span>
     </div>
+  ) : null;
+  return (
+    <Row page={page} item={entry.item} number={entry.item.number} title={entry.item.title || t('No title')} dot={replied ? 'ok' : 'neutral'} onOpen={() => onOpen(entry.item)} after={after} className="ab-mw-follow">
+      <span className={`ab-chip ${replied ? 'ab-chip-ok' : 'ab-chip-neutral'} ab-mw-state`}>{followUpReason(entry)}</span>
+    </Row>
   );
 }
 
@@ -176,7 +167,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
   const known = (data.queue.items || []).some((i) => i.marker?.known);
   const replied = list.filter((f) => f.kind === 'replied').length;
   const due = list.length - replied;
-  const summary = [due ? t('{count} due', { count: due }) : '', replied ? t('{count} replied', { count: replied }) : ''].filter(Boolean).join(' · ');
+  const summary = countLine([due ? t('{count} due', { count: due }) : '', replied ? t('{count} replied', { count: replied }) : '']);
   return (
     <CardFrame
       id="mywork-followups"
@@ -187,7 +178,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
           <label className="ab-mw-sr" htmlFor={selectId}>
             {t('Follow up after')}
           </label>
-          <select id={selectId} className="ab-select ab-select-sm" value={days} onChange={(e) => setDays(Number(e.target.value))} title={t('How long a customer may wait for a word')}>
+          <select id={selectId} className="ab-select ab-select-sm ab-mw-days" value={days} onChange={(e) => setDays(Number(e.target.value))} title={t('How long a customer may wait for a word')}>
             {FOLLOW_UP_DAY_CHOICES.map((d) => (
               <option key={d} value={d}>
                 {tn(d, 'after {n} day', 'after {n} days')}
@@ -198,7 +189,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
       }
     >
       {list.length > 0 ? (
-        <ShowMore items={list} limit={3} render={(entry) => <FollowUpRow key={`${entry.kind}:${entry.item.sysId}`} page={page} entry={entry} onOpen={onOpen} />} className="ab-list ab-mw-list" />
+        <RowList items={list} limit={3} render={(entry) => <FollowUpRow key={`${entry.kind}:${entry.item.sysId}`} page={page} entry={entry} onOpen={onOpen} />} />
       ) : (
         <EmptyNote>{known || !data.queue.items.length ? tn(days, 'No customer has waited {n} day for a word from you.', 'No customer has waited {n} days for a word from you.') : t('Follow-ups need the comments on your tickets, which are not visible to you.')}</EmptyNote>
       )}
@@ -211,11 +202,11 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
 export function GroupsCard({ page, groups, now, onOpen }) {
   const items = groups.items || [];
   const oldest = items[0]?.openedAt;
-  const summary = items.length ? [t('{count} waiting', { count: groups.total > items.length ? groups.total : items.length }), oldest ? t('oldest {span}', { span: spanText(now - oldest) }) : ''].filter(Boolean).join(' · ') : '';
+  const summary = items.length ? countLine([t('{count} waiting', { count: groups.total > items.length ? groups.total : items.length }), oldest ? t('oldest {span}', { span: spanText(now - oldest) }) : '']) : '';
   return (
     <CardFrame id="mywork-groups" title={t('Unassigned in my groups')} summary={summary}>
       {items.length > 0 ? (
-        <ShowMore items={items} limit={3} render={(item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} where="group" />} className="ab-list ab-mw-list" />
+        <RowList items={items} limit={3} render={(item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} where="group" />} />
       ) : (
         <EmptyNote>{groups.groups.length ? t('Nothing is waiting unassigned in your groups.') : t('Agent Buddy can see no group you belong to.')}</EmptyNote>
       )}

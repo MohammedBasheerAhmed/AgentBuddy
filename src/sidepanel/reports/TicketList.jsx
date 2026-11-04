@@ -3,8 +3,9 @@ import { isPlainClick, NEW_TAB_HINT } from '../linkClick.js';
 import { t } from '../../i18n/index.js';
 
 /**
- * A short list of tickets, easy to scan at 400 px: the number (a real link to the record) and the title on the first line, a few
- * plain facts on the second ("Breached 2 h ago · Ann Lee · 1 - Critical"). The first `limit` are shown, then "Show all (8)".
+ * A short list of tickets, easy to scan at 400 px: rows parted by dividers, the number (a real link to the record) and the title on
+ * up to two lines, a few plain facts under them ("Breached 2 h ago · Ann Lee · 1 - Critical"). The first `limit` are shown, then
+ * "Show all (8)".
  * Replaces the label/value tables the SLA radar and the hand-over drew, which a lead had to read cell by cell.
  *
  *   caption   the list's name (heading for screen readers and the eye)
@@ -16,7 +17,7 @@ import { t } from '../../i18n/index.js';
 export default function TicketList({ caption, items, meta, env, limit = 3, empty = t('Nothing to show.') }) {
   const [all, setAll] = useState(false);
   const list = (Array.isArray(items) ? items : []).filter((i) => i && i.number);
-  if (!list.length) return <p className="ab-note ab-note-ok">{empty}</p>;
+  if (!list.length) return <p className="ab-tlist-empty">{empty}</p>;
   const shown = all ? list : list.slice(0, limit);
   return (
     <div className="ab-tlist-wrap">
@@ -52,6 +53,7 @@ export default function TicketList({ caption, items, meta, env, limit = 3, empty
                 ) : (
                   <span className="ab-tlist-number">{item.number}</span>
                 )}
+                {item.title ? ' ' : null}
                 {item.title ? <span className="ab-tlist-title">{item.title}</span> : null}
               </span>
               {facts.length > 0 && <span className="ab-tlist-meta">{facts.join(' · ')}</span>}

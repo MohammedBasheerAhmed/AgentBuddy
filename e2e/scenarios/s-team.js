@@ -124,7 +124,9 @@ module.exports = {
     t.check('Request fulfilment: requested items and catalog tasks by state, and the oldest open items', /Oldest open items/.test(await widgetText(p, 'Request fulfilment')) && /RITM0010050/.test(await widgetText(p, 'Request fulfilment')));
     await widgetReady(ctx, p, 'SLA risk radar');
     const slaText = await widgetText(p, 'SLA risk radar');
-    t.check('SLA risk radar: breached, at risk and due soon counts, from the active SLAs of the agent\'s tickets (dot-walked task query)', /Breached/.test(slaText) && /At risk/.test(slaText) && /active SLAs/.test(slaText), slaText.slice(0, 200));
+    // One number once: next to Overview the radar draws only its own count (At risk); Breached and Due soon are Overview's tiles.
+    const radarTiles = await p.$$eval(`${widget('SLA risk radar')} .ab-tile-label`, (els) => els.map((el) => el.innerText.trim()));
+    t.check('SLA risk radar: the at-risk count from the active SLAs of the agent\'s tickets (dot-walked task query); breached and due soon are said once, by Overview', /At risk/.test(slaText) && /active SLAs/.test(slaText) && JSON.stringify(radarTiles) === '["At risk"]' && Number.isFinite(await tileValue(p, 'Due soon')) && breached >= 2, `${JSON.stringify(radarTiles)} | ${slaText.slice(0, 160)}`);
     t.check('SLA risk radar: a short list that says when, in words ("Breached 2 h ago", "Due in 1 h 20 min"), not a timestamp', /(Breached|Due in|Overdue by) [\d]|Breached ·|No SLA is at risk/.test(slaText) && !/\d{4}-\d\d-\d\d \d\d:\d\d:\d\d/.test(slaText), slaText.slice(0, 300));
 
     // The reads behind all that: GET-only Table / Aggregate, with the dot-walked and grouped queries
@@ -197,7 +199,8 @@ module.exports = {
     await clickButton(p, /^Cancel$/);
     await p.waitForFunction(() => !document.querySelector('.ab-builder'), { timeout: 5000 }).catch(() => {});
     await clickButton(p, /^Done$/);
-    t.check('Workload: the ageing buckets and the open work by state are there', /Open/.test(await widgetText(p, 'Workload and ageing')));
+    const workloadTiles = await p.$$eval(`${widget('Workload and ageing')} .ab-tile-label`, (els) => els.map((el) => el.innerText.trim()));
+    t.check('Workload: the ageing buckets are there, and next to Overview none of Overview\'s counts again (Open, Unassigned, No update)', /How long tickets have been open/.test(await widgetText(p, 'Workload and ageing')) && !workloadTiles.some((l) => tileLabels.includes(l) || /^(Unassigned|No update in)/.test(l)), JSON.stringify(workloadTiles));
     t.check('Quality: opened against resolved, and the top categories, are there', /Opened|resolved/i.test(await widgetText(p, 'Quality and trend')));
 
     // "My groups": the memberships are read (sys_user_grmember), and the people / group breakdown appears

@@ -36,7 +36,7 @@ export default function KnownErrorsCard({ page, eff, record, active, setSummary,
             : ''
       : ''
   );
-  useReport(setAttention, withWorkaround ? 'warn' : '');
+  useReport(setAttention, withWorkaround ? 'warn' : data && !items.length && (known || status === 'skipped') ? 'clear' : '');
 
   if (!data) return <ReadState state={state} what={t('problems')} onRetry={state.reload} />;
   return (

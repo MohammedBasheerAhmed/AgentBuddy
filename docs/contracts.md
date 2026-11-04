@@ -208,7 +208,7 @@ may assume `g_form` or `g_user` exists.
 ## Additions from the second round (2026-10-30)
 
 **Firewall and pipeline**
-- `fw.buildRequest({ ..., mask: string[] })`: extra literals the person chose in the preview ("Mask this too"); everywhere one is written
+- `fw.buildRequest({ ..., mask: string[] })`: extra literals the person chose in the check before sending ("Hide something else"); everywhere one is written
   as a word of its own in the ticket data (any case; never inside a longer word, never in the fixed prompt) it gets a placeholder
   (`[PERSON_n]` when it looks like a name, otherwise `[MASKED_n]`). It can only add masking. `stats.counts.MANUAL` counts those places (a
   number only, for the audit). `maskMore` (src/lib/pipeline.js) answers `PART_OF_WORD` when the text is only inside longer words.

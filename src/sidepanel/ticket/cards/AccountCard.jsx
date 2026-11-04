@@ -46,7 +46,7 @@ export default function AccountCard({ page, eff, record, active, setSummary }) {
       value: priority ? (
         <>
           {text(f.account)}{' '}
-          <span className="ab-glance-vip" title={PRIORITY_ACCOUNT_MARK.title}>
+          <span className="ab-chip ab-chip-warn ab-glance-vip" title={PRIORITY_ACCOUNT_MARK.title}>
             {PRIORITY_ACCOUNT_MARK.text}
           </span>
         </>

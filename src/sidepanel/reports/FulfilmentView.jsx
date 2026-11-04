@@ -40,12 +40,12 @@ export function FulfilmentBody({ d, env }) {
 }
 
 // Requested items and catalog tasks: where they stand, what waits for approval, what has been open longest.
-export default function FulfilmentView({ widget, env }) {
+export default function FulfilmentView({ widget, env, tools }) {
   const state = useSection('fulfilment', widget, env);
   const d = state.result?.data;
   const ok = d && d.available !== false;
   return (
-    <SectionShell title={t('Request fulfilment')} help={t('Requested items and catalog tasks by state, approvals, and the oldest open items.')} state={state} env={env} widgetId={widget?.id}>
+    <SectionShell title={t('Request fulfilment')} help={t('Requested items and catalog tasks by state, approvals, and the oldest open items.')} state={state} env={env} widgetId={widget?.id} tools={tools}>
       {ok && <FulfilmentBody d={d} env={env} />}
     </SectionShell>
   );

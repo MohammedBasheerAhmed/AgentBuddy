@@ -6,7 +6,8 @@ import { DUPLICATE_THRESHOLD, findDuplicateClusters } from '../../knowledge/simi
 import { KB_MAX_ARTICLES, KB_MAX_OFFSET } from '../../context/knowledge.js';
 import { toCsv } from '../../lib/export.js';
 import { downloadText } from '../reports/download.js';
-import { EmptyNote, ShowMore } from '../ui/primitives.jsx';
+import { EmptyNote } from '../ui/primitives.jsx';
+import { MoreRows } from '../write/Section.jsx';
 import Notes from './Notes.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { plainNote } from '../plainAccess.js';
@@ -229,7 +230,7 @@ function DuplicatesTool({ page, active = true, onCompared = () => {} }) {
       <Notes access={scopes.access} />
       {scopes.items.length > 0 && (
         <>
-          <div className="ab-field">
+          <div className="ab-field ab-wk-field">
             <label className="ab-label" htmlFor="ab-kb-base">{t('Knowledge base')}</label>
             <select id="ab-kb-base" className="ab-select" value={kb} disabled={reading} onChange={(e) => chooseKb(e.target.value)}>
               <option value="">{t('Choose one…')}</option>
@@ -239,7 +240,7 @@ function DuplicatesTool({ page, active = true, onCompared = () => {} }) {
             </select>
           </div>
           {categories.length > 0 && (
-            <div className="ab-field">
+            <div className="ab-field ab-wk-field">
               <label className="ab-label" htmlFor="ab-kb-category">{t('Category (optional)')}</label>
               <select id="ab-kb-category" className="ab-select" value={category} onChange={(e) => chooseCategory(e.target.value)}>
                 <option value="">{t('All categories')}</option>
@@ -277,29 +278,31 @@ function DuplicatesTool({ page, active = true, onCompared = () => {} }) {
             </div>
           )}
           {okNote && !canPage && found.truncated && <p className="ab-hint">{plainNote(okNote)}</p>}
-          <ShowMore
+          <MoreRows
             items={clusters}
-            className="ab-list"
+            keep={(c) => picked?.cluster.id === c.id}
+            label={t('Duplicate groups')}
             render={(c) => (
-              <div key={c.id} className={`ab-kb-cluster${picked?.cluster.id === c.id ? ' ab-kb-picked' : ''}`}>
-                <div className="ab-row">
-                  <strong>{c.exactTitle ? tn(c.articles.length, '{n} article with the same title', '{n} articles with the same title') : tn(c.articles.length, '{n} article that reads alike', '{n} articles that read alike')}</strong>
-                  <span className="ab-spacer" />
-                  <button type="button" className="ab-btn ab-btn-sm" disabled={locked} onClick={() => pick(c)}>{t('Compare')}</button>
+              <li key={c.id} className={`ab-row ab-kb-cluster${picked?.cluster.id === c.id ? ' ab-kb-picked' : ''}`}>
+                <div className="ab-row-main">
+                  <div className="ab-kb-cluster-head">
+                    <span className="ab-row-title">{c.exactTitle ? tn(c.articles.length, '{n} article with the same title', '{n} articles with the same title') : tn(c.articles.length, '{n} article that reads alike', '{n} articles that read alike')}</span>
+                    <button type="button" className="ab-btn ab-btn-sm" disabled={locked} onClick={() => pick(c)}>{t('Compare')}</button>
+                  </div>
+                  {c.sharedWords.length > 0 && <div className="ab-chips">{c.sharedWords.map((w) => <span key={w} className="ab-chip ab-chip-neutral">{w}</span>)}</div>}
+                  <ul className="ab-kb-articles">
+                    {c.articles.map((a) => (
+                      <li key={a.sysId}>
+                        <RecordLink page={page} item={{ table: 'kb_knowledge', sysId: a.sysId }} className="ab-kb-open">
+                          <span className="ab-kbx-number">{a.number}</span> {a.title}
+                        </RecordLink>
+                        <span className="ab-row-sub">{tn(Number(a.views) || 0, '{n} view', '{n} views')}{a.updated ? ` · ${t('changed {date}', { date: isolate(a.updated.slice(0, 10)) })}` : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="ab-hint">{t('Most read: {number}', { number: isolate(c.keep.number) })}</p>
                 </div>
-                {c.sharedWords.length > 0 && <div className="ab-tags">{c.sharedWords.map((w) => <span key={w} className="ab-tag">{w}</span>)}</div>}
-                <ul className="ab-kb-articles">
-                  {c.articles.map((a) => (
-                    <li key={a.sysId}>
-                      <RecordLink page={page} item={{ table: 'kb_knowledge', sysId: a.sysId }} className="ab-btn ab-btn-quiet ab-btn-sm ab-kb-open">
-                        <span className="ab-record-number">{a.number}</span> {a.title}
-                      </RecordLink>
-                      <span className="ab-hint">{tn(Number(a.views) || 0, '{n} view', '{n} views')}{a.updated ? ` · ${t('changed {date}', { date: isolate(a.updated.slice(0, 10)) })}` : ''}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="ab-hint">{t('Most read: {number}', { number: isolate(c.keep.number) })}</p>
-              </div>
+              </li>
             )}
           />
           {clusters.length > 0 && (
@@ -313,14 +316,14 @@ function DuplicatesTool({ page, active = true, onCompared = () => {} }) {
 
       {picked && (
         <section className="ab-kbx-compare" aria-label={t('Compare the text')}>
-          <h3 className="ab-h" ref={mergeHeading} tabIndex={-1}>{t('Compare the text')}</h3>
+          <h3 className="ab-wk-subtitle" ref={mergeHeading} tabIndex={-1}>{t('Compare the text')}</h3>
           <p className="ab-sub">{t('Choose two to {MERGE_MAX_ARTICLES} articles.', { MERGE_MAX_ARTICLES })}</p>
-          <ul className="ab-kb-articles">
+          <ul className="ab-kb-articles ab-kb-choose">
             {picked.cluster.articles.map((a) => (
               <li key={a.sysId}>
                 <label className="ab-check">
                   <input type="checkbox" checked={picked.selected.has(a.sysId)} onChange={() => toggle(a.sysId)} disabled={locked || (!picked.selected.has(a.sysId) && sel >= MERGE_MAX_ARTICLES)} />
-                  <span><span className="ab-record-number">{a.number}</span> {a.title}</span>
+                  <span><span className="ab-kbx-number">{a.number}</span> {a.title}</span>
                 </label>
               </li>
             ))}

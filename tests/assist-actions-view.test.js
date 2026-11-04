@@ -2,7 +2,7 @@ import { mount, click, makeChrome, settle } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ActionGroups, QuickBar } from '../src/sidepanel/ticket/assist/actions/index.js';
+import { ActionGroups, MoreActions, QuickBar } from '../src/sidepanel/ticket/assist/actions/index.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 
 // The AI Assist actions and the quick bar of the Ticket screen as a person sees them: one primary button, three suggestions, the rest
@@ -23,26 +23,36 @@ const html = (props) => renderToStaticMarkup(<ActionGroups page={page} eff={eff(
 
 const shownButtons = (markup) => {
   // (what is folded under "More actions" is not on screen; the small "Change format" links under an action are not action buttons)
-  const before = markup.split('hidden=""')[0].replace(/<div class="ab-fmt-open"><button[^>]*>[^<]*<\/button>/g, '');
+  const before = markup.split('hidden=""')[0].replace(/<div class="ab-fmt-open"><p class="ab-fmt-line"><button[^>]*>.*?<\/button>/g, '');
   return (before.match(/<button/g) || []).length;
 };
 
 test('one primary button, three suggestions and "More actions": four buttons before anything is unfolded', () => {
   const markup = html();
   assert.equal((markup.match(/ab-act-primary/g) || []).length, 1);
-  assert.match(markup, /class="ab-act ab-act-primary ab-btn-ai" data-feature="reply-draft"/);
+  // The redesign: the suggestions are rows (an icon tile, the name, one line); the first carries the one filled mark, "Start".
+  assert.match(markup, /class="ab-row ab-act ab-act-row ab-act-primary" data-feature="reply-draft"/);
+  assert.equal((markup.match(/class="ab-act-start"[^>]*>Start</g) || []).length, 1);
+  assert.equal((markup.match(/class="ab-act-icon"/g) || []).length, 3);
   assert.equal(shownButtons(markup), 4);
   assert.match(markup, /More actions \(\d+\)/);
   assert.match(markup, /Suggested while you work on it/);
+  assert.ok(!/ab-btn-ai/.test(markup), 'no AI colour: the AI mark is the small grey spark');
 });
 
-test('every action carries the AI mark and says where text goes on hover; one line of description each', () => {
+test('every action carries the AI mark and says where text goes on hover; a suggested row has one line of description', () => {
   const markup = html();
-  const actions = (markup.match(/<button type="button" class="ab-act[^"]*" data-feature/g) || []).length;
+  const actions = (markup.match(/<button type="button" class="[^"]*ab-act[^"]*" data-feature/g) || []).length;
   assert.ok(actions >= 8);
   assert.equal((markup.match(/class="ab-ai-badge"/g) || []).length, actions);
   assert.match(markup, /title="Sends masked text to [^"]+\. You see it first\."/);
-  assert.equal((markup.match(/class="ab-act-desc"/g) || []).length, actions);
+  const rows = (markup.match(/class="ab-row ab-act ab-act-row[^"]*" data-feature/g) || []).length;
+  assert.equal(rows, 3);
+  assert.equal((markup.match(/class="ab-row-sub ab-act-desc"/g) || []).length, rows);
+  // Under "More actions" the actions are small buttons; the description is on hover, with where the text goes.
+  const pills = [...markup.matchAll(/<button type="button" class="ab-act ab-act-pill" data-feature="[^"]+" title="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(pills.length, actions - rows);
+  assert.ok(pills.every((title) => /Sends masked text to [^"]+\. You see it first\.$/.test(title)), pills.join(' | '));
 });
 
 test('More actions groups the rest under Understand, Reply, Work it and Resolve', () => {
@@ -62,7 +72,7 @@ test('AI not usable now, or an answer on its way: every action is off and none i
     const markup = html(props);
     assert.equal((markup.match(/ab-act-primary/g) || []).length, 0);
     const actions = (markup.match(/data-feature=/g) || []).length;
-    assert.equal((markup.match(/<button type="button" class="ab-act[^"]*" data-feature="[^"]+" disabled=""/g) || []).length, actions);
+    assert.equal((markup.match(/<button type="button" class="[^"]*ab-act[^"]*" data-feature="[^"]+" disabled=""/g) || []).length, actions);
   }
 });
 
@@ -95,9 +105,27 @@ test('a click runs the action through onRun; More actions opens and closes the g
   assert.equal(more.getAttribute('aria-expanded'), 'false');
   await click(more);
   assert.ok(ui.hasButton(/^Catch up on the discussion/));
-  assert.equal(ui.button(/^Fewer actions/).getAttribute('aria-expanded'), 'true');
+  assert.equal(more.getAttribute('aria-expanded'), 'true', 'the same button, its chevron turned up');
   await click(ui.button(/^Catch up on the discussion/));
   assert.equal(ran[1][0], 'thread-summary');
+  await click(more);
+  assert.ok(!ui.hasButton(/^Catch up on the discussion/), 'folded again');
+  await ui.unmount();
+});
+
+test('a reason that stops one action under "More actions" is said in words next to it, not only on hover', async () => {
+  const fake = makeChrome();
+  globalThis.chrome = fake.chrome;
+  const strict = { id: 'strict-thing', title: 'Summarise strictly', description: 'A summary.' };
+  const ok = { id: 'other-thing', title: 'Something else', description: 'Another.' };
+  const plan = { total: 3, more: 2, block: '', suggested: [], groups: [{ id: 'understand', label: 'Understand', items: [{ feature: strict, reason: 'Needs Strict privacy mode. Change it in Settings.', caution: '' }, { feature: ok, reason: '', caution: '' }] }] };
+  const ui = await mount(<MoreActions plan={plan} eff={eff()} aiReady onRun={() => {}} />);
+  await click(ui.button(/^More actions \(2\)/));
+  const off = ui.button(/^Summarise strictly/);
+  assert.equal(off.disabled, true);
+  assert.equal(ui.$(`#${off.getAttribute('aria-describedby')}`)?.textContent, 'Summarise strictly: Needs Strict privacy mode. Change it in Settings.');
+  assert.equal(ui.button(/^Something else/).disabled, false);
+  assert.equal(ui.button(/^Something else/).getAttribute('aria-describedby'), null);
   await ui.unmount();
 });
 

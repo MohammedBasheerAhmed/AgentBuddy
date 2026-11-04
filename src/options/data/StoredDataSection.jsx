@@ -5,6 +5,7 @@ import { USAGE_KEY } from '../../lib/aiUsage.js';
 import { loadSettings, keyVault } from '../../lib/storage.js';
 import { MSG } from '../../lib/messages.js';
 import { clearAllStored, summarizeStored } from '../../lib/storedData.js';
+import { SectionHead } from '../fields.jsx';
 import { t, t as tr } from '../../i18n/index.js';
 
 // "saved now", "nothing saved", and for what lives in memory only "..., memory only"
@@ -79,36 +80,37 @@ export function StoredDataSection({ eff, onCleared }) {
   }
 
   return (
-    <section className="ab-section" aria-labelledby="h-stored">
-      <h2 className="ab-h" id="h-stored">{t('Stored data')}</h2>
-      <p className="ab-sub">
+    <section className="ab-section ab-set-section" aria-labelledby="h-stored">
+      <SectionHead id="h-stored" title={t('Stored data')}>
         {t("This is everything Agent Buddy keeps in this browser. It never keeps ticket text, names or the AI's answers.")}
-      </p>
+      </SectionHead>
       {items === null ? <p className="ab-sub">{t('Loading…')}</p> : (
-        <ul style={{ paddingInlineStart: 18 }}>
+        <ul className="ab-set-list">
           {items.map((item) => (
-            <li key={item.id}>
-              <strong>{tr(item.title)}</strong>{' '}
-              <span className="ab-sub">({storedState(item)})</span>
-              <div className="ab-hint">{tr(item.detail)}</div>
+            <li key={item.id} className="ab-set-item">
+              <span className="ab-set-item-main">
+                <span className="ab-set-item-title">{tr(item.title)}</span>
+                <span className="ab-hint ab-set-item-sub">{tr(item.detail)}</span>
+              </span>
+              <span className={`ab-chip ${item.present ? 'ab-chip-ok' : 'ab-chip-neutral'}`}>{storedState(item)}</span>
             </li>
           ))}
         </ul>
       )}
       {!confirming ? (
-        <div className="ab-row">
-          <button type="button" className="ab-btn" onClick={() => { setResult(null); setConfirming(true); }}>{t('Clear everything stored by Agent Buddy')}</button>
+        <div className="ab-set-actions">
+          <button type="button" className="ab-btn ab-set-danger" onClick={() => { setResult(null); setConfirming(true); }}>{t('Clear everything stored by Agent Buddy')}</button>
         </div>
       ) : (
-        <div className="ab-note ab-note-warn" role="alertdialog" aria-labelledby="clear-title" aria-describedby="clear-text">
-          <strong id="clear-title">{t('Remove everything?')}</strong>{' '}
-          <span id="clear-text">
+        <div className="ab-set-confirm" role="alertdialog" aria-labelledby="clear-title" aria-describedby="clear-text">
+          <strong id="clear-title" className="ab-set-confirm-title">{t('Remove everything?')}</strong>
+          <p id="clear-text" className="ab-set-confirm-text">
             {t('Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards and checklist ticks are deleted, and the ServiceNow sites you turned on are turned off. This cannot be undone.')}
             {budgeted ? ` ${t('The AI usage log stays while your organisation sets a daily limit.')}` : ''}
-          </span>
-          <div className="ab-row" style={{ marginTop: 8 }}>
-            <button type="button" ref={confirmButton} className="ab-btn ab-btn-danger ab-btn-sm" onClick={clearEverything} disabled={busy}>{busy ? t('Removing…') : t('Yes, remove everything')}</button>
-            <button type="button" className="ab-btn ab-btn-sm" onClick={() => setConfirming(false)} disabled={busy}>{t('Cancel')}</button>
+          </p>
+          <div className="ab-set-actions">
+            <button type="button" ref={confirmButton} className="ab-btn ab-btn-danger" onClick={clearEverything} disabled={busy}>{busy ? t('Removing…') : t('Yes, remove everything')}</button>
+            <button type="button" className="ab-btn" onClick={() => setConfirming(false)} disabled={busy}>{t('Cancel')}</button>
           </div>
         </div>
       )}

@@ -1,26 +1,45 @@
 import { useEffect, useRef, useState } from 'react';
-import { buildGlance } from '../../../insights/glance.js';
+import { buildGlance, waitingText } from '../../../insights/glance.js';
 import { PRIORITY_ACCOUNT_MARK, isPriorityAccount } from '../../../insights/priorityAccount.js';
+import { KNOWN_TABLES } from '../../../mywork/tables.js';
+import { needsNow } from '../needsNow.js';
+import NeedsNow from '../NeedsNow.jsx';
 import { useTicketFacts } from './data.js';
-import { showCard } from './bits.jsx';
-import { t } from '../../../i18n/index.js';
+import { t, t as tr } from '../../../i18n/index.js';
 
-// N1, the ticket at a glance, over both halves of the Ticket screen. Three short lines at most:
-//   INC0010001  VPN keeps disconnecting                       [VIP] [Priority account: a case's account the policy names]
-//   In Progress · 2 - High · SLA 2h 10m
-//   Beth Anglin · Customer waiting 4 d · Updated 3 h ago
-// then the outage banner when other open tickets on the same item pile up (N29), then the quick-actions bar (the shell's node).
+// N1, the ticket at the top of the Ticket screen, with no box around it:
+//   INC0010001 · Incident
+//   VPN keeps disconnecting for Abel Tuter                      (the title, up to two lines)
+//   [In Progress] [2 - High] [SLA breached] [VIP]               (chips; a breached SLA is red)
+//   Beth Anglin · Network Support · Updated 9 d ago
+// then "Needs you now" (src/sidepanel/ticket/needsNow.js: the SLA, a customer waiting, a possible outage and the Insights cards that
+// need a look), when there is anything to say. `compact` (the AI Assist half is on show): the number and the title on one line and the
+// chips, nothing else.
 //
 // The header comes from the shell (number, title, state, priority); the rest from the `glance` read, which every Insights card shares.
 // It reads again when the shell's header is read again (after a Save the page reloads) and when the panel comes back into view after
 // a while, but never more often than every 20 seconds.
 //
-// props: { page, eff, record, header, headPhase, quickBar, onShowCard?, active? } (active: the Ticket screen is on show)
+// props: { page, eff, record, header, headPhase, onShowCard?, active?, compact?, needs? }
+//   active: the Ticket screen is on show; needs: { cards: [{ id, title }], reports } (the Insights cards of this record and what they
+//   reported) to draw "Needs you now", or null for none
 
 const AGAIN_AFTER_MS = 20000;
 const BACK_AFTER_MS = 120000;
 
-export default function Glance({ page, eff, record, header, headPhase, quickBar = null, onShowCard, active = true }) {
+const text = (v) => (typeof v === 'string' ? v.trim() : '');
+
+/** The one line under the chips: who has it (and their group), when it last changed. A customer waiting is said in "Needs you now". */
+export function metaLine(g, fields = {}) {
+  const waiting = waitingText(g.waiting);
+  const bits = g.line3.filter((bit) => bit !== waiting);
+  const who = text(fields.assigned_to);
+  const group = text(fields.assignment_group);
+  if (who && group && bits[0] === who) bits.splice(1, 0, group);
+  return bits;
+}
+
+export default function Glance({ page, eff, record, header, headPhase, onShowCard, active = true, compact = false, needs = null }) {
   const facts = useTicketFacts({ page, record, eff, active: true, maxAgeMs: AGAIN_AFTER_MS });
   const [now, setNow] = useState(() => Date.now());
   const at = useRef(0);
@@ -61,51 +80,59 @@ export default function Glance({ page, eff, record, header, headPhase, quickBar 
   }, []);
 
   const g = buildGlance({ record, header, headPhase, answer: facts.data, now });
+  const fields = facts.data?.pack?.fields || {};
   // N28: a case whose account the organisation names as a priority account (the account comes with the same read; nothing more is read).
-  const priorityAccount = isPriorityAccount(facts.data?.pack?.fields?.account, eff?.policy?.priorityAccounts);
+  const priorityAccount = isPriorityAccount(fields.account, eff?.policy?.priorityAccounts);
+  const kind = KNOWN_TABLES[record.table]?.one;
+  const titleClass = `ab-glance-title${g.titleKind === 'text' ? '' : ' ab-muted'}`;
+  const chips = [
+    ...g.line2.map((bit, i) => ({ key: `${bit.text}:${i}`, text: bit.text, tone: bit.tone || 'neutral' })),
+    g.vip && { key: 'vip', text: t('VIP'), tone: 'warn', title: t('The caller is marked VIP in ServiceNow.'), vip: true },
+    priorityAccount && { key: 'account', text: PRIORITY_ACCOUNT_MARK.text, tone: 'warn', title: PRIORITY_ACCOUNT_MARK.title, vip: true },
+  ].filter(Boolean);
+  const meta = compact ? [] : metaLine(g, fields);
+  const items = !compact && needs ? needsNow({ glance: g, cards: needs.cards || [], reports: needs.reports || {} }) : [];
 
   return (
-    <section className="ab-card ab-glance" aria-label={t('Ticket at a glance')}>
-      <div className="ab-glance-line ab-glance-head">
-        <span className="ab-record-number">{g.number}</span>
-        <span className={`ab-glance-title${g.titleKind === 'text' ? '' : ' ab-muted'}`} title={g.titleKind === 'text' ? g.title : undefined}>
-          {g.title}
-        </span>
-        {g.vip && (
-          <span className="ab-glance-vip" title={t('The caller is marked VIP in ServiceNow.')}>
-            {t('VIP')}
-          </span>
+    <>
+      <section className={`ab-glance${compact ? ' is-compact' : ''}`} aria-label={t('Ticket at a glance')}>
+        <div className="ab-glance-head">
+          {compact ? (
+            <h2 className={`${titleClass} ab-glance-oneline`} title={g.titleKind === 'text' ? `${g.number} · ${g.title}` : undefined}>
+              <span className="ab-record-number">{g.number}</span> <span className="ab-glance-dot" aria-hidden="true">·</span> {g.title}
+            </h2>
+          ) : (
+            <>
+              <p className="ab-glance-id">
+                <span className="ab-record-number">{g.number}</span>
+                {kind && <span className="ab-glance-kind"> · {tr(kind)}</span>}
+              </p>
+              <h2 className={titleClass} title={g.titleKind === 'text' ? g.title : undefined}>
+                {g.title}
+              </h2>
+            </>
+          )}
+        </div>
+        {chips.length > 0 && (
+          <p className="ab-glance-line ab-chips ab-glance-chips">
+            {chips.map((c) => (
+              <span key={c.key} className={`ab-chip ab-chip-${c.tone}${c.vip ? ' ab-glance-vip' : ''}`} title={c.title}>
+                {c.text}
+              </span>
+            ))}
+          </p>
         )}
-        {priorityAccount && (
-          <span className="ab-glance-vip" title={PRIORITY_ACCOUNT_MARK.title}>
-            {PRIORITY_ACCOUNT_MARK.text}
-          </span>
+        {meta.length > 0 && (
+          <p className="ab-glance-line ab-glance-soft">
+            {meta.map((bit, i) => (
+              <span key={`${bit}:${i}`} className="ab-glance-bit">
+                {bit}
+              </span>
+            ))}
+          </p>
         )}
-      </div>
-      {g.line2.length > 0 && (
-        <p className="ab-glance-line ab-glance-chips">
-          {g.line2.map((bit, i) => (
-            <span key={`${bit.text}:${i}`} className={`ab-glance-bit${bit.tone ? ` ab-glance-${bit.tone}` : ''}`}>
-              {bit.text}
-            </span>
-          ))}
-        </p>
-      )}
-      {g.line3.length > 0 && (
-        <p className="ab-glance-line ab-glance-soft">
-          {g.line3.map((bit, i) => (
-            <span key={`${bit}:${i}`} className="ab-glance-bit">
-              {bit}
-            </span>
-          ))}
-        </p>
-      )}
-      {g.outage && (
-        <button type="button" className="ab-glance-outage" onClick={() => showCard('outage', onShowCard)} title={t('Show the tickets')}>
-          <span aria-hidden="true">!</span> {g.outage.line}
-        </button>
-      )}
-      {quickBar}
-    </section>
+      </section>
+      {items.length > 0 && <NeedsNow items={items} onShowCard={onShowCard} />}
+    </>
   );
 }

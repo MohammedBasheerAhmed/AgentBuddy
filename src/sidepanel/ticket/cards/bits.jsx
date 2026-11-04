@@ -5,6 +5,7 @@ import ErrorNote from '../../ErrorNote.jsx';
 import Notes from '../../knowledge/Notes.jsx';
 import { readFailure } from '../../plainAccess.js';
 import { EmptyNote } from '../../ui/primitives.jsx';
+import { Icon } from '../../ui/icons.jsx';
 import { copyText } from '../../reports/download.js';
 import { t } from '../../../i18n/index.js';
 
@@ -59,9 +60,9 @@ export function Group({ title, count, defaultOpen = false, children }) {
   return (
     <div className="ab-ins-group">
       <button type="button" className="ab-ins-group-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-        <span className="ab-cardx-chevron" aria-hidden="true" />
         <span className="ab-ins-group-title">{title}</span>
-        {count !== undefined && count !== null && <span className="ab-tag">{count}</span>}
+        {count !== undefined && count !== null && <span className="ab-chip ab-chip-neutral ab-ins-count">{count}</span>}
+        <Icon name="chevronDown" size={16} className="ab-chevron" />
       </button>
       <div id={id} className="ab-ins-group-body" hidden={!open}>
         {children}
@@ -102,7 +103,7 @@ export function CopyButton({ value, label = t('Copy'), title }) {
 
 /**
  * Bring another Insights card into view and open it. The shell's own way (onShowCard) when the card was given one; otherwise the
- * card frame on the page (data-card) is opened and scrolled to.
+ * card's row on the page (data-card) is opened and scrolled to.
  */
 export function showCard(id, onShowCard) {
   if (typeof onShowCard === 'function') {
@@ -113,13 +114,15 @@ export function showCard(id, onShowCard) {
   const frame = document.querySelector(`[data-card="${id}"]`);
   if (!frame) return;
   const open = () => {
-    const toggle = frame.querySelector('.ab-cardx-toggle');
+    // A card with nothing to report waits under "All clear in ...": open that row first.
+    if (frame.hasAttribute('hidden')) frame.parentElement?.querySelector('.ab-ins-clear-toggle[aria-expanded="false"]')?.click();
+    const toggle = frame.querySelector('.ab-ins-card-toggle');
     if (toggle && toggle.getAttribute('aria-expanded') === 'false') toggle.click();
     frame.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
     toggle?.focus?.();
   };
   // The card is in the Insights half while AI Assist is on show: switch halves first (the shell's own switch).
-  if (frame.closest('[hidden]')) {
+  if (frame.parentElement?.closest('[hidden]')) {
     document.getElementById('ab-ticket-half-tab-insights')?.click();
     setTimeout(open, 0);
   } else open();

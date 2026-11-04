@@ -4,7 +4,8 @@ import RunPanel from '../RunPanel.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import AiKeyNote from '../AiKeyNote.jsx';
 import { isAiReady } from '../aiReady.js';
-import { AiBadge, CardFrame, EmptyNote, ShowMore } from '../ui/primitives.jsx';
+import { AiBadge, EmptyNote } from '../ui/primitives.jsx';
+import { MoreRows, Section } from '../write/Section.jsx';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { gapPack, mergePack } from '../../knowledge/parts.js';
 import { shownFor } from '../../profiles/profiles.js';
@@ -23,7 +24,7 @@ const pct = (ratio) => `${Math.round(ratio * 100)}%`;
 /** The AI button of a card: filled (the one main step) or outlined, always with the AI mark. */
 function AiButton({ primary, disabled, onClick, children }) {
   return (
-    <button type="button" className={primary ? 'ab-btn ab-wk-aibtn' : 'ab-btn ab-wk-aibtn-quiet'} disabled={disabled} title={t('Sends masked text to the AI you chose, after a preview.')} onClick={onClick}>
+    <button type="button" className={primary ? 'ab-btn ab-btn-ai' : 'ab-btn ab-btn-ai-quiet'} disabled={disabled} title={t('Sends masked text to the AI you chose, after a preview.')} onClick={onClick}>
       <AiBadge label="" title="" /> {children}
     </button>
   );
@@ -51,10 +52,10 @@ export function MergeDraft({ page, eff, primary = true }) {
   const best = (texts.pairs || []).reduce((top, p) => (!top || p.containment > top.containment ? p : top), null);
   return (
     <>
-      <ul className="ab-kb-articles">
+      <ul className="ab-rows ab-wk-rows ab-kb-articles" aria-label={t('Articles in the group')}>
         {articles.map((a) => (
-          <li key={a.sysId}>
-            <span><span className="ab-record-number">{a.number}</span> {a.title}</span>
+          <li key={a.sysId} className="ab-row">
+            <span className="ab-row-main ab-row-title"><span className="ab-kbx-number">{a.number}</span> {a.title}</span>
           </li>
         ))}
       </ul>
@@ -97,16 +98,20 @@ export function GapOutline({ page, eff, primary = true }) {
     <>
       <fieldset className="ab-fieldset ab-kbx-topics">
         <legend className="ab-label">{t('Topic to outline')}</legend>
-        <ShowMore
+        <MoreRows
           items={clusters}
-          className="ab-list"
+          keep={(c) => c.id === topic?.id}
+          className="ab-kbx-topic-rows"
           render={(c) => (
-            <label key={c.id} className="ab-check">
-              <input type="radio" name="ab-gap-topic" value={c.id} checked={topic?.id === c.id} onChange={() => setChosen(c.id)} />
-              <span>
-                {shownText(c.label)} <span className="ab-hint">({tn(c.count, '{n} ticket', '{n} tickets')})</span>
-              </span>
-            </label>
+            <li key={c.id} className="ab-row ab-kbx-topic">
+              <label className="ab-check">
+                <input type="radio" name="ab-gap-topic" value={c.id} checked={topic?.id === c.id} onChange={() => setChosen(c.id)} />
+                <span className="ab-row-main">
+                  <span className="ab-row-title">{shownText(c.label)}</span>
+                  <span className="ab-row-sub">{tn(c.count, '{n} ticket', '{n} tickets')}</span>
+                </span>
+              </label>
+            </li>
           )}
         />
       </fieldset>
@@ -133,16 +138,16 @@ export default function KnowledgeAssist({ page, eff }) {
   return (
     <div className="ab-kbx" data-half="assist">
       <AiKeyNote eff={eff} what={tm('the merged drafts and outlines')} />
-      <CardFrame id="kb-merge" title={t('Merge duplicate articles')} summary={mergeReady ? t('A compared group is ready') : ''} actions={<AiBadge />}>
+      <Section id="kb-merge" title={t('Merge duplicate articles')} summary={mergeReady ? t('A compared group is ready') : ''} ai>
         <ErrorBoundary resetKey="merge">
           <MergeDraft page={page} eff={eff} primary />
         </ErrorBoundary>
-      </CardFrame>
-      <CardFrame id="kb-outline" title={t('Outline a missing article')} actions={<AiBadge />}>
+      </Section>
+      <Section id="kb-outline" title={t('Outline a missing article')} ai>
         <ErrorBoundary resetKey="outline">
           <GapOutline page={page} eff={eff} primary={!mergeReady} />
         </ErrorBoundary>
-      </CardFrame>
+      </Section>
     </div>
   );
 }

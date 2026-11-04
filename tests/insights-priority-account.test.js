@@ -112,7 +112,8 @@ test('Glance: the mark sits next to VIP for a listed account, from the same one 
   const ui = await mount(<Glance page={pageFor()} eff={eff({ priorityAccounts: ['boxeo'] })} record={record} header={header} headPhase="ready" />);
   try {
     await settle(4);
-    const head = ui.$('.ab-glance-head');
+    // (the redesign: the marks are chips next to the state and the priority, under the title)
+    const head = ui.$('.ab-glance-chips');
     const marks = head.querySelectorAll('.ab-glance-vip');
     assert.equal(marks.length, 1);
     assert.equal(marks[0].textContent, 'Priority account');

@@ -1,7 +1,7 @@
 import { ShowMore } from '../../ui/primitives.jsx';
 import { articleShareUrl } from '../../../insights/links.js';
 import { useKnowledge } from './data.js';
-import { useReport } from './useInsight.js';
+import { readFully, useReport } from './useInsight.js';
 import { CopyButton, ItemLink, Notes, QuietButton, ReadState } from './bits.jsx';
 import { t, tn } from '../../../i18n/index.js';
 
@@ -10,10 +10,11 @@ import { t, tn } from '../../../i18n/index.js';
 
 const clip = (s, n) => (s && s.length > n ? `${s.slice(0, n).trimEnd()}…` : s || '');
 
-export default function KnowledgeCard({ page, eff, record, active, setSummary }) {
+export default function KnowledgeCard({ page, eff, record, active, setSummary, setAttention }) {
   const kb = useKnowledge({ page, record, eff, active });
   const hits = Array.isArray(kb.data?.hits) ? kb.data.hits : [];
   useReport(setSummary, kb.data && !kb.error ? (hits.length ? tn(hits.length, '{n} matching article', '{n} matching articles') : t('No matching articles')) : '');
+  useReport(setAttention, kb.data && !kb.error && !hits.length && readFully(kb.data.access) ? 'clear' : '');
 
   return (
     <>

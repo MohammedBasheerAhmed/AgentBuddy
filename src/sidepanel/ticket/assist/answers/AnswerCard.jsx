@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SafeText } from '../../../../render/SafeText.jsx';
 import { AiBadge } from '../../../ui/primitives.jsx';
+import { Icon } from '../../../ui/icons.jsx';
 import { applyFieldStates, choicesOf, insertTargets, readFieldStates, reviewInsert } from '../../../insertFlow.js';
 import { useInsertActions } from '../../../useInsertActions.js';
 import InsertFindings from '../../../InsertFindings.jsx';
@@ -22,9 +23,10 @@ import { t, t as tr } from '../../../../i18n/index.js';
 const NO_TEXTS = [];
 
 /**
- * One answer on the Ticket screen (AI0.4). Folded, it is one line ("Earlier: Summary · 2 min ago"); open, it is the answer with at
- * most four buttons in a row: the main one (Insert, or Copy for a note to self), the other of the two, Refine and More. The AI mark
- * is on its title. Close sits in the title row.
+ * One answer on the Ticket screen (AI0.4). Folded, it is one line ("Earlier: Summary · 2 min ago"); open, it is a soft panel with no
+ * border: the AI mark (a small grey spark), the title, the time and Close; the answer; at most four buttons in a row: the one that
+ * leads (Insert, or Copy for a note to self), the other of the two, Refine and More. Insert is the screen's one filled button when this
+ * is the newest answer (`lead`); Copy, Refine and More are outlined. What stays masked in the answer is one quiet line at the end.
  *
  * Insert takes the part of the answer the feature's insert chooses and goes through the Actions agent's insert path
  * (src/sidepanel/insertFlow.js insertText): the record the answer was written for only, one whitelisted field, the safe-to-send
@@ -36,9 +38,10 @@ const NO_TEXTS = [];
  * are); "Copy body" is next to it, "Copy subject" and "Copy all" under More.
  *
  * props: answer (from the store), open, onToggle(open), page, eff, record, busy (a run is going on for this ticket: Refine and Try
- * again wait), onRefine(answer, preset, choice), onAgain(answer), onClose(answer)
+ * again wait), lead (the newest answer: its Insert is the screen's main button), onRefine(answer, preset, choice), onAgain(answer),
+ * onClose(answer)
  */
-export default function AnswerCard({ answer, open, onToggle, page, eff, record, busy = false, onRefine, onAgain, onClose, now = Date.now() }) {
+export default function AnswerCard({ answer, open, onToggle, page, eff, record, busy = false, lead = false, onRefine, onAgain, onClose, now = Date.now() }) {
   const headId = `ab-answer${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`; // (no colons: the ids must work in a CSS selector)
   const base = baseFeatureOf(answer);
   const title = titleOf(answer);
@@ -147,21 +150,24 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     return (
       <section className="ab-answer is-folded" data-answer={answer.id} aria-label={title}>
         <button type="button" className="ab-answer-fold" aria-expanded="false" onClick={() => onToggle(true)}>
-          <span className="ab-cardx-chevron" aria-hidden="true" />
+          <AiBadge label="" title={t('Written by AI. It can be wrong: check it before you use it.')} />
           <span className="ab-answer-fold-text">{t('Earlier: {title}', { title })}</span>
           <span className="ab-answer-when">· {when}{answer.unseen ? ` · ${t('new')}` : ''}</span>
+          <Icon name="chevronDown" size={16} className="ab-chevron" />
         </button>
       </section>
     );
   }
 
   const first = targets[0] || null;
+  // The button that leads (ab-answer-main): Insert (or "Open the email form") is filled when this is the screen's main answer (`lead`);
+  // Copy, Refine and More are outlined.
   const insertButton = (target, main) => {
     const inserted = Boolean(done[target.key]);
     return (
       <button
         type="button"
-        className={`ab-btn ab-btn-sm${main ? ' ab-btn-ai' : ''}`}
+        className={`ab-btn${main ? ` ab-answer-main${lead ? ' ab-btn-primary' : ''}` : ''}`}
         disabled={inserting || inserted || Boolean(target.blocked) || (wrongRecord && !target.table)}
         title={target.blocked || target.where || ''}
         onClick={() => insertNow(target)}
@@ -171,7 +177,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     );
   };
   const copyButton = (main) => (
-    <button type="button" className={`ab-btn ab-btn-sm${main ? ' ab-btn-ai' : ''}`} onClick={() => copy()}>
+    <button type="button" className={`ab-btn${main ? ' ab-answer-main' : ''}`} onClick={() => copy()}>
       {t('Copy')}
     </button>
   );
@@ -191,20 +197,19 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   const gapsLine = Array.isArray(answer.lastPack?.madeWithout) ? madeWithoutText(answer.lastPack.madeWithout) : madeWithoutLine(answer.lastPack?.gaps);
 
   return (
-    <section className="ab-answer" data-answer={answer.id} aria-labelledby={headId}>
+    <section className="ab-answer ab-surface" data-answer={answer.id} aria-labelledby={headId}>
       <div className="ab-answer-head">
         <button type="button" id={headId} className="ab-answer-toggle" aria-expanded="true" onClick={() => onToggle(false)}>
-          <span className="ab-cardx-chevron" aria-hidden="true" />
-          <AiBadge title={t('Written by AI. It can be wrong: check it before you use it.')} />
+          <AiBadge label="" title={t('Written by AI. It can be wrong: check it before you use it.')} />
           <span className="ab-answer-title">{title}</span>
-          <span className="ab-answer-when">{when}</span>
+          <Icon name="chevronDown" size={14} className="ab-chevron" />
         </button>
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-answer-close" onClick={() => onClose(answer)}>
-          {t('Close')}
+        <span className="ab-answer-when">{when}</span>
+        <button type="button" className="ab-iconbtn ab-answer-close" aria-label={t('Close')} title={t('Close')} onClick={() => onClose(answer)}>
+          <Icon name="x" size={16} />
         </button>
       </div>
       {question && <p className="ab-answer-q">{t('You asked: {question}', { question })}</p>}
-      {answer.notice && <p className="ab-note ab-note-warn" role="status">{answer.notice}</p>}
       <div className="ab-output">
         {choices.length ? (
           <ol className="ab-answer-choices">
@@ -256,11 +261,11 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
               // An email draft goes into the email form, not into a box of the ticket: open it (the draft goes along), or copy the body.
               <>
                 {emailUrl && (
-                  <button type="button" className="ab-btn ab-btn-sm ab-btn-ai" onClick={openEmailForm}>
+                  <button type="button" className={`ab-btn ab-answer-main${lead ? ' ab-btn-primary' : ''}`} onClick={openEmailForm}>
                     {t('Open the email form')}
                   </button>
                 )}
-                <button type="button" className={`ab-btn ab-btn-sm${emailUrl ? '' : ' ab-btn-ai'}`} disabled={!email.body} onClick={() => copy('', email.body)}>
+                <button type="button" className={`ab-btn${emailUrl ? '' : ' ab-answer-main'}`} disabled={!email.body} onClick={() => copy('', email.body)}>
                   {t('Copy body')}
                 </button>
               </>
@@ -366,6 +371,13 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
           {hint && <p className="ab-hint ab-answer-hint">{hint}</p>}
         </>
       )}
+      {/* What stays masked in the answer (passwords, card and ID numbers), and when an answer was cut short: one quiet line. */}
+      {answer.notice && (
+        <p className="ab-answer-mask" role="status">
+          <Icon name="shield" size={14} className="ab-answer-mask-icon" />
+          <span>{answer.notice}</span>
+        </p>
+      )}
     </section>
   );
 }
@@ -373,9 +385,9 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
 /** A button that opens a small panel of choices under the card's buttons (a disclosure, not a menu widget). */
 function MenuButton({ id, label, open, onToggle }) {
   return (
-    <button type="button" className="ab-btn ab-btn-sm ab-menu-toggle" aria-expanded={open} aria-controls={id} data-menu={id} onClick={onToggle}>
+    <button type="button" className="ab-btn ab-menu-toggle" aria-expanded={open} aria-controls={id} data-menu={id} onClick={onToggle}>
       {label}
-      <span className="ab-menu-caret" aria-hidden="true" />
+      <Icon name="chevronDown" size={14} className="ab-chevron" />
     </button>
   );
 }

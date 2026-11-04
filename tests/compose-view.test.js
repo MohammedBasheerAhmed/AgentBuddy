@@ -30,8 +30,20 @@ test('Insights: the safe-to-send check and the snippets, for the ticket that is 
   assert.equal((markup.match(/ab-btn-primary/g) || []).length, 1, 'one primary button on the screen');
   assert.doesNotMatch(markup, /Which email fits|Suggested emails/, 'the email tools moved to the Ticket screen');
   assert.doesNotMatch(markup, /ab-ai-badge/, 'no Insights element carries the AI mark');
-  for (const id of ['ab-check-field', 'ab-snip-search']) assert.ok(markup.includes(`id="${id}"`) && markup.includes(`for="${id}"`), `${id} has a label`);
+  assert.ok(markup.includes('id="ab-check-field"') && markup.includes('for="ab-check-field"'), 'ab-check-field has a label');
   for (const label of ['Customer comment', 'Resolution notes', 'Description']) assert.ok(markup.includes(`>${label}</option>`), label);
+  // The snippet search is there once there are snippets to search (here the organisation's), with its label.
+  const withSnippets = insights(page(), eff({ policy: { orgSnippets: [{ title: 'Greeting', body: 'Hello {{caller.first_name}}' }] } }));
+  assert.ok(withSnippets.includes('id="ab-snip-search"') && withSnippets.includes('for="ab-snip-search"'), 'ab-snip-search has a label');
+  assert.match(withSnippets, /Greeting/, 'the snippet is listed as a row');
+});
+
+test('Insights: the calm layout: two sections with quiet headings, no cards inside the screen; a new snippet can always be started', () => {
+  const markup = insights(page(), eff());
+  assert.equal((markup.match(/<section class="ab-section ab-wk-section"/g) || []).length, 2, 'the check and the snippets are sections');
+  assert.doesNotMatch(markup, /ab-cardx|class="ab-card[ "]/, 'no cards inside the screen');
+  assert.match(markup, /<h2 class="ab-section-title ab-wk-title">Safe-to-send check<\/h2>/);
+  assert.match(markup, />New snippet<\/button>/, 'a new snippet can always be written');
 });
 
 test('Insights with no ticket open says so', () => {

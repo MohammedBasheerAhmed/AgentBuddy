@@ -115,13 +115,18 @@ test('drawn on a record page: the screens for the profiles, one panel each, only
   assert.ok(!markup.includes('id="ab-knowledge-half-panel-insights"'), 'a screen never opened is not mounted');
 });
 
-test('the header is quiet: name, the instance, the shield and settings; no footer sentence, no model picker', () => {
+test('the header is quiet: name, the instance, the privacy promise and three icon buttons; no footer sentence, no model picker', () => {
   const markup = draw({ page: record, lastGood: record, lastSeen: record, section: 'ticket', visited: new Set(['ticket']) });
   const header = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'));
   assert.match(header, /Agent Buddy/);
   assert.match(header, /class="ab-instance"[^>]*>acme</);
   assert.match(header, /aria-label="Settings"/);
-  assert.match(header, /class="ab-shield"/);
+  const buttons = [...header.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(buttons, ['Search commands', 'Switch to dark colours', 'Settings'], 'at most three icon buttons: the palette, the colours, Settings');
+  // The promise the shield mark carried stays in the header: on hover over the name, and as text for a screen reader.
+  const promise = 'Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.';
+  assert.match(header, new RegExp(`class="ab-brandtext" title="${promise.replace(/\./g, '\\.')}"`));
+  assert.match(header, new RegExp(`<span class="ab-sr ab-promise">${promise.replace(/\./g, '\\.')}</span>`));
   assert.ok(!header.includes('<select'), 'no model picker in the header');
   assert.ok(!markup.includes('ab-footer'), 'no footer sentence');
 });

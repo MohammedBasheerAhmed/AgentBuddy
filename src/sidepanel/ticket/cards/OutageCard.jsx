@@ -13,7 +13,7 @@ export default function OutageCard({ page, eff, record, active, setSummary, setA
   const pack = ticket.data?.pack || null;
   const sig = pack && ticket.data?.outage ? outageSignal(ticket.data.outage, pack) : null;
   useReport(setSummary, sig ? sig.line || sig.note : '');
-  useReport(setAttention, sig?.over ? 'danger' : '');
+  useReport(setAttention, sig?.over ? 'danger' : sig?.readable && !sig.hits.length ? 'clear' : '');
 
   if (!sig) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   const recentFirst = [...sig.hits].sort((a, b) => (a.hoursAgo ?? 1e9) - (b.hoursAgo ?? 1e9));

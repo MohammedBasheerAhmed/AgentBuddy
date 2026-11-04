@@ -156,13 +156,14 @@ module.exports = {
     await p.click('#ab-rewrite-text');
     await p.type('#ab-rewrite-text', 'please check the vpn gateway certificate', { delay: 0 });
     await clearBox(p, '#ab-rewrite-names');
-    // (Rewrite and Notes share the AI Assist half now: the Notes proposal from the portal is still there, so its card is folded and only
-    // the rewrite's answer is on screen)
-    await p.evaluate(() => {
-      const b = document.querySelector('[data-card="write-notes"] .ab-cardx-toggle');
-      if (b?.getAttribute('aria-expanded') === 'true') b.click();
+    // (Rewrite and Notes share the AI Assist half as two open sections: the Notes proposal from the portal is still on screen below the
+    // rewrite; the buttons used here, "Plain language" and "Add below", are the rewrite's only)
+    // The Notes answer from the portal step is still on screen (Notes no longer folds): wait for this run's own check before sending,
+    // or runAfter would take that answer for this run's and not send.
+    await runAfter(p, async () => {
+      await clickButton(p, /^Plain language/);
+      await p.waitForSelector('.ab-dialog', { visible: true, timeout: 8000 });
     });
-    await runAfter(p, () => clickButton(p, /^Plain language/));
     await waitForText(p, 'Use it in the form', { timeout: 8000 });
     const wsBefore = await ws.evaluate(deepTextareaValue, 'Work notes');
     await clickButton(p, /^Add below/);

@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { WidgetHead } from './SectionShell.jsx';
 import { t, tm } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 
@@ -30,15 +31,19 @@ export default class WidgetBoundary extends Component {
   render() {
     if (!this.state.failed) return this.props.children;
     const title = this.props.title || t('Section');
+    // The section's menu stays (while customizing it moves and removes the section), so a section that cannot draw can still go.
     return (
-      <section className="ab-card ab-widget" aria-label={title}>
-        <div className="ab-widget-head">
-          <h2 className="ab-h">{title}</h2>
-        </div>
-        <p className="ab-note ab-note-warn" role="alert">{shown(WIDGET_BROKEN_TEXT)}</p>
-        <div className="ab-row">
-          <button type="button" className="ab-btn ab-btn-sm" onClick={() => this.setState({ failed: false })}>{t('Try again')}</button>
-        </div>
+      <section className="ab-widget" aria-label={title}>
+        <WidgetHead title={title} tools={this.props.tools}>
+          {() => (
+            <>
+              <p className="ab-note ab-note-warn" role="alert">{shown(WIDGET_BROKEN_TEXT)}</p>
+              <div className="ab-row">
+                <button type="button" className="ab-btn ab-btn-sm" onClick={() => this.setState({ failed: false })}>{t('Try again')}</button>
+              </div>
+            </>
+          )}
+        </WidgetHead>
       </section>
     );
   }

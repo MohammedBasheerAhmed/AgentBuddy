@@ -5,10 +5,15 @@ import { t } from '../../i18n/index.js';
 const ARROW = { up: '▲', down: '▼', flat: '▬' };
 const wordOf = (direction) => ({ up: t('Up'), down: t('Down'), flat: t('No change') })[direction];
 
+// A number that is a problem carries a small status dot by its label (no coloured edges: TRACKER.md 2.4, calm). The dot is never
+// the only cue: the label and the hint say what the number is.
+const DOT = { bad: 'danger', warn: 'warn' };
+
 /**
- * One headline number. HTML, not SVG.
+ * One headline number: a small label, the number large, a short hint. HTML, not SVG.
  *
  *   value        number or text
+ *   tone         'bad' | 'warn' draw a status dot by the label (a problem); any other tone draws none
  *   unavailable  the person cannot read this data: shows "Not available to you", never a 0
  *   loading      a calm placeholder while the read is running
  *   delta        { text, direction: 'up'|'down'|'flat', good: true|false|null }: an arrow and a word as well as a colour
@@ -23,10 +28,14 @@ export default function Tile({ label, value, hint, delta, tone = 'neutral', onOp
   const missing = Boolean(unavailable);
   const shown = typeof value === 'number' ? formatNumber(value) : String(value ?? '');
   const dir = ARROW[delta?.direction] ? delta.direction : 'flat';
+  const dot = !missing && !busy ? DOT[tone] : '';
 
   const body = (
     <>
-      <span className="ab-tile-label">{label}</span>
+      <span className="ab-tile-label">
+        {dot ? <span className={`ab-dot ab-dot-${dot} ab-tile-dot`} aria-hidden="true" /> : null}
+        {label}
+      </span>
       {missing ? (
         <span className="ab-tile-unavailable">{t('Not available to you')}</span>
       ) : busy ? (

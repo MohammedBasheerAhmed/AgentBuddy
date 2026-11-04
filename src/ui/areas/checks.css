@@ -1,40 +1,41 @@
 /* Styles for the checks pieces the Ticket screen's cards use (src/sidepanel/checks, src/sidepanel/ticket/cards). Use the --ab-*
-   tokens from theme.css only. Panel width can be 320px: nothing here is a wide table, long text wraps and never scrolls sideways. */
+   tokens from theme.css only. Panel width can be 320px: nothing here is a wide table, long text wraps and never scrolls sideways.
+   Calm and focused: rows parted by one divider instead of boxes; a state is a word in a chip, its colour only backs it up. */
 
 /* ---- label / value pairs: label on top, value below, so a long answer never squeezes the label ---- */
-.ab-chk-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.ab-chk-fact { display: flex; flex-direction: column; gap: 1px; }
-.ab-chk-fact dt { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); font-weight: 600; }
+.ab-chk-facts { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.ab-chk-fact { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ab-chk-fact dt { color: var(--ab-fg-muted); font-size: var(--ab-text-md); font-weight: 500; }
 .ab-chk-fact dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 /* short labels (State, Stage, Due...) sit beside their value; long ones (questions) stay on top */
-.ab-chk-facts-tight .ab-chk-fact { flex-direction: row; gap: 8px; }
+.ab-chk-facts-tight { gap: 6px; }
+.ab-chk-facts-tight .ab-chk-fact { flex-direction: row; gap: 12px; }
 .ab-chk-facts-tight .ab-chk-fact dt { flex: 0 0 34%; }
 .ab-chk-facts-tight .ab-chk-fact dd { flex: 1; min-width: 0; }
 .ab-chk-hidden { color: var(--ab-fg-muted); font-style: italic; }
 .ab-chk-hints { display: flex; flex-direction: column; gap: 2px; }
 .ab-chk-hints .ab-hint { margin: 0; }
 
-/* ---- lists of approvals, tasks and checks ---- */
-.ab-chk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ab-chk-item { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
-.ab-chk-head { display: block; }
-.ab-chk-item-main { font-weight: 600; overflow-wrap: anywhere; }
-.ab-chk-item[data-status='warn'] { border-color: var(--ab-warn-line); background: var(--ab-warn-soft); }
-.ab-chk-item[data-status='ok'] { border-color: var(--ab-ok-line); }
+/* ---- lists of approvals, tasks and checks: rows with a divider between them ---- */
+.ab-chk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ab-chk-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; min-width: 0; }
+.ab-chk-item + .ab-chk-item { border-top: 1px solid var(--ab-divider); }
+.ab-chk-list > li + li { border-top: 1px solid var(--ab-divider); }
+.ab-chk-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.ab-chk-item-main { font-weight: 500; overflow-wrap: anywhere; }
 
-/* ---- state words (always written out; colour backs them up) ---- */
-.ab-chk-tag-ok { background: var(--ab-ok-soft); color: var(--ab-ok); border-color: var(--ab-ok-line); }
-.ab-chk-tag-warn { background: var(--ab-warn-soft); color: var(--ab-warn); border-color: var(--ab-warn-line); }
-.ab-chk-tag-danger { background: var(--ab-danger-soft); color: var(--ab-danger); border-color: var(--ab-danger-line); }
+/* ---- state words: a chip (always written out; colour backs it up) ---- */
+.ab-chk-tag { padding: 1px 8px; }
 
 /* ---- the checklist ---- */
-.ab-chk-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.ab-chk-bar { flex: 1; height: 8px; border-radius: var(--ab-radius-xs); background: var(--ab-bg-sunken); border: 1px solid var(--ab-border); overflow: hidden; }
-.ab-chk-bar-fill { height: 100%; background: var(--ab-accent); }
-.ab-chk-progress-text { font-size: var(--ab-text-sm); font-weight: 600; white-space: nowrap; }
-.ab-chk-steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.ab-chk-step { padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-raised); }
+.ab-chk-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ab-chk-bar { flex: 1; height: 6px; border-radius: 999px; background: var(--ab-bg-sunken); overflow: hidden; }
+.ab-chk-bar-fill { height: 100%; border-radius: 999px; background: var(--ab-accent); }
+.ab-chk-progress-text { font-size: var(--ab-text-md); font-weight: 500; color: var(--ab-fg-soft); white-space: nowrap; }
+.ab-chk-steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; }
+.ab-chk-step { padding: 8px 0; }
+.ab-chk-step + .ab-chk-step { border-top: 1px solid var(--ab-divider); }
 .ab-chk-step .ab-check { cursor: pointer; align-items: flex-start; }
+.ab-chk-step .ab-check input { margin-top: 3px; }
 .ab-chk-step .ab-check span { overflow-wrap: anywhere; }
-.ab-chk-step-done { background: var(--ab-bg-subtle); }
 .ab-chk-step-done .ab-check span { color: var(--ab-fg-muted); text-decoration: line-through; }

@@ -13,6 +13,7 @@ import SectionShell, { dashboardNotes } from '../src/sidepanel/reports/SectionSh
 import ExportPanel from '../src/sidepanel/reports/ExportPanel.jsx';
 import ScopeBar from '../src/sidepanel/reports/ScopeBar.jsx';
 import { REPORT_SECTIONS, sectionById } from '../src/sidepanel/reports/sections.js';
+import { drawnSections, shownElsewhere } from '../src/sidepanel/reports/onDashboard.js';
 import { SECTION_IDS } from '../src/reports/engine/constants.js';
 import { fakeInstance, cell, group, group2, count, USER, GROUP_A, NOW } from './reports-fixtures.js';
 
@@ -121,7 +122,38 @@ test('SLA radar: tiles, the table of the closest tickets with an Open button, an
   assert.match(at, /Breached/);
   assert.match(markup, /<button type="button" class="ab-chart-link ab-tlist-number">INC1<\/button>/);
   assert.match(markup, /SLA risk by owner/);
-  assert.match(markup, /<summary>Who holds the risk<\/summary>/, 'the bars are folded away');
+  assert.match(markup, /<summary class="ab-summary"><span>Who holds the risk<\/span>/, 'the bars are folded away');
+});
+
+test('one number is said once: with Overview on the dashboard, Workload and the SLA radar leave out its counts (only the drawing)', async () => {
+  const overview = await section('overview');
+  const workload = await section('workload');
+  const sla = await section('sla');
+  const tileLabels = (markup) => [...markup.matchAll(/<span class="ab-tile-label">(?:<span[^>]*><\/span>)?([^<]+)<\/span>/g)].map((m) => m[1]);
+  const onTheDashboard = { ...env, sections: drawnSections([{ type: 'section', section: 'overview' }, { type: 'section', section: 'workload' }, { type: 'section', section: 'sla' }, { type: 'builder' }]) };
+  assert.deepEqual(onTheDashboard.sections, ['overview', 'workload', 'sla']);
+  const shownInOverview = tileLabels(html(h(OverviewBody, { d: overview.data, env: onTheDashboard })));
+  assert.ok(['Open', 'Unassigned', 'Due soon', 'Breached'].every((l) => shownInOverview.includes(l)), shownInOverview.join(', '));
+
+  // Workload alone shows its totals; next to Overview only what it has of its own (the moves, the ageing, people, groups).
+  const alone = tileLabels(html(h(WorkloadBody, { d: workload.data, env })));
+  assert.ok(alone.includes('Open') && alone.includes('Unassigned') && alone.some((l) => /No update in/.test(l)), alone.join(', '));
+  const next = html(h(WorkloadBody, { d: workload.data, env: onTheDashboard }));
+  const nextLabels = tileLabels(next);
+  assert.ok(!nextLabels.some((l) => l === 'Open' || l === 'Unassigned' || /No update in|Resolved, not closed/.test(l)), nextLabels.join(', '));
+  assert.ok(nextLabels.some((l) => /Reassigned \d\+ times/.test(l)), 'the moves are Workload\'s own');
+  assert.match(next, /How long tickets have been open/);
+  assert.match(next, /Open work by person/);
+  assert.ok(!nextLabels.some((l) => shownInOverview.includes(l)), 'no tile label twice on the dashboard');
+
+  // The SLA radar keeps "At risk" (Overview has no such tile) and leaves Breached and Due soon to Overview.
+  assert.deepEqual(tileLabels(html(h(SlaBody, { d: sla.data, env }))), ['Breached', 'At risk', 'Due soon']);
+  assert.deepEqual(tileLabels(html(h(SlaBody, { d: sla.data, env: onTheDashboard }))), ['At risk']);
+
+  // What is drawn changes; what the export and "Explain this dashboard" get does not: the results keep every number.
+  assert.ok(Number.isFinite(workload.data.totals.open) && Number.isFinite(sla.data.counts.breached));
+  assert.equal(shownElsewhere(onTheDashboard, 'overview'), true);
+  assert.equal(shownElsewhere(env, 'overview'), false);
 });
 
 test('Quality: trend charts, tiles and tables render without NaN even when parts are missing', async () => {
@@ -207,7 +239,7 @@ test('one export panel per dashboard: everything, one section, copy and masking,
   assert.match(on, /Mask names and emails/);
   assert.match(on, /checked=""/);
   assert.match(on, /Check the file before you share it/, 'it says the person should still look: a name with nothing around it can pass');
-  assert.match(on, /<summary>One section<\/summary>/);
+  assert.match(on, /<summary class="ab-summary"><span>One section<\/span>/);
   assert.match(on, /aria-label="Download SLA risk radar as CSV"/, 'one section stays reachable from the one menu');
   const off = html(h(ExportPanel, { name: 'x', entries, order: ['w1', 'w2'], mask: false, setMask() {}, onClose() {} }));
   assert.ok(!/checked=""/.test(off));

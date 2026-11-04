@@ -35,8 +35,8 @@ button:focus-visible { outline: none; box-shadow: var(--ab-ring); }
 
 .actions { display: flex; align-items: center; gap: 4px; }
 .act { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ab-fg-soft); }
+/* An AI action hovers like any other: the AI tokens are neutral greys now (theme.css), and a grey hover would make the icon fainter. */
 .act:hover:not(:disabled) { background: var(--ab-accent-soft); border-color: var(--ab-accent-line); color: var(--ab-accent); }
-.act[data-ai='true']:hover:not(:disabled) { background: var(--ab-ai-soft); border-color: var(--ab-ai-line); color: var(--ab-ai); }
 /* Every action looks alike (only the mark is filled): the first in the list is the step suggested for the ticket's state. */
 /* No opacity here: the browser's visibility check (bar.js) counts a see-through button as not in plain view. */
 .act:disabled { cursor: not-allowed; background: var(--ab-bg-sunken); border-color: var(--ab-border); color: var(--ab-fg-muted); }

@@ -40,15 +40,21 @@ module.exports = {
     // ---- 1. Summarise: preview first -----------------------------------------------------------------------------
     await clickButton(p, /^Summarise this ticket/);
     await p.waitForSelector('.ab-dialog', { timeout: 15000 });
-    // The check shows the ticket data first and folds the fixed rules (AI0.2); the exact text is one click away.
-    const dataView = await textOf(p, '.ab-preview');
-    const rulesFolded = await p.evaluate(() => { const d = document.querySelector('details.ab-preview-rules'); return Boolean(d) && !d.open && /Rules sent with it/.test(d.querySelector('summary')?.innerText || ''); });
-    t.check('the check shows the ticket data first, with the fixed rules folded under "Rules sent with it"', /^<ticket_data/.test((dataView || '').trim()) && !/Rules set by the application/.test(dataView || '') && rulesFolded, (dataView || '').slice(0, 80));
+    // The check shows the ticket data first, readable (the fields, the notes as messages, every hidden value a chip such as
+    // "Person 1"), and folds the fixed rules and the exact text (AI0.2, the redesign); the exact text is one click away.
+    const dataView = (await textOf(p, '.ab-sent')) || '';
+    const rulesFolded = await p.evaluate(() => {
+      const b = [...document.querySelectorAll('.ab-dialog button')].find((x) => x.getClientRects().length > 0 && /The rules sent with it/.test(x.innerText));
+      return Boolean(b) && b.getAttribute('aria-expanded') === 'false' && !document.querySelector('.ab-preview-rules-text');
+    });
+    const exactFolded = (await textOf(p, '.ab-preview')) === null;
+    t.check('the check shows the ticket data first, readable (no request markup, hidden values as chips), with the fixed rules and the exact text folded', dataView.includes('INC0010001') && /Person 1/.test(dataView) && !/<ticket_data|\[PERSON_1\]/.test(dataView) && !/Rules set by the application/.test(dataView) && rulesFolded && exactFolded, dataView.replace(/\s+/g, ' ').slice(0, 120));
     await clickButton(p, /^Show the exact text/);
     const preview = await textOf(p, '.ab-preview');
     const subtitle = await textOf(p, '.ab-dialog-head');
+    const hidden = (await textOf(p, '.ab-check-summary')) || '';
     t.check('preview dialog is shown BEFORE anything is sent', ai.requests.length === 0, `${ai.requests.length} requests so far`);
-    t.check('preview names the destination (the fake AI host) and what was masked', subtitle.includes(`localhost:${ai.port}`) && /masked: \d+ names/.test(subtitle), subtitle.replace(/\s+/g, ' '));
+    t.check('preview names the destination (the fake AI host and model) and what was hidden', subtitle.includes(`localhost:${ai.port}`) && subtitle.includes('test-model') && /\d+ names/.test(hidden), `${subtitle.replace(/\s+/g, ' ')} | ${hidden.replace(/\s+/g, ' ')}`);
     for (const ph of ['[PERSON_1]', '[EMAIL_1]', '[PHONE_1]', '[CARD_1]', '[SECRET_1]']) t.check(`preview shows placeholder ${ph}`, preview.includes(ph));
     const leaks = findLeaks(preview, data);
     t.check('preview contains NO raw caller name, email, phone, card number or password', leaks.critical.length === 0, leaks.critical.join(' | '));
@@ -64,13 +70,13 @@ module.exports = {
     t.check('a result is shown (no error)', result !== null, (await textOf(p, '.ab-note-danger')) || '');
     t.check('result shows the REAL caller name (rehydrated locally)', Boolean(result) && result.includes(data.SEED.callerName), (result || '').replace(/\s+/g, ' ').slice(0, 120));
     t.check('result has no leftover placeholders except the card and password markers, which are never put back', Boolean(result) && leftoverPlaceholders(result).length === 0 && /\[CARD_\d+\]/.test(result) && /\[SECRET_\d+\]/.test(result) && !result.includes(data.SEED.card) && !result.includes(data.SEED.password), (result || '').replace(/\s+/g, ' ').slice(0, 160));
-    t.check('the panel says why the card and password stay hidden in the answer', /stay hidden in answers/.test((await textOf(p, '.ab-note-warn[role="status"]')) || ''));
+    t.check('the panel says why the card and password stay hidden in the answer', /stay hidden in answers/.test((await textOf(p, '.ab-answer-mask[role="status"]')) || ''));
     // (Round 3: the Ticket screen's Insights cards show tickets as real links to the instance, data-ab-link="record", built from the
     // page's own origin. Those are allowed outside the answers; nothing that loads is allowed anywhere else, and nothing at all in the answers.)
     const loading = () => p.evaluate((origin) => [...document.querySelectorAll('img, picture, svg image, a[href], iframe, object, embed, video, audio, link[rel=stylesheet][href^="http"]')].filter((e) => !(e.matches('a[data-ab-link="record"]') && e.href.startsWith(origin + '/') && !e.closest('.ab-answers'))).map((e) => `${e.tagName} ${e.getAttribute('href') || e.getAttribute('src') || ''}`), inst.origin);
     const loadingNow = await loading();
     t.check('rendered result has no <img>, <a>, <iframe> or other loading element (record links to the instance aside, never in an answer)', loadingNow.length === 0, loadingNow.slice(0, 3).join(' | '));
-    const card = await p.evaluate(() => { const c = [...document.querySelectorAll('section.ab-answer')].find((e) => e.getClientRects().length > 0 && !e.classList.contains('is-folded')); return c ? { badge: Boolean(c.querySelector('.ab-ai-badge')), main: c.querySelector('.ab-btn-ai')?.innerText.trim() || '', buttons: c.querySelectorAll('.ab-answer-actions > button').length, top: c === document.querySelector('.ab-answers section.ab-answer') } : null; });
+    const card = await p.evaluate(() => { const c = [...document.querySelectorAll('section.ab-answer')].find((e) => e.getClientRects().length > 0 && !e.classList.contains('is-folded')); return c ? { badge: Boolean(c.querySelector('.ab-ai-badge')), main: c.querySelector('.ab-answer-main')?.innerText.trim() || '', buttons: c.querySelectorAll('.ab-answer-actions > button').length, top: c === document.querySelector('.ab-answers section.ab-answer') } : null; });
     t.check('the answer is at the top of AI Assist, carries the AI mark, and leads with Copy (a summary is a note to self); at most 4 buttons', Boolean(card) && card.badge && card.main === 'Copy' && card.buttons <= 4 && card.top, JSON.stringify(card));
 
     // ---- 3. What the AI server actually received ------------------------------------------------------------------
@@ -134,7 +140,7 @@ module.exports = {
     const msgs = asked?.body?.messages || [];
     t.check('Ask: the question reached the AI only as data (a <ticket_data> block labelled as the question), never in the system message', msgs.length === 2 && !msgs[0].content.includes('tried the new client') && /<ticket_data field="text" label="Question from the agent">[^<]*tried the new client yet\?/.test(msgs[1].content), (msgs[1]?.content || '').slice(-200));
     t.check('Ask: the name in the question was masked like the ticket\'s', Boolean(asked) && !asked.raw.includes(data.SEED.callerName) && findLeaks(asked.raw, data).critical.length === 0);
-    const askedCard = await p.evaluate(() => { const c = [...document.querySelectorAll('section.ab-answer')].find((e) => e.getClientRects().length > 0 && !e.classList.contains('is-folded')); return c ? { text: c.innerText, main: c.querySelector('.ab-btn-ai')?.innerText.trim() || '' } : null; });
+    const askedCard = await p.evaluate(() => { const c = [...document.querySelectorAll('section.ab-answer')].find((e) => e.getClientRects().length > 0 && !e.classList.contains('is-folded')); return c ? { text: c.innerText, main: c.querySelector('.ab-answer-main')?.innerText.trim() || '' } : null; });
     t.check('Ask: the answer is titled as one, shows the question with the real name (put back locally) and leads with Copy', Boolean(askedCard) && /Answer to your question/.test(askedCard.text) && askedCard.text.includes(`You asked: ${question}`) && askedCard.main === 'Copy', JSON.stringify(askedCard).slice(0, 200));
 
     await panel.close();

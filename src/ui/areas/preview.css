@@ -1,0 +1,93 @@
+/* preview: the check before sending (a sheet over the dimmed panel, PreviewDialog.jsx), the answer on the Write and Knowledge screens
+   (ResultView.jsx), what the safe-to-send review found (InsertFindings.jsx) and the line while a run waits or after it failed
+   (RunStatus.jsx). Owner: the Check agent (the redesign spec). Only --ab-* tokens. Panel 320 to 480 px.
+   The earlier rules for the same elements stay where they were (.ab-backdrop, .ab-dialog*, .ab-preview, .ab-ph, .ab-output in
+   src/ui/ui.css; .ab-preview-*, .ab-runstatus, .ab-findings in assist-answers.css): this file comes after both and wins. */
+
+/* ---- the sheet ---- */
+.ab-backdrop { align-items: flex-end; }
+.ab-dialog { position: relative; width: 100%; max-height: calc(100vh - 40px); border-radius: 16px 16px 0 0; box-shadow: var(--ab-shadow); overflow: hidden; }
+.ab-sheet-grip { flex: none; align-self: center; width: 36px; height: 4px; margin-top: 8px; border-radius: 999px; background: var(--ab-border-strong); }
+.ab-dialog .ab-dialog-head { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 16px 6px; border-bottom: 0; }
+.ab-sheet-title { margin: 0; font-size: var(--ab-text-xl); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.ab-sheet-sub { margin: 0; font-size: var(--ab-text-md); line-height: 1.4; color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-dialog .ab-dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 16px 16px; }
+
+/* Cancel and Send stay at the bottom of the sheet: the body scrolls between the head and this. */
+.ab-dialog .ab-dialog-foot { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--ab-divider); background: var(--ab-bg); }
+.ab-sheet-note { margin: 0; }
+.ab-sheet-actions { display: flex; gap: 10px; }
+.ab-sheet-cancel { flex: 1 1 0; min-width: 0; }
+.ab-sheet-send { flex: 1.7 1 0; min-width: 0; }
+/* (the AI mark in Send is the shared AiBadge: shell.css gives it the button's own colour) */
+
+/* ---- what is hidden: a soft strip with a shield and a chip per kind ---- */
+.ab-check-summary { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; }
+.ab-check-summary-line { margin: 0; display: flex; align-items: flex-start; gap: 8px; font-size: var(--ab-text-md); line-height: 1.4; }
+.ab-check-shield { flex: none; margin-top: 1px; color: var(--ab-ok); }
+.ab-check-counts { list-style: none; margin: 0; padding: 0; padding-inline-start: 24px; }
+.ab-chip.ab-check-count { background: var(--ab-mask-bg); color: var(--ab-mask-fg); }
+
+/* ---- what will be sent ---- */
+.ab-check-h { margin: 18px 0 0; font-size: var(--ab-text-base); font-weight: 600; line-height: 1.4; }
+.ab-check-hint { margin: 2px 0 0; font-size: var(--ab-text-md); line-height: 1.4; color: var(--ab-fg-muted); }
+.ab-check-sent { margin-top: 8px; min-width: 0; }
+.ab-dialog-short .ab-confirm-short { margin: 0 0 12px; font-size: var(--ab-text-base); }
+
+/* the readable view: sections parted by dividers, no boxes */
+.ab-sent { display: flex; flex-direction: column; min-width: 0; border-radius: var(--ab-radius-xs); }
+.ab-sent:focus { outline: none; }
+.ab-sent:focus-visible { box-shadow: var(--ab-ring); }
+.ab-sent-section { padding: 12px 0 14px; border-top: 1px solid var(--ab-divider); min-width: 0; }
+.ab-sent-title { margin: 0 0 6px; font-size: var(--ab-text-md); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.ab-sent-fields { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.ab-sent-field { display: grid; grid-template-columns: minmax(64px, 34%) minmax(0, 1fr); column-gap: 12px; align-items: baseline; line-height: 1.4; }
+.ab-sent-field dt { font-size: var(--ab-text-sm); color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-sent-field dd { margin: 0; min-width: 0; font-size: var(--ab-text-md); overflow-wrap: anywhere; }
+.ab-sent-text { margin: 0; font-size: var(--ab-text-md); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ab-sent-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.ab-sent-note { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ab-sent-meta { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+
+/* a hidden value: "Person 1" where [PERSON_1] is sent */
+.ab-mask-chip { background: var(--ab-mask-bg); color: var(--ab-mask-fg); border-radius: var(--ab-radius-sm); padding: 0 5px; font-weight: 500; white-space: nowrap; }
+
+/* the rules and the exact text: quiet rows with a chevron that points down, the text below when open */
+.ab-disclosure { border-top: 1px solid var(--ab-divider); }
+.ab-disclosure-toggle { width: 100%; min-height: 40px; padding: 0; border: 0; border-radius: var(--ab-radius-xs); background: transparent; display: flex; align-items: center; gap: 8px; font-size: var(--ab-text-md); color: var(--ab-fg); text-align: start; cursor: pointer; }
+.ab-disclosure-toggle:hover { background: var(--ab-bg-subtle); }
+.ab-dialog .ab-preview, .ab-dialog .ab-preview-rules-text { margin: 0 0 12px; padding: 10px 12px; border: 0; border-radius: var(--ab-radius); background: var(--ab-surface); font-family: var(--ab-mono); font-size: var(--ab-text-sm); white-space: pre-wrap; word-break: break-word; }
+.ab-dialog .ab-preview-rules-text { color: var(--ab-fg-soft); }
+.ab-check-sent > .ab-preview:first-child { margin-bottom: 0; }
+
+/* hide something else */
+.ab-dialog .ab-check-hide { margin: 0; padding-top: 14px; border-top: 1px solid var(--ab-divider); gap: 6px; }
+.ab-check-hide-row { display: flex; gap: 8px; min-width: 0; }
+.ab-check-hide-row .ab-input { flex: 1 1 auto; width: auto; min-width: 0; min-height: 40px; }
+.ab-check-hide-btn { flex: none; min-height: 40px; color: var(--ab-accent); font-weight: 600; }
+
+/* ---- the answer on the Write and Knowledge screens: a soft surface, no border ---- */
+.ab-result { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ab-result-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ab-result-title { margin: 0; min-width: 0; font-size: var(--ab-text-base); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; border-radius: var(--ab-radius-xs); }
+.ab-result-title:focus { outline: none; }
+.ab-result-title:focus-visible { box-shadow: var(--ab-ring); }
+.ab-result .ab-result-for { margin: -6px 0 0; }
+.ab-result .ab-result-body { padding: 0; border: 0; border-radius: 0; background: transparent; overflow-wrap: anywhere; }
+.ab-result-body .ab-safe-text > :last-child { margin-bottom: 0; }
+.ab-result .ab-note, .ab-result .ab-answer-gaps, .ab-result-foot { margin: 0; }
+.ab-result-actions { gap: 6px; }
+.ab-result-foot { font-size: var(--ab-text-sm); }
+
+/* ---- what the review found before an insert: a quiet warning surface ---- */
+.ab-note.ab-findings-box { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 0; border-radius: var(--ab-radius-lg); background: var(--ab-attn-bg); color: var(--ab-fg); }
+.ab-findings-head { margin: 0; display: flex; align-items: flex-start; gap: 8px; color: var(--ab-attn-fg); }
+.ab-findings-icon { flex: none; margin-top: 2px; }
+.ab-findings-box .ab-findings { margin: 0; padding-inline-start: 24px; }
+.ab-findings-box .ab-findings li + li { margin-top: 2px; }
+.ab-findings-box .ab-mono { overflow-wrap: anywhere; }
+.ab-findings-actions { gap: 6px; }
+
+/* ---- while a run waits, and after it failed ---- */
+.ab-note.ab-runstatus { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 10px 14px; border: 0; border-radius: var(--ab-radius-lg); background: var(--ab-surface); color: var(--ab-fg-soft); }
+.ab-note.ab-runerror { padding: 12px 14px; border: 0; border-radius: var(--ab-radius-lg); }

@@ -49,34 +49,55 @@ async function setup({ glance } = {}) {
 const cardProps = (page, extra = {}) => ({ page, eff: eff(), record, header, active: true, setSummary: () => {}, setAttention: () => {}, ...extra });
 const card = (id) => INSIGHT_CARDS.find((c) => c.id === id);
 
-test('Glance: the three lines from the header and one glance read, then the quick bar inside it', async () => {
+test('Glance: the ticket from the header and one glance read: number and kind, title, chips, who has it and when it changed', async () => {
   const { fake } = await setup();
   const page = pageFor();
-  const ui = await mount(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" quickBar={<div className="qb">QUICK</div>} />);
-  const text = ui.text();
-  assert.match(text, /INC0010001 VPN keeps disconnecting for Abel Tuter/);
-  assert.match(text, /In Progress 2 - High/);
-  assert.match(text, /Beth Anglin/);
-  assert.match(text, /QUICK/);
-  assert.ok(!/VIP/.test(text), 'the fixture caller is not marked VIP');
-  assert.equal(fake.readsOf('glance').length, 1);
-  assert.deepEqual(fake.readsOf('glance')[0], { table: 'incident', sysId: INCIDENT_ID, allowSensitive: false });
-  await ui.unmount();
+  const ui = await mount(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" />);
+  try {
+    const text = ui.text();
+    assert.match(text, /INC0010001 · Incident VPN keeps disconnecting for Abel Tuter/);
+    assert.match(text, /In Progress 2 - High/);
+    assert.match(text, /Beth Anglin/);
+    assert.equal(ui.$('h2.ab-glance-title')?.textContent, 'VPN keeps disconnecting for Abel Tuter', 'the title is the heading');
+    assert.ok(ui.$$('.ab-glance-chips .ab-chip').length >= 2, 'state and priority are chips');
+    assert.ok(!/VIP/.test(text), 'the fixture caller is not marked VIP');
+    assert.ok(!ui.$('.ab-card'), 'no box around the ticket');
+    assert.equal(fake.readsOf('glance').length, 1);
+    assert.deepEqual(fake.readsOf('glance')[0], { table: 'incident', sysId: INCIDENT_ID, allowSensitive: false });
+    // AI Assist on show: one line, the chips, nothing else.
+    await ui.rerender(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" compact />);
+    assert.ok(ui.$('.ab-glance-oneline'));
+    assert.ok(!/Beth Anglin/.test(ui.text()));
+    assert.equal(fake.readsOf('glance').length, 1, 'no read of its own');
+  } finally {
+    await ui.unmount();
+  }
 });
 
-test('Glance: VIP mark and the outage banner, which opens the outage card', async () => {
+test('Glance: VIP mark, and "Needs you now" says the possible outage with a way to its card', async () => {
   const answer = await glanceAnswer();
   answer.vip = { status: 'yes', access: [] };
   answer.outage = { hits: [0.3, 0.8, 1.5].map((h, i) => ({ table: 'incident', sysId: String(i + 1).repeat(32), number: `INC00200${i}`, hoursAgo: h, same: ['cmdb_ci'], state: 'New' })), windowHours: 24, access: [{ source: 'incident', status: 'ok' }] };
-  await setup({ glance: answer });
+  const { fake } = await setup({ glance: answer });
   const page = pageFor();
   const shown = [];
-  const ui = await mount(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" onShowCard={(id) => shown.push(id)} />);
-  assert.match(ui.text(), /VIP/);
-  const banner = ui.button(/3 other open tickets on VPN Gateway EU in the last 2 h/);
-  await click(banner);
-  assert.deepEqual(shown, ['outage']);
-  await ui.unmount();
+  const needs = { cards: [{ id: 'outage', title: 'Outage spotter' }], reports: {} };
+  const ui = await mount(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" onShowCard={(id) => shown.push(id)} needs={needs} />);
+  try {
+    assert.match(ui.text(), /VIP/);
+    const block = ui.$('.ab-needs');
+    assert.ok(block, ui.text().slice(0, 300));
+    assert.match(block.textContent, /Needs you now/);
+    assert.match(block.textContent, /Possible outage: 3 other open tickets on VPN Gateway EU in the last 2 h/);
+    await click(ui.button('Show the tickets'));
+    assert.deepEqual(shown, ['outage']);
+    assert.equal(fake.readsOf('glance').length, 1, 'built from the same read: no read of its own');
+    // Without `needs` (AI Assist on show) the block is not drawn.
+    await ui.rerender(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" onShowCard={(id) => shown.push(id)} />);
+    assert.equal(ui.$('.ab-needs'), null);
+  } finally {
+    await ui.unmount();
+  }
 });
 
 test('the cards share the Glance read: risk, missing details, email, journey and outage ask nothing more of the ticket', async () => {
@@ -201,8 +222,44 @@ test('through the shell: the cards an IT agent sees on an incident, in order, no
   assert.equal(shownFor(card('article').profiles, eff(['it'])), false);
 
   const ui = await mount(<TicketInsights page={page} eff={eff(['it'])} record={record} header={header} active />);
-  await settle(6);
-  assert.equal(ui.$('.ab-ai-badge', { all: true }), null, 'no Insights element carries the AI mark');
-  assert.ok(ui.$$('[data-card]').length >= 10);
-  await ui.unmount();
+  try {
+    await settle(6);
+    assert.equal(ui.$('.ab-ai-badge', { all: true }), null, 'no Insights element carries the AI mark');
+    assert.ok(ui.$$('[data-card]', { all: true }).length >= 10, 'every card is there (the all-clear ones inside their row)');
+    // One list of rows: a dot, the title and its one line, a chevron that says whether it is open; no card frame with a border.
+    const list = ui.$('ul.ab-rows.ab-ins-cards');
+    assert.ok(list);
+    assert.equal(ui.$('.ab-cardx'), null);
+    const first = ui.$('li[data-card] > button.ab-ins-card-toggle');
+    assert.ok(first.querySelector('.ab-dot') && first.querySelector('.ab-ins-card-title') && first.querySelector('.ab-chevron'));
+    assert.equal(first.getAttribute('aria-expanded'), 'false', 'rows start folded, their one line showing');
+    // The cards with nothing to report (no change on the CI, no known error here) wait under "All clear in ...", which opens to list them.
+    const clear = ui.button(/^All clear in /);
+    assert.match(clear.textContent, /Recent changes on this CI or service/);
+    assert.equal(ui.$('[data-card="changes"]'), null, 'folded away');
+    await click(clear);
+    assert.ok(ui.$('[data-card="changes"]'), 'listed once the row is opened');
+    // A row opens its card in place.
+    await click(first);
+    assert.equal(first.getAttribute('aria-expanded'), 'true');
+    assert.ok(ui.$(`#${first.getAttribute('aria-controls')}`));
+  } finally {
+    await ui.unmount();
+  }
+});
+
+test('"open card X" (the palette, the quick bar, a Needs-you-now link) opens a card even when it waits under "All clear"', async () => {
+  await setup();
+  const page = pageFor();
+  const ui = await mount(<TicketInsights page={page} eff={eff(['it'])} record={record} header={header} active />);
+  try {
+    await settle(6);
+    assert.equal(ui.$('[data-card="knownErrors"]'), null);
+    await ui.rerender(<TicketInsights page={page} eff={eff(['it'])} record={record} header={header} active openCard={{ id: 'knownErrors', at: 1 }} />);
+    const row = ui.$('[data-card="knownErrors"]');
+    assert.ok(row, 'the All clear row opened');
+    assert.equal(row.querySelector('.ab-ins-card-toggle').getAttribute('aria-expanded'), 'true');
+  } finally {
+    await ui.unmount();
+  }
 });

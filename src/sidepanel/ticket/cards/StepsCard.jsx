@@ -9,7 +9,7 @@ import { t, tn } from '../../../i18n/index.js';
 // N12, steps that worked before: what fixed the solved look-alikes and what the matching articles say to do, as one list, best match
 // first. The words are colleagues' own, cut to the first sentences. (AI next best actions are in AI Assist.)
 
-export default function StepsCard({ page, eff, record, active, setSummary }) {
+export default function StepsCard({ page, eff, record, active, setSummary, setAttention }) {
   const look = useLookalikes({ page, record, eff, active });
   const kb = useKnowledge({ page, record, eff, active });
   const lookOk = look.data && !look.error;
@@ -17,6 +17,8 @@ export default function StepsCard({ page, eff, record, active, setSummary }) {
   const { items } = useMemo(() => stepsThatWorked({ lookalikes: lookOk ? look.data.hits : [], articles: kbOk ? kb.data.hits : [] }), [look.data, kb.data, lookOk, kbOk]);
   const done = Boolean(look.data || look.error) && Boolean(kb.data || kb.error);
   useReport(setSummary, done && (lookOk || kbOk) ? (items.length ? tn(items.length, '{n} fix from solved tickets and articles', '{n} fixes from solved tickets and articles') : t('None found')) : '');
+  // A fix that worked before is good news; none at all is nothing to report.
+  useReport(setAttention, done && (lookOk || kbOk) ? (items.length ? 'ok' : 'clear') : '');
 
   return (
     <>

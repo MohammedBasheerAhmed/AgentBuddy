@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Tile, DataTable } from '../charts/index.js';
 import DrillLink from '../charts/DrillLink.jsx';
 import SectionShell from './SectionShell.jsx';
+import Summary from './Summary.jsx';
 import { useSection } from './useSection.js';
 import { t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
@@ -57,7 +58,7 @@ export function OverviewBody({ d, env }) {
       )}
       {d.perTable?.length > 1 && (
         <details className="ab-details">
-          <summary>{t('By table')}</summary>
+          <Summary>{t('By table')}</Summary>
           <DataTable
             caption={t('Overview by table')}
             columns={[
@@ -79,7 +80,7 @@ export function OverviewBody({ d, env }) {
 }
 
 // F2/F3/F5 start here: one look at how the queue stands. A click on a tile opens the matching list in ServiceNow.
-export default function OverviewView({ widget, env }) {
+export default function OverviewView({ widget, env, tools }) {
   const state = useSection('overview', widget, env);
   const d = state.result?.data;
   return (
@@ -89,6 +90,7 @@ export default function OverviewView({ widget, env }) {
       state={state}
       env={env}
       widgetId={widget?.id}
+      tools={tools}
       facts={d?.sla && !d.sla.unavailable ? [t('SLA counts cover {n} active SLAs', { n: d.sla.activeSlas })] : []}
     >
       {d && <OverviewBody d={d} env={env} />}

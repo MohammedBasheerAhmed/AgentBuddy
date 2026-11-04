@@ -3,6 +3,7 @@ import { resultTables } from '../../reports/engine/index.js';
 import { exportFileName, maskTables, tablesToCsv, tablesToTsv } from '../../reports/exportTables.js';
 import { copyText, downloadText } from './download.js';
 import { dashboardTables } from './dashboardEnv.js';
+import Summary from './Summary.jsx';
 import { t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 
@@ -31,13 +32,12 @@ export default function ExportPanel({ name, entries, order, mask, setMask, maskM
   const copied = (ok) => say(ok ? t('Copied. Paste it into a spreadsheet or a mail.') : t('Could not copy. Use Download instead.'));
 
   return (
-    <section className="ab-card ab-export-panel" aria-label={t('Export')}>
+    <section className="ab-surface ab-export-panel" aria-label={t('Export')}>
       <div className="ab-widget-head">
-        <h2 className="ab-h">{t('Export')}</h2>
-        <span className="ab-spacer" />
+        <h2 className="ab-widget-title">{t('Export')}</h2>
         <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onClose}>{t('Close')}</button>
       </div>
-      <p className="ab-sub">{t('Made in your browser from the numbers on screen. Nothing is read again or sent anywhere.')}</p>
+      <p className="ab-widget-help">{t('Made in your browser from the numbers on screen. Nothing is read again or sent anywhere.')}</p>
       {!all.length ? (
         <p className="ab-note">{t('Nothing to export yet: wait for the numbers to load.')}</p>
       ) : (
@@ -57,7 +57,7 @@ export default function ExportPanel({ name, entries, order, mask, setMask, maskM
           {mask && <p className="ab-hint">{t('People become Person 1, Person 2... A name in a title is found when the words around it mark it as one ("for Anna Schmidt", "spoke with Tom"). Check the file before you share it.')}</p>}
           {sections.length > 1 && (
             <details className="ab-details">
-              <summary>{t('One section')}</summary>
+              <Summary>{t('One section')}</Summary>
               <ul className="ab-export-list">
                 {sections.map((s) => (
                   <li key={s.id} className="ab-export-item">

@@ -125,6 +125,43 @@ test('Insights: the one "⋯" menu holds refresh, auto-refresh, customize, expor
   await ui.unmount();
 });
 
+test('Insights: each section has a quiet "⋯" by its title: its charts as tables at once and, while customizing, move and remove', async () => {
+  world();
+  const ui = await show(<TeamInsights page={page} eff={eff()} active />);
+  await settleMore();
+  const sectionNamed = (name) => ui.$(`section.ab-widget[aria-label="${name}"]`);
+  const workload = sectionNamed('Workload and ageing');
+  assert.ok(workload, 'the lead\'s dashboard has Workload');
+  assert.equal(workload.querySelectorAll('.ab-chart-toggle').length, 0, 'no "Show as table" button on every chart of a section');
+  const charts = workload.querySelectorAll('.ab-chart-visual').length;
+  assert.ok(charts >= 1);
+  const more = workload.querySelector('.ab-widget-more .ab-more-btn');
+  assert.equal(more.getAttribute('aria-label'), 'Options for Workload and ageing');
+  await click(more);
+  const tables = ui.$$('[role="menuitemcheckbox"]').find((b) => /Show as tables/.test(b.textContent));
+  assert.equal(tables.getAttribute('aria-checked'), 'false');
+  await click(tables);
+  assert.equal(workload.querySelectorAll('table.ab-chart-table').length, charts, 'every chart of the section is now a table');
+  assert.equal(workload.querySelectorAll('.ab-chart-visual').length, 0);
+  assert.ok(sectionNamed('Quality and trend').querySelectorAll('.ab-chart-visual').length >= 1, 'the other sections keep their charts');
+  // One number once: next to Overview, Workload draws none of Overview's tiles.
+  const labels = (el) => el.querySelectorAll('.ab-tile-label').map((l) => l.textContent.trim());
+  const overviewTiles = labels(sectionNamed('Overview'));
+  assert.ok(overviewTiles.includes('Open'));
+  assert.ok(!labels(workload).some((l) => overviewTiles.includes(l)), labels(workload).join(', '));
+  assert.ok(!labels(sectionNamed('SLA risk radar')).some((l) => overviewTiles.includes(l)), labels(sectionNamed('SLA risk radar')).join(', '));
+
+  // Customizing: the section's menu also moves and removes it (in place of four buttons above every section).
+  await click(ui.$('.ab-dash-top .ab-more-btn'));
+  await click(ui.$$('[role="menuitem"]').find((b) => b.textContent === 'Customize'));
+  assert.ok(!ui.hasButton('Move up') && !ui.hasButton('Remove'), 'no row of buttons above each section');
+  await click(workload.querySelector('.ab-more-btn'));
+  assert.deepEqual(ui.$$('[role^="menuitem"]').map((b) => b.textContent.replace(/[✓\s]+/g, ' ').trim()), ['Show as tables', 'Move up', 'Move down', 'Remove']);
+  await click(ui.$$('[role="menuitem"]').find((b) => b.textContent === 'Remove'));
+  assert.equal(sectionNamed('Workload and ageing'), null, 'Remove takes the section off the dashboard');
+  await ui.unmount();
+});
+
 test('Insights: an ended ServiceNow session is ONE banner with Try again, not a red box per widget', async () => {
   const { fake, state } = world({ session: true });
   const ui = await show(<TeamInsights page={page} eff={eff()} active />);

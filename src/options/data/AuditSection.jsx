@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { readAudit, clearAudit } from '../../lib/storage.js';
 import { auditToCsv } from '../../audit/auditLog.js';
 import { downloadText } from '../../sidepanel/reports/download.js';
-import { Status } from '../fields.jsx';
+import { SectionHead, Status } from '../fields.jsx';
 import { t, tm } from '../../i18n/index.js';
 
 // What the activity log says happened to a run (src/audit/auditLog.js OUTCOMES); the action and the table are codes, shown as they are.
@@ -33,19 +33,18 @@ export function AuditSection({ eff }) {
   }
 
   return (
-    <section className="ab-section" aria-labelledby="h-audit">
-      <h2 className="ab-h" id="h-audit">{t('Activity log')}</h2>
-      <p className="ab-sub">
+    <section className="ab-section ab-set-section" aria-labelledby="h-audit">
+      <SectionHead id="h-audit" title={t('Activity log')}>
         {t("A local record of what Agent Buddy did: which action, which table, how many items were masked, tokens and outcome. It never stores ticket text, names or the AI's answers.")}
-      </p>
-      <div className="ab-row" style={{ marginBottom: 8 }}>
+      </SectionHead>
+      <div className="ab-set-actions">
         <button type="button" className="ab-btn ab-btn-sm" onClick={exportCsv} disabled={!canExport || !log.length}>{t('Export CSV')}</button>
-        <button type="button" className="ab-btn ab-btn-sm" onClick={clear} disabled={!log.length}>{t('Clear log')}</button>
+        <button type="button" className="ab-btn ab-btn-sm ab-set-danger" onClick={clear} disabled={!log.length}>{t('Clear log')}</button>
         {!canExport && <span className="ab-locked">{t('Export is switched off by your organisation.')}</span>}
       </div>
       <Status status={status} />
-      {log.length === 0 ? <p className="ab-note">{t('Nothing yet.')}</p> : (
-        <table className="ab-table">
+      {log.length === 0 ? <p className="ab-note ab-set-empty">{t('Nothing yet.')}</p> : (
+        <table className="ab-table ab-set-table">
           <thead><tr><th scope="col">{t('Time')}</th><th scope="col">{t('Action')}</th><th scope="col">{t('Table')}</th><th scope="col">{t('Masked')}</th><th scope="col">{t('Outcome')}</th></tr></thead>
           <tbody>
             {log.slice(0, 40).map((e, i) => (

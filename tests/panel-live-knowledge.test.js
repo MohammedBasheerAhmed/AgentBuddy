@@ -45,7 +45,7 @@ function setup() {
   return { fake, copied };
 }
 
-const openCard = async (ui, title) => click(ui.$$('.ab-cardx-toggle').find((b) => b.textContent.includes(title)));
+const openCard = async (ui, title) => click(ui.$$('.ab-wk-toggle').find((b) => b.textContent.includes(title)));
 
 test('knowledge search for everyone: a result opens in the agent\'s own UI and "Copy link" copies the article\'s share address', async () => {
   const { fake, copied } = setup();
@@ -61,6 +61,46 @@ test('knowledge search for everyone: a result opens in the agent\'s own UI and "
   await click(ui.button('Copy link'));
   assert.deepEqual(copied, [`${ORIGIN}/kb_view.do?sysparm_article=KB0000001`]);
   assert.ok(ui.hasButton('Link copied'));
+  await ui.unmount();
+});
+
+const ticketPage = (sysId, number) => ({ ...page, status: 'record', href: `${ORIGIN}/incident.do?sys_id=${sysId}`, record: { table: 'incident', sysId, number, kind: 'incident' } });
+const TITLES = { [sys('1')]: 'VPN keeps disconnecting', [sys('2')]: 'Printer jam on floor 2' };
+
+test('with a ticket open the screen starts with its articles: the knowledge search on its title, once per record, reads only', async () => {
+  const { fake, copied } = setup();
+  fake.onRead('header', (args) => ({ number: args.sysId === sys('1') ? 'INC0010001' : 'INC0010002', short_description: TITLES[args.sysId] || '', state: 'New', priority: '3 - Moderate' }));
+  const ui = await mount(<KnowledgeInsights page={ticketPage(sys('1'), 'INC0010001')} eff={eff(undefined, ['it'])} active />);
+  assert.deepEqual(fake.readsOf('kbSearch'), [{ query: 'VPN keeps disconnecting' }], 'the search the screen already has, on the title');
+  assert.match(ui.text(), /Articles for INC0010001 KB0000001 Reset your VPN password IT · Network/);
+  assert.equal(ui.field('Search knowledge').value, '', 'the search box stays for other words');
+  // The panel polls the page: the same record again is not searched again.
+  await ui.rerender(<KnowledgeInsights page={{ ...ticketPage(sys('1'), 'INC0010001') }} eff={eff(undefined, ['it'])} active />);
+  assert.equal(fake.readsOf('kbSearch').length, 1);
+  await click(ui.button('Copy link'));
+  assert.deepEqual(copied, [`${ORIGIN}/kb_view.do?sysparm_article=KB0000001`]);
+  // Another record: its own title is searched; an answer still on its way for the first record never shows under the second.
+  const held = deferred();
+  fake.onRead('kbSearch', (args) => (args.query === TITLES[sys('2')] ? held.promise : { hits: [], more: false, access: [] }));
+  await ui.rerender(<KnowledgeInsights page={ticketPage(sys('2'), 'INC0010002')} eff={eff(undefined, ['it'])} active />);
+  assert.deepEqual(fake.readsOf('kbSearch').map((a) => a.query), ['VPN keeps disconnecting', 'Printer jam on floor 2']);
+  assert.match(ui.text(), /Articles for INC0010002 Searching…/);
+  assert.ok(!/Reset your VPN password/.test(ui.text()), 'the first ticket\'s articles are gone');
+  await during(() => held.resolve({ hits: [{ sysId: sys('c'), number: 'KB0000003', title: 'Clear a printer jam', knowledgeBase: 'IT', excerpt: '', access: [] }], more: false, access: [] }));
+  assert.match(ui.text(), /Articles for INC0010002 KB0000003 Clear a printer jam/);
+  assert.equal(globalThis.fetch.calls.length, 0, 'no AI');
+  await ui.unmount();
+});
+
+test('the articles for the ticket: nothing is read while the screen is not on show; a title that may not be read is said, not searched', async () => {
+  const { fake } = setup();
+  fake.onRead('header', () => ({ number: 'HRC0001001', short_description: '', state: 'Open', priority: '' }));
+  const ui = await mount(<KnowledgeInsights page={ticketPage(sys('3'), 'HRC0001001')} eff={eff(undefined, ['it'])} active={false} />);
+  assert.equal(fake.readsOf('header').length + fake.readsOf('kbSearch').length, 0);
+  await ui.rerender(<KnowledgeInsights page={ticketPage(sys('3'), 'HRC0001001')} eff={eff(undefined, ['it'])} active />);
+  assert.deepEqual(fake.readsOf('header'), [{ table: 'incident', sysId: sys('3'), allowSensitive: false }]);
+  assert.equal(fake.readsOf('kbSearch').length, 0);
+  assert.match(ui.text(), /This ticket's title cannot be read here, so search with your own words below\./);
   await ui.unmount();
 });
 

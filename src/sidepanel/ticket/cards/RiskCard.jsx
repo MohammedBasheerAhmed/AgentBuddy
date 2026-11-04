@@ -26,7 +26,7 @@ export default function RiskCard({ page, eff, record, active, setSummary, setAtt
     return riskSignals({ pack: answer.pack, slas: slasRead ? answer.slas?.items || [] : null, vip: answer.vip?.status === 'yes', outageCount: outage?.count || 0, now: Date.now() });
   }, [answer]);
   useReport(setSummary, risk ? risk.summary : '');
-  useReport(setAttention, risk ? risk.attention : '');
+  useReport(setAttention, risk ? risk.attention || (risk.signals.length ? '' : 'clear') : '');
 
   if (!risk) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   return (

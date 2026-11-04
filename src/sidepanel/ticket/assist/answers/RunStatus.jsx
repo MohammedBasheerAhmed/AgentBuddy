@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { errorNextSteps, waitingText } from '../../../runLogic.js';
+import { AiBadge } from '../../../ui/primitives.jsx';
 import { t } from '../../../../i18n/index.js';
 
 /**
@@ -20,6 +21,7 @@ export function useTick(on, ms = 1000) {
 /**
  * What a run is doing while the person waits, with the way out: "Reading the ticket…" or "Waiting for the AI · 12 s", and the try
  * when the provider was busy and Agent Buddy tries again. "Stop waiting" drops the run (an answer that arrives later is not shown).
+ * A calm line on a soft surface, with the grey AI spark while the AI is being asked.
  *
  * props: run ({ phase, since, attempt, attempts }), onStop, readingText
  */
@@ -30,6 +32,7 @@ export function RunProgress({ run, onStop, readingText = t('Reading the ticket w
   const text = waiting ? waitingText({ since: run.since, now, attempt: run.attempt || 1, attempts: run.attempts || 3 }) : readingText;
   return (
     <div className="ab-note ab-runstatus" role="status">
+      {waiting && <AiBadge label="" title="" />}
       <span className="ab-runstatus-text">{text}</span>
       <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={onStop}>{t('Stop waiting')}</button>
     </div>

@@ -1,20 +1,21 @@
 import { ShowMore } from '../../ui/primitives.jsx';
 import { routingVote } from '../../../insights/routing.js';
 import { useLookalikes, useTicketFacts } from './data.js';
-import { useReport } from './useInsight.js';
+import { readFully, useReport } from './useInsight.js';
 import { ItemLink, Notes, ReadState } from './bits.jsx';
 import { t, isolate } from '../../../i18n/index.js';
 
 // N10, where similar tickets went: a count over the solved look-alikes' own assignment groups and categories. A hint for routing, not
 // a rule; the AI version (with reasons) is in AI Assist.
 
-export default function RoutingCard({ page, eff, record, active, setSummary }) {
+export default function RoutingCard({ page, eff, record, active, setSummary, setAttention }) {
   const ticket = useTicketFacts({ page, record, eff, active });
   const look = useLookalikes({ page, record, eff, active });
   const fields = ticket.data?.pack?.fields || {};
   const hits = Array.isArray(look.data?.hits) ? look.data.hits : [];
   const vote = routingVote(hits, { group: fields.assignment_group, category: fields.category });
   useReport(setSummary, look.data && !look.error ? (vote.enough ? vote.line : t('Too few solved look-alikes to tell')) : '');
+  useReport(setAttention, look.data && !look.error && !vote.enough && readFully(look.data.access) ? 'clear' : '');
 
   if (!look.data || look.error) return <ReadState state={look} what={t('solved tickets like this one')} onRetry={look.reload} />;
   if (!vote.enough) {

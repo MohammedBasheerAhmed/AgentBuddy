@@ -7,6 +7,7 @@
 //                       above the actions, never on each button.
 //   featureBlock()      a reason that stops ONE action (it needs Strict privacy mode). Said on that button, which is disabled.
 //   actionPlan()        the 3 suggested for the ticket's stage (the first is the one primary button) and the rest by group.
+//   nextStep()          the first of those: the main step at the top of the Ticket screen.
 //
 // The checks mirror the ones src/lib/pipeline.js assertRunnable makes when the action runs (same rules, same words), so a button that
 // is enabled here does not fail on the first step for a reason that was known all along. The pipeline still decides: nothing here
@@ -125,4 +126,16 @@ export function actionPlan({ record, header = null, eff, features = FEATURES, ga
     more: rest.length,
     total: items.length,
   };
+}
+
+/**
+ * The one step the ticket's state suggests first: the first of actionPlan's suggestions (the first row of the AI Assist list and the
+ * main button at the top of the Ticket screen), or null when there is none or every AI action is stopped on this record. The checklist
+ * action needs a read to know whether it is offered (useChecklistNeed), so it is never this step.
+ * @param {{ record: object, header?: object|null, eff: object, features?: object[] }} input
+ * @returns {object|null} the feature
+ */
+export function nextStep({ record, header = null, eff, features = FEATURES }) {
+  const plan = actionPlan({ record, header, eff, features, gates: { 'fulfilment-checklist': false } });
+  return plan.block ? null : plan.suggested[0]?.feature || null;
 }

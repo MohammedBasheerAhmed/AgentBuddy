@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { focusToRestore, inertOutside } from '../dialogKeys.js';
 import { Icon } from '../ui/icons.jsx';
+import { AiBadge } from '../ui/primitives.jsx';
 import { groupLabel } from './commands.js';
 import { rankCommands } from './search.js';
 import { t } from '../../i18n/index.js';
@@ -162,12 +163,7 @@ export default function CommandPalette({ open, onClose, commands, onRun }) {
                     <span className="ab-palette-label">{command.label}</span>
                     {command.hint && <span className="ab-palette-hint">{command.hint}</span>}
                   </span>
-                  {command.ai && (
-                    <span className="ab-ai-badge" aria-hidden="true">
-                      <Icon name="spark" size={10} />
-                      AI
-                    </span>
-                  )}
+                  {command.ai && <AiBadge title="" />}
                 </div>
               ))}
             </div>

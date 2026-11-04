@@ -1,43 +1,56 @@
-/* assist-actions: the AI actions of the Ticket screen (src/sidepanel/ticket/assist/actions). Owner: the Actions agent (docs/round3.md).
-   Only --ab-* tokens; AI elements use the --ab-ai* ones. One primary (filled) button: the first suggestion. Three suggestions,
-   the rest folded under "More actions" by group (TRACKER.md 2.4). */
+/* assist-actions: the AI actions of the Ticket screen (src/sidepanel/ticket/assist/actions). Only --ab-* tokens; the AI mark is the
+   small grey spark. "Suggested" is a list of rows across the panel (an icon tile, the name, one line); the first row carries the
+   screen's one filled mark, "Start". "More actions" folds the rest into small round buttons by group (TRACKER.md 2.4). */
 
-.ab-acts { display: flex; flex-direction: column; gap: 8px; }
-.ab-act-head { margin: 0; font-size: var(--ab-text-xs); font-weight: 650; color: var(--ab-ai); letter-spacing: 0.02em; text-transform: uppercase; }
-.ab-act-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ab-act-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ab-acts { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ab-act-head { margin: 0; }
+.ab-act-item { min-width: 0; }
 
-.ab-act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-width: 0; text-align: start; padding: 8px 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); color: var(--ab-fg); cursor: pointer; }
-.ab-act:hover:not(:disabled) { border-color: var(--ab-ai-line); background: var(--ab-ai-soft); }
-.ab-act:focus-visible { outline: 2px solid var(--ab-ai); outline-offset: 2px; }
-.ab-act:disabled { cursor: not-allowed; opacity: 0.6; }
-.ab-act-line { display: flex; align-items: center; gap: 6px; max-width: 100%; }
-.ab-act-title { font-weight: 600; overflow-wrap: anywhere; }
-.ab-act-desc { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.ab-act-reason { white-space: normal; color: var(--ab-fg-soft); }
+/* ---- a suggested action: the whole row is the button ---- */
+.ab-act-row { align-items: center; padding-block: 9px; }
+.ab-act-row:disabled { cursor: not-allowed; opacity: 0.6; }
+.ab-act-row:disabled:hover { background: transparent; }
+.ab-act-row:focus-visible { box-shadow: inset 0 0 0 2px var(--ab-accent); border-radius: 0; }
+.ab-act-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); color: var(--ab-fg-soft); }
+.ab-act-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ab-act-title { min-width: 0; overflow-wrap: anywhere; }
+/* its line says what the action does: two lines at most (why it cannot run is said in full) */
+.ab-act-row .ab-act-desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ab-act-row .ab-act-desc.ab-act-reason { display: block; -webkit-line-clamp: unset; color: var(--ab-fg-soft); }
+.ab-act-start { flex: none; display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: var(--ab-radius); background: var(--ab-accent); color: var(--ab-accent-fg); font-size: var(--ab-text-md); font-weight: 600; }
+.ab-act-row:hover .ab-act-start { background: var(--ab-accent-hover); }
+/* what sits under a row, in line with its text (16px side + 32px tile + 12px gap) */
+.ab-act-caution { margin-block: -4px 10px; margin-inline: 60px 16px; font-size: var(--ab-text-sm); color: var(--ab-warn); }
+.ab-act-item > .ab-fmt-open { margin-block: -6px 10px; margin-inline: 60px 16px; }
+.ab-fmt-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ab-act-link { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--ab-accent); font-size: var(--ab-text-sm); font-weight: 500; cursor: pointer; }
+.ab-act-link:hover { color: var(--ab-accent-hover); text-decoration: underline; text-underline-offset: 2px; }
+.ab-act-link .ab-chevron { color: currentColor; }
+.ab-act-empty { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 
-/* The one main action: filled, in the AI colour (the shared ab-btn-ai of shell.css; the description follows its text colour). */
-.ab-act-primary .ab-act-desc { color: var(--ab-ai-fg); }
-
-.ab-act-caution { margin-inline-start: 10px; font-size: var(--ab-text-xs); color: var(--ab-warn); }
-.ab-act-empty { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
-
-/* More actions, by group */
-.ab-act-more { display: flex; flex-direction: column; gap: 8px; }
-.ab-act-moretoggle { align-self: flex-start; }
-.ab-act-chevron { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform 120ms ease-out; }
-.ab-act-chevron.is-open { transform: rotate(45deg); }
-.ab-act-groups { display: flex; flex-direction: column; gap: 10px; }
+/* ---- More actions ---- */
+.ab-acts-more { gap: 6px; }
+.ab-act-moretoggle { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px; padding: 0; border: 0; background: transparent; color: var(--ab-fg); font-weight: 500; text-align: start; cursor: pointer; }
+.ab-act-moretext { flex: 1; min-width: 0; }
+.ab-act-moretoggle .ab-chevron { color: var(--ab-fg-muted); }
+.ab-act-groups { display: flex; flex-direction: column; gap: 12px; padding-bottom: 4px; }
 .ab-act-groups[hidden] { display: none; }
-.ab-act-group { display: flex; flex-direction: column; gap: 6px; }
-.ab-act-grouphead { margin: 0; font-size: var(--ab-text-sm); font-weight: 650; color: var(--ab-fg-soft); }
+.ab-act-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ab-act-grouphead { margin: 0; font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-muted); }
+.ab-act-pills { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ab-act-pill-item { max-width: 100%; }
+.ab-act-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; padding: 4px 12px; border: 1px solid var(--ab-border-strong); border-radius: 999px; background: var(--ab-bg); color: var(--ab-fg); font-size: var(--ab-text-md); font-weight: 500; line-height: 1.3; text-align: start; cursor: pointer; }
+.ab-act-pill:hover:not(:disabled) { background: var(--ab-bg-subtle); border-color: var(--ab-input-border); }
+.ab-act-pill:disabled { opacity: 0.55; cursor: not-allowed; }
+.ab-act-pill .ab-ai-badge { flex: none; }
+.ab-act-note { margin: 0; font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+.ab-act-note.ab-act-reason { color: var(--ab-fg-soft); }
+.ab-act-note.ab-act-caution { margin: 0; }
 
-/* An AI email draft waiting on the email form of its ticket (src/sidepanel/PendingDraft.jsx, AI9): AI-framed like an answer. */
-.ab-pending-email { border-color: var(--ab-ai-line); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* An AI email draft waiting on the email form of its ticket (src/sidepanel/PendingDraft.jsx, AI9): a soft panel like an answer. */
+.ab-pending-email { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .ab-pending-email-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .ab-pending-email-title { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .ab-pending-email .ab-output { overflow-wrap: anywhere; }
 .ab-pending-email .ab-hint, .ab-pending-email .ab-note { margin: 0; }
 .ab-pending-email-actions { gap: 6px; }
-
-@media (prefers-reduced-motion: reduce) { .ab-act-chevron { transition: none; } }

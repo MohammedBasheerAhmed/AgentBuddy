@@ -65,7 +65,7 @@ export function BuilderChart({ data, env }) {
 }
 
 // A custom report on a dashboard: whatever the report builder put together, drawn the way the person chose.
-export default function BuilderView({ widget, env, actions }) {
+export default function BuilderView({ widget, env, actions, tools }) {
   const request = builderRequest(widget.builder, env);
   const state = useReport({ tabId: env.page.tabId, request, refreshKey: env.refreshKey, limiter: env.limiter });
   const d = state.result?.data;
@@ -81,6 +81,7 @@ export default function BuilderView({ widget, env, actions }) {
       widgetId={widget.id}
       facts={ok ? [d.basedOn ? shown(d.basedOn) : t('{n} in total', { n: d.total })] : []}
       actions={actions}
+      tools={tools}
     >
       {ok && <BuilderChart data={d} env={env} />}
     </SectionShell>

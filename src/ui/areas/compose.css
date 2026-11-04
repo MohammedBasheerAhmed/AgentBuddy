@@ -1,71 +1,96 @@
-/* Styles for the compose area (the Write section). Use the --ab-* tokens from theme.css only. */
+/* Styles for the Write screen (src/sidepanel/write, src/sidepanel/compose) and for the calm sections the Write and Knowledge screens
+   share (src/sidepanel/write/Section.jsx: .ab-wk-*). Use the --ab-* tokens from theme.css only. The panel can be 320px wide: rows wrap,
+   nothing scrolls sideways. Calm and focused: sections parted by space and one divider, rows instead of boxes, one filled button. */
 
-.ab-compose { display: flex; flex-direction: column; gap: 10px; }
-.ab-compose-tabs { gap: 4px; }
-.ab-compose-tabs .ab-btn { flex: 1 1 auto; }
+/* ---- sections: a quiet heading, a few words beside it, then the content (the shared .ab-section gives the padding and the divider) */
+.ab-write, .ab-kbx { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.ab-wk-section { margin-block: 0; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ab-wk-head { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; font-size: inherit; font-weight: inherit; line-height: inherit; }
+.ab-wk-title { margin: 0; font-size: var(--ab-text-md); font-weight: 600; line-height: 1.4; color: var(--ab-fg-soft); }
+.ab-wk-summary { flex: 1 1 auto; min-width: 0; font-size: var(--ab-text-md); color: var(--ab-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-wk-warn .ab-wk-summary { color: var(--ab-warn); font-weight: 500; }
+.ab-wk-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ab-wk-body[hidden] { display: none; }
+/* A section that opens in place: the whole heading is the button, the chevron at its end points down (up while open). */
+.ab-wk-section.ab-wk-fold { padding-block: 4px; gap: 4px; }
+.ab-wk-fold > .ab-wk-body { padding-bottom: 12px; }
+.ab-wk-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0; border: 0; border-radius: var(--ab-radius-sm); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.ab-wk-toggle .ab-wk-chevron { margin-inline-start: auto; }
+.ab-wk-toggle:hover .ab-wk-title { color: var(--ab-fg); }
+.ab-wk-toggle:hover .ab-wk-chevron { color: var(--ab-fg-muted); }
 
-/* A hidden panel stays mounted (its draft survives); the class below would otherwise override the hidden attribute. */
-.ab-compose-panel[hidden] { display: none; }
-.ab-compose-stack { display: flex; flex-direction: column; gap: 10px; }
+/* ---- rows inside a section reach the panel's edges, like the dividers between sections (their own padding keeps the text in line) */
+.ab-wk-section .ab-rows { margin-inline: -16px; }
+.ab-wk-rows > li { min-width: 0; }
+.ab-wk-oneline { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ab-wk-chevron { margin-top: 3px; }
+.ab-wk-more { align-self: flex-start; }
+.ab-wk-opener { gap: 4px; }
+.ab-wk-opener .ab-chevron { color: var(--ab-fg-muted); }
 
-.ab-compose-head { margin-bottom: 4px; }
-.ab-compose-gap { margin-top: 8px; }
-.ab-compose-sub { margin: 10px 0 4px; font-size: var(--ab-text-md); font-weight: 650; }
+/* ---- form parts: a label above its box; a box with its button beside it (they wrap at 320px) ---- */
+.ab-wk-field { display: flex; flex-direction: column; gap: 6px; margin: 0; min-width: 0; }
+.ab-wk-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.ab-wk-grow { flex: 1 1 10em; min-width: 0; width: auto; }
+.ab-wk-lead { margin: 0; font-size: var(--ab-text-md); color: var(--ab-fg-muted); }
+.ab-wk-count { align-self: flex-end; font-size: var(--ab-text-sm); }
+.ab-wk-start { align-self: flex-start; }
+.ab-wk-subtitle { margin: 0; font-size: var(--ab-text-base); font-weight: 600; line-height: 1.4; }
+/* What comes after the inputs (what to do with an answer, a proposal to review): a divider above it, no box around it. */
+.ab-wk-block { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--ab-divider); min-width: 0; }
+/* A paragraph straight in one of these blocks takes its space from the block's gap, not from its own margins. */
+:where(.ab-wk-body, .ab-wk-block, .ab-wk-field, .ab-compose-stack, .ab-compose-input, .ab-compose-editor, .ab-compose-actions, .ab-compose-vars, .ab-write-check, .ab-write-hints, .ab-snip-detail, .ab-snip-backup, .ab-kbx-search, .ab-kbx-tool, .ab-kbx-results, .ab-kbx-compare) > p { margin: 0; }
+/* A text button that starts a line sits in line with the text above it (its padding hangs into the margin). */
+:where(.ab-wk-more, .ab-write-paste, .ab-wk-start, .ab-snip-foot > :first-child, .ab-write-blank > :first-child.ab-btn-quiet) { margin-inline-start: -10px; }
+/* No box inside a box: a note inside a note (the hints under a finding) is plain text in it. */
+:where(.ab-write, .ab-kbx) .ab-note > .ab-note { padding: 0; background: transparent; color: inherit; }
 
-/* Lists of kinds of email, of variables, of snippets: a row with text on the left and a button on the right. */
-.ab-compose-rows { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ab-compose-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
-.ab-compose-row-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.ab-compose-row .ab-btn { flex: 0 0 auto; }
+/* Pills: several equal choices, none of them the main step (the rewrite presets). */
+.ab-wk-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ab-wk-pill { min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: var(--ab-text-md); font-weight: 500; }
+.ab-wk-language { width: auto; flex: 1 1 8em; min-width: 0; max-width: 14em; }
 
-.ab-compose-scroll { max-height: 240px; overflow-y: auto; }
-.ab-compose-pick { overflow-wrap: anywhere; }
-.ab-compose-picked { border-color: var(--ab-accent); background: var(--ab-accent-soft); }
-
+/* ---- the Write screen ---- */
+/* "For INC0012345 - VPN keeps disconnecting": the quiet context line at the top of each half */
+.ab-write-for { margin: 0 0 4px; font-size: var(--ab-text-md); color: var(--ab-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-write-for-record { color: var(--ab-fg-soft); }
+.ab-write > .ab-note { margin-block: 4px 8px; }
+.ab-compose-stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ab-compose-input { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ab-compose-editor { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ab-compose-editor .ab-h { margin: 0; font-size: var(--ab-text-base); }
+.ab-compose-sub { margin: 4px 0 0; font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg-soft); }
+.ab-compose-gap { margin-top: 6px; }
 .ab-compose-list { margin: 4px 0 6px; padding-inline-start: 18px; }
 .ab-compose-text { min-height: 110px; }
-.ab-compose-select { width: auto; min-width: 8em; flex: 1 1 8em; }
-.ab-compose-presets { margin-top: 6px; }
-.ab-compose-actions { display: flex; flex-direction: column; gap: 8px; }
-.ab-compose-actions .ab-field { margin-bottom: 0; }
-.ab-compose-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5em, 1fr)); gap: 8px; }
-
-.ab-compose-preview { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--ab-text-md); }
-.ab-compose-vars { display: flex; flex-direction: column; gap: 6px; }
-.ab-compose-vars p { margin: 0; }
-
-/* ---- The Write screen (round 3): two halves, each a few folding cards ---- */
-.ab-write { display: flex; flex-direction: column; gap: 8px; }
-.ab-write-for { margin: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ab-write-for-record { color: var(--ab-fg); font-weight: 600; }
-.ab-compose-input { display: flex; flex-direction: column; gap: 8px; }
-.ab-compose-input .ab-field { margin-bottom: 0; }
-.ab-compose-editor { display: flex; flex-direction: column; gap: 8px; }
-.ab-write-ailabel { display: flex; align-items: center; gap: 6px; }
+.ab-compose-actions { display: flex; flex-direction: column; gap: 10px; }
+.ab-compose-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5em, 1fr)); gap: 10px; }
+.ab-compose-grid .ab-field { margin-bottom: 0; }
+/* what a snippet will look like: a soft panel, no border */
+.ab-compose-preview { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px 14px; border-radius: var(--ab-radius-lg); background: var(--ab-surface); }
+.ab-compose-vars { display: flex; flex-direction: column; gap: 8px; }
+.ab-rows > .ab-compose-row { align-items: center; }
+.ab-compose-row .ab-btn { flex: none; }
 
 /* the safe-to-send check */
-.ab-write-check { display: flex; flex-direction: column; gap: 6px; }
-.ab-write-check-row { flex-wrap: wrap; align-items: center; }
-.ab-write-check-row .ab-compose-select { flex: 1 1 9em; }
-.ab-write-findings { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; padding: 0; }
+.ab-write-check { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ab-write-findings { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; padding: 0; }
 .ab-write-finding { margin: 0; overflow-wrap: anywhere; }
 .ab-write-paste { align-self: flex-start; }
 
-/* snippets */
-.ab-snip-org { background: var(--ab-accent-soft); color: var(--ab-fg); border-color: var(--ab-accent-line); }
-.ab-snip-detail { padding-top: 8px; border-top: 1px solid var(--ab-border); }
-.ab-snip-insert { align-items: center; flex-wrap: wrap; }
-.ab-snip-backup { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px dashed var(--ab-border-strong); border-radius: var(--ab-radius-sm); }
+/* snippets: one row each (title, search word, the first line of the text); the one picked opens in place under its row */
+.ab-snip-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ab-snip-name { overflow-wrap: anywhere; }
+.ab-snip-title .ab-chip { padding: 1px 8px; }
+.ab-snip-detail { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 0 16px 16px; }
+.ab-compose-stack > .ab-snip-detail { padding: 0; }
+.ab-snip-detail-head { align-items: center; }
+.ab-snip-foot { gap: 4px; }
+.ab-snip-backup { display: flex; flex-direction: column; gap: 10px; }
 
 /* notes to ticket */
 .ab-write-blank { flex-wrap: wrap; }
 .ab-write-reason { margin: 0 0 6px; }
-.ab-write-hints { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); border: 1px solid var(--ab-border); }
+/* suggestions read without AI (caller, category, group): a soft panel, no border */
+.ab-write-hints { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--ab-radius-lg); background: var(--ab-surface); }
 .ab-write-hints .ab-compose-sub { margin-top: 0; }
-
-/* AI buttons of the Write and Knowledge screens: the AI colour, with the AI mark inside (TRACKER.md 2.3). */
-.ab-wk-aibtn { background: var(--ab-ai); color: var(--ab-ai-fg); border-color: var(--ab-ai); }
-.ab-wk-aibtn:hover:not(:disabled) { background: var(--ab-ai-hover); border-color: var(--ab-ai-hover); }
-.ab-wk-aibtn .ab-ai-badge { color: inherit; }
-.ab-wk-aibtn-quiet { color: var(--ab-ai); border-color: var(--ab-ai-line); background: var(--ab-bg-raised); }
-.ab-wk-aibtn-quiet:hover:not(:disabled) { background: var(--ab-ai-soft); }

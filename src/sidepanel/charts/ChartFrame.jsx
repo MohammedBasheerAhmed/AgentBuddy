@@ -1,6 +1,6 @@
-import { useId, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useState } from 'react';
 import DataTable from './DataTable.jsx';
-import { patternFor, toneClass } from './geometry.js';
+import { fillPatterns, toneClass } from './geometry.js';
 import { t } from '../../i18n/index.js';
 
 /** An id that is safe inside url(#...) and unique per chart instance (React's useId has colons in it). */
@@ -11,16 +11,25 @@ export function useUid(prefix = 'abc-') {
 export const patternId = (uid, index) => `${uid}-p${index}`;
 
 /**
- * The fill patterns for a chart's series, defined once and referenced as fill="url(#...)". Each index has its own pattern, so the
- * series differ by more than colour. Rendered in a 0 x 0 SVG (not display:none, which some browsers treat as "no pattern").
+ * "Show as tables" for every chart of one dashboard section at once (src/sidepanel/reports/SectionShell.jsx provides it, from the
+ * section's "⋯" menu): { on, register() -> unregister }. Inside it a chart draws no toggle of its own; on its own (no provider) a
+ * chart keeps its "Show as table" button.
+ */
+export const ChartTables = createContext(null);
+
+/**
+ * The fill patterns for a chart's series, defined once and referenced as fill="url(#...)". A series is solid unless another series
+ * of the same chart could be mistaken for it by colour (fillPatterns in geometry.js); then it has a texture as well, so the series
+ * differ by more than colour. Rendered in a 0 x 0 SVG (not display:none, which some browsers treat as "no pattern").
  * tones: one tone per series, in order.
  */
 export function PatternDefs({ uid, tones }) {
+  const fills = fillPatterns(tones);
   return (
     <svg className="ab-chart-defs" width="0" height="0" aria-hidden="true" focusable="false">
       <defs>
         {tones.map((tone, i) => {
-          const p = patternFor(i);
+          const p = fills[i];
           return (
             <pattern key={patternId(uid, i)} id={patternId(uid, i)} className={toneClass(tone)} width="8" height="8" patternUnits="userSpaceOnUse">
               <rect className="ab-pat-bg" width="8" height="8" />
@@ -59,18 +68,23 @@ export function Swatch({ uid, index, tone }) {
  */
 export default function ChartFrame({ title, summary, table, children, legend, actions, note, interactive = false, defaultTable = false, empty = false, emptyText = t('Nothing to show.') }) {
   const [showTable, setShowTable] = useState(Boolean(defaultTable));
+  const shared = useContext(ChartTables);
   const canTable = Boolean(table && Array.isArray(table.rows) && table.rows.length && !empty);
-  const tableOn = canTable && showTable;
+  const register = shared?.register;
+  // A chart that can be a table tells its section, which then offers "Show as tables" in its menu.
+  useEffect(() => (canTable && register ? register() : undefined), [canTable, register]);
+  const tableOn = canTable && (shared ? Boolean(defaultTable) || Boolean(shared.on) : showTable);
+  const ownToggle = canTable && !shared;
   const label = String(summary || title || t('Chart'));
 
   return (
     <div className="ab-chart">
-      {title || canTable || actions ? (
+      {title || ownToggle || actions ? (
         <div className="ab-chart-head">
           {title ? <h3 className="ab-chart-title">{title}</h3> : <span />}
           <div className="ab-chart-actions">
             {actions}
-            {canTable ? (
+            {ownToggle ? (
               <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-chart-toggle" aria-pressed={tableOn} onClick={() => setShowTable((v) => !v)}>
                 {t('Show as table')}
               </button>

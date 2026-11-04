@@ -39,8 +39,15 @@ test('the Knowledge screen for everyone is search only; a knowledge manager also
   const everyone = html(KnowledgeInsights, { page: page('incident', 'incident'), eff: withProfiles(['it']), active: true });
   assert.match(everyone, /Knowledge search/);
   assert.ok(everyone.includes('id="ab-kb-search"') && everyone.includes('for="ab-kb-search"'), 'the search box has a label');
-  assert.match(everyone, /<button type="button" class="ab-btn ab-btn-primary ab-btn-sm" disabled="">Search<\/button>/, 'one primary button, off until words are typed');
+  assert.match(everyone, /<button type="button" class="ab-btn ab-btn-primary" disabled="">Search<\/button>/, 'one primary button, off until words are typed');
   assert.doesNotMatch(everyone, /Duplicate articles|Articles to write/);
+  // With a ticket open the screen starts with the articles for it (read once the screen is on show), above the search box.
+  assert.match(everyone, /<h2 class="ab-section-title ab-wk-title">Articles for X1<\/h2>/);
+  assert.ok(everyone.indexOf('Articles for X1') < everyone.indexOf('id="ab-kb-search"'));
+  const none = html(KnowledgeInsights, { page: { ...page('incident', 'incident'), status: 'no-record', record: null }, eff: withProfiles(['it']), active: true });
+  assert.match(none, /Open a ticket to see the articles that match it here, or search below\./, 'no ticket: a short empty state');
+  const article = html(KnowledgeInsights, { page: page('kb_knowledge', 'article'), eff: withProfiles(['it']), active: true });
+  assert.doesNotMatch(article, /Articles for X1/, 'an article is not a ticket: its own title would only find itself');
   assert.equal(KnowledgeAssist.shownFor(withProfiles(['it'])), false, 'no AI half without the knowledge manager profile');
 
   const km = html(KnowledgeInsights, { page: page('incident', 'incident'), eff: withProfiles(['it', 'km']), active: true });

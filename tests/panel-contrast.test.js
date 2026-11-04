@@ -83,7 +83,32 @@ const PAIRS = [
   ['--ab-ai-fg', '--ab-ai', 'the main AI Assist button'],
   ['--ab-fg', '--ab-ai-soft', 'text inside the AI Assist area'],
   ['--ab-fg-muted', '--ab-ai-soft', 'hints inside the AI Assist area'],
+  // the calm look (2026): soft panels, the "Needs you now" block, the masked-value chip, the neutral chip
+  ['--ab-fg', '--ab-surface', 'answers and summary strips (.ab-surface, .ab-card, .ab-output)'],
+  ['--ab-fg-muted', '--ab-surface', 'hints inside a soft panel'],
+  ['--ab-fg-soft', '--ab-surface', 'quiet buttons inside a soft panel'],
+  ['--ab-accent', '--ab-surface', 'links inside a soft panel'],
+  ['--ab-fg', '--ab-attn-bg', 'an item of "Needs you now"'],
+  ['--ab-attn-fg', '--ab-attn-bg', 'the heading of "Needs you now"'],
+  ['--ab-fg-muted', '--ab-attn-bg', 'the line under an item of "Needs you now"'],
+  ['--ab-accent', '--ab-attn-bg', 'a link inside "Needs you now"'],
+  ['--ab-mask-fg', '--ab-mask-bg', 'a masked value in the check before sending'],
+  ['--ab-fg-soft', '--ab-bg-subtle', 'a neutral chip on a subtle background'],
 ];
+
+// Lines and marks that are not text but must be seen (WCAG 1.4.11, 3:1): the edge of a text box, the icon of an attention item.
+const GRAPHICS = [
+  ['--ab-input-border', '--ab-bg', 'the edge of a text box or a select'],
+  ['--ab-warn', '--ab-attn-icon-bg', 'the icon of a "Needs you now" item'],
+  ['--ab-danger', '--ab-danger-soft', 'the icon of a danger item'],
+  ['--ab-ai', '--ab-bg', 'the AI spark'],
+];
+for (const [name, scope] of Object.entries(SCOPES)) {
+  test(`lines and marks are visible (3:1): ${name}`, () => {
+    const failing = GRAPHICS.filter(([fg, bg]) => ratio(scope.get(fg), scope.get(bg)) < 3).map(([fg, bg, where]) => `${fg} on ${bg} (${where}): ${ratio(scope.get(fg), scope.get(bg)).toFixed(2)}`);
+    assert.deepEqual(failing, []);
+  });
+}
 
 for (const [name, scope] of Object.entries(SCOPES)) {
   test(`panel text is readable (WCAG AA, 4.5:1): ${name}`, () => {
@@ -101,7 +126,7 @@ for (const [name, scope] of Object.entries(SCOPES)) {
 }
 
 test('the panel styles use colour tokens only (no literal colours) in the shared and the panel area files', () => {
-  for (const file of ['ui.css', 'areas/checks.css', 'areas/compose.css', 'areas/knowledge.css', 'areas/quick.css', 'areas/domain.css', 'areas/itsm.css', 'areas/portal.css', 'areas/shell.css', 'areas/insights.css', 'areas/assist-actions.css', 'areas/assist-answers.css', 'areas/mywork.css', 'areas/setup.css']) {
+  for (const file of ['ui.css', 'areas/checks.css', 'areas/compose.css', 'areas/knowledge.css', 'areas/quick.css', 'areas/domain.css', 'areas/itsm.css', 'areas/portal.css', 'areas/shell.css', 'areas/insights.css', 'areas/assist-actions.css', 'areas/assist-answers.css', 'areas/mywork.css', 'areas/setup.css', 'areas/palette.css']) {
     const css = fs.readFileSync(path.join(ROOT, 'src', 'ui', file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     // rgba() is allowed only inside the theme file's shadows and rings; panel styles take every colour from a token
     assert.ok(!/#[0-9a-f]{3,8}\b/i.test(css), `${file}: no hex colours`);

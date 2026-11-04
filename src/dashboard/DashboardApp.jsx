@@ -12,8 +12,9 @@ const MESSAGES = {
   'not-enabled': tm('Agent Buddy cannot reach that ServiceNow tab. Open ServiceNow, make sure Agent Buddy is turned on for it, reload the ServiceNow tab, then press "Check again".'),
 };
 
-// The Team dashboard on a page of its own: the same components as the side panel, with room for several columns. It reads
-// through the ServiceNow tab it was opened for (the address says which); it has no connection of its own to the instance.
+// The Team dashboard on a page of its own: the same components as the side panel, with room for several columns, in the same calm
+// look (sections parted by space and dividers, no boxes: src/ui/areas/reports.css). It reads through the ServiceNow tab it was opened
+// for (the address says which); it has no connection of its own to the instance.
 export default function DashboardApp() {
   const eff = useEffective();
   const lang = useLanguage(eff.values?.language);
@@ -70,9 +71,9 @@ export default function DashboardApp() {
           <ReportsDashboard page={source.page} eff={eff} layout="page" />
         </>
       ) : (
-        <section className="ab-card" role="alert">
-          <h2 className="ab-h">{t('Open ServiceNow and reload')}</h2>
-          <p className="ab-sub">{tr(MESSAGES[source.status])}</p>
+        <section className="ab-surface ab-dashboard-alone" role="alert">
+          <h2 className="ab-widget-title">{t('Open ServiceNow and reload')}</h2>
+          <p className="ab-widget-help">{tr(MESSAGES[source.status])}</p>
           <button type="button" className="ab-btn" onClick={check}>{t('Check again')}</button>
         </section>
       )}

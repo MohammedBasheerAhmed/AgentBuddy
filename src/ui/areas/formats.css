@@ -5,8 +5,8 @@
 .ab-fmt-grouphead { margin: 0 0 4px; font-size: var(--ab-text-md); font-weight: 650; }
 .ab-fmt-item > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 28px; }
 .ab-fmt-title { font-weight: 600; color: var(--ab-fg); }
-.ab-fmt-state { padding: 1px 8px; border: 1px solid var(--ab-accent-line); border-radius: 999px; background: var(--ab-accent-soft); color: var(--ab-fg); font-size: var(--ab-text-sm); }
-.ab-fmt-state-locked { border-color: var(--ab-warn-line); background: var(--ab-warn-soft); color: var(--ab-warn); }
+.ab-fmt-state { padding: 2px 8px; border: 0; border-radius: 999px; background: var(--ab-accent-soft); color: var(--ab-fg); font-size: var(--ab-text-sm); font-weight: 500; }
+.ab-fmt-state-locked { background: var(--ab-warn-soft); color: var(--ab-warn); }
 .ab-fmt-rows { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ab-fmt-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
 .ab-fmt-btns { display: flex; gap: 4px; justify-content: flex-end; }
@@ -21,6 +21,11 @@
 @media (min-width: 560px) {
   .ab-fmt-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: center; }
 }
-/* in the side panel the editor sits under its action, in a box of its own so it reads as part of that action */
-.ab-act-item .ab-fmt { margin-block-start: 6px; padding: 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
-.ab-act-item .ab-fmt-row { background: var(--ab-bg); }
+/* in the side panel the editor opens under its action, on a soft panel with no border (no box inside a box): its section rows are
+   parted by dividers, and its buttons are outlined (the screen's one filled button is its main step) */
+.ab-fmt-inpanel { margin-block-start: 8px; padding: 12px; border: 0; border-radius: var(--ab-radius-lg); background: var(--ab-surface); }
+.ab-fmt-inpanel .ab-fmt-rows { gap: 0; }
+.ab-fmt-inpanel .ab-fmt-row { padding: 8px 0; border: 0; border-radius: 0; background: transparent; }
+.ab-fmt-inpanel .ab-fmt-row + .ab-fmt-row { border-top: 1px solid var(--ab-divider); }
+.ab-fmt-inpanel .ab-fmt-preview { border: 0; background: var(--ab-bg); }
+.ab-fmt-inpanel .ab-field { margin-bottom: 8px; }

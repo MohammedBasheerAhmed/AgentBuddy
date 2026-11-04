@@ -72,7 +72,14 @@ test('the queue: most urgent first, one status chip, SLA time left, waiting and 
   assert.deepEqual(fake.readsOf('myWork')[0], { profiles: ['it'], allowSensitive: false });
   const text = ui.text();
   assert.match(text, /Read just now/);
-  assert.match(text, /My queue 6 open · 1 SLA breached · 1 replied/);
+  assert.match(text, /My queue 6 open, 1 SLA breached, 1 replied/);
+  // Calm: no red frame around the queue; the breached ticket carries a red dot and a chip on its own row, the reply a green dot.
+  assert.equal(ui.$$('.ab-cardx-danger, .ab-cardx-warn', { all: true }).length, 0, 'no alarm frame around the queue');
+  const dots = ui.$$('.ab-mw-row a').map((a) => a.querySelector('.ab-dot').className);
+  assert.match(dots[0], /ab-dot-danger/);
+  assert.match(dots[1], /ab-dot-ok/);
+  assert.match(dots[2], /ab-dot-neutral/);
+  assert.ok(ui.$$('.ab-mw-row a')[0].querySelector('.ab-mw-sla-breached.ab-chip-danger'), 'the breached SLA is a chip in its colour');
   // Order on screen: breached, then the customer's reply, then priority/SLA.
   const shown = ui.$$('.ab-mw-row a').map((a) => a.textContent);
   assert.match(shown[0], /Printer offline.*SLA breached/);
@@ -145,10 +152,13 @@ test('follow-ups: a reminder and a status update to copy, the customer\'s answer
   const fake = setup(answer({ items: [waiting, stale, answered] }));
   const copied = fakeClipboard();
   const ui = await mount(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => {}} />);
-  assert.match(ui.text(), /Follow-ups due 2 due · 1 replied/);
+  assert.match(ui.text(), /Follow-ups due 2 due, 1 replied/);
   assert.match(ui.text(), /Got the logs Customer replied today/);
   assert.match(ui.text(), /Need logs Waiting on the customer 4 d/);
   assert.match(ui.text(), /Slow VPN Customer not updated for 6 d/);
+  // The copy is a quiet action of its row, outside the link that opens the ticket.
+  assert.equal(ui.button('Copy reminder').closest('a'), null);
+  assert.ok(ui.button('Copy reminder').closest('.ab-mw-row'));
   await click(ui.button('Copy reminder'));
   assert.match(copied[0], new RegExp(`your reply on ${waiting.number} \\(Need logs\\)`));
   assert.match(ui.text(), /Copied\. Paste it into the customer comment of the ticket\./);
@@ -159,7 +169,7 @@ test('follow-ups: a reminder and a status update to copy, the customer\'s answer
   await choose(ui.$('select'), '5');
   assert.equal((await fake.chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY].followUpDays, 5);
   await ui.rerender(<MyWorkView page={page} eff={eff({ followUpDays: 5 })} active onOpenTicket={() => {}} />);
-  assert.match(ui.text(), /Follow-ups due 1 due · 1 replied/);
+  assert.match(ui.text(), /Follow-ups due 1 due, 1 replied/);
   await ui.unmount();
 });
 
@@ -198,7 +208,7 @@ test('empty: a useful line, with what waits in my groups', async () => {
   setup(answer({ items: [], groups: [g('Unassigned A', { breached: false, paused: false, percentage: 10, dueAt, risk: 'at-risk' }), g('Unassigned B', null)] }));
   const ui = await mount(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => {}} />);
   assert.match(ui.text(), /Nothing is waiting on you\. 1 ticket in your groups is due today\./);
-  assert.match(ui.text(), /Unassigned in my groups 2 waiting · oldest 1 d/);
+  assert.match(ui.text(), /Unassigned in my groups 2 waiting, oldest 1 d/);
   assert.match(ui.text(), /Unassigned A .*Service Desk/);
   await ui.unmount();
 });

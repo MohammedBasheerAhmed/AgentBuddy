@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   num, percent, formatNumber, withUnit, clipLabel, niceMax, ticks, thinLabels,
-  TONES, normTone, toneClass, toneForIndex, PATTERNS, patternFor, MARKERS, markerFor, markerPath, markerIsLine,
+  TONES, normTone, toneClass, toneForIndex, PATTERNS, patternFor, MARKERS, markerFor, markerPath, markerIsLine, CONFUSABLE, tonesConfusable, fillPatterns,
   barLayout, stackedLayout, linePath, areaPath, trendLayout, donutArcs, heatLevel, heatLayout,
   summarizeItems, summarizeStacked, summarizeSeries, describeTile, itemsToTable, stackedToTable, seriesToTable,
 } from '../src/sidepanel/charts/geometry.js';
@@ -136,6 +136,30 @@ test('every series index gets its own pattern and marker, cycling after six', ()
   assert.equal(markerFor(6), 'circle');
   // every non-solid pattern draws something
   PATTERNS.slice(1).forEach((p) => assert.ok(p.lines || p.dot, p.id));
+});
+
+test('fills: solid where colour tells the series apart, a texture only where it may not, never the same fill for two look-alikes', () => {
+  // The Workload board: new (green), in progress (blue), waiting (orange), resolved (purple), other (grey).
+  const workload = fillPatterns(['c1', 'c2', 'c3', 'c4', 'neutral']).map((p) => p.id);
+  assert.deepEqual(workload, ['solid', 'solid', 'diagonal', 'diagonal', 'diagonal']);
+  // Breached and at risk (red and orange) look alike to many people: the second is striped.
+  assert.deepEqual(fillPatterns(['bad', 'warn']).map((p) => p.id), ['solid', 'diagonal']);
+  // Two distinct colours stay calm.
+  assert.deepEqual(fillPatterns(['c1', 'c2']).map((p) => p.id), ['solid', 'solid']);
+  // The same tone twice (a seventh slice cycles back to the first colour) is never drawn the same way.
+  assert.deepEqual(fillPatterns(['c1', 'c1', 'c1']).map((p) => p.id), ['solid', 'diagonal', 'dots']);
+  assert.deepEqual(fillPatterns(undefined), []);
+  // Every pair of look-alikes in any set of tones differs by its fill.
+  const sets = [TONES, ['good', 'warn', 'bad', 'neutral'], ['c1', 'c3', 'c5', 'c6', 'good'], ['c2', 'c4', 'c5', 'bad', 'neutral']];
+  for (const tones of sets) {
+    const fills = fillPatterns(tones);
+    tones.forEach((a, i) => tones.forEach((b, j) => {
+      if (i < j && tonesConfusable(a, b)) assert.notEqual(fills[i].id, fills[j].id, `${a} / ${b} in ${tones.join(',')}`);
+    }));
+  }
+  assert.ok(tonesConfusable('warn', 'bad') && tonesConfusable('bad', 'warn'), 'both ways');
+  assert.ok(!tonesConfusable('c1', 'c2'));
+  assert.ok(CONFUSABLE.every((pair) => pair.split('-').every((tone) => TONES.includes(tone))), 'the list names known tones only');
 });
 
 test('marker paths are valid for every shape and survive bad numbers', () => {

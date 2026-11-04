@@ -72,7 +72,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
           {tx('Agent Buddy reads only what you can already see on {host}, including its portal pages. Nothing is written to ServiceNow.', { host: <span className="ab-mono">{host}</span> })}
         </p>
         <div className="ab-row">
-          <button type="button" className={`ab-btn${primary ? ' ab-btn-primary' : ''}`} disabled={busy} onClick={enable}>
+          <button type="button" className={`ab-btn${primary ? ' ab-btn-primary ab-btn-lg' : ''}`} disabled={busy} onClick={enable}>
             {t('Turn on for this site')}
           </button>
         </div>

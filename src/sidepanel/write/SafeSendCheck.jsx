@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { read, plainError } from '../ask.js';
 import ReviewHints from '../ReviewHints.jsx';
 import { ShowMore } from '../ui/primitives.jsx';
+import { OpenButton } from './Section.jsx';
 import { FORM_FIELDS, MAX_FORM_TEXT } from '../../compose/formFields.js';
 import { checkTypedText, internalTextsOf } from '../../safeSend/review.js';
 import { isolate, t, tn, t as tr } from '../../i18n/index.js';
@@ -108,28 +109,30 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
 
   return (
     <div className="ab-write-check">
-      <div className="ab-row ab-write-check-row">
-        <label className="ab-sub" htmlFor="ab-check-field">{t('Field')}</label>
-        <select
-          id="ab-check-field"
-          className="ab-select ab-compose-select"
-          value={field.name}
-          onChange={(e) => {
-            // A check still on its way is about the field it read: its answer must not show under the new field's name.
-            token.current += 1;
-            setFieldName(e.target.value);
-            setState(null);
-          }}
-        >
-          {CHECK_FIELDS.map((f) => (
-            <option key={f.name} value={f.name}>{tr(f.label)}</option>
-          ))}
-        </select>
-        <button type="button" className="ab-btn ab-btn-primary ab-btn-sm" disabled={!active || state?.phase === 'reading'} onClick={checkForm}>
-          {buttonLabel(field)}
-        </button>
+      <p className="ab-wk-lead">{t('Checks what you typed for personal data, passwords and internal wording before the customer sees it.')}</p>
+      <div className="ab-field ab-wk-field">
+        <label className="ab-label" htmlFor="ab-check-field">{t('Field')}</label>
+        <div className="ab-wk-inline">
+          <select
+            id="ab-check-field"
+            className="ab-select ab-wk-grow"
+            value={field.name}
+            onChange={(e) => {
+              // A check still on its way is about the field it read: its answer must not show under the new field's name.
+              token.current += 1;
+              setFieldName(e.target.value);
+              setState(null);
+            }}
+          >
+            {CHECK_FIELDS.map((f) => (
+              <option key={f.name} value={f.name}>{tr(f.label)}</option>
+            ))}
+          </select>
+          <button type="button" className="ab-btn ab-btn-primary" disabled={!active || state?.phase === 'reading'} onClick={checkForm}>
+            {buttonLabel(field)}
+          </button>
+        </div>
       </div>
-      <p className="ab-hint">{t('Checks what you typed for personal data, passwords and internal wording before the customer sees it.')}</p>
 
       {state?.phase === 'reading' && <p className="ab-sub" role="status">{state.from === 'form' ? t('Reading the form…') : t('Checking…')}</p>}
       {state?.phase === 'note' && <p className="ab-note ab-note-warn" role="status">{state.note}</p>}
@@ -166,16 +169,17 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
       )}
       {state?.partial && <p className="ab-hint">{t("The ticket's people and notes could not be read, so names and copied notes were not compared.")}</p>}
 
-      {pasteOpen ? (
-        <div className="ab-field">
+      <OpenButton open={pasteOpen} className="ab-btn ab-btn-quiet ab-btn-sm ab-write-paste" onClick={() => setPasteOpen((v) => !v)}>
+        {t('Paste the text instead')}
+      </OpenButton>
+      {pasteOpen && (
+        <div className="ab-field ab-wk-field">
           <label className="ab-label" htmlFor="ab-check-paste">{t('Text to check')}</label>
           <textarea id="ab-check-paste" className="ab-textarea ab-compose-text" maxLength={MAX_FORM_TEXT} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={t('Paste the message you are about to send')} />
           <div className="ab-row">
             <button type="button" className="ab-btn ab-btn-sm" disabled={!pasted.trim() || state?.phase === 'reading'} onClick={checkPasted}>{t('Check this text')}</button>
           </div>
         </div>
-      ) : (
-        <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-write-paste" onClick={() => setPasteOpen(true)}>{t('Paste the text instead')}</button>
       )}
     </div>
   );

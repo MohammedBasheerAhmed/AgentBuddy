@@ -247,9 +247,9 @@ const dialog = (props) => renderToStaticMarkup(<PreviewDialog feature={{ title: 
 test('L4: the dialog is a labelled modal that takes key presses itself', () => {
   const markup = dialog();
   const title = markup.match(/role="dialog" aria-modal="true" aria-labelledby="(ab-prev-title-[\w-]+)"/)?.[1];
-  assert.ok(title && markup.includes(`id="${title}">Check what will be sent</h2>`), 'labelled by its own title');
+  assert.ok(title && markup.includes(`id="${title}">Check before sending</h2>`), 'labelled by its own title');
   assert.match(markup, /class="ab-backdrop" role="presentation" tabindex="-1"/);
-  assert.ok(markup.includes('Check what will be sent'));
+  assert.ok(markup.includes('Check before sending'));
 });
 
 test('SEC-05: a preview that is shown because it includes other tickets says so instead of "you will not be asked again"', () => {
