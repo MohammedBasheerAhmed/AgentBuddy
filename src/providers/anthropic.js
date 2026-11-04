@@ -10,9 +10,10 @@
 //    behind a custom address may refuse effort, so it is left out and the request sent once more;
 //  - stop_reason 'max_tokens' (or 'model_context_window_exceeded') means the text was cut short: the reply says `truncated`;
 //    'refusal' is turned into a plain error (messages.js);
-//  - forced tool_choice is rejected, so tool use is always "auto".
+//  - no tools and no prompt caching: each request is a one-off (a different record every time), so caching the prefix would only
+//    add write cost.
 import { ANTHROPIC_API_URL, ANTHROPIC_VERSION } from './config.js';
-import { toAnthropicRequest, toAnthropicTools, fromAnthropicResponse, applyCacheControl } from './messages.js';
+import { toAnthropicRequest, fromAnthropicResponse } from './messages.js';
 import { anthropicMessagesUrl } from '../lib/aiUsage.js';
 import { AiError, requestJson } from './http.js';
 import { t, isolate } from '../i18n/index.js';
@@ -27,9 +28,9 @@ const hostOf = (url) => {
   }
 };
 
-// `baseUrl` is an optional Anthropic-compatible proxy (validated); blank = the real API. `promptCache` marks the stable
-// prefix for caching (see applyCacheControl). `name` is how messages name the provider; `signal` cancels.
-export async function sendAnthropic({ apiKey, model, messages, tools = [], maxTokens = MAX_OUTPUT_TOKENS, effort = 'medium', baseUrl = '', promptCache = true, name = '', signal, timeoutMs, fetchFn, sleep }) {
+// `baseUrl` is an optional Anthropic-compatible proxy (validated); blank = the real API. `name` is how messages name the provider;
+// `signal` cancels.
+export async function sendAnthropic({ apiKey, model, messages, maxTokens = MAX_OUTPUT_TOKENS, effort = 'medium', baseUrl = '', name = '', signal, timeoutMs, fetchFn, sleep }) {
   if (!apiKey) throw new AiError(t('Missing Anthropic API key. Add it in the Agent Buddy settings.'), 'NO_KEY');
   const url = baseUrl ? anthropicMessagesUrl(baseUrl) : ANTHROPIC_API_URL;
   const who = name || (baseUrl ? t('The endpoint {host}', { host: isolate(hostOf(baseUrl)) }) : 'Anthropic');
@@ -42,8 +43,6 @@ export async function sendAnthropic({ apiKey, model, messages, tools = [], maxTo
     output_config: { effort },
   };
   if (system) body.system = system;
-  if (tools.length) body.tools = toAnthropicTools(tools);
-  if (promptCache) body = applyCacheControl(body);
   const sent = [system, ...wire.map((m) => (typeof m.content === 'string' ? m.content : ''))].join('\n');
 
   for (let effortDropped = false; ; ) {

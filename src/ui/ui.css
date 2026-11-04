@@ -29,14 +29,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---- cards ---- */
 .ab-card { border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); padding: 10px 12px; }
 .ab-card + .ab-card { margin-top: 0; }
-.ab-record { display: flex; flex-direction: column; gap: 2px; }
 .ab-record-number { font-family: var(--ab-mono); font-size: var(--ab-text-sm); color: var(--ab-accent); font-weight: 600; }
-.ab-record-title { font-weight: 600; }
 .ab-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .ab-tag { font-size: var(--ab-text-xs); padding: 1px 6px; border-radius: var(--ab-radius-xs); background: var(--ab-bg-sunken); color: var(--ab-fg-soft); border: 1px solid var(--ab-border); }
 
 /* ---- feature list ---- */
-.ab-features { display: grid; grid-template-columns: 1fr; gap: 6px; }
 .ab-feature { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: start; width: 100%; padding: 8px 10px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius); background: var(--ab-bg-raised); cursor: pointer; }
 .ab-feature:hover:not(:disabled) { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
 .ab-feature:disabled { opacity: 0.55; cursor: not-allowed; }

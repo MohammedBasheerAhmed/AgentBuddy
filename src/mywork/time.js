@@ -24,13 +24,6 @@ export function spanText(ms) {
   return days < 3 && rest ? t('{d} d {h} h', { d: days, h: rest }) : t('{d} d', { d: days });
 }
 
-/** "3 h ago", "2 d ago", "just now". */
-export function agoText(at, now) {
-  if (!ok(at)) return '';
-  if (now - at < MINUTE) return t('just now');
-  return t('{span} ago', { span: spanText(now - at) });
-}
-
 /** "waiting 4 d", "waiting just now": how long a ticket has been in the group queue. */
 export function waitingText(at, now) {
   if (!ok(at)) return '';

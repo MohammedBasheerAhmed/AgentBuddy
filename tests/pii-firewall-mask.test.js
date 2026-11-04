@@ -49,13 +49,11 @@ test('the counts go to the stats as MANUAL, numbers only, and into the total', (
   assert.ok(!JSON.stringify(req.stats).toLowerCase().includes('falcon'));
 });
 
-test('masking can only be added: a later request without the list still masks it, and so does clear()', () => {
+test('masking can only be added: a later request without the list still masks it', () => {
   const fw = createFirewall({ people: PEOPLE });
   fw.buildRequest(input(PARTS, { mask: ['Carol Diaz'] }));
   const later = fw.buildRequest(input([part('Carol Diaz again')]));
   assert.deepEqual(bodies(later), ['[PERSON_1] again']);
-  fw.clear();
-  assert.deepEqual(bodies(fw.buildRequest(input([part('Carol Diaz again')]))), ['[PERSON_1] again']);
   // asking for the same text twice changes nothing
   const twice = fw.buildRequest(input([part('Carol Diaz')], { mask: ['carol diaz', 'Carol Diaz'] }));
   assert.deepEqual(bodies(twice), ['[PERSON_1]']);
@@ -110,7 +108,7 @@ test('the masked text is checked again on the finished request: no part of the t
 
 test('the firewall object keeps its shape: masking more is part of building a request, not a new door', () => {
   const fw = createFirewall({ people: PEOPLE });
-  assert.deepEqual(Object.keys(fw).sort(), ['buildRequest', 'clear', 'mode', 'rehydrate', 'scan', 'stats', 'toJSON']);
+  assert.deepEqual(Object.keys(fw).sort(), ['buildRequest', 'mode', 'rehydrate', 'scan', 'stats', 'toJSON']);
   fw.buildRequest(input(PARTS, { mask: ['Carol Diaz'] }));
   assert.equal(JSON.stringify(fw), '{"mode":"standard"}');
   assert.ok(!JSON.stringify(fw.stats()).includes('Carol'));

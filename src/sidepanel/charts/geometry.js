@@ -1,4 +1,4 @@
-// Pure helpers behind the charts: scales, bar / stacked / line / donut / gauge geometry, label thinning, and the plain-language
+// Pure helpers behind the charts: scales, bar / stacked / line / donut geometry, label thinning, and the plain-language
 // summaries a screen reader gets. No DOM and no React in here, so all of it is unit-tested (tests/charts-geometry.test.js).
 //
 // Every function tolerates what real data looks like: an empty list, a zero total, NaN or negative numbers (clamped to 0),
@@ -127,12 +127,6 @@ export const TONES = ['good', 'warn', 'bad', 'neutral', 'c1', 'c2', 'c3', 'c4', 
 export const CATEGORICAL = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
 
 export const normTone = (tone, fallback = 'neutral') => (TONES.includes(tone) ? tone : fallback);
-
-/** The CSS custom property that holds a tone's colour (defined in src/ui/areas/reports.css). */
-export const toneVar = (tone) => {
-  const t = normTone(tone);
-  return `var(--ab-chart-${/^c\d$/.test(t) ? t.slice(1) : t})`;
-};
 
 /** The class that sets `--tone` for an element and everything inside it. */
 export const toneClass = (tone) => `ab-tone-${normTone(tone)}`;
@@ -371,7 +365,7 @@ export function trendLayout(series, { width = 320, height = 170, padding, maxXLa
   };
 }
 
-// ---- donut and gauge ---------------------------------------------------------------------------
+// ---- donut -------------------------------------------------------------------------------------
 
 // Angles are degrees, 0 at 12 o'clock, growing clockwise.
 const polar = (cx, cy, r, angle) => {
@@ -422,70 +416,6 @@ export function donutArcs(items, { radius = 50, thickness = 18, cx, cy } = {}) {
   return { total, arcs, cx: centerX, cy: centerY, radius: outer, innerRadius: inner, size: (outer + 2) * 2 };
 }
 
-/** Tone for a gauge reading. `higherIsWorse` (a backlog, an age): at or above `bad` is bad. Otherwise (a compliance rate): at or below. */
-export function gaugeTone(value, thresholds, higherIsWorse = true) {
-  const v = num(value);
-  const warn = Number.isFinite(thresholds?.warn) ? thresholds.warn : null;
-  const bad = Number.isFinite(thresholds?.bad) ? thresholds.bad : null;
-  if (warn === null && bad === null) return 'neutral';
-  if (higherIsWorse) {
-    if (bad !== null && v >= bad) return 'bad';
-    if (warn !== null && v >= warn) return 'warn';
-    return 'good';
-  }
-  if (bad !== null && v <= bad) return 'bad';
-  if (warn !== null && v <= warn) return 'warn';
-  return 'good';
-}
-
-/**
- * Semicircle gauge from the left end over the top to the right end. `cy` is the baseline (the flat edge).
- * Returns the empty track, the filled part, and a tick for each threshold.
- */
-export function gaugeArc(value, max, { radius = 80, thickness = 14, cx, cy, thresholds } = {}) {
-  const outer = num(radius) || 80;
-  const inner = Math.max(1, outer - (num(thickness) || 14));
-  // Room around the arc for the threshold labels and the end labels.
-  const centerX = Number.isFinite(cx) ? cx : outer + 18;
-  const centerY = Number.isFinite(cy) ? cy : outer + 18;
-  const top = num(max) || 1;
-  const fraction = Math.min(1, num(value) / top);
-  const f = (n) => round(n, 2);
-  // fraction 0 is the left end (angle 270), 1 the right end (angle 90, i.e. 450)
-  const at = (r, frac) => polar(centerX, centerY, r, 270 + frac * 180);
-  const band = (frac) => {
-    if (frac <= 0) return '';
-    const so = at(outer, 0);
-    const eo = at(outer, frac);
-    const ei = at(inner, frac);
-    const si = at(inner, 0);
-    return `M${f(so.x)} ${f(so.y)}A${f(outer)} ${f(outer)} 0 0 1 ${f(eo.x)} ${f(eo.y)}L${f(ei.x)} ${f(ei.y)}A${f(inner)} ${f(inner)} 0 0 0 ${f(si.x)} ${f(si.y)}Z`;
-  };
-  const marks = ['warn', 'bad']
-    .filter((name) => Number.isFinite(thresholds?.[name]) && thresholds[name] >= 0 && thresholds[name] <= top)
-    .map((name) => {
-      const frac = thresholds[name] / top;
-      const a = at(inner - 3, frac);
-      const b = at(outer + 3, frac);
-      const label = at(outer + 11, frac);
-      return { name, value: thresholds[name], fraction: round(frac, 6), x1: f(a.x), y1: f(a.y), x2: f(b.x), y2: f(b.y), lx: f(label.x), ly: f(label.y) };
-    });
-  return {
-    fraction: round(fraction, 6),
-    track: band(1),
-    fill: band(fraction),
-    ticks: marks,
-    cx: centerX,
-    cy: centerY,
-    width: round(centerX * 2, 2),
-    height: round(centerY + 18, 2),
-    radius: outer,
-    innerRadius: inner,
-    left: { x: f(at(outer, 0).x), y: f(centerY) },
-    right: { x: f(at(outer, 1).x), y: f(centerY) },
-  };
-}
-
 // ---- heat strip --------------------------------------------------------------------------------
 
 /** Step 1 to 5 on the sequential scale. Zero is step 1 on its own; anything above zero is 2 to 5, relative to the largest cell. */
@@ -508,8 +438,6 @@ export function heatLayout(cells, { total } = {}) {
 }
 
 // ---- text for people who cannot see the chart ----------------------------------------------------
-
-const statusWord = (tone) => ({ good: t('good'), warn: t('warning'), bad: t('bad') })[tone];
 
 /**
  * "In Progress 12 (40%), New 8 (27%), and 3 more. Total 30." With `shares: false` (values that are not parts of a whole, such as
@@ -560,14 +488,6 @@ export function summarizeSeries(series, { unit = '', maxSeries = 4 } = {}) {
       return t('{name}: starts at {first}, ends at {last}, highest {high}.', { name, first: at(pts[0]), last: at(pts[pts.length - 1]), high: at(high) });
     })
     .join(' ');
-}
-
-/** "SLA met: 82% of 100% (warning)". */
-export function summarizeGauge({ label, value, max, unit = '', tone } = {}) {
-  const v = withUnit(formatNumber(num(value), { decimals: Number.isInteger(num(value)) ? 0 : 1 }), unit);
-  const shown = num(max) ? t('{value} of {max}', { value: v, max: withUnit(formatNumber(num(max)), unit) }) : v;
-  const status = statusWord(tone) ? ` (${statusWord(tone)})` : '';
-  return `${label ? `${clipLabel(label, 40)}: ` : ''}${shown}${status}.`;
 }
 
 /** The plain sentence for a tile: "Open: 12, assigned to your groups. Up 3 since yesterday." */

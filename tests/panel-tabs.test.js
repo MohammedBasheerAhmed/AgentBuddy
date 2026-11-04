@@ -1,14 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import Tabs, { TabPanel } from '../src/sidepanel/Tabs.jsx';
-import { nextTabIndex, panelId, sharedPanelId, tabId } from '../src/sidepanel/tabKeys.js';
-import RecordView from '../src/sidepanel/RecordView.jsx';
-import KnowledgeToolsView from '../src/sidepanel/tabs/KnowledgeToolsView.jsx';
-import { normalizePolicy } from '../src/policy/policy.js';
-
-globalThis.React = React;
+import Tabs from '../src/sidepanel/Tabs.jsx';
+import { nextTabIndex, panelId, tabId } from '../src/sidepanel/tabKeys.js';
 
 // Integration review M10: one tab list for the whole panel, with the keyboard behaviour its roles promise.
 
@@ -34,7 +28,6 @@ test('a list with one tab, or none, or an unknown position cannot get lost', () 
 test('ids: a tab and its panel always point at each other', () => {
   assert.equal(tabId('ab-sec', 'write'), 'ab-sec-tab-write');
   assert.equal(panelId('ab-sec', 'write'), 'ab-sec-panel-write');
-  assert.equal(sharedPanelId('ab-rec'), 'ab-rec-panel');
 });
 
 const TABS = [{ id: 'a', label: 'Alpha' }, { id: 'b', label: 'Beta' }, { id: 'c', label: 'Gamma' }];
@@ -54,71 +47,4 @@ test('Tabs: a value that is not a tab (the record changed kind) still leaves one
   const markup = tabs({ value: 'gone' });
   assert.equal((markup.match(/tabindex="0"/g) || []).length, 1);
   assert.match(markup, /id="x-tab-a"[^>]*aria-selected="true"/);
-});
-
-test('Tabs shared: all tabs control the one panel, which is labelled by the chosen tab', () => {
-  const markup = renderToStaticMarkup(
-    <>
-      <Tabs idBase="x" label="Things" tabs={TABS} value="c" onChange={() => {}} shared />
-      <TabPanel idBase="x" shared value="c">content</TabPanel>
-    </>
-  );
-  assert.equal((markup.match(/aria-controls="x-panel"/g) || []).length, 3);
-  assert.match(markup, /<div id="x-panel" role="tabpanel" aria-labelledby="x-tab-c">content<\/div>/);
-});
-
-test('TabPanel per tab: labelled by its tab, hidden when it is not the chosen one', () => {
-  const markup = renderToStaticMarkup(
-    <>
-      <TabPanel idBase="x" id="a" hidden>one</TabPanel>
-      <TabPanel idBase="x" id="b">two</TabPanel>
-    </>
-  );
-  assert.match(markup, /<div id="x-panel-a" role="tabpanel" aria-labelledby="x-tab-a" hidden="">one<\/div>/);
-  assert.match(markup, /<div id="x-panel-b" role="tabpanel" aria-labelledby="x-tab-b">two<\/div>/);
-});
-
-// ---- where it is used ------------------------------------------------------------------------------------------------------------
-
-const eff = (over = {}) => ({
-  ready: true,
-  values: { provider: 'anthropic', piiMode: 'standard', previewMode: 'always', previewSeen: [], models: {} },
-  locked: {},
-  policy: normalizePolicy({}),
-  apiKey: 'sk-ant-test',
-  keyLocked: false,
-  ...over,
-});
-const page = (kind, table) => ({ status: 'record', tabId: 1, href: 'https://acme.service-now.com/x', surface: 'classic', record: { table, sysId: 'a'.repeat(32), number: 'X1', kind }, newRecord: null, user: null });
-
-// Changed in the usability pass: a record's tabs keep what was found or chosen in them while another tab is on show, so each tab has
-// its own panel (hidden when another one shows) instead of one panel whose content is swapped.
-test('a record view has one labelled tab list and a panel for each tab, each pointing at the other', () => {
-  const markup = renderToStaticMarkup(<RecordView page={page('incident', 'incident')} eff={eff()} />);
-  assert.match(markup, /aria-label="Record tools"/);
-  assert.ok(!markup.includes('Panel sections'));
-  for (const label of ['Actions', 'Related', 'Check']) assert.ok(markup.includes(`>${label}</button>`), label);
-  for (const id of ['actions', 'related', 'check']) {
-    assert.ok(markup.includes(`aria-controls="ab-rec-panel-${id}"`), id);
-    assert.match(markup, new RegExp(`<div id="ab-rec-panel-${id}" role="tabpanel" aria-labelledby="ab-rec-tab-${id}"`), id);
-  }
-  assert.match(markup, /<div id="ab-rec-panel-related" role="tabpanel" aria-labelledby="ab-rec-tab-related" class="ab-pane" hidden="">/, 'only the chosen one is on show');
-  assert.equal((markup.match(/tabindex="0"/g) || []).length, 1, 'one tab stop in the tab list');
-});
-
-test('the tabs of a record view follow its kind', () => {
-  const labels = (kind, table) => [...renderToStaticMarkup(<RecordView page={page(kind, table)} eff={eff()} />).matchAll(/role="tab"[^>]*>([^<]*)</g)].map((m) => m[1]);
-  assert.deepEqual(labels('incident', 'incident'), ['Actions', 'Related', 'Check']);
-  assert.deepEqual(labels('catalog_task', 'sc_task'), ['Actions', 'Related', 'Request', 'Check', 'Checklist']);
-  assert.deepEqual(labels('knowledge', 'kb_knowledge'), ['Actions', 'Related', 'Article']);
-});
-
-test('the Knowledge tools are one tab list, a panel for each tool, the second one hidden and still there', () => {
-  const markup = renderToStaticMarkup(<KnowledgeToolsView page={page('incident', 'incident')} eff={eff()} />);
-  assert.match(markup, /aria-label="Knowledge tools"/);
-  assert.match(markup, /id="ab-kbt-tab-duplicates"[^>]*aria-selected="true"[^>]*aria-controls="ab-kbt-panel-duplicates"/);
-  assert.match(markup, /id="ab-kbt-tab-gaps"[^>]*aria-selected="false"[^>]*aria-controls="ab-kbt-panel-gaps"[^>]*tabindex="-1"/);
-  assert.match(markup, /<div id="ab-kbt-panel-duplicates" role="tabpanel" aria-labelledby="ab-kbt-tab-duplicates" class="ab-pane">/);
-  assert.match(markup, /<div id="ab-kbt-panel-gaps" role="tabpanel" aria-labelledby="ab-kbt-tab-gaps" class="ab-pane" hidden="">/);
-  assert.match(markup, /Articles to write/, 'the Gaps tool is mounted, so what it found survives a look at the other one');
 });

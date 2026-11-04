@@ -129,13 +129,6 @@ test('scan() reports names found in prose too (the review of a draft uses it), w
   assert.deepEqual(found.map((f) => [f.kind, f.value]), [['PERSON', 'Tom'], ['PERSON', 'Anna Schmidt']]);
 });
 
-test('names stay masked after clear(): clearing forgets placeholders, never what to mask', () => {
-  const fw = createFirewall({ people: [] });
-  fw.buildRequest(request([part('Hi Tom,')]));
-  fw.clear();
-  assert.deepEqual(bodies(fw.buildRequest(request([part('Tom called.')]))), ['[PERSON_1] called.']);
-});
-
 test('the final check still fails closed, and a prose name never makes a request fail by itself', () => {
   const fw = createFirewall({ people: PEOPLE });
   assert.throws(() => fw.buildRequest(request([part('Hi Tom, NI AB123456C4111 1111 1111 1111 on file')])), (e) => e instanceof FirewallError && e.code === 'REDACTION_FAILED');

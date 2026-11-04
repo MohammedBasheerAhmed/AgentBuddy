@@ -1,15 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { NOTES_UNREADABLE, buildCheckView, resolutionCheck } from '../src/checks/resolutionCheck.js';
-import { CheckList } from '../src/sidepanel/checks/CheckList.jsx';
 import { readContextPack } from '../src/context/pack.js';
 import { fakeDeps } from './fixtures/sn-fakeDeps.js';
 import { buildInstance } from './fixtures/sn-instance.js';
 import { INCIDENT_ID, NOW } from './fixtures/sn-incident.js';
-
-globalThis.React = React;
 
 // Integration review M3: the Check tab must not say "nothing there" about notes it was not allowed to read.
 
@@ -99,14 +94,6 @@ test('the summary of a ticket whose notes could not be read never says it is all
   const view = buildCheckView(incident({ access: journal('denied') }), { form: { close_notes: GOOD_NOTES }, links: { problem: { status: 'yes' }, knowledge: { status: 'yes' } } }, { now: NOW });
   assert.equal(view.summary.tone, 'info');
   assert.equal(view.summary.headline, 'Nothing is wrong, but there are a few notes');
-});
-
-test('drawn: the unreadable-notes line says "Note", and table names in the access note are put into words', () => {
-  const view = buildCheckView(incident({ access: journal('error', 'Could not read sys_journal_field: HTTP 500') }), {}, { now: NOW });
-  const markup = renderToStaticMarkup(<CheckList checks={view.checks} />);
-  assert.match(markup, /Could not read the notes and comments/);
-  assert.match(markup, /Could not read notes and comments: HTTP 500/);
-  assert.ok(!markup.includes('sys_journal_field'));
 });
 
 test('from a real pack: a denied journal table, and no notes on the record itself, gives the same answer', async () => {

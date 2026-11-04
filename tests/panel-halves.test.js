@@ -6,8 +6,6 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { HalfPanel, HalfSwitch } from '../src/sidepanel/ui/primitives.jsx';
 
-globalThis.React = React;
-
 // The Insights / AI Assist switch and its panels (found by the accessibility audit, e2e scenario zz): a panel is a tab panel only
 // where the switch that names it is on screen, and the selected tab still shows where the keyboard focus is.
 

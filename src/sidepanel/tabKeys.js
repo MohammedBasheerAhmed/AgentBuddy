@@ -28,4 +28,3 @@ export function nextTabIndex(key, at, count) {
 /** The ids a tab and its panel get, so aria-controls and aria-labelledby always point at each other. */
 export const tabId = (base, id) => `${base}-tab-${id}`;
 export const panelId = (base, id) => `${base}-panel-${id}`;
-export const sharedPanelId = (base) => `${base}-panel`;

@@ -85,8 +85,6 @@ export function isSensitiveReportTable(table, prefixes = []) {
 /** The report tables anyone may be offered: every one that is not sensitive. */
 export const STANDARD_TABLE_IDS = Object.freeze(REPORT_TABLE_IDS.filter((t) => !isSensitiveReportTable(t)));
 
-export const tableLabel = (table) => REPORT_TABLES[table]?.label || table;
-
 /**
  * The one column of the signed-in person's OWN user record the reports read: their ServiceNow time zone, so 'today' and 'this week'
  * are their days (src/content/ops/reports.js readUserZone; a soft read, the browser's zone when it fails).
@@ -121,7 +119,6 @@ export const LIMITS = Object.freeze({
   // A scope holds at most this many groups (the query stays short); a person's memberships are read up to membershipMax.
   maxGroups: 25,
   membershipMax: 200,
-  maxTables: 6,
   topN: 10,
   // At or above this share of its time used, an SLA is "at risk" (the same line My Day draws).
   slaAtRiskPercent: AT_RISK_PERCENT,

@@ -28,17 +28,6 @@ export function instanceOf(page) {
  */
 export const placeOf = (page) => `${page?.tabId ?? ''}|${instanceOf(page)}`;
 
-const keyOf = (page, name) => `${instanceOf(page)}|${name}`;
-
-export const getShared = (page, name) => values.get(keyOf(page, name)) ?? null;
-
-export function setShared(page, name, value) {
-  const key = keyOf(page, name);
-  if (value === null || value === undefined) values.delete(key);
-  else values.set(key, value);
-  notify();
-}
-
 /** Forget everything (tests). */
 export function clearShared() {
   values.clear();

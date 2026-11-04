@@ -12,8 +12,6 @@ import { setLanguage } from '../src/i18n/index.js';
 import { FEATURES } from '../src/features/registry.js';
 import { QUICK_LABELS } from '../src/features/quick.js';
 
-globalThis.React = React;
-
 const eff = (values = {}, policy = {}) => ({ ready: true, ...effectiveSettings(values, policy) });
 const incident = { table: 'incident', sysId: 'a'.repeat(32), kind: 'incident' };
 const recordPage = { tabId: 7, record: incident };

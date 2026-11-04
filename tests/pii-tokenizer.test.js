@@ -121,15 +121,6 @@ test('the map exists only inside the tokenizer: nothing serialises or enumerates
   assert.ok(!String(t).includes('example.com'));
 });
 
-test('clear forgets every placeholder', () => {
-  const t = createTokenizer();
-  const ph = t.placeholderFor(f('EMAIL', 'a@x.com'));
-  t.clear();
-  assert.equal(t.size, 0);
-  assert.equal(t.rehydrate(ph), ph);
-  assert.equal(t.placeholderFor(f('EMAIL', 'b@x.com')), '[EMAIL_1]', 'numbering restarts');
-});
-
 test('rehydrate is safe with odd input', () => {
   const t = createTokenizer();
   assert.equal(t.rehydrate(undefined), '');

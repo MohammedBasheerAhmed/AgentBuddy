@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ErrorBoundary, { BOUNDARY_TEXT } from '../src/sidepanel/ErrorBoundary.jsx';
 import { HEADER_DENIED, HEADER_LOADING, HEADER_NO_TITLE, describeHeader, headerPhase } from '../src/sidepanel/recordHeader.js';
@@ -11,8 +10,6 @@ import { FOCUSABLE, dialogKeyAction, inertOutside } from '../src/sidepanel/dialo
 import PreviewDialog from '../src/sidepanel/PreviewDialog.jsx';
 import Notes from '../src/sidepanel/knowledge/Notes.jsx';
 import { normalizePolicy } from '../src/policy/policy.js';
-
-globalThis.React = React;
 
 // ---- M9: the error boundary --------------------------------------------------------------------------------------------------
 

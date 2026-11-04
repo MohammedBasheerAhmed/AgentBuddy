@@ -42,7 +42,7 @@ Workspaces **and portals** (Service Portal, Employee Center, customer service po
 
 - **Own your files only.** Your brief lists the files and folders you own. You may create new files inside your own folders. Do NOT
   edit anything else. If you need a change in a shared file (for example `useRun.js`, `ResultView.jsx`, `pipeline.js`, `registry.js`,
-  `App.jsx`, `RecordView.jsx`, `recordTabs.js`, `manifest.json`, `package.json`, `build.js` unless it is yours), do not edit it:
+  `App.jsx`, `manifest.json`, `package.json`, `build.js` unless it is yours), do not edit it:
   describe the exact change in your final report. The lead applies it.
 - **Do not commit, do not push.** The lead commits. Leave your work in the tree.
 - **Run only what is safe in parallel:** `node tests/run.js [filter]` (own temp folder per process) and `node scripts/check-compile.js`

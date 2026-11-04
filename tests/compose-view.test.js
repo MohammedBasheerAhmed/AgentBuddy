@@ -5,10 +5,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { WriteAssist, WriteInsights } from '../src/sidepanel/write/index.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 
-// Some shared components (RunPanel...) use JSX without importing React; the build uses the automatic runtime, this bundle
-// uses the classic one. Providing React globally makes the same code render here.
-globalThis.React = React;
-
 // First render only (effects do not run in a static render): enough to catch a broken import, a typo in a render path, and to look
 // at the structure and the safety of the markup of the Write screen's two halves (round 3). Behaviour is covered by
 // tests/panel-live-write.test.js and the pure-module tests; nothing here is a substitute for using the panel in a real browser.

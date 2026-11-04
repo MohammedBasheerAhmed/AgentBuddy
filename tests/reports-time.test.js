@@ -1,11 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-import { startOfLocalDay, startOfLocalWeek, bucketStarts, bucketCounts, bucketLabels, dayLabel, quantize, daysBetween, median, mean, formatDuration, DAY, HOUR } from '../src/reports/engine/time.js';
+import { startOfLocalDay, bucketStarts, bucketCounts, bucketLabels, dayLabel, quantize, median, mean, DAY } from '../src/reports/engine/time.js';
 import { ageBuckets } from '../src/reports/engine/workload.js';
 import { backlogSeries, partialBuckets, durationsHours, repeatCallers, mergeTop, normalizeTrend } from '../src/reports/engine/quality.js';
 import { NOW } from './reports-fixtures.js';
 
-test('local day and week starts follow the time zone offset', () => {
+test('local day starts follow the time zone offset', () => {
   // 12:00 UTC on Tuesday 27 Oct 2026.
   assert.equal(new Date(startOfLocalDay(NOW, 0)).toISOString(), '2026-10-27T00:00:00.000Z');
   // UTC-5 (offset +300): local time is 07:00, the day began at 05:00 UTC.
@@ -15,9 +15,6 @@ test('local day and week starts follow the time zone offset', () => {
   // 02:00 UTC is still yesterday for someone at UTC-5.
   const early = Date.UTC(2026, 9, 27, 2, 0, 0);
   assert.equal(new Date(startOfLocalDay(early, 300)).toISOString(), '2026-10-26T05:00:00.000Z');
-  assert.equal(new Date(startOfLocalWeek(NOW, 0)).toISOString(), '2026-10-26T00:00:00.000Z'); // Monday
-  const sunday = Date.UTC(2026, 9, 25, 12, 0, 0);
-  assert.equal(new Date(startOfLocalWeek(sunday, 0)).toISOString(), '2026-10-19T00:00:00.000Z');
 });
 
 test('buckets run oldest to newest and end with the current day or week', () => {
@@ -112,13 +109,4 @@ test('trend choices fall back to 30 days', () => {
   assert.equal(normalizeTrend({ unit: 'day', span: 14 }).id, 'day-14');
   assert.equal(normalizeTrend('nope').id, 'day-30');
   assert.equal(normalizeTrend(undefined).id, 'day-30');
-});
-
-test('small helpers', () => {
-  assert.equal(daysBetween(NOW - 3 * DAY - HOUR, NOW), 3);
-  assert.equal(daysBetween(NOW + DAY, NOW), 0);
-  assert.equal(formatDuration(0.5), '30 min');
-  assert.equal(formatDuration(5), '5 h');
-  assert.equal(formatDuration(72), '3 d');
-  assert.equal(formatDuration(NaN), '');
 });

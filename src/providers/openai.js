@@ -2,7 +2,7 @@
 // DeepSeek, OpenRouter), Ollama and any compatible server. Keep this module the only place that knows that request/response
 // shape; anthropic.js is its sibling. Sending, time limits, retries and error wording are in http.js.
 import { OPENAI_MODEL, OPENAI_API_URL } from './config.js';
-import { toOpenAIMessages, toOpenAITools, fromOpenAIResponse } from './messages.js';
+import { toOpenAIMessages, fromOpenAIResponse } from './messages.js';
 import { chatCompletionsUrl, modelsUrl, azureChatUrl } from '../lib/aiUsage.js';
 import { AiError, requestJson, LIST_TIMEOUT_MS } from './http.js';
 import { t, isolate } from '../i18n/index.js';
@@ -69,7 +69,7 @@ export async function fetchModelsBody({ apiKey, baseUrl = '', fetchFn, signal, s
  * resource address and `model` the deployment. `keyOptional` is for a server on this machine that needs no key. `name` is the
  * provider's name for messages. `signal` cancels; `timeoutMs`, `fetchFn` and `sleep` are passed to http.js.
  */
-export async function sendOpenAI({ apiKey, model = OPENAI_MODEL, messages, tools = [], baseUrl = '', azure = null, keyOptional = false, name = '', signal, timeoutMs, fetchFn, sleep }) {
+export async function sendOpenAI({ apiKey, model = OPENAI_MODEL, messages, baseUrl = '', azure = null, keyOptional = false, name = '', signal, timeoutMs, fetchFn, sleep }) {
   const who = name || (baseUrl ? t('The endpoint {host}', { host: isolate(hostOf(baseUrl)) }) : 'OpenAI');
   if (!apiKey && !keyOptional) {
     throw new AiError(!baseUrl && !name ? t('Missing OpenAI API key. Configure it in the Agent Buddy settings.') : t('Missing API key for {who}. Configure it in the Agent Buddy settings.', { who }), 'NO_KEY');
@@ -78,7 +78,6 @@ export async function sendOpenAI({ apiKey, model = OPENAI_MODEL, messages, tools
   const body = { model, messages: wire };
   if (!FIXED_TEMPERATURE.test(model)) body.temperature = 0.2;
   if (azure || !baseUrl) body.max_completion_tokens = MAX_OUTPUT_TOKENS;
-  if (tools.length) body.tools = toOpenAITools(tools);
 
   const { url, keyHeader } = chatTarget({ baseUrl, azure, model });
   // The plain text that was sent, so an error that quotes it is not shown (http.js safeReason).

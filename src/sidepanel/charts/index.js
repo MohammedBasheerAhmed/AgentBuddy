@@ -5,7 +5,6 @@ export { default as HorizontalBar } from './HorizontalBar.jsx';
 export { default as StackedBar } from './StackedBar.jsx';
 export { default as TrendChart } from './TrendChart.jsx';
 export { default as Donut } from './Donut.jsx';
-export { default as Gauge } from './Gauge.jsx';
 export { default as HeatStrip } from './HeatStrip.jsx';
 export { default as DataTable } from './DataTable.jsx';
 export { default as ChartFrame, PatternDefs, Swatch, patternId, useUid } from './ChartFrame.jsx';

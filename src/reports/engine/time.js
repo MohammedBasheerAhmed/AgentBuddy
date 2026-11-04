@@ -106,11 +106,6 @@ export function startOfLocalDay(ms, tz = localOffset) {
 
 const mondayOf = (localDate) => localDate - ((new Date(localDate).getUTCDay() + 6) % 7) * DAY; // getUTCDay of a local date = local weekday
 
-/** The instant the local week (Monday first) containing `ms` began. */
-export function startOfLocalWeek(ms, tz = localOffset) {
-  return Math.min(ms, instantOfLocalDate(mondayOf(localDateOf(ms, tz)), tz));
-}
-
 /** 'Oct 27' for the local day that starts at `startMs`. */
 export function dayLabel(startMs, tz = localOffset) {
   const d = new Date(startMs - offsetAt(tz, startMs) * MINUTE);
@@ -155,9 +150,6 @@ export function bucketCounts(timestamps, starts, step = DAY) {
   return counts;
 }
 
-/** Whole days between two instants (never negative). */
-export const daysBetween = (fromMs, toMs) => Math.max(0, Math.floor((toMs - fromMs) / DAY));
-
 /**
  * Calendar days in the person's zone from the day of `fromMs` to the day of `toMs`: 0 on the same day, 1 for a ticket opened yesterday
  * evening and looked at this morning (13 hours, but not "opened today"). Never negative.
@@ -172,14 +164,6 @@ export const snLiteral = (ms) => formatSnTime(ms);
 
 /** ms for a stored date-time cell; NaN when it is empty or not a date. */
 export const timeOf = (text) => parseSnTime(text);
-
-/** Hours as 'x.y h' / 'x.y d' for people. */
-export function formatDuration(hours) {
-  if (!Number.isFinite(hours)) return '';
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
-  if (hours < 48) return `${Math.round(hours * 10) / 10} h`;
-  return `${Math.round((hours / 24) * 10) / 10} d`;
-}
 
 export const median = (values) => {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);

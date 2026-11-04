@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PreviewDialog from '../src/sidepanel/PreviewDialog.jsx';
 import { errorNextSteps, madeWithout, madeWithoutLine, otherRecordsSummary, previewStyle, splitPreview, waitingText } from '../src/sidepanel/runLogic.js';
@@ -9,8 +8,6 @@ import { createFirewall } from '../src/pii/index.js';
 import { prepareRun, maskMore } from '../src/lib/pipeline.js';
 import { effectiveSettings, normalizePolicy, DEFAULT_SETTINGS } from '../src/policy/policy.js';
 import { resolveProviderConfig } from '../src/providers/config.js';
-
-globalThis.React = React;
 
 // The check before a send (TRACKER.md AI0.2): the ticket data first and the fixed rules folded, the exact text one click away and
 // still exactly what is sent; the short check for look-alike tickets after the first time. And the lines around an answer (AI0.4):

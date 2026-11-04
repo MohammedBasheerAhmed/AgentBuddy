@@ -6,8 +6,6 @@ import { MAX_AGE_MS, clearPending, getPending, originOf, pendingFits, setPending
 import PendingDraft from '../src/sidepanel/PendingDraft.jsx';
 import { featureById } from '../src/features/registry.js';
 
-globalThis.React = React;
-
 // AB-SEC-17: the draft carried to a blank form belongs to one site, lasts 15 minutes, and goes after it is used or closed.
 
 const ORIGIN = 'https://acme.service-now.com';

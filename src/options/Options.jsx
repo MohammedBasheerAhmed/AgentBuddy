@@ -629,7 +629,7 @@ export function UsageSection({ eff }) {
   const [state, setState] = useState(null);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState(null);
-  const load = useCallback(() => readBudgetState().then(setState).catch(() => setState({ log: [], prices: {}, caps: {} })), []);
+  const load = useCallback(() => readBudgetState().then(setState).catch(() => setState({ log: [], caps: {} })), []);
   useEffect(() => {
     load();
   }, [load]);

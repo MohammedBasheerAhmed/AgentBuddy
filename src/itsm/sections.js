@@ -120,12 +120,3 @@ export function pickArticleBody(plain) {
   }
   return lines.slice(first, end).join('\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 }
-
-const SIMILAR_LINE = /^\s*Similar article exists:\s*([A-Za-z]{2,12}\d{4,12})\s+(.+?)\.?\s*Consider updating it instead\.?\s*$/i;
-
-/** { number, title } when the first line of the answer says a similar article exists, otherwise null. */
-export function similarArticleLine(plain) {
-  const first = String(plain ?? '').split('\n').find((l) => l.trim());
-  const m = first ? SIMILAR_LINE.exec(first) : null;
-  return m ? { number: m[1].toUpperCase(), title: m[2].trim() } : null;
-}

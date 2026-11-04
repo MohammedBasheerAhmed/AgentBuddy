@@ -6,7 +6,7 @@ import { AREAS, KEY_PREFIX, STORED_DATA, clearAllStored, describeKey, summarizeS
 import { SETTINGS_KEY, SNIPPETS_KEY } from '../src/lib/storage.js';
 import { AUDIT_KEY, AUDIT_SALT_KEY } from '../src/audit/auditLog.js';
 import { CHECKLIST_KEY } from '../src/checks/checklistStore.js';
-import { CAPS_KEY, PRICES_KEY, USAGE_KEY } from '../src/lib/aiUsage.js';
+import { CAPS_KEY, USAGE_KEY } from '../src/lib/aiUsage.js';
 import { DASHBOARDS_KEY } from '../src/reports/dashboards.js';
 
 // AB-SEC-10: "Clear everything stored by Agent Buddy" removes every agentbuddy_* key in local and session storage and nothing else,
@@ -33,7 +33,7 @@ test('every agentbuddy_ key is removed from local and session storage', async ()
     [AUDIT_KEY]: [{}],
     [AUDIT_SALT_KEY]: 'salt',
     [USAGE_KEY]: [],
-    [PRICES_KEY]: {},
+    agentbuddy_ai_prices: {},
     [CAPS_KEY]: {},
     [DASHBOARDS_KEY]: {},
     agentbuddy_key_anthropic: 'sk-ant-123',

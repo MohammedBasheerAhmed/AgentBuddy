@@ -4,7 +4,6 @@ import { FEATURES, featureById, featuresFor, insertsFor } from '../src/features/
 import { FIELDS_BY_KIND } from '../src/context/allowlists.js';
 import { kindForTable, KINDS } from '../src/context/kinds.js';
 import { normalizePolicy } from '../src/policy/policy.js';
-import { destinationNote } from '../src/checks/requestView.js';
 
 // Integration review M6: a feature must not be offered on a kind of record where it cannot do what its button says. The ceiling
 // (FIELDS_BY_KIND) is what a record of that kind may ever be read for, so a feature whose insert goes into a column the ceiling
@@ -77,10 +76,4 @@ test('routing-hint is offered where category and assignment group are on the cei
   assert.ok(!featuresFor('request', policy).some((f) => f.id === 'routing-hint' || f.id === 'resolution-notes'));
   assert.ok(featuresFor('incident', policy).some((f) => f.id === 'routing-hint'));
   assert.ok(featuresFor('requested_item', policy).some((f) => f.id === 'resolution-notes'));
-});
-
-test('a catalog task says where the message for the requester goes; other kinds say nothing extra', () => {
-  assert.equal(destinationNote({ kind: 'catalog_task' }), "This goes into the task's comments.");
-  for (const kind of ['request', 'requested_item', 'incident']) assert.equal(destinationNote({ kind }), '');
-  assert.equal(destinationNote(null), '');
 });

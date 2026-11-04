@@ -8,7 +8,6 @@
 //
 // To add a section: add an entry below, give the engine a section with the same id (or have the View call its own reader), and add
 // the id to SECTION_IDS in src/reports/engine/constants.js so a saved dashboard can hold it. Nothing else in the dashboard changes.
-import { featureById, isFeatureAvailable } from '../../features/registry.js';
 import { tm } from '../../i18n/index.js';
 import OverviewView from './OverviewView.jsx';
 import WorkloadView from './WorkloadView.jsx';
@@ -38,9 +37,3 @@ export const sectionById = (id) => REPORT_SECTIONS.find((s) => s.id === id) || n
 /** The sections Customize offers: the Insights ones only (the AI ones are under AI Assist). `policy` is kept for callers. */
 // eslint-disable-next-line no-unused-vars
 export const addableSections = (policy) => REPORT_SECTIONS.filter((s) => !s.ai);
-
-/** Is this AI section allowed by the organisation's policy? (For the AI Assist half.) */
-export const aiSectionAllowed = (id, policy) => {
-  const s = sectionById(id);
-  return Boolean(s?.feature) && isFeatureAvailable(featureById(s.feature), policy);
-};

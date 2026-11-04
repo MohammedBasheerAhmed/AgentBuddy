@@ -121,7 +121,6 @@ export const AR_TICKET_LOGIC = {
   'No state': 'بلا حالة',
   'Requested items': 'العناصر المطلوبة',
   'Catalog tasks': 'مهام الكتالوج',
-  "This goes into the task's comments.": 'سيضاف هذا إلى تعليقات المهمة.',
   '{person} in {group}': '{person} في {group}',
 
   // ---- "Ready to resolve?" (src/checks/resolutionCheck.js) -----------------------------------------------------------------------

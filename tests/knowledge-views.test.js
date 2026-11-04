@@ -2,17 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import KnowledgeRecordView from '../src/sidepanel/tabs/KnowledgeRecordView.jsx';
-import ChatRecordView from '../src/sidepanel/tabs/ChatRecordView.jsx';
 import { KnowledgeAssist, KnowledgeInsights } from '../src/sidepanel/knowledgeScreen/index.js';
 import DuplicatesPanel from '../src/sidepanel/knowledge/DuplicatesPanel.jsx';
 import GapsPanel from '../src/sidepanel/knowledge/GapsPanel.jsx';
 import Notes from '../src/sidepanel/knowledge/Notes.jsx';
-import { RECORD_TABS } from '../src/sidepanel/recordTabs.js';
 import { normalizePolicy } from '../src/policy/policy.js';
-
-// Some shared components use JSX without importing React; the build uses the automatic runtime, this bundle the classic one.
-globalThis.React = React;
 
 // First render only (effects do not run in a static render): enough to catch a broken import or a typo in a render path and to
 // look at the structure and safety of the markup. Behaviour after the first read is covered by the pure-module and op tests;
@@ -35,44 +29,7 @@ const page = (table, kind) => ({
   newRecord: null,
   user: { name: 'Beth Anglin' },
 });
-const run = (over = {}) => ({ busy: false, phase: 'idle', run() {}, reset() {}, ...over });
 const html = (View, props) => renderToStaticMarkup(React.createElement(View, props));
-
-test('the Article and Chat tabs are registered for their kinds only', () => {
-  const tab = (id) => RECORD_TABS.find((t) => t.id === id);
-  assert.deepEqual(tab('article').kinds, ['knowledge']);
-  assert.deepEqual(tab('chat').kinds, ['chat']);
-  assert.equal(tab('article').View, KnowledgeRecordView);
-  assert.equal(tab('chat').View, ChatRecordView);
-});
-
-test('the Article tab starts by reading, offers the AI button, and enables it only with a key and when policy allows', () => {
-  const p = page('kb_knowledge', 'knowledge');
-  const props = { page: p, eff: eff(), record: p.record, header: null, run: run(), aiReady: true };
-  const ready = html(KnowledgeRecordView, props);
-  assert.match(ready, /Checks on this article/);
-  assert.match(ready, /Reading the article/);
-  assert.match(ready, /Nothing here is sent to an AI/);
-  assert.match(ready, /<button[^>]*class="ab-btn ab-btn-primary"[^>]*>Suggest improvements<\/button>/);
-  assert.doesNotMatch(ready, /class="ab-btn ab-btn-primary"[^>]*disabled/);
-  const noKey = html(KnowledgeRecordView, { ...props, aiReady: false });
-  assert.match(noKey, /class="ab-btn ab-btn-primary"[^>]*disabled=""[^>]*>Suggest improvements/);
-  const off = html(KnowledgeRecordView, { ...props, eff: eff({ policy: normalizePolicy({ disabledFeatures: ['article-optimise'] }) }) });
-  assert.match(off, /Your organisation has switched this off/);
-  assert.match(off, /disabled=""[^>]*>Suggest improvements/);
-});
-
-test('the Chat tab starts by reading and has both AI buttons, disabled while a run is busy', () => {
-  const p = page('interaction', 'chat');
-  const props = { page: p, eff: eff(), record: p.record, header: null, run: run(), aiReady: true };
-  const idle = html(ChatRecordView, props);
-  assert.match(idle, /Reading the conversation/);
-  assert.match(idle, />Summarise this chat<\/button>/);
-  assert.match(idle, />Suggest replies<\/button>/);
-  assert.match(idle, /copy the one you want into the chat/);
-  const busy = html(ChatRecordView, { ...props, run: run({ busy: true }) });
-  assert.ok((busy.match(/disabled=""/g) || []).length >= 2);
-});
 
 // Round 3: the Knowledge screen is split into Insights (no AI) and AI Assist; search is for everyone, the knowledge-manager tools for
 // the km work profile only (docs/round3.md, TRACKER.md N18, N19, N23, AI26, AI27).

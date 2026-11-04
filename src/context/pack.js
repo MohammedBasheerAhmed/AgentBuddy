@@ -9,11 +9,10 @@ import { STATUS, entry as accessEntry, isBlockedTable } from './access.js';
 import { assignSides, readChatMessages } from './chat.js';
 import { JOURNAL_RECORD_FIELDS, applyAuthorNames, readJournal } from './journal.js';
 import { articleHtmlStats, statsToStrings } from './knowledge.js';
-import { isSensitiveTable, kindForTable, tableForNumber } from './kinds.js';
+import { isSensitiveTable, kindForTable } from './kinds.js';
 import { personRefs, resolvePeople, splitName } from './people.js';
 import { readRelated, relatedPlan } from './related.js';
 import { SYS_ID_RE, TABLE_RE, cleanText, disp, oneLine, raw, uniq } from './util.js';
-import { parseRecordNumber } from '../lib/recordNumber.js';
 
 export { stripHtml } from './util.js';
 export { confirmEmptyIsReallyEmpty } from './access.js';
@@ -72,26 +71,12 @@ function notFound(table, what) {
   return err;
 }
 
-/**
- * { table, sysId } for a reference given as { table, sysId } or { table?, number }. A number is looked up with one
- * small read (task and its children share the number space, so an unknown table is searched as `task`).
- */
-export async function resolveRecordRef(ref, deps) {
+/** { table, sysId } for a reference given as { table, sysId }: the table name checked, the sys_id in lower case. */
+export async function resolveRecordRef(ref) {
   const table = String(ref?.table || '').trim().toLowerCase();
-  if (SYS_ID_RE.test(ref?.sysId || '')) {
-    if (!TABLE_RE.test(table)) throw new TypeError('A record reference needs a table name.');
-    return { table, sysId: ref.sysId.toLowerCase() };
-  }
-  const number = parseRecordNumber(ref?.number);
-  if (!number) throw new TypeError('A record reference needs a sys_id or a record number.');
-  const searchTable = TABLE_RE.test(table) ? table : tableForNumber(number) || 'task';
-  const rows = await deps.queryTable(searchTable, `number=${number}`, ['sys_id', 'number', 'sys_class_name'], { limit: 1, displayValue: false });
-  const found = Array.isArray(rows) ? rows[0] : null;
-  // The row must carry the number asked for: ServiceNow ignores a condition on a column the table does not have and answers with its
-  // first row, which is some other record.
-  if (!found || !SYS_ID_RE.test(raw(found.sys_id)) || raw(found.number).trim().toUpperCase() !== number) throw notFound(searchTable, number);
-  const actual = raw(found.sys_class_name);
-  return { table: searchTable === 'task' && TABLE_RE.test(actual) ? actual : searchTable, sysId: raw(found.sys_id).toLowerCase() };
+  if (!SYS_ID_RE.test(ref?.sysId || '')) throw new TypeError('A record reference needs a sys_id.');
+  if (!TABLE_RE.test(table)) throw new TypeError('A record reference needs a table name.');
+  return { table, sysId: ref.sysId.toLowerCase() };
 }
 
 /**
@@ -151,7 +136,7 @@ export async function readContextPack(ref, deps, options = {}) {
   if (!FEATURES.includes(feature)) throw new Error(`Unknown feature "${feature}". Known: ${FEATURES.join(', ')}.`);
   const prefixes = deps.sensitivePrefixes;
 
-  const asked = await resolveRecordRef(ref, deps);
+  const asked = await resolveRecordRef(ref);
   const { table, unresolved } = await resolveRealClass(asked, deps);
   const sysId = asked.sysId;
   const kind = kindForTable(table);

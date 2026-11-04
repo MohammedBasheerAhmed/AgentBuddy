@@ -46,6 +46,3 @@ export function workState({ table, state, stateValue = '', holdReason = '', hold
   if (NEW.test(shown)) return 'new';
   return 'open';
 }
-
-/** Is this state one where the ticket waits (on the customer or on someone else)? */
-export const isWaiting = (ws) => ws === 'waiting-customer' || ws === 'on-hold';

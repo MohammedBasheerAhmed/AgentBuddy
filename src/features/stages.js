@@ -166,7 +166,7 @@ export function whenAllows(feature, record, header) {
 
 /**
  * A short caution about where a feature's text lands on this record, or ''. A comment on a catalog task stays on the task: the
- * requester reads the requested item, not its tasks (the same wording as src/checks/requestView.js destinationNote).
+ * requester reads the requested item, not its tasks.
  */
 export function cautionFor(feature, record) {
   const id = feature?.id;

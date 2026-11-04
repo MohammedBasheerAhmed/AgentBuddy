@@ -18,7 +18,7 @@ const SHARED = {
   Insert: 'أدرج',
 };
 
-// ---- Which email fits (src/compose/emailRecommend.js, sidepanel/compose/EmailPanel.jsx) ----
+// ---- Which email fits (src/compose/emailRecommend.js) ----
 const EMAIL = {
   'Ask the person for what is still needed, or remind them.': 'اطلب من الشخص ما لا يزال مطلوبا، أو ذكره بذلك.',
   'Tell the person where things stand and what happens next.': 'أخبر الشخص أين وصلت الأمور وما سيحدث بعد ذلك.',
@@ -112,22 +112,6 @@ const EMAIL = {
     'لا تزال {n} موافقة بانتظار القرار.',
     'لا تزال {n} موافقة بانتظار القرار.'
   ),
-  'Draft: {label}': 'اكتب مسودة: {label}',
-  Draft: 'اكتب مسودة',
-  'Use the draft': 'استخدم المسودة',
-  'Insert into the email body': 'أدرج في نص البريد',
-  'This email form is for another ticket. Open the email form for this draft again, or use Copy.': 'نموذج البريد هذا لتذكرة أخرى. افتح نموذج البريد لهذه المسودة مرة أخرى، أو استخدم النسخ.',
-  'The email form is opening in this tab. When it is ready, press Insert, or paste what you copied.': 'يفتح نموذج البريد في هذا التبويب. عندما يجهز، اضغط أدرج، أو الصق ما نسخته.',
-  'Insert only works when the email form is open on this page; Copy always works. Nothing is sent until you press Send in the form.':
-    'يعمل الإدراج فقط عندما يكون نموذج البريد مفتوحا في هذه الصفحة؛ أما النسخ فيعمل دائما. لا يتم إرسال شيء حتى تضغط إرسال في النموذج.',
-  'The ticket could not be read.': 'تعذرت قراءة التذكرة.',
-  'Open a ticket (an incident, request, case or similar) to get email suggestions that fit it. Agent Buddy reads it with your own session.':
-    'افتح تذكرة (حادثة أو طلبا أو حالة أو ما يشبهها) لتحصل على اقتراحات بريد تناسبها. يقرأها Agent Buddy بجلستك أنت.',
-  'Suggested emails': 'رسائل بريد مقترحة',
-  'Which email fits?': 'أي رسالة تناسب؟',
-  'What the suggestions are based on': 'ما تستند إليه الاقتراحات',
-  'Nothing stands out for this ticket. Pick a kind of email below if you need one.': 'لا شيء بارز في هذه التذكرة. اختر نوع رسالة أدناه إن احتجت إلى واحدة.',
-  'Other emails': 'رسائل أخرى',
 };
 
 // ---- Notes to ticket (sidepanel/compose/NotesPanel.jsx, NotesHints.jsx, src/compose/notesToTicket.js, notesHints.js) ----
@@ -740,7 +724,7 @@ const ARTICLE = {
     ),
 };
 
-// ---- My work (sidepanel/mywork, src/mywork, MyDayView.jsx) ----
+// ---- My work (sidepanel/mywork, src/mywork) ----
 const DAYS = (zero, one, two, few, many, other) => pl(zero, one, two, few, many, other);
 
 const MYWORK = {
@@ -839,29 +823,7 @@ const MYWORK = {
   'SLA {percent}% used': 'SLA مستهلكة {percent}%',
   'updated just now': 'تم التحديث الآن',
   'updated {span} ago': 'تم التحديث منذ {span}',
-  'updated {n}h ago': 'تم التحديث منذ {n} س',
-  'updated {n}d ago': 'تم التحديث منذ {n} يوم',
-  ' and ': ' و',
   'None of your ticket queues could be read.': 'تعذرت قراءة أي من قوائم تذاكرك.',
-  'Agent Buddy can see no tickets at all in these tables with your access, so it cannot tell whether anything is assigned to you.':
-    'لا يرى Agent Buddy أي تذاكر في هذه الجداول بصلاحياتك، لذلك لا يستطيع معرفة ما إذا كان شيء مسندا إليك.',
-  'Nothing is assigned to you right now.': 'لا شيء مسند إليك الآن.',
-  '{source}: you cannot read this.': '{source}: لا يمكنك قراءة هذا.',
-  'My day': 'يومي',
-  'Your open tickets, most urgent first. A click opens one in this tab; Ctrl+click or right-click opens a new tab.':
-    'تذاكرك المفتوحة، الأكثر إلحاحا أولا. النقر يفتح تذكرة في هذا التبويب؛ والنقر مع مفتاح التحكم أو بزر الفأرة الأيمن يفتحها في تبويب جديد.',
-  'Reading your queue…': 'جارٍ قراءة قائمتك…',
-  '{n} with a breached SLA|{n} with a breached SLA': pl('{n} بـ SLA متجاوز', '{n} بـ SLA متجاوز', '{n} بـ SLA متجاوز', '{n} بـ SLA متجاوز', '{n} بـ SLA متجاوز', '{n} بـ SLA متجاوز'),
-  '{n} with an SLA at risk|{n} with an SLA at risk': pl('{n} بـ SLA معرض للخطر', '{n} بـ SLA معرض للخطر', '{n} بـ SLA معرض للخطر', '{n} بـ SLA معرض للخطر', '{n} بـ SLA معرض للخطر', '{n} بـ SLA معرض للخطر'),
-  '{n} open ticket.|{n} open tickets.': pl('{n} تذكرة مفتوحة.', '{n} تذكرة مفتوحة.', '{n} تذكرتان مفتوحتان.', '{n} تذاكر مفتوحة.', '{n} تذكرة مفتوحة.', '{n} تذكرة مفتوحة.'),
-  '{n} open ticket: {urgent}, listed first.|{n} open tickets: {urgent}, listed first.': pl(
-    '{n} تذكرة مفتوحة: {urgent}، وهي مدرجة أولا.',
-    '{n} تذكرة مفتوحة: {urgent}، وهي مدرجة أولا.',
-    '{n} تذكرتان مفتوحتان: {urgent}، وهما مدرجتان أولا.',
-    '{n} تذاكر مفتوحة: {urgent}، وهي مدرجة أولا.',
-    '{n} تذكرة مفتوحة: {urgent}، وهي مدرجة أولا.',
-    '{n} تذكرة مفتوحة: {urgent}، وهي مدرجة أولا.'
-  ),
   '{count} open': '{count} مفتوحة',
   '{count} SLA breached': '{count} SLA متجاوز',
   '{count} replied': '{count} تم الرد عليها',

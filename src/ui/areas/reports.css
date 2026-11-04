@@ -211,16 +211,6 @@ button.ab-legend-item:hover { background: var(--ab-bg-subtle); }
 .ab-donut-total { font-size: 22px; font-weight: 700; fill: var(--ab-fg); }
 .ab-donut-sub { font-size: 10px; fill: var(--ab-chart-label-muted); }
 
-/* ---- gauge ---- */
-.ab-gauge { max-width: 220px; margin: 0 auto; }
-.ab-gauge-svg { display: block; width: 100%; height: auto; overflow: visible; }
-.ab-gauge-track { fill: var(--ab-chart-track); stroke: var(--ab-chart-grid); stroke-width: 1; }
-.ab-gauge-fill { fill: var(--tone); }
-.ab-gauge-tick { stroke: var(--ab-chart-axis); stroke-width: 2; }
-.ab-gauge-end { font-size: 10px; fill: var(--ab-chart-label-muted); }
-.ab-gauge-value { font-size: 26px; font-weight: 700; fill: var(--ab-fg); }
-.ab-gauge-label { font-size: 11px; fill: var(--ab-chart-label); }
-
 /* ---- heat strip ---- */
 .ab-heat { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(46px, 1fr)); gap: 4px; }
 .ab-heat-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; height: 100%; padding: 6px 2px; margin: 0; border: 1px solid var(--ab-chart-axis); border-radius: var(--ab-radius-sm); color: var(--ab-chart-seq-label); font: inherit; text-align: center; }
@@ -368,14 +358,6 @@ a.ab-stack-link { display: block; }
 .ab-widget-error { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
 .ab-widget-error .ab-note { margin: 0; }
 
-/* ---- My day (src/sidepanel/MyDayView.jsx) ---- */
-.ab-myday-head { justify-content: space-between; align-items: center; }
-.ab-myday-head .ab-h { margin: 0; }
-.ab-myday-summary { margin: 8px 0 0; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); font-weight: 600; }
-.ab-myday-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ab-myday-list .ab-feature { min-width: 0; overflow-wrap: anywhere; }
-.ab-myday-list.ab-is-busy { opacity: 0.7; }
-.ab-myday-access { margin-top: 8px; }
 .ab-dash-help { margin: 0; }
 @media print {
   /* Screen-only help and buttons. */

@@ -1,16 +1,5 @@
-/* Styles for the checks area (Request, Check and Checklist tabs). Use the --ab-* tokens from theme.css only.
-   Panel width can be 320px: nothing here is a wide table, long text wraps and never scrolls sideways. */
-
-.ab-chk-between { justify-content: space-between; }
-.ab-chk-h { margin: 0; }
-
-/* ---- collapsible sections ---- */
-.ab-chk-summary { cursor: pointer; font-weight: 600; }
-.ab-chk-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-
-/* ---- the status line of the Request tab ---- */
-.ab-chk-status { display: flex; flex-direction: column; gap: 6px; }
-.ab-chk-line { margin: 0; font-size: var(--ab-text-lg); font-weight: 600; overflow-wrap: anywhere; }
+/* Styles for the checks pieces the Ticket screen's cards use (src/sidepanel/checks, src/sidepanel/ticket/cards). Use the --ab-*
+   tokens from theme.css only. Panel width can be 320px: nothing here is a wide table, long text wraps and never scrolls sideways. */
 
 /* ---- label / value pairs: label on top, value below, so a long answer never squeezes the label ---- */
 .ab-chk-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -30,7 +19,6 @@
 .ab-chk-item { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
 .ab-chk-head { display: block; }
 .ab-chk-item-main { font-weight: 600; overflow-wrap: anywhere; }
-.ab-chk-current { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); }
 .ab-chk-item[data-status='warn'] { border-color: var(--ab-warn-line); background: var(--ab-warn-soft); }
 .ab-chk-item[data-status='ok'] { border-color: var(--ab-ok-line); }
 

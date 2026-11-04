@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { FEATURES, featureById, insertsFor } from '../src/features/registry.js';
 import { CUSTOMER_SAFE, LANGUAGE_AGENT, LANGUAGE_CUSTOMER, LANGUAGE_SOURCE, ONLY_OUTPUT, UNTRUSTED, UNTRUSTED_MARK, rulesFor } from '../src/prompts/rules.js';
 import { parseSafeText, toPlainText } from '../src/render/safeText.js';
-import { ARTICLE_LABELS, pickArticleBody, pickArticleTitle, similarArticleLine } from '../src/itsm/sections.js';
+import { ARTICLE_LABELS, pickArticleBody, pickArticleTitle } from '../src/itsm/sections.js';
 import { PROBLEM_HEADINGS } from '../src/features/packs/domain.js';
 import { CHAT_SUMMARY_HEADINGS } from '../src/features/packs/knowledge.js';
 import { PROPOSAL_LABELS, parseTicketProposal } from '../src/compose/notesToTicket.js';
@@ -173,7 +173,6 @@ test('the knowledge article draft: the prompt\'s labels are the parser\'s, title
     '2. Choose Renew certificate.',
     'Applies to: Windows laptops with the corporate VPN client.',
   ].join('\n');
-  assert.deepEqual(similarArticleLine(plainOf(answer)), { number: 'KB0010001', title: 'Reset your VPN password' });
   assert.equal(insertValue('kb-article-draft', answer, 0), 'VPN client says the certificate has expired');
   const body = insertValue('kb-article-draft', answer, 1);
   assert.match(body, /^Symptoms: The VPN client refuses/);

@@ -398,7 +398,7 @@ test('HR brief: it needs Strict privacy mode (the contract: MODE_TOO_LOW and the
   const feature = featureById('hr-case-brief');
   const allowed = policy({ allowHrContent: true, aiProvider: 'anthropic' });
   try {
-    assertRunnable({ feature, pack, values: values({ piiMode: 'standard' }), policy: allowed, config: config(), hasKey: true });
+    assertRunnable({ feature, pack, values: values({ piiMode: 'standard' }), policy: allowed, config: config() });
     assert.fail('Standard mode must be refused');
   } catch (e) {
     assert.ok(e instanceof RunBlocked);
@@ -406,12 +406,12 @@ test('HR brief: it needs Strict privacy mode (the contract: MODE_TOO_LOW and the
     assert.equal(e.message, 'This needs Strict privacy mode. Change it in Settings.');
   }
   for (const piiMode of ['strict']) {
-    assert.doesNotThrow(() => assertRunnable({ feature, pack, values: values({ piiMode }), policy: allowed, config: config(), hasKey: true }), piiMode);
+    assert.doesNotThrow(() => assertRunnable({ feature, pack, values: values({ piiMode }), policy: allowed, config: config() }), piiMode);
   }
   // Local-only is stricter than Strict, and a local model satisfies it
   const local = resolveProviderConfig({ provider: 'ollama' }, '');
   // (a model on this computer needs no pinned endpoint: nothing leaves the machine)
-  assert.doesNotThrow(() => assertRunnable({ feature, pack, values: values({ piiMode: 'local-only' }), policy: policy({ allowHrContent: true }), config: local, hasKey: false }));
+  assert.doesNotThrow(() => assertRunnable({ feature, pack, values: values({ piiMode: 'local-only' }), policy: policy({ allowHrContent: true }), config: local }));
   // the mode check does not hide the table check or the feature switch
   assert.throws(() => assertRunnable({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', blockedTables: ['sn_hr_core_case'] }), config: config() }), (e) => e.code === 'TABLE_BLOCKED');
   assert.throws(() => assertRunnable({ feature, pack, values: values({ piiMode: 'strict' }), policy: policy({ allowHrContent: true, aiProvider: 'anthropic', disabledFeatures: ['hr-case-brief'] }), config: config() }), (e) => e.code === 'FEATURE_OFF');
@@ -460,7 +460,7 @@ test('HR brief: without the HR switch Strict mode would refuse the free text (wh
 test('the other domain features are not gated by the HR rules', async () => {
   for (const id of ['account-briefing', 'case-eng-escalation', 'problem-rca', 'change-cab-brief']) {
     const pack = await buildPack(id);
-    assert.doesNotThrow(() => assertRunnable({ feature: featureById(id), pack, values: values({ piiMode: 'standard' }), policy: policy(), config: config(), hasKey: true }), id);
+    assert.doesNotThrow(() => assertRunnable({ feature: featureById(id), pack, values: values({ piiMode: 'standard' }), policy: policy(), config: config() }), id);
   }
 });
 

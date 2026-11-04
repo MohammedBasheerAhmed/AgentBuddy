@@ -101,11 +101,11 @@ export const localOnlyProblem = (piiMode, config) =>
 
 /**
  * Everything that can be refused before a single byte is built. Throws RunBlocked with a message fit for the person.
- * @param {object} p { feature, pack, values (effective settings), policy, config (resolveProviderConfig), hasKey, pageTable }
+ * @param {object} p { feature, pack, values (effective settings), policy, config (resolveProviderConfig), pageTable }
  *   pageTable: the table of the form the person is on, when it can differ from the pack's table (Rewrite and Notes-to-ticket label
  *   their pack 'compose'). The blocked-table and HR rules apply to it as well as to `pack.table`.
  */
-export function assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable = '' }) {
+export function assertRunnable({ feature, pack, values, policy, config, pageTable = '' }) {
   const off = aiOffProblem(policy);
   if (off) throw new RunBlocked(off, 'AI_OFF');
   if (!isFeatureEnabled(feature.id, policy)) throw new RunBlocked(t('Your organisation has switched this feature off.'), 'FEATURE_OFF');
@@ -156,11 +156,11 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey, 
  * `input` is what the firewall was given, kept in memory only so "Mask this too" can have the same firewall build it again.
  * @returns {{ request: object, firewall: object, preview: string, stats: object, input: object, feature: object, pack: object }}
  */
-export function prepareRun({ feature: action, pack, values, policy, config, hasKey = true, createFirewall, pageTable = '' }) {
+export function prepareRun({ feature: action, pack, values, policy, config, createFirewall, pageTable = '' }) {
   // R11: how this action writes its answer. The person's own format, or the organisation's (locked or standard), becomes the action's
   // system text here, before the size is counted and the preview is built; with none chosen the action is used as it is.
   const feature = withFormat(action, values?.formats, policy?.orgFormats);
-  assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable });
+  assertRunnable({ feature, pack, values, policy, config, pageTable });
   const sensitive = isSensitivePack(pack, policy) || Boolean(pageTable && isSensitiveByPolicy(pageTable, policy));
   const firewall = createFirewall({
     mode: values.piiMode,

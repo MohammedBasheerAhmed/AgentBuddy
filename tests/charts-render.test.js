@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Tile, HorizontalBar, StackedBar, TrendChart, Donut, Gauge, HeatStrip, DataTable, ChartFrame } from '../src/sidepanel/charts/index.js';
+import { Tile, HorizontalBar, StackedBar, TrendChart, Donut, HeatStrip, DataTable, ChartFrame } from '../src/sidepanel/charts/index.js';
 
 const h = React.createElement;
 const html = (Component, props) => renderToStaticMarkup(h(Component, props));
@@ -39,7 +39,6 @@ const CHARTS = [
   ['StackedBar', StackedBar, { title: 'Workload', rows: ROWS, series: SERIES }, 'rows'],
   ['TrendChart', TrendChart, { title: 'Opened and resolved', series: TREND }, 'series'],
   ['Donut', Donut, { title: 'Priority mix', items: STATES, centerLabel: 'open' }, 'items'],
-  ['Gauge', Gauge, { title: 'SLA met', value: 82, max: 100, unit: '%', thresholds: { warn: 90, bad: 80 }, higherIsWorse: false }, null],
   ['HeatStrip', HeatStrip, { title: 'Ageing', cells: AGE }, 'cells'],
 ];
 
@@ -64,23 +63,12 @@ test('the exact summaries', () => {
   assert.equal(attr(html(HorizontalBar, { title: 'Open by state', items: STATES }), 'aria-label')[0], 'Open by state. New 8 (40%), In Progress 12 (60%). Total 20.');
   assert.equal(attr(html(StackedBar, { title: 'Workload', rows: ROWS, series: SERIES }), 'aria-label')[0], 'Workload. Alice: New 3, In progress 5, total 8. Bob: New 2, total 2.');
   assert.equal(attr(html(TrendChart, { title: 'Opened and resolved', series: TREND }), 'aria-label')[0], 'Opened and resolved. Opened: starts at 3 (Mon), ends at 6 (Wed), highest 9 (Tue). Resolved: starts at 1 (Mon), ends at 4 (Wed), highest 4 (Wed).');
-  assert.equal(attr(html(Gauge, { title: 'SLA met', value: 82, max: 100, unit: '%', thresholds: { warn: 90, bad: 80 }, higherIsWorse: false }), 'aria-label')[0], 'SLA met: 82% of 100% (warning).');
   assert.equal(attr(html(HeatStrip, { title: 'Ageing', cells: AGE }), 'aria-label')[0], 'Ageing. 0-1d 10 (56%), 2-3d 0 (0%), 4-7d 5 (28%), 8-14d 2 (11%), 15+d 1 (6%). Total 18.');
-});
-
-test('the gauge writes its state out, so it never depends on colour', () => {
-  const low = html(Gauge, { title: 'SLA met', value: 82, max: 100, unit: '%', thresholds: { warn: 90, bad: 80 }, higherIsWorse: false });
-  assert.match(low, /Status: Warning \(warning at 90 or below, bad at 80 or below\)\./);
-  assert.match(low, /ab-tone-warn/);
-  const high = html(Gauge, { title: 'Backlog', value: 95, max: 120, thresholds: { warn: 70, bad: 90 } });
-  assert.match(high, /Status: Bad \(warning at 70 or above, bad at 90 or above\)\./);
-  assert.match(html(Gauge, { title: 'Age', value: 3, max: 10 }), /ab-gauge/);
-  assert.ok(!/Status:/.test(html(Gauge, { title: 'Age', value: 3, max: 10 })), 'no thresholds, no verdict');
 });
 
 test('no chart ever prints NaN, undefined, [object, inline styles or a colour literal', () => {
   for (const [name, Component, props, key] of CHARTS) {
-    const variants = [props, { ...props, onDrill: noop }, key ? { ...props, [key]: [] } : { ...props, value: NaN, max: NaN, thresholds: { warn: NaN } }, key ? { ...props, [key]: undefined } : { ...props, value: -5, max: 0 }, { ...props, defaultTable: true }];
+    const variants = [props, { ...props, onDrill: noop }, { ...props, [key]: [] }, { ...props, [key]: undefined }, { ...props, defaultTable: true }];
     for (const variant of variants) {
       const markup = html(Component, variant);
       assert.ok(!/NaN|undefined|\[object|Infinity/.test(markup), `${name}: ${markup.match(/.{30}(NaN|undefined|\[object|Infinity).{30}/)?.[0]}`);
@@ -92,7 +80,7 @@ test('no chart ever prints NaN, undefined, [object, inline styles or a colour li
 });
 
 test('empty data shows the empty text, not a broken chart', () => {
-  for (const [name, Component, props, key] of CHARTS.filter((c) => c[3])) {
+  for (const [name, Component, props, key] of CHARTS) {
     const markup = html(Component, { ...props, [key]: [], emptyText: 'Nothing here yet.' });
     assert.match(markup, /Nothing here yet\./, name);
     assert.ok(!/role="img"/.test(markup), `${name}: no image role without data`);
@@ -127,7 +115,7 @@ test('drill-down: real buttons or role=button with tabindex, named with the numb
   assert.match(donut, /aria-label="In Progress: 12, 60%\. Open the list\."/);
   assert.match(donut, /role="img"/, 'the ring itself is a picture; its legend is the list of buttons');
 
-  const heat = drilled(HeatStrip, CHARTS[5][2]);
+  const heat = drilled(HeatStrip, CHARTS[4][2]);
   assert.equal(count(heat, /<button type="button" class="ab-heat-cell/g), 5);
   assert.match(heat, /aria-label="4-7d: 5, 28%\. Open the list\."/);
 
@@ -155,10 +143,6 @@ test('"Show as table" gives the same numbers as an accessible table', () => {
 
   const trend = html(TrendChart, { title: 'T', series: TREND, defaultTable: true });
   assert.match(trend, /<th scope="row"[^>]*>Tue<\/th><td[^>]*>9<\/td><td[^>]*>2<\/td>/);
-
-  const gauge = html(Gauge, { title: 'SLA', value: 82, max: 100, unit: '%', thresholds: { warn: 90, bad: 80 }, higherIsWorse: false, defaultTable: true });
-  assert.match(gauge, /82%/);
-  assert.match(gauge, /Warning/);
 });
 
 test('series differ by pattern and marker, not only by colour; ids are unique per chart', () => {
@@ -209,7 +193,6 @@ test('hostile labels come out as escaped text, never as markup', () => {
     html(StackedBar, { title: HOSTILE, rows: [{ label: HOSTILE, parts: [{ key: 's', value: 2 }] }], series: [{ key: 's', label: HOSTILE }], onDrill: noop }),
     html(TrendChart, { title: HOSTILE, series: [{ key: 's', label: HOSTILE, points: [{ label: HOSTILE, value: 2 }] }] }),
     html(Donut, { title: HOSTILE, items: [evil], centerLabel: HOSTILE, onDrill: noop }),
-    html(Gauge, { title: HOSTILE, label: HOSTILE, value: 5, max: 10 }),
     html(HeatStrip, { title: HOSTILE, cells: [evil], onDrill: noop }),
     html(Tile, { label: HOSTILE, value: HOSTILE, hint: HOSTILE, delta: { text: HOSTILE, direction: 'up' }, onOpen: noop }),
     html(DataTable, { caption: HOSTILE, columns: [{ key: 'a', label: HOSTILE }], rows: [{ a: HOSTILE }] }),

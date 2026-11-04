@@ -12,7 +12,7 @@ import { t } from '../i18n/index.js';
 export { truncationNote } from './messages.js';
 
 /**
- * @param {object} config { provider, model, apiKey, baseUrl, keyOptional, local, azure?, promptCache } from resolveProviderConfig()
+ * @param {object} config { provider, model, apiKey, baseUrl, keyOptional, local, azure? } from resolveProviderConfig()
  * @param {object} sealed a SealedRequest from the firewall (src/pii)
  * @param {object} [options]
  *   host: instance host for the usage log; kind: 'chat' | 'validate'; skipBudget;
@@ -31,8 +31,8 @@ export async function sendChat(config, sealed, { host = '', kind = 'chat', skipB
   // to the vendor's public API with this key.
   if (config.invalidBaseUrl) throw new AiError(t('The AI address is not valid: {reason}', { reason: config.invalidBaseUrl }), 'BAD_URL');
   if (config.azure && !config.model) throw new AiError(t('Enter the name of your Azure deployment in Settings first.'), 'NO_MODEL');
-  // A spend cap that is reached refuses the call here too.
-  if (!skipBudget) await assertWithinCaps(config.provider);
+  // A cap of the person's own that is reached refuses the call here too.
+  if (!skipBudget) await assertWithinCaps();
   if (signal?.aborted) throw new AiError(t('Cancelled. Nothing was sent.'), 'CANCELLED');
   const limit = timeoutMs || (config.local ? LOCAL_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
   const common = { apiKey: config.apiKey, model: config.model, messages: sealed.messages, baseUrl: config.baseUrl || '', name: providerName(config), signal, timeoutMs: limit, fetchFn, sleep };
@@ -43,7 +43,7 @@ export async function sendChat(config, sealed, { host = '', kind = 'chat', skipB
     reply =
       apiOf(config.provider) === 'openai'
         ? await sendOpenAI({ ...common, azure: config.azure || null, keyOptional: Boolean(config.keyOptional) })
-        : await sendAnthropic({ ...common, effort: 'low', promptCache: config.promptCache !== false });
+        : await sendAnthropic({ ...common, effort: 'low' });
   } catch (err) {
     // An answer that came back but could not be used (cut short before any text, empty, declined, stopped by a filter) was billed
     // all the same: the adapters put its usage on the error, and it counts against the caps and the daily budget like any call.

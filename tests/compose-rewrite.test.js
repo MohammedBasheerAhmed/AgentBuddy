@@ -14,7 +14,7 @@ import {
   withLanguage,
 } from '../src/compose/rewrite.js';
 import { FORM_FIELDS, FORM_FIELD_NAMES, formFieldByName, isCustomerVisible } from '../src/compose/formFields.js';
-import { seriousFindings } from '../src/compose/sendCheck.js';
+import { reviewForCustomer } from '../src/safeSend/review.js';
 import { featureById } from '../src/features/registry.js';
 
 // ---- Presets and languages -------------------------------------------------------------------------------------------
@@ -139,6 +139,9 @@ test('five form fields may be read or written, with the customer-visible ones ma
 });
 
 // ---- The safe-to-send check ------------------------------------------------------------------------------------------
+
+// The findings that stop an insert until the person chooses ("Insert anyway"): the serious ones of the one review.
+const seriousFindings = (plain, people = [], scan = null) => reviewForCustomer(plain, { people, scan }).serious;
 
 test('serious findings: a password, a card number; the record\'s own email is fine; low-severity hints are left out', () => {
   const people = [{ role: 'caller', name: 'Abel Tuter', email: 'abel.tuter@example.com' }];

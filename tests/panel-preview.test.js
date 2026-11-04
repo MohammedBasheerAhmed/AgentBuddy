@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PreviewDialog, { maskSummary } from '../src/sidepanel/PreviewDialog.jsx';
 import { focusToRestore, outsideKeyAction, selectedTextIn, dialogKeyAction } from '../src/sidepanel/dialogKeys.js';
@@ -11,8 +10,6 @@ import { featureById } from '../src/features/registry.js';
 import { createFirewall } from '../src/pii/index.js';
 import { effectiveSettings, normalizePolicy } from '../src/policy/policy.js';
 import { resolveProviderConfig } from '../src/providers/config.js';
-
-globalThis.React = React;
 
 // The preview step: "Mask this too", the keys that work before the dialog has the focus, where the focus goes afterwards, the
 // record an answer is bound to, and the send step's stop button and notice.

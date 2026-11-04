@@ -1,20 +1,6 @@
-// Small presentational pieces shared by the three record tabs of the checks area. No state, no reads: they draw what they
-// are given (React escapes every string, so ticket text is never markup).
+// Small presentational pieces shared by the Ticket screen's cards (src/sidepanel/ticket/cards). No state, no reads: they draw what
+// they are given (React escapes every string, so ticket text is never markup).
 import React from 'react';
-import ErrorNote from '../ErrorNote.jsx';
-import { t } from '../../i18n/index.js';
-
-/** A collapsible card with a title and an optional count. */
-export function Section({ title, count, children, defaultOpen = true }) {
-  return (
-    <details className="ab-card ab-chk-section" open={defaultOpen}>
-      <summary className="ab-chk-summary">
-        {title} {count !== undefined && count !== null && <span className="ab-tag">{count}</span>}
-      </summary>
-      <div className="ab-chk-body">{children}</div>
-    </details>
-  );
-}
 
 /** Label and value pairs (question and answer, field and value). A long value wraps; nothing scrolls sideways. */
 export function Facts({ rows, tight = false }) {
@@ -40,16 +26,6 @@ export function Hints({ lines }) {
         <p className="ab-hint" key={i}>{line}</p>
       ))}
     </div>
-  );
-}
-
-/** The state of a read: a quiet "looking" line and a red error with "Try again" (onRetry). Renders nothing once the data is there. */
-export function LoadNotes({ state, onRetry }) {
-  return (
-    <>
-      {state.phase === 'loading' && !state.data && <p className="ab-note" role="status">{t('Looking…')}</p>}
-      {state.phase === 'error' && <ErrorNote error={state.error} onRetry={onRetry} />}
-    </>
   );
 }
 

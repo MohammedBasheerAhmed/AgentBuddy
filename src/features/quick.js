@@ -16,14 +16,6 @@ import { t } from '../i18n/core.js';
 
 export const MAX_QUICK = 4;
 
-// The bar in the side panel is a shortcut past a long list. Where the Actions list is only a few buttons (a chat, a knowledge article,
-// a page we know nothing about) a bar would just repeat it, so the panel shows the bar from this many actions up. (The bar on the
-// ServiceNow page is not affected: there it saves opening the panel.)
-export const QUICK_MIN_LIST = 4;
-
-/** Does the side panel show its bar for a record whose Actions list has this many actions? */
-export const panelShowsBar = (actionCount) => actionCount >= QUICK_MIN_LIST;
-
 // A short label for every feature that can be pinned. (The full titles in the Actions list are sentences; a bar needs a word or two.)
 // (Getters: the words are looked up when they are read, so they follow the language. This file imports core.js, not index.js: the
 // service worker and the bar on the ServiceNow page use it and have no need of the whole Arabic catalogue; the panel registers it.)

@@ -6,8 +6,6 @@ import { browserName, diagnosticsText } from '../src/options/diagnostics.js';
 import { DiagnosticsSection, ProfilesSection, SettingsPages, SITE_REFUSED_TEXT, settingsPageFromHash } from '../src/options/Options.jsx';
 import { effectiveSettings } from '../src/policy/policy.js';
 
-globalThis.React = React;
-
 // F8 "Copy diagnostics": what support needs, and never a key (not the key, not its preview, not its length). F2: Settings in two pages.
 
 const KEY = 'sk-personal-0123456789abcdefXYZW';

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_STEPS, buildChecklist, checklistProgress, looksLikeStep, normaliseStep, setDone, splitInstructions, stepId, stepsFromPack } from '../src/checks/checklist.js';
+import { MAX_STEPS, buildChecklist, checklistProgress, looksLikeStep, normaliseStep, splitInstructions, stepId, stepsFromPack } from '../src/checks/checklist.js';
 import { checklistParts, mergeParentPack } from '../src/checks/checklistParts.js';
 
 // ---- numbered and bulleted lists --------------------------------------------------------------------------------------
@@ -115,14 +115,6 @@ test('progress: "3 of 7 done", ticks for steps that are gone are ignored, comple
   assert.equal(checklistProgress(steps, steps.map((s) => s.id)).complete, true);
   assert.deepEqual(checklistProgress([], ['x']), { done: 0, total: 0, percent: 0, complete: false, text: 'No steps' });
   assert.equal(checklistProgress(steps, undefined).done, 0);
-});
-
-test('setDone returns a new list and never changes its argument', () => {
-  const before = Object.freeze(['a', 'b']);
-  assert.deepEqual(setDone(before, 'c', true), ['a', 'b', 'c']);
-  assert.deepEqual(setDone(before, 'a', false), ['b']);
-  assert.deepEqual(setDone(before, 'a', true), ['b', 'a']);
-  assert.deepEqual(setDone(undefined, 'a', true), ['a']);
 });
 
 // ---- what the AI proposal reads --------------------------------------------------------------------------------------------------------

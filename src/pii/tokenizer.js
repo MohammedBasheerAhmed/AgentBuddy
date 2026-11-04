@@ -132,13 +132,6 @@ export function createTokenizer() {
       return reverse.size;
     },
 
-    /** Forget everything. */
-    clear() {
-      forward.clear();
-      reverse.clear();
-      counters.clear();
-    },
-
     // Serialising a tokenizer must never leak the map.
     toJSON() {
       return { placeholders: reverse.size };

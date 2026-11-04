@@ -83,8 +83,6 @@ const OPS = {
   gt: (c) => `${needField(c)}>${needNumber(c)}`,
 };
 
-export const QUERY_OPS = Object.freeze(Object.keys(OPS));
-
 /**
  * @param {{op:string, field:string, value?:any, values?:any[], ms?:number}[]} conditions all joined with AND
  * @param {{ orderBy?: string, descending?: boolean }} [options]

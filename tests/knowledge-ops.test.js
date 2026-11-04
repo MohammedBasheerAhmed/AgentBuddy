@@ -17,7 +17,7 @@ const kb = (behaviour) => context(knowledgeTables(), behaviour);
 const tickets = (behaviour) => context({ incident: incidentRows(), ...linkTables() }, behaviour);
 
 test('my operation names carry a kb/chat prefix, so they cannot shadow the built-in ones or another area\'s', () => {
-  const BUILT_IN = ['pack', 'history', 'myday', 'similar', 'duplicates', 'knowledge', 'header'];
+  const BUILT_IN = ['pack', 'history', 'similar', 'duplicates', 'knowledge', 'header'];
   for (const name of [...Object.keys(knowledgeOps), ...Object.keys(chatOps)]) {
     assert.match(name, /^(kb|chat)[A-Z]/, name);
     assert.ok(!BUILT_IN.includes(name), name);

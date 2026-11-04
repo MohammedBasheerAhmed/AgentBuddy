@@ -9,8 +9,6 @@ import { unknownDisabledFeatures, knownFeatureIds, dailyTokenLimit, parseLimit, 
 import { FEATURES } from '../src/features/registry.js';
 import { effectiveSettings, normalizePolicy, PII_MODES, PREVIEW_MODES } from '../src/policy/policy.js';
 
-globalThis.React = React;
-
 // The Settings page: the limit that applies, ids in the policy that match no feature, and the provider section as drawn (first
 // render only: effects do not run in a static render, and nothing here touches chrome.*).
 

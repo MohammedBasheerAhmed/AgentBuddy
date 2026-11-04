@@ -1,6 +1,5 @@
-/* Styles for the knowledge area (article checks, Knowledge tools, chat tab). Use the --ab-* tokens from theme.css only. */
+/* Styles for the knowledge area (article checks, the Knowledge screen's tools, chats). Use the --ab-* tokens from theme.css only. */
 
-.ab-kb-head { align-items: baseline; }
 .ab-kb-notes { margin: 6px 0 0; }
 
 /* ---- findings on an article ---- */

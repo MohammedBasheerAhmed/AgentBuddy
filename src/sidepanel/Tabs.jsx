@@ -1,17 +1,14 @@
 import React, { useRef } from 'react';
-import { nextTabIndex, panelId, sharedPanelId, tabId } from './tabKeys.js';
+import { nextTabIndex, panelId, tabId } from './tabKeys.js';
 
 /**
- * The one tab list of the side panel (the same pattern the Write section uses): one tab stop (roving tabindex), Left/Right/Home/End
- * move between tabs, every tab names the panel it controls and every panel names its tab.
+ * A tab list (the Settings pages): one tab stop (roving tabindex), Left/Right/Home/End move between tabs, every tab names the panel
+ * it controls. Each panel is the caller's own element and names its tab with the same ids (src/sidepanel/tabKeys.js):
  *
- *   <Tabs idBase="ab-sec" label="Agent Buddy sections" tabs={[{ id, label }]} value={id} onChange={setId} />
- *   <TabPanel idBase="ab-sec" id="write" hidden={value !== 'write'}>...</TabPanel>
- *
- * With `shared`, all tabs control ONE panel whose content changes (a record's tabs, the Knowledge tools):
- *   <Tabs shared .../>  <TabPanel idBase shared value={id}>...</TabPanel>
+ *   <Tabs idBase="ab-settings" label="Settings pages" tabs={[{ id, label }]} value={id} onChange={setId} />
+ *   <div id={panelId('ab-settings', 'ai')} role="tabpanel" aria-labelledby={tabId('ab-settings', 'ai')} hidden={id !== 'ai'}>...</div>
  */
-export default function Tabs({ idBase, label, tabs, value, onChange, className = 'ab-row', shared = false }) {
+export default function Tabs({ idBase, label, tabs, value, onChange, className = 'ab-row' }) {
   const buttons = useRef({});
   const selected = tabs.some((t) => t.id === value) ? value : tabs[0]?.id;
 
@@ -40,7 +37,7 @@ export default function Tabs({ idBase, label, tabs, value, onChange, className =
           type="button"
           role="tab"
           aria-selected={selected === t.id}
-          aria-controls={shared ? sharedPanelId(idBase) : panelId(idBase, t.id)}
+          aria-controls={panelId(idBase, t.id)}
           tabIndex={selected === t.id ? 0 : -1}
           className={`ab-btn ab-btn-sm${selected === t.id ? ' ab-btn-primary' : ''}`}
           onClick={() => choose(t.id)}
@@ -48,21 +45,6 @@ export default function Tabs({ idBase, label, tabs, value, onChange, className =
           {t.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-/** The panel a tab controls. `shared`: the one panel of a shared tab list, labelled by the selected tab (`value`). */
-export function TabPanel({ idBase, id, value, shared = false, hidden = false, className = '', children }) {
-  return (
-    <div
-      id={shared ? sharedPanelId(idBase) : panelId(idBase, id)}
-      role="tabpanel"
-      aria-labelledby={tabId(idBase, shared ? value : id)}
-      className={className || undefined}
-      hidden={hidden || undefined}
-    >
-      {children}
     </div>
   );
 }

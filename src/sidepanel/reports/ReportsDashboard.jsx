@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import { isFeatureEnabled } from '../../policy/policy.js';
 import { activeProfiles } from '../../profiles/profiles.js';
 import { read } from '../ask.js';
-import { useSectionVisible } from '../SectionVisible.js';
 import {
   PRESETS, CAPS, addDashboard, addOrgDashboard, addPresetDashboard, addWidget, exportLayout, importLayout, instanceKey, layoutFileName, moveWidget,
   offerOrgDashboard, removeDashboard, removeWidget, renameDashboard, setActive, setDashboardSetup, updateWidget,
@@ -137,8 +136,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
   }, []);
 
   // A section that is not on screen (another screen, or the AI Assist half) must not keep working: the timer runs only while shown.
-  const sectionVisible = useSectionVisible();
-  const onScreen = sectionVisible && active !== false;
+  const onScreen = active !== false;
   useEffect(() => {
     if (!auto || !onScreen) return undefined;
     const timer = setInterval(() => {

@@ -1,13 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRecordResolver } from '../src/content/recordResolver.js';
-import { resolveRecordRef } from '../src/context/pack.js';
-import { fakeDeps, v } from './fixtures/sn-fakeDeps.js';
 
-// Which record the page shows (src/content/recordResolver.js, used by src/content/index.js), and the panel-side number lookup
-// (src/context/pack.js resolveRecordRef). Audit P2.25: a number's sys_id was taken from the first row without checking the row is
-// that number (ServiceNow ignores a condition on a column the table does not have and answers with its first row). Audit P2.26: a
-// `task` record whose real class could not be looked up was looked up again on every request (the bar asks every 2 seconds).
+// Which record the page shows (src/content/recordResolver.js, used by src/content/index.js). Audit P2.25: a number's sys_id was taken
+// from the first row without checking the row is that number (ServiceNow ignores a condition on a column the table does not have and
+// answers with its first row). Audit P2.26: a `task` record whose real class could not be looked up was looked up again on every
+// request (the bar asks every 2 seconds).
 
 const INC = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const OTHER = 'b2c3d4e5f60718293a4b5c6d7e8f90a1';
@@ -73,17 +71,6 @@ test('a row that is not that number (the filter was ignored) is no record, and i
     await page.resolveRecord(BY_NUMBER);
     assert.equal(page.reads.length, 1);
   }
-});
-
-test('the panel-side lookup by number (resolveRecordRef) checks the number too', async () => {
-  // A table without a number column: the instance ignores the condition and answers with its first row, some other record.
-  const deps = fakeDeps({ u_custom: [{ sys_id: v(OTHER), name: v('Something else') }], incident: [{ sys_id: v(INC), number: v('INC0010001'), sys_class_name: v('incident') }] });
-  await assert.rejects(resolveRecordRef({ table: 'u_custom', number: 'INC0010001' }, deps), (err) => err.code === 'NOT_FOUND');
-  assert.deepEqual(await resolveRecordRef({ table: 'incident', number: 'inc0010001' }, deps), { table: 'incident', sysId: INC });
-  assert.deepEqual(deps.calls.at(-1).fields, ['sys_id', 'number', 'sys_class_name']);
-  // a row that carries another number is not this record either
-  const wrong = { queryTable: async () => [{ sys_id: OTHER, number: 'INC0099999', sys_class_name: 'incident' }] };
-  await assert.rejects(resolveRecordRef({ table: 'incident', number: 'INC0010001' }, wrong), (err) => err.code === 'NOT_FOUND');
 });
 
 // ---- the real class of a `task` record ------------------------------------------------------------------------------------------

@@ -7,10 +7,7 @@ import { expectForInsert } from '../src/lib/fillable.js';
 import { MSG } from '../src/lib/messages.js';
 import ResultView from '../src/sidepanel/ResultView.jsx';
 import { RewriteResultActions } from '../src/sidepanel/compose/RewritePanel.jsx';
-import { DraftActions } from '../src/sidepanel/compose/EmailPanel.jsx';
 import { featureById } from '../src/features/registry.js';
-
-globalThis.React = React;
 
 const A = 'a'.repeat(32);
 const B = 'b'.repeat(32);
@@ -249,21 +246,4 @@ test('the rewrite buttons are off while an insert is in flight, say "Inserted" a
   assert.match(buttonTag(wrong, 'Add below'), /disabled/);
   assert.match(buttonTag(wrong, 'Replace what is in the form'), /disabled/);
   assert.match(wrong, /This was written for INC0010001\. Open that ticket again, or use Copy\./);
-});
-
-test('the email body button is bound to the email form of its own ticket', () => {
-  const run = { result: 'Subject: Update\n\nHello, we are working on it.', people: [], scan: null };
-  const fill = { busy: false, inserted: {}, note: null, findings: null, copy: noop, insert: noop };
-  const target = { table: 'incident', sysId: A };
-  const emailHref = (id) => `https://x.service-now.com/email_client.do?sysparm_table=incident&sysparm_sys_id=${id}`;
-  const render = (href, over = {}) => renderToStaticMarkup(React.createElement(DraftActions, { page: { tabId: 5, href, record: null, newRecord: { table: 'sys_email' } }, run, fill: { ...fill, ...over }, target, internalTexts: [] }));
-  const own = render(emailHref(A));
-  assert.ok(!buttonTag(own, 'Insert into the email body').includes('disabled'));
-  const other = render(emailHref(B));
-  assert.match(buttonTag(other, 'Insert into the email body'), /disabled/);
-  assert.match(other, /This email form is for another ticket/);
-  // before the email form is open the button is on, and the content script decides (it answers wrong-record)
-  assert.ok(!buttonTag(render('https://x.service-now.com/incident.do'), 'Insert into the email body').includes('disabled'));
-  assert.match(buttonTag(render(emailHref(A), { busy: true }), 'Insert into the email body'), /disabled/);
-  assert.match(buttonTag(render(emailHref(A), { inserted: { body: true } }), 'Inserted'), /disabled/);
 });

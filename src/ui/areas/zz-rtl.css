@@ -31,5 +31,5 @@
 
 /* Charts keep their own left-to-right geometry (a trend line goes from the oldest to the newest on the right, a bar grows from the left,
    numbers read left to right); the labels around them are text and follow the language. */
-:root[dir='rtl'] .ab-donut-svg, :root[dir='rtl'] .ab-gauge-svg, :root[dir='rtl'] .ab-hbar-svg,
+:root[dir='rtl'] .ab-donut-svg, :root[dir='rtl'] .ab-hbar-svg,
 :root[dir='rtl'] .ab-stack-svg, :root[dir='rtl'] .ab-trend-svg { direction: ltr; }

@@ -135,9 +135,3 @@ function explainParts(pack) {
   }
   return parts;
 }
-
-/**
- * Where "Insert as customer comment" puts the message, when that is not where the requester looks. The message is for the
- * requester, who normally reads the requested item; on a catalog task the comment lands on the task itself.
- */
-export const destinationNote = (record) => (record?.kind === 'catalog_task' ? t("This goes into the task's comments.") : '');

@@ -1,5 +1,5 @@
 // Drill-downs that open a ServiceNow LIST are real links (like tickets); the Team dashboard stops restarting its widgets when the
-// ServiceNow tab moves; the full page keeps its dashboard while that tab loads; My day says what an empty list means.
+// ServiceNow tab moves; the full page keeps its dashboard while that tab loads.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -19,7 +19,6 @@ import { listUrl } from '../src/sidepanel/reports/drill.js';
 import { pageIdentity, visibleWidgets, widgetParams } from '../src/sidepanel/reports/dashboardEnv.js';
 import { retryDelay, LOST_TOUCH_RETRY_MS } from '../src/sidepanel/reports/useReport.js';
 import { nextSource } from '../src/dashboard/sourceTab.js';
-import { summaryText, emptyText, idleText, accessText } from '../src/sidepanel/MyDayView.jsx';
 import { normalizePolicy } from '../src/policy/policy.js';
 import { fakeInstance, cell, group, group2, count, USER, GROUP_A, NOW } from './reports-fixtures.js';
 
@@ -103,7 +102,6 @@ test('Tile: with an address it is a link; without one (a tile that opens a choic
 
 // ---- the report views ----------------------------------------------------------------------------------------------------
 
-const id = (n) => String(n).padStart(32, '0');
 const world = () =>
   fakeInstance({
     rules: [
@@ -200,23 +198,6 @@ test('full page: a dashboard that is showing stays while its ServiceNow tab load
   assert.deepEqual(nextSource({ status: 'ready', page, reconnecting: true }, back), back, 'the tab answers again');
   assert.deepEqual(nextSource(ready, { status: 'gone' }), { status: 'gone' }, 'a closed tab is said at once');
   assert.deepEqual(nextSource({ status: 'checking' }, { status: 'not-enabled' }), { status: 'not-enabled' }, 'nothing to keep on the first check');
-});
-
-// ---- My day ----------------------------------------------------------------------------------------------------------------
-
-test('My day: the summary line, the empty-list sentence and the access notes', () => {
-  const items = [{ risk: 'breached' }, { risk: 'at-risk' }, { risk: 'ok' }];
-  assert.equal(summaryText(items), '3 open tickets: 1 with a breached SLA and 1 with an SLA at risk, listed first.');
-  assert.equal(summaryText([{ risk: 'none' }]), '1 open ticket.');
-  assert.equal(summaryText([]), '');
-  assert.equal(emptyText('nothing'), 'Nothing is assigned to you right now.');
-  assert.match(emptyText('unseen'), /cannot tell whether anything is assigned to you/);
-  assert.equal(emptyText('unread'), 'None of your ticket queues could be read.');
-  assert.equal(idleText(0), 'updated just now');
-  assert.equal(idleText(5), 'updated 5h ago');
-  assert.equal(idleText(72), 'updated 3d ago');
-  assert.match(accessText([{ source: 'sn_customerservice_case', status: 'denied', note: 'You cannot read this table.' }]), /: you cannot read this\./);
-  assert.ok(id(1));
 });
 
 test('dashboard: "Download all as CSV" takes every table on screen, in widget order, named by its section', async () => {

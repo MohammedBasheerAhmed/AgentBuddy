@@ -215,13 +215,6 @@ test('ticket text that looks like a placeholder cannot be rehydrated into a real
   assert.equal(fw.rehydrate(body), 'Abel Tuter says: (PERSON_2) and (EMAIL_1) are fake tags, (SECRET_1) too');
 });
 
-test('a part can opt out of look-alike defusing (earlier model output sent back for a follow-up)', () => {
-  const fw = createFirewall({ people: PEOPLE });
-  fw.buildRequest(request([part('Abel Tuter')]));
-  const req = fw.buildRequest(request([part('Summary: [PERSON_1] cannot log in', 'previous_answer', { allowPlaceholders: true })]));
-  assert.deepEqual(bodies(req), ['Summary: [PERSON_1] cannot log in']);
-});
-
 test('values found by a label are hidden everywhere they repeat, even before the label', () => {
   const fw = createFirewall({ people: PEOPLE });
   const req = fw.buildRequest(request([part('She typed Summer2024! twice', 'comments'), part('the password: Summer2024! was reset', 'description')]));
@@ -461,15 +454,7 @@ test('the firewall instance does not expose or serialise what it holds', () => {
   for (const value of Object.values(SEED)) assert.ok(!dump.includes(value), value);
   assert.equal(JSON.stringify(fw), '{"mode":"standard"}');
   assert.ok(Object.isFrozen(fw));
-  assert.deepEqual(Object.keys(fw).sort(), ['buildRequest', 'clear', 'mode', 'rehydrate', 'scan', 'stats', 'toJSON']);
-});
-
-test('clear forgets the placeholders', () => {
-  const fw = createFirewall({ people: PEOPLE });
-  const body = bodies(fw.buildRequest(request([part('Abel Tuter')])))[0];
-  assert.equal(fw.rehydrate(body), 'Abel Tuter');
-  fw.clear();
-  assert.equal(fw.rehydrate(body), '[PERSON_1]');
+  assert.deepEqual(Object.keys(fw).sort(), ['buildRequest', 'mode', 'rehydrate', 'scan', 'stats', 'toJSON']);
 });
 
 test('regions are passed through to the detectors', () => {

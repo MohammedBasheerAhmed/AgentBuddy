@@ -37,8 +37,6 @@ export function hours(h) {
   return tn(days, '{n} day', '{n} days');
 }
 
-export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
 // ---- Relative times ("due in 1 h 20 min") ------------------------------------------------------------------------------------
 // A lead scanning a list wants "how long", not a timestamp in someone's format: an SLA's end is said relative to the moment the
 // numbers were read.

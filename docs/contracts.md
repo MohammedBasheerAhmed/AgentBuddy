@@ -154,11 +154,11 @@ GET-only through the context engine or src/content/tableApi.js; validate every a
 `SYS_ID_RE`); never return more than the person's own session could read. The panel calls it with `read(tabId, 'opName', args)`
 (src/sidepanel/ask.js).
 
-### Panel sections and record tabs
+### Panel screens
 
-- Top-level sections (src/sidepanel/App.jsx): This page, My day, Team (`tabs/ReportsView.jsx`), Write (`tabs/ComposeView.jsx`),
-  Knowledge (`tabs/KnowledgeToolsView.jsx`). Props `{ page, eff }`. They work from any page of an enabled site.
-- Record tabs (src/sidepanel/recordTabs.js): extra tabs on a record for given kinds. Props `{ page, eff, record, header, run, aiReady }`.
+- Screens (src/sidepanel/App.jsx): Ticket (`ticket/TicketView.jsx`), and My work, Team, Write and Knowledge (`mywork/`, `team/`,
+  `write/`, `knowledgeScreen/`), each an Insights and an AI Assist half drawn by `shell/ScreenView.jsx`. Props `{ page, eff, active }`.
+  They work from any page of an enabled site.
 - `page` carries `{ tabId, href, surface: 'classic'|'workspace'|'portal'|'other', portal: {base, pageId}|null, record, newRecord: {table, kind}|null, user }`.
 - To run AI: `const run = useRun({ page, eff, record })`, then `run.run(feature, { getPack })` and render `<RunPanel run={run} eff page />`.
   A view that is not about one record builds a ContextPack-shaped object in `getPack` (its text goes through the firewall like any other).

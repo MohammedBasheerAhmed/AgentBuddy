@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { internalTextsOf, isCustomerVisible, linkFindings, markupFindings, overlapFindings, placeholderFindings, reviewForCustomer, reviewForInsert } from '../src/safeSend/review.js';
-import { seriousFindings } from '../src/compose/sendCheck.js';
 import { checkOutgoing } from '../src/safeSend/index.js';
 
 const people = [{ role: 'caller', name: 'Abel Tuter', email: 'abel.tuter@example.com' }];
@@ -67,14 +66,6 @@ test('the names and values in findings are masked excerpts, never the value', ()
   assert.ok(!all.includes('someone.else@example.com'));
   assert.ok(!all.includes('4111 1111 1111 1111'));
   assert.ok(!all.includes('John Smith'));
-});
-
-test('the Write section\'s seriousFindings is the same review (no second copy)', () => {
-  const text = 'Hi Abel, your password: Summer2024!x and card 4111 1111 1111 1111 [code]x[/code] [PERSON_1]';
-  assert.deepEqual(seriousFindings(text, people), reviewForCustomer(text, { people }).serious);
-  assert.deepEqual(seriousFindings('fine', people), []);
-  const scan = (t) => (t.includes('bare-secret-value') ? [{ kind: 'SECRET', start: t.indexOf('bare-secret-value'), end: t.indexOf('bare-secret-value') + 17, value: 'bare-secret-value' }] : []);
-  assert.deepEqual(seriousFindings('your sign-in is bare-secret-value now', people, scan), reviewForCustomer('your sign-in is bare-secret-value now', { people, scan }).serious);
 });
 
 test('what the firewall hid and the model brought back is caught through scan(); a throwing scan changes nothing', () => {

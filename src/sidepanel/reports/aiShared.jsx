@@ -5,7 +5,7 @@ import { parseSafeText, toPlainText } from '../../render/safeText.js';
 import { resolveProviderConfig } from '../../providers/config.js';
 import { logAudit } from '../../lib/storage.js';
 import { featureById, isFeatureAvailable } from '../../features/registry.js';
-import { aiNeedsText, isAiReady } from '../aiReady.js';
+import { isAiReady } from '../aiReady.js';
 import AiKeyNote from '../AiKeyNote.jsx';
 import { AiBadge } from '../ui/primitives.jsx';
 import { destinationOf } from '../shell/shellParts.jsx';
@@ -13,9 +13,6 @@ import { isolate, t } from '../../i18n/index.js';
 import { tx } from '../../i18n/jsx.jsx';
 
 export { isAiReady };
-
-/** The sentence for a section that cannot use the AI yet (no key, or the key is locked). */
-export const aiNotReadyText = (eff) => aiNeedsText(eff, 'this') || t('Add an AI key in Settings to use this.');
 
 /** That sentence as the panel's shared note, with the way there ("Open Settings"). Nothing when the AI can be used. */
 export function AiKeyLine({ eff }) {

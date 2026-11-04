@@ -1,5 +1,5 @@
 // The ONE review of text that is about to be put into a form field. ResultView (the Insert buttons on a result) and the Write
-// section (src/compose/sendCheck.js) both call it; there is no second copy to drift apart.
+// screen both call it; there is no second copy to drift apart.
 //
 //   reviewForCustomer(text, { people, scan, internalTexts }) -> { serious: Finding[], hints: Finding[] }
 //   reviewForInsert(field, text, opts)                       -> the same, for the field it goes into

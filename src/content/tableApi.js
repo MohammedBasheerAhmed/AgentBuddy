@@ -291,37 +291,3 @@ export async function aggregate(table, { query = '', groupBy = [], avgFields = [
   );
   return data?.result ?? null;
 }
-
-/** Page through a query until `max` rows (or the end). Pages run one at a time. */
-export async function queryAll(table, query, fields = [], { max = 2000, pageSize = 500, displayValue = false } = {}) {
-  const rows = [];
-  while (rows.length < max) {
-    const want = Math.min(pageSize, max - rows.length);
-    // eslint-disable-next-line no-await-in-loop -- sequential paging keeps load on the instance low.
-    const page = await queryTable(table, query, fields, { limit: want, offset: rows.length, displayValue });
-    rows.push(...page);
-    if (page.length < want) break;
-  }
-  return rows;
-}
-
-/**
- * Run the same query across chunks of an IN-list so we never build a URL that exceeds what the instance will accept.
- * `values` is deduplicated first.
- */
-export async function queryInChunks(table, field, values, fields = [], options = {}) {
-  const { chunkSize = 50, extraQuery = '', limit = 200 } = options;
-  const unique = [...new Set(values.filter(Boolean))];
-  const results = [];
-
-  for (let i = 0; i < unique.length; i += chunkSize) {
-    const chunk = unique.slice(i, i + chunkSize);
-    const inClause = `${field}IN${chunk.join(',')}`;
-    const query = extraQuery ? `${inClause}^${extraQuery}` : inClause;
-    // eslint-disable-next-line no-await-in-loop -- chunks must stay sequential so we do not burst parallel requests.
-    const rows = await queryTable(table, query, fields, { limit });
-    results.push(...rows);
-  }
-
-  return results;
-}

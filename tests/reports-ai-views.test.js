@@ -16,10 +16,6 @@ import { normalizePolicy } from '../src/policy/policy.js';
 import { createLoadedStore } from '../src/reports/ai/loaded.js';
 import { USER, NOW, GROUP_A, dashboardWorld, handoverWorld } from './reports-ai-fixtures.js';
 
-// Some shared components (RunPanel...) use JSX without importing React; the build uses the automatic runtime, this bundle uses
-// the classic one. Providing React globally makes the same code render here.
-globalThis.React = React;
-
 // First render only (effects do not run in a static render): enough to catch a broken import, a typo in a render path, and to
 // look at the structure and the safety of the markup. The views' behaviour after the first read is covered by the pure-module
 // tests; none of this replaces using the panel in a real browser.

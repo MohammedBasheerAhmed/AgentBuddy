@@ -37,7 +37,7 @@ test('saveCaps keeps what is not changed, cleans what is typed, and a reached da
     await recordCall({ provider: 'openai', model: 'm', ms: 5, usage: { input: 700, output: 400 }, host: '', kind: 'chat' });
     const { log } = await readBudgetState();
     assert.equal(log.length, 1);
-    const err = await assertWithinCaps('openai').catch((e) => e);
+    const err = await assertWithinCaps().catch((e) => e);
     assert.ok(err instanceof Error);
     assert.equal(err.code, 'BUDGET');
     assert.match(err.message, /Daily tokens cap reached .* Agent Buddy settings > Usage and limits\./);
@@ -46,7 +46,7 @@ test('saveCaps keeps what is not changed, cleans what is typed, and a reached da
     // Key checks ("Test connection") never count against a cap.
     await saveCaps({ dailyTokens: 5000 });
     await recordCall({ provider: 'openai', model: 'm', ms: 5, usage: { input: 9000, output: 0 }, kind: 'validate' });
-    assert.equal((await assertWithinCaps('openai')).status, 'ok');
+    assert.equal((await assertWithinCaps()).status, 'ok');
   } finally {
     delete globalThis.chrome;
   }

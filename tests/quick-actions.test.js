@@ -4,7 +4,7 @@ import { FEATURES, featuresFor } from '../src/features/registry.js';
 import { KINDS } from '../src/context/kinds.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
-import { MAX_QUICK, QUICK_CARDS, QUICK_DEFAULTS, QUICK_LABELS, QUICK_MIN_LIST, cleanPins, isQuickId, panelShowsBar, quickActions, quickCardItem, quickItems } from '../src/features/quick.js';
+import { MAX_QUICK, QUICK_CARDS, QUICK_DEFAULTS, QUICK_LABELS, cleanPins, isQuickId, quickActions, quickCardItem, quickItems } from '../src/features/quick.js';
 import { INSIGHT_CARDS } from '../src/sidepanel/ticket/cards/index.js';
 import { cardsFor } from '../src/sidepanel/ticket/assist/actions/TicketQuickBar.jsx';
 
@@ -98,13 +98,4 @@ test('when the policy switches off every pin, the defaults (minus the policy) ap
 test('when the policy switches off everything, the bar is empty', () => {
   const policy = normalizePolicy({ disabledFeatures: Object.keys(QUICK_LABELS) });
   assert.deepEqual(quickActions({ kind: 'incident', policy }), []);
-});
-
-// ---- where the old panel showed its bar (RecordView, before round 3) -------------------------------------------------
-
-test('panelShowsBar: from QUICK_MIN_LIST actions up (the bar of the Ticket screen shows whenever it has an item: tests/assist-actions-quick.test.js)', () => {
-  assert.equal(panelShowsBar(QUICK_MIN_LIST - 1), false);
-  assert.equal(panelShowsBar(QUICK_MIN_LIST), true);
-  const policy = normalizePolicy({});
-  for (const kind of ['chat', 'knowledge', 'other']) assert.equal(panelShowsBar(featuresFor(kind, policy).length), false, kind);
 });

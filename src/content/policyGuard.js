@@ -3,7 +3,7 @@
 // `blockedTables` used to be checked only when an AI run was prepared (src/lib/pipeline.js), after the data had been read. The
 // content script has no policy of its own, so a blocked table was still read for the panel, for related lists, for reference
 // answers and for the journal. This module loads the managed policy in the content script and wraps the deps every READ operation
-// uses (queryTable, fetchRecord, countRecords, countByColumn, aggregate, queryAll), so a read of a blocked table is refused with
+// uses (queryTable, fetchRecord, countRecords, countByColumn, aggregate), so a read of a blocked table is refused with
 // the error code 'BLOCKED_TABLE' before a request is made:
 //
 //   - the table named in the call, case-insensitively;
@@ -260,17 +260,11 @@ export function createPolicyGuard({ getManaged = readManaged, now = Date.now, tt
         };
       }
     }
-    // aggregate(table, options) and queryAll(table, query, fields, options) exist on some deps (the reports engine, tests).
+    // aggregate(table, options) exists on some deps (the reports engine, tests).
     if (typeof deps.aggregate === 'function') {
       wrapped.aggregate = async (table, options = {}) => {
         checkCall(table, options?.query, [...(options?.groupBy || []), ...(options?.avgFields || [])]);
         return deps.aggregate(table, options);
-      };
-    }
-    if (typeof deps.queryAll === 'function') {
-      wrapped.queryAll = async (table, query, fields, options) => {
-        checkCall(table, query, fields);
-        return checkRows(table, await deps.queryAll(table, query, fieldsFor(table, fields), options));
       };
     }
     // checkRead(table, query, columns): the same checks for a read made some other way (the reports' Aggregate API call): throws

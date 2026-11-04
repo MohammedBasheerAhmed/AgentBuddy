@@ -6,8 +6,6 @@ import { tx } from '../src/i18n/jsx.jsx';
 import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 
-globalThis.React = React;
-
 // The mechanism (src/i18n) and the promise that no text a person reads is missing in Arabic (scripts/lib/i18nCheck.js reads the
 // source for every t(), tn(), tm() and tx() and looks each one up in src/i18n/ar).
 

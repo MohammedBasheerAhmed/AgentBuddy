@@ -3,19 +3,17 @@
 //
 //   import { mount, click, makeChrome, deferred } from './fixtures/panel-dom.js';   // FIRST import of the test file
 //   const fake = makeChrome(); globalThis.chrome = fake.chrome;
-//   fake.onRead('pack', (args) => ({ ... }));
-//   const ui = await mount(<RecordView page={page} eff={eff} />);
-//   await click(ui.button('Related'));
+//   fake.onRead('kbSearch', (args) => ({ ... }));
+//   const ui = await mount(<KnowledgeInsights page={page} eff={eff} active />);
+//   await click(ui.button('Search'));
 //
 // Every step runs inside React's act(), so effects and state updates have settled when it returns.
 import { document, FakeEvent, window } from './panel-dom-env.js';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MSG } from '../../src/lib/messages.js';
 
 export { document, window, FakeEvent };
-
-globalThis.React = React; // (views written for the automatic JSX runtime; the test bundle uses the classic one)
 
 /** A promise the test resolves or rejects when it chooses. */
 export function deferred() {

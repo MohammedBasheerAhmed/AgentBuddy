@@ -1,14 +1,9 @@
 // Provider-neutral conversation format and the converters to each vendor's wire
 // format. Pure functions, so they are unit-tested without any network.
 //
-// Neutral messages:
-//   { role: 'system' | 'user', content }
-//   { role: 'assistant', content, toolCalls?: [{ id, name, args }], raw?: { provider, blocks } }
-//   { role: 'tool', toolCallId, name, content, isError? }
-//
-// `raw` carries the vendor's own assistant blocks. Anthropic requires thinking
-// blocks to be sent back unchanged within a tool loop, so the adapter replays
-// `raw` when it came from the same provider instead of rebuilding the turn.
+// Neutral messages are what the PII firewall seals (src/pii/firewall.js): { role: 'system' | 'user', content } with text content.
+// The model is never given tools. An answer is read for its text, its usage and why it stopped; tool calls in it are still read, so an
+// answer that has only those is not taken for an empty one.
 import { AiError } from './http.js';
 import { t } from '../i18n/index.js';
 
@@ -25,32 +20,7 @@ function parseJsonObject(text) {
 // ---- OpenAI ------------------------------------------------------------------
 
 export function toOpenAIMessages(messages) {
-  const out = [];
-  for (const m of messages) {
-    if (m.role === 'assistant') {
-      const msg = { role: 'assistant', content: m.content || null };
-      if (m.toolCalls?.length) {
-        msg.tool_calls = m.toolCalls.map((c) => ({
-          id: c.id,
-          type: 'function',
-          function: { name: c.name, arguments: JSON.stringify(c.args || {}) },
-        }));
-      }
-      out.push(msg);
-    } else if (m.role === 'tool') {
-      out.push({ role: 'tool', tool_call_id: m.toolCallId, content: String(m.content ?? '') });
-    } else {
-      out.push({ role: m.role, content: m.content });
-    }
-  }
-  return out;
-}
-
-export function toOpenAITools(tools) {
-  return tools.map((tool) => ({
-    type: 'function',
-    function: { name: tool.name, description: tool.description, parameters: tool.inputSchema },
-  }));
+  return messages.map((m) => ({ role: m.role, content: m.content }));
 }
 
 // prompt_tokens includes the tokens served from the cache, so the neutral `input` is the part that was NOT cached.
@@ -109,44 +79,13 @@ export const truncationNote = (reply) =>
 
 // ---- Anthropic ---------------------------------------------------------------
 
-export function toAnthropicTools(tools) {
-  return tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.inputSchema }));
-}
-
-/** { system, messages } in the Messages API shape. */
+/** { system, messages } in the Messages API shape: the system text apart, every other message as the user's. */
 export function toAnthropicRequest(messages) {
   const system = [];
   const out = [];
-
-  const push = (role, content) => {
-    const last = out[out.length - 1];
-    // Parallel tool results must share one user message.
-    if (last && last.role === role && Array.isArray(last.content) && Array.isArray(content)) {
-      last.content.push(...content);
-    } else {
-      out.push({ role, content });
-    }
-  };
-
   for (const m of messages) {
-    if (m.role === 'system') {
-      system.push(m.content);
-    } else if (m.role === 'tool') {
-      push('user', [
-        { type: 'tool_result', tool_use_id: m.toolCallId, content: String(m.content ?? ''), ...(m.isError ? { is_error: true } : {}) },
-      ]);
-    } else if (m.role === 'assistant') {
-      if (m.raw?.provider === 'anthropic' && Array.isArray(m.raw.blocks)) {
-        out.push({ role: 'assistant', content: m.raw.blocks });
-      } else {
-        const blocks = [];
-        if (m.content) blocks.push({ type: 'text', text: m.content });
-        (m.toolCalls || []).forEach((c) => blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: c.args || {} }));
-        if (blocks.length) out.push({ role: 'assistant', content: blocks });
-      }
-    } else {
-      push('user', m.content);
-    }
+    if (m.role === 'system') system.push(m.content);
+    else out.push({ role: 'user', content: m.content });
   }
   return { system: system.join('\n\n'), messages: out };
 }
@@ -192,44 +131,8 @@ export function fromAnthropicResponse(data) {
   return {
     content,
     toolCalls,
-    raw: { provider: 'anthropic', blocks },
     stopReason: cut ? 'max_tokens' : data.stop_reason === 'tool_use' || toolCalls.length ? 'tool_use' : 'end_turn',
     truncated: cut,
     usage,
   };
-}
-
-const EPHEMERAL = { type: 'ephemeral' };
-const CACHEABLE_BLOCKS = new Set(['text', 'tool_result', 'tool_use', 'image', 'document']);
-
-/**
- * Prompt caching: mark the end of the stable prefix so the next call in a conversation (or an agent's tool loop) is
- * billed at the cheap cache-read rate for everything before it. Three breakpoints, in prefix order: the last tool
- * definition, the system prompt, and the last block of the last message (the whole conversation so far). Pure: returns a
- * new request body and leaves the argument alone. Thinking blocks cannot carry cache_control, so a trailing assistant
- * turn is left unmarked.
- */
-export function applyCacheControl(body) {
-  const out = { ...body };
-  if (Array.isArray(out.tools) && out.tools.length) {
-    out.tools = out.tools.map((tool, i) => (i === out.tools.length - 1 ? { ...tool, cache_control: EPHEMERAL } : tool));
-  }
-  if (typeof out.system === 'string' && out.system) {
-    out.system = [{ type: 'text', text: out.system, cache_control: EPHEMERAL }];
-  }
-  if (Array.isArray(out.messages) && out.messages.length) {
-    const messages = out.messages.slice();
-    const last = messages[messages.length - 1];
-    if (typeof last.content === 'string' && last.content) {
-      messages[messages.length - 1] = { ...last, content: [{ type: 'text', text: last.content, cache_control: EPHEMERAL }] };
-    } else if (Array.isArray(last.content) && last.content.length) {
-      const index = last.content.length - 1;
-      const block = last.content[index];
-      if (block && CACHEABLE_BLOCKS.has(block.type)) {
-        messages[messages.length - 1] = { ...last, content: last.content.map((b, i) => (i === index ? { ...b, cache_control: EPHEMERAL } : b)) };
-      }
-    }
-    out.messages = messages;
-  }
-  return out;
 }

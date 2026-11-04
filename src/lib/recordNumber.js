@@ -8,8 +8,3 @@ export function parseRecordNumber(text) {
   const match = NUMBER_RE.exec(String(text ?? '').trim());
   return match ? `${match[1].toUpperCase()}${match[2]}` : '';
 }
-
-/** Tables to look in: task and everything extending it, plus knowledge articles for KB numbers. */
-export function tablesForNumber(number) {
-  return /^KB/i.test(number) ? ['kb_knowledge', 'task'] : ['task', 'kb_knowledge'];
-}

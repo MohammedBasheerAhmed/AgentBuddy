@@ -1,12 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import RecordLink from '../src/sidepanel/RecordLink.jsx';
 import DataTable from '../src/sidepanel/charts/DataTable.jsx';
 import { isPlainClick } from '../src/sidepanel/linkClick.js';
-
-globalThis.React = React;
 
 const SYS = 'a'.repeat(32);
 const classic = { href: 'https://acme.service-now.com/incident.do?sys_id=' + SYS, surface: 'classic', tabId: 1 };

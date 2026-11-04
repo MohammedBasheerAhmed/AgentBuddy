@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   num, percent, formatNumber, withUnit, clipLabel, niceMax, ticks, thinLabels,
-  TONES, normTone, toneVar, toneClass, toneForIndex, PATTERNS, patternFor, MARKERS, markerFor, markerPath, markerIsLine,
-  barLayout, stackedLayout, linePath, areaPath, trendLayout, donutArcs, gaugeTone, gaugeArc, heatLevel, heatLayout,
-  summarizeItems, summarizeStacked, summarizeSeries, summarizeGauge, describeTile, itemsToTable, stackedToTable, seriesToTable,
+  TONES, normTone, toneClass, toneForIndex, PATTERNS, patternFor, MARKERS, markerFor, markerPath, markerIsLine,
+  barLayout, stackedLayout, linePath, areaPath, trendLayout, donutArcs, heatLevel, heatLayout,
+  summarizeItems, summarizeStacked, summarizeSeries, describeTile, itemsToTable, stackedToTable, seriesToTable,
 } from '../src/sidepanel/charts/geometry.js';
 
 // Nothing a chart computes may contain a NaN or an Infinity, in a number or in a path string.
@@ -113,11 +113,7 @@ test('thinLabels keeps first and last and spreads the rest', () => {
   assert.equal(new Set(picked).size, picked.length);
 });
 
-test('tones map to the chart tokens; unknown tones fall back to neutral', () => {
-  assert.equal(toneVar('bad'), 'var(--ab-chart-bad)');
-  assert.equal(toneVar('c3'), 'var(--ab-chart-3)');
-  assert.equal(toneVar('nope'), 'var(--ab-chart-neutral)');
-  assert.equal(toneVar(undefined), 'var(--ab-chart-neutral)');
+test('tones map to the chart classes; unknown tones fall back to neutral', () => {
   assert.equal(toneClass('c2'), 'ab-tone-c2');
   assert.equal(toneClass('<script>'), 'ab-tone-neutral');
   assert.equal(normTone('warn'), 'warn');
@@ -315,36 +311,6 @@ test('donutArcs: angles add up to 360 (or 0), a lone item is a full ring', () =>
   assert.match(wide.arcs[0].d, /A\d+(\.\d+)? \d+(\.\d+)? 0 1 1 /); // 270 degrees needs the large-arc flag
 });
 
-test('gaugeTone: thresholds in both directions', () => {
-  const t = { warn: 70, bad: 90 };
-  assert.deepEqual([50, 70, 89, 90, 120].map((v) => gaugeTone(v, t)), ['good', 'warn', 'warn', 'bad', 'bad']);
-  const low = { warn: 90, bad: 80 };
-  assert.deepEqual([95, 90, 85, 80, 10].map((v) => gaugeTone(v, low, false)), ['good', 'warn', 'warn', 'bad', 'bad']);
-  assert.equal(gaugeTone(5, undefined), 'neutral');
-  assert.equal(gaugeTone(5, {}), 'neutral');
-  assert.equal(gaugeTone(NaN, t), 'good');
-  assert.equal(gaugeTone(80, { bad: 75 }), 'bad');
-});
-
-test('gaugeArc: semicircle from the left over the top, ticks at the thresholds', () => {
-  const g = gaugeArc(50, 100, { radius: 80, thickness: 16, thresholds: { warn: 70, bad: 90 } });
-  assert.equal(g.fraction, 0.5);
-  assert.equal(g.cx, 98);
-  assert.ok(g.fill.startsWith('M18 98A80 80 0 0 1 98 18'));
-  assert.ok(g.track.startsWith('M18 98A80 80 0 0 1 178 98'));
-  assert.deepEqual(g.ticks.map((t) => [t.name, t.fraction]), [['warn', 0.7], ['bad', 0.9]]);
-  assert.deepEqual(g.left, { x: 18, y: 98 });
-  assert.deepEqual(g.right, { x: 178, y: 98 });
-  assert.equal(gaugeArc(0, 100).fill, '');
-  assert.notEqual(gaugeArc(0, 100).track, '');
-  assert.equal(gaugeArc(500, 100).fraction, 1);
-  assert.equal(gaugeArc(5, 0).fraction, 1); // no scale given: 1
-  assert.equal(gaugeArc(NaN, NaN).fraction, 0);
-  assert.deepEqual(gaugeArc(50, 100, { thresholds: { warn: 150, bad: -1 } }).ticks, []);
-  assertClean(gaugeArc(1e300, 1e300, { thresholds: { warn: NaN } }));
-  assertClean(g);
-});
-
 test('heat levels and layout', () => {
   assert.equal(heatLevel(0, 10), 1);
   assert.equal(heatLevel(1, 10), 2);
@@ -377,7 +343,7 @@ test('summarizeItems reads the numbers out in words', () => {
   assert.ok(summarizeItems([{ label: 'y'.repeat(500), value: 1 }]).length < 120);
 });
 
-test('summarizeStacked, summarizeSeries, summarizeGauge, describeTile', () => {
+test('summarizeStacked, summarizeSeries, describeTile', () => {
   const rows = [{ label: 'Alice', parts: [{ key: 'new', value: 3 }, { key: 'wip', value: 5 }] }, { label: 'Bob', parts: [{ key: 'new', value: 2 }] }];
   const series = [{ key: 'new', label: 'New' }, { key: 'wip', label: 'In progress' }];
   assert.equal(summarizeStacked(rows, series), 'Alice: New 3, In progress 5, total 8. Bob: New 2, total 2.');
@@ -390,10 +356,6 @@ test('summarizeStacked, summarizeSeries, summarizeGauge, describeTile', () => {
   assert.equal(summarizeSeries([{ label: 'A', points: [] }]), 'No data.');
   assert.equal(summarizeSeries([OPENED, { label: 'Resolved', points: [] }]), 'Opened: starts at 3 (Mon), ends at 6 (Wed), highest 9 (Tue). Resolved: no data.');
   assertClean(summarizeSeries([{ label: 'B', points: [{ label: 'a', value: NaN }, { value: 1e300 }, null] }]));
-
-  assert.equal(summarizeGauge({ label: 'SLA met', value: 82, max: 100, unit: '%', tone: 'warn' }), 'SLA met: 82% of 100% (warning).');
-  assert.equal(summarizeGauge({ label: 'Mean age', value: 2.5, unit: 'd' }), 'Mean age: 2.5d.');
-  assertClean(summarizeGauge({}));
 
   assert.equal(describeTile({ label: 'Open', value: 12, hint: 'assigned to your groups', delta: { text: '3 since yesterday', direction: 'up' } }), 'Open: 12, assigned to your groups. Up 3 since yesterday.');
   assert.equal(describeTile({ label: 'Open', value: 1234 }), 'Open: 1,234.');

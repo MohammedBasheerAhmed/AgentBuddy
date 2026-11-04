@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ARTICLE_LABELS, parseSections, pickArticleBody, pickArticleTitle, similarArticleLine } from '../src/itsm/sections.js';
+import { ARTICLE_LABELS, parseSections, pickArticleBody, pickArticleTitle } from '../src/itsm/sections.js';
 import { parseSafeText, toPlainText } from '../src/render/safeText.js';
 
 const DRAFT = [
@@ -171,26 +171,9 @@ test('through the real renderer: the plain text ResultView builds gives the righ
   assert.ok(body.includes('1. Open the console.\n2. Install the certificate.'));
   assert.ok(body.endsWith('VPN client 5.x'));
   assert.ok(!body.includes('Similar article') && !body.includes('Title'));
-  assert.deepEqual(similarArticleLine(plain), { number: 'KB0010001', title: 'Troubleshooting VPN disconnects' });
 });
 
 test('placeholders in the answer are left alone by the pickers (the pipeline keeps them masked)', () => {
   const body = pickArticleBody('Title: T\nSymptoms: [PERSON_1] cannot log in.\nApplies to: all');
   assert.ok(body.includes('[PERSON_1]'));
-});
-
-// ---- similarArticleLine -------------------------------------------------------------------------------
-
-test('similarArticleLine reads the number and title from the first line', () => {
-  assert.deepEqual(similarArticleLine('Similar article exists: KB0010004 How to reset your password. Consider updating it instead.\nTitle: x'), { number: 'KB0010004', title: 'How to reset your password' });
-  assert.deepEqual(similarArticleLine('\n  similar article exists: kb0010004 Reset. Consider updating it instead'), { number: 'KB0010004', title: 'Reset' });
-  assert.deepEqual(similarArticleLine('Similar article exists: KB0010005 Fix v2.1. Remove old drivers. Consider updating it instead.'), { number: 'KB0010005', title: 'Fix v2.1. Remove old drivers' });
-});
-
-test('similarArticleLine is null for anything else, including the line further down', () => {
-  assert.equal(similarArticleLine('Title: x'), null);
-  assert.equal(similarArticleLine('Title: x\nSimilar article exists: KB0010004 A. Consider updating it instead.'), null);
-  assert.equal(similarArticleLine('Similar article exists: not a number. Consider updating it instead.'), null);
-  assert.equal(similarArticleLine(''), null);
-  assert.equal(similarArticleLine(undefined), null);
 });

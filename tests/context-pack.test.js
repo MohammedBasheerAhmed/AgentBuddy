@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FEATURES, LIMITS, allowedFields } from '../src/context/allowlists.js';
-import { readContextPack, resolveRecordRef, stripHtml } from '../src/context/pack.js';
+import { readContextPack, stripHtml } from '../src/context/pack.js';
 import { CASE_ID } from './fixtures/sn-case.js';
 import { HR_CASE_ID } from './fixtures/sn-hr-case.js';
 import { INCIDENT_ID, INCIDENT_NUMBER } from './fixtures/sn-incident.js';
@@ -321,17 +321,6 @@ test('bad input fails before anything is read', async () => {
   await assert.rejects(readContextPack({ sysId: INCIDENT_ID }, deps), TypeError);
   await assert.rejects(readContextPack(incident, deps, { feature: 'make-coffee' }), /Unknown feature/);
   assert.equal(deps.calls.length, 0);
-});
-
-test('a record can be named by number', async () => {
-  const deps = fakeDeps(buildInstance());
-  assert.deepEqual(await resolveRecordRef({ table: 'incident', number: 'inc0010001' }, deps), { table: 'incident', sysId: INCIDENT_ID });
-  assert.deepEqual(await resolveRecordRef({ number: 'INC0010001' }, deps), { table: 'incident', sysId: INCIDENT_ID });
-  const pack = await readContextPack({ number: 'RITM0010050' }, deps);
-  assert.equal(pack.table, 'sc_req_item');
-  assert.equal(pack.sysId, RITM_ID);
-  await assert.rejects(resolveRecordRef({ number: 'INC9999999' }, deps), (err) => err.code === 'NOT_FOUND');
-  await assert.rejects(resolveRecordRef({ number: 'hello' }, deps), TypeError);
 });
 
 // ---- Other kinds ---------------------------------------------------------------------------------------------

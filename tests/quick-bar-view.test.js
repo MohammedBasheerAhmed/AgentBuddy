@@ -6,8 +6,6 @@ import QuickBar from '../src/sidepanel/QuickBar.jsx';
 import { featuresFor } from '../src/features/registry.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 
-globalThis.React = React;
-
 // First render only (effects do not run in a static render): the structure, the labels and the states. Clicking and saving are
 // covered in a real browser by e2e scenario x.
 const eff = (values = {}, policy = {}) => ({ ready: true, values: { quickBarOpen: true, quickPins: {}, ...values }, locked: {}, policy: normalizePolicy(policy) });

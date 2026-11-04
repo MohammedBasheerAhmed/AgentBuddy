@@ -194,12 +194,6 @@ export function checklistProgress(steps, doneIds) {
   return { done: n, total, percent: total ? Math.round((n / total) * 100) : 0, complete: total > 0 && n === total, text: total ? t('{n} of {total} done', { n, total }) : t('No steps') };
 }
 
-/** A new list of done ids with `id` switched on or off (the argument is not changed). */
-export function setDone(doneIds, id, on) {
-  const rest = (doneIds || []).filter((x) => x !== id);
-  return on ? [...rest, id] : rest;
-}
-
 /** The steps written on a task or requested item: its description first, then its special instructions. */
 export function stepsFromPack(pack) {
   return buildChecklist([

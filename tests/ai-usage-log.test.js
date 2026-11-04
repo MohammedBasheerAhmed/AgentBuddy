@@ -4,7 +4,7 @@ import { sendChat } from '../src/providers/index.js';
 import { readBudgetState, assertWithinCaps } from '../src/providers/budget.js';
 import { fromOpenAIResponse, fromAnthropicResponse } from '../src/providers/messages.js';
 import { createFirewall } from '../src/pii/index.js';
-import { LOG_LIMIT, USAGE_KEY, appendEntry, checkCaps, logToCsv, makeEntry, summarize, tokensUsedToday } from '../src/lib/aiUsage.js';
+import { LOG_LIMIT, USAGE_KEY, appendEntry, checkCaps, makeEntry, summarize, tokensUsedToday } from '../src/lib/aiUsage.js';
 
 // The usage log is what the person's caps and the organisation's daily token budget are counted from. It must count every call that
 // was billed, also past 500 calls a day, and hold nothing but numbers and names of providers and models.
@@ -29,7 +29,7 @@ function installChrome() {
 const answer = (body) => async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) });
 const sealed = () => createFirewall({ mode: 'standard' }).buildRequest({ feature: 'x', table: 'incident', system: 'S', parts: [{ field: 'description', text: 'Printer on floor 3 is jammed' }], userInstruction: 'Go' });
 const OPENAI = { provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test-0123456789', baseUrl: '', keyOptional: false, local: false };
-const CLAUDE = { provider: 'anthropic', model: 'claude-sonnet-5-5', apiKey: 'sk-ant-test-0123456789', baseUrl: '', keyOptional: false, local: false, promptCache: false };
+const CLAUDE = { provider: 'anthropic', model: 'claude-sonnet-5-5', apiKey: 'sk-ant-test-0123456789', baseUrl: '', keyOptional: false, local: false };
 
 // ---- P1.11: an answer that was billed but could not be used is still counted --------------------------------------------------
 
@@ -89,7 +89,7 @@ function busyLog() {
   let log = [];
   // Last month (does not count anywhere), 300 calls earlier this month, then 600 calls today.
   for (let i = 0; i < 50; i += 1) log = appendEntry(log, call(new Date(2026, 9, 30, 10, i % 60)));
-  for (let i = 0; i < 300; i += 1) log = appendEntry(log, call(at(10 + (i % 5), 9, i % 60), { price: { inPerM: 1, outPerM: 2 } }));
+  for (let i = 0; i < 300; i += 1) log = appendEntry(log, call(at(10 + (i % 5), 9, i % 60)));
   for (let i = 0; i < 600; i += 1) log = appendEntry(log, call(at(20, 8 + Math.floor(i / 60), i % 60)));
   return log;
 }
@@ -97,19 +97,14 @@ function busyLog() {
 test('a daily call limit above 500 can be reached, and the day\'s tokens are all counted', () => {
   const log = busyLog();
   assert.equal(tokensUsedToday(log, NOW), 600 * 120, 'every one of today\'s 600 calls');
-  assert.equal(checkCaps(log, { dailyCalls: 550 }, 'openai', NOW).status, 'blocked');
-  assert.equal(checkCaps(log, { dailyCalls: 600 }, 'openai', NOW).status, 'blocked');
-  assert.equal(checkCaps(log, { dailyCalls: 700 }, 'openai', NOW).status, 'warn');
-  assert.equal(checkCaps(log, { dailyTokens: 600 * 120 }, 'openai', NOW).status, 'blocked');
+  assert.equal(checkCaps(log, { dailyCalls: 550 }, NOW).status, 'blocked');
+  assert.equal(checkCaps(log, { dailyCalls: 600 }, NOW).status, 'blocked');
+  assert.equal(checkCaps(log, { dailyCalls: 700 }, NOW).status, 'warn');
+  assert.equal(checkCaps(log, { dailyTokens: 600 * 120 }, NOW).status, 'blocked');
   const { today, month } = summarize(log, NOW);
   assert.equal(today.calls, 600);
   assert.equal(month.calls, 900, 'the month too: 300 earlier calls and today\'s 600');
   assert.equal(month.tokens, 900 * 120);
-  // The spend of the month's earlier, priced calls is kept (a monthly spend cap counts it): 300 x (100 x 1 + 20 x 2) / 1e6.
-  assert.ok(Math.abs(month.cost - 0.042) < 1e-9, String(month.cost));
-  assert.equal(month.priced, 300);
-  assert.equal(month.complete, false, 'today\'s calls had no price');
-  assert.equal(checkCaps(log, { openai: { monthlyUsd: 0.04 } }, 'openai', NOW).status, 'blocked');
 });
 
 test('the log stays small and holds no more than before: the newest calls one by one, older ones as totals per day, no instance', () => {
@@ -119,11 +114,10 @@ test('the log stays small and holds no more than before: the newest calls one by
   assert.equal(single.length, LOG_LIMIT);
   assert.ok(totals.length <= 6, `${totals.length} totals: one per day of this month, none for last month`);
   assert.ok(totals.every((e) => e.host === '' && e.time.startsWith('2026-11')), 'a total names no instance');
-  const allowed = new Set(['time', 'provider', 'model', 'ms', 'inputTokens', 'outputTokens', 'cacheRead', 'cacheWrite', 'costUsd', 'host', 'kind', 'calls', 'priced']);
+  const allowed = new Set(['time', 'provider', 'model', 'ms', 'inputTokens', 'outputTokens', 'cacheRead', 'cacheWrite', 'host', 'kind', 'calls']);
   assert.deepEqual(totals.flatMap((e) => Object.keys(e)).filter((k) => !allowed.has(k)), []);
-  // The newest call is last; the recent list shows only calls.
+  // The newest call is last.
   assert.equal(log[log.length - 1].time, call(at(20, 17, 59)).time);
-  assert.ok(summarize(log, NOW).recent.every((e) => e.calls === undefined));
   // Appending more keeps it the same size.
   assert.equal(appendEntry(log, call(at(20, 18))).length, log.length);
   // Under the limit nothing changes.
@@ -135,29 +129,15 @@ test('the log stays small and holds no more than before: the newest calls one by
 test('key checks are folded on their own and still never count against a cap', async () => {
   let log = [];
   for (let i = 0; i < LOG_LIMIT + 40; i += 1) log = appendEntry(log, call(at(20, 9, i % 60), { kind: i < 40 ? 'validate' : 'chat' }));
-  assert.equal(checkCaps(log, { dailyCalls: LOG_LIMIT }, 'openai', NOW).status, 'blocked', 'the 500 real calls');
-  assert.equal(checkCaps(log, { dailyCalls: LOG_LIMIT + 1 }, 'openai', NOW).status, 'warn', 'not the 40 key checks');
+  assert.equal(checkCaps(log, { dailyCalls: LOG_LIMIT }, NOW).status, 'blocked', 'the 500 real calls');
+  assert.equal(checkCaps(log, { dailyCalls: LOG_LIMIT + 1 }, NOW).status, 'warn', 'not the 40 key checks');
   // And the stored budget check reads the totals as well.
   const data = installChrome();
   try {
     data[USAGE_KEY] = log;
     data.agentbuddy_ai_caps = { dailyCalls: LOG_LIMIT };
-    await assert.rejects(() => assertWithinCaps('openai', NOW), (err) => err.code === 'BUDGET');
+    await assert.rejects(() => assertWithinCaps(NOW), (err) => err.code === 'BUDGET');
   } finally {
     delete globalThis.chrome;
   }
-});
-
-// ---- P1.24: the CSV never starts a cell with a formula ------------------------------------------------------------------------
-
-test('the usage CSV guards every cell against spreadsheet formulas, as the audit CSV does', () => {
-  const odd = { ...call(at(20, 9)), model: '=HYPERLINK("http://x")', provider: '\t=1+1', host: '\r@SUM(A1)', kind: '-2+3' };
-  const csv = logToCsv([odd]);
-  const [header, row] = csv.split('\r\n');
-  assert.match(header, /,calls$/);
-  assert.ok(row.includes(`"'=HYPERLINK(""http://x"")"`), row);
-  assert.ok(row.includes(`'\t=1+1`), row);
-  assert.ok(row.includes(`"'\r@SUM(A1)"`), row);
-  assert.ok(row.includes(`'-2+3`), row);
-  assert.ok(row.endsWith(',1'), 'one call');
 });

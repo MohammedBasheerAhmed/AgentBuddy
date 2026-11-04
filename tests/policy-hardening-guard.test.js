@@ -105,12 +105,11 @@ test('every read function refuses a blocked table before any request is made', a
   assert.equal(fake.calls.length, 1);
 });
 
-test('aggregate and queryAll are guarded when the deps have them, and a table name is made safe in the message', async () => {
+test('aggregate is guarded when the deps have it, and a table name is made safe in the message', async () => {
   const calls = [];
-  const base = { ...fakeDeps({}), aggregate: async (t) => calls.push(['aggregate', t]), queryAll: async (t) => (calls.push(['queryAll', t]), []) };
+  const base = { ...fakeDeps({}), aggregate: async (t) => calls.push(['aggregate', t]) };
   const deps = await guardFor({ blockedTables: ['sys_user'] }).deps(base);
   await assert.rejects(() => deps.aggregate('sys_user', { groupBy: ['name'] }), refused('sys_user'));
-  await assert.rejects(() => deps.queryAll('sys_user', '', ['name'], {}), refused('sys_user'));
   await deps.aggregate('incident', { query: 'active=true' });
   assert.deepEqual(calls, [['aggregate', 'incident']]);
   assert.equal(blockedError('sys_user"><img src=x>').message, 'Your organisation does not allow Agent Buddy to read sys_userimgsrcx records.');

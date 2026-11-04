@@ -10,8 +10,6 @@ import { createLiveDeps } from '../context/live.js';
 import { SYS_ID_RE } from '../context/util.js';
 import { OPS } from './ops/index.js';
 import { checkRecord, checkPack } from './ops/validate.js';
-import { readMyDay } from '../reports/myDay.js';
-import { getSessionUser } from './sessionToken.js';
 import { policyGuard } from './policyGuard.js';
 
 /**
@@ -38,11 +36,6 @@ export async function handleRead(op, args, { guard = policyGuard, makeDeps = cre
     case 'history': {
       if (!SYS_ID_RE.test(args.callerSysId || '')) throw new Error('This ticket has no caller to look up.');
       return readCallerHistory({ callerSysId: args.callerSysId, excludeSysId: SYS_ID_RE.test(args.excludeSysId || '') ? args.excludeSysId : '' }, deps, { limit: 10, allowSensitive });
-    }
-    case 'myday': {
-      // The signed-in user's own id comes from the page, never from the panel.
-      const session = await getSessionUser(deps);
-      return readMyDay({ userId: session?.userId || '' }, deps, {});
     }
     case 'similar':
       return findSimilarTickets(checkPack(args.pack), deps, { resolvedOnly: args.resolvedOnly === true, allowSensitive });

@@ -16,7 +16,6 @@
 .ab-compose-rows { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ab-compose-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-sm); background: var(--ab-bg-subtle); }
 .ab-compose-row-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.ab-compose-row-title { font-weight: 600; }
 .ab-compose-row .ab-btn { flex: 0 0 auto; }
 
 .ab-compose-scroll { max-height: 240px; overflow-y: auto; }

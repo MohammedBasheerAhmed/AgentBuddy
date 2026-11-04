@@ -9,9 +9,6 @@ import ScreenView from '../src/sidepanel/shell/ScreenView.jsx';
 import TicketView from '../src/sidepanel/ticket/TicketView.jsx';
 import SetupView from '../src/sidepanel/SetupView.jsx';
 
-// The use of JSX in shared components without an import: the build uses the automatic runtime, this bundle the classic one.
-globalThis.React = React;
-
 // The panel's routing (integration review H1, carried over to the round-3 screens): which screens exist, which one shows and what
 // each is given, without a browser. What is INSIDE a screen belongs to its area and is tested there.
 

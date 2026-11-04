@@ -403,14 +403,11 @@ export function createFirewall(options = {}) {
     return resolveOverlaps(candidates.filter((c) => c.confidence >= DEFAULT_MIN_CONFIDENCE));
   }
 
-  const prepare = (text, protect) => {
-    const clean = sanitize(text);
-    return protect ? tokenizer.protect(clean) : clean;
-  };
+  const prepare = (text) => tokenizer.protect(sanitize(text));
 
   // Redact one piece of text; `tally` collects counts (numbers only).
-  function redactText(text, tally, { protect = true, prose = true } = {}) {
-    const clean = prepare(text, protect);
+  function redactText(text, tally, { prose = true } = {}) {
+    const clean = prepare(text);
     let findings = findAll(clean, { prose });
     if (learn(findings)) findings = findAll(clean, { prose });
     let out = '';
@@ -502,18 +499,18 @@ export function createFirewall(options = {}) {
       // First look at everything (the field names and labels too), so a value found in one place is also hidden in the places
       // that came before it. The trusted prompt (system, instruction) is fixed text: its wording is not searched for names in prose.
       const everything = [
-        [request.system ?? '', true, false],
+        [request.system ?? '', false],
         ...parts.flatMap((p) => [
-          [String(p.field ?? p.label ?? 'text'), true, true],
-          ...(p.label !== undefined && p.label !== p.field ? [[String(p.label), true, true]] : []),
-          [p.text, p.allowPlaceholders !== true, true],
+          [String(p.field ?? p.label ?? 'text'), true],
+          ...(p.label !== undefined && p.label !== p.field ? [[String(p.label), true]] : []),
+          [p.text, true],
         ]),
-        [request.userInstruction ?? '', true, false],
+        [request.userInstruction ?? '', false],
       ];
       // A name learned late can make another one visible (a prose name next to a record name): look again until nothing new.
       for (let round = 0; round < 3; round++) {
         let grew = false;
-        for (const [text, protect, prose] of everything) grew = learn(findAll(prepare(text, protect), { prose })) || grew;
+        for (const [text, prose] of everything) grew = learn(findAll(prepare(text), { prose })) || grew;
         if (!grew) break;
       }
 
@@ -534,9 +531,9 @@ export function createFirewall(options = {}) {
       for (const p of parts) {
         const clean = sanitize(p.text);
         if (p.inline === true && clean.trim().length <= INLINE_MAX && !LINE_BREAK.test(clean.trim())) {
-          const label = take(String(p.label ?? p.field ?? 'text'), { protect: true }).replace(/\s+/g, ' ').trim().slice(0, 80);
+          const label = take(String(p.label ?? p.field ?? 'text')).replace(/\s+/g, ' ').trim().slice(0, 80);
           // (Masking puts no line break in; the replace is there so that nothing ever could.)
-          const body = take(p.text, { protect: p.allowPlaceholders !== true }).trim().replace(LINE_BREAKS, ' ');
+          const body = take(p.text).trim().replace(LINE_BREAKS, ' ');
           if (fieldsAt < 0) {
             fieldsAt = blocks.length;
             blocks.push('');
@@ -544,9 +541,9 @@ export function createFirewall(options = {}) {
           fieldLines.push(`${label}: ${body}`);
           continue;
         }
-        const field = attrSafe(take(String(p.field ?? p.label ?? 'text'), { protect: true }));
-        const label = p.label !== undefined && p.label !== p.field ? attrSafe(take(String(p.label), { protect: true })) : '';
-        const body = take(p.text, { protect: p.allowPlaceholders !== true });
+        const field = attrSafe(take(String(p.field ?? p.label ?? 'text')));
+        const label = p.label !== undefined && p.label !== p.field ? attrSafe(take(String(p.label))) : '';
+        const body = take(p.text);
         blocks.push(`<ticket_data field="${field}"${label ? ` label="${label}"` : ''}>\n${escapeData(body)}\n</ticket_data>`);
       }
       // The lines are escaped like any block body: a value can never open or close a tag.
@@ -596,14 +593,6 @@ export function createFirewall(options = {}) {
     },
     /** Running totals for this instance: numbers only. */
     stats: () => ({ requests: totals.requests, refused: totals.refused, total: totals.total, counts: { ...totals.counts } }),
-    /**
-     * Forget every placeholder (and so the ability to rehydrate). Text masked by hand and names found in prose stay masked for
-     * any later request: clearing never makes the firewall mask less.
-     */
-    clear: () => {
-      tokenizer.clear();
-      learned.clear();
-    },
     toJSON: () => ({ mode }),
   });
 }

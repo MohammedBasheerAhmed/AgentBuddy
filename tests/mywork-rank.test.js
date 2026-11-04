@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 import { workState } from '../src/mywork/states.js';
 import { pickSla, riskOfSla } from '../src/mywork/sla.js';
 import { groupQueue, compareNow, filterChips, passes, sharedCis, priorityRank, groupOf } from '../src/mywork/rank.js';
-import { spanText, slaText, readText, agoText, idleText, dueToday, HOUR, MINUTE, DAY } from '../src/mywork/time.js';
+import { spanText, slaText, readText, idleText, dueToday, HOUR, MINUTE, DAY } from '../src/mywork/time.js';
 import { tablesForProfiles, readDecision, columnsFor, pluralOf, customerColumn } from '../src/mywork/tables.js';
 import { fullListUrl } from '../src/mywork/links.js';
 
@@ -90,7 +90,6 @@ test('time phrases', () => {
   assert.equal(readText(NOW - 20000, NOW), 'Read just now');
   assert.equal(readText(NOW - 2 * MINUTE, NOW), 'Read 2 min ago');
   assert.equal(readText(NOW - 2 * HOUR, NOW), 'Read 2h ago');
-  assert.equal(agoText(NOW - 3 * DAY, NOW), '3 d ago');
   assert.equal(idleText(NOW - 5 * HOUR, NOW), 'updated 5h ago');
   assert.equal(dueToday(NOW, NOW), true);
   assert.equal(dueToday(NOW + 3 * DAY, NOW), false);

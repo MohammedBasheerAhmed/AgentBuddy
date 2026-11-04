@@ -5,9 +5,9 @@ const assert = require('node:assert/strict');
 import { createCache, createLimiter } from '../src/reports/engine/cache.js';
 import { createReader, attempt } from '../src/reports/engine/reader.js';
 import { runReport, createRuntime, asOfFor, AS_OF_MAX_AGE_MS } from '../src/reports/engine/index.js';
-import { startOfLocalDay, startOfLocalWeek, bucketStarts, bucketLabels, dayLabel, offsetAt } from '../src/reports/engine/time.js';
+import { startOfLocalDay, bucketStarts, bucketLabels, dayLabel, offsetAt } from '../src/reports/engine/time.js';
 import { groupSlaByTicket, worryingQuery } from '../src/reports/engine/sla.js';
-import { slaPercent, worstSla, riskOf, isPaused, readMyDay } from '../src/reports/myDay.js';
+import { slaPercent, worstSla, riskOf, isPaused } from '../src/reports/myDay.js';
 import { createReportOps, cleanParams, readsFor } from '../src/content/ops/reports.js';
 import { createPolicyGuard } from '../src/content/policyGuard.js';
 import { fakeInstance, cell, count, group, USER, GROUP_A, NOW, DAY, HOUR } from './reports-fixtures.js';
@@ -160,7 +160,6 @@ test('time: daily buckets across a change of the clocks each start at their own 
   assert.deepEqual(bucketLabels(starts, london), ['Oct 24', 'Oct 25', 'Oct 26']);
   const weeks = bucketStarts({ now: Date.UTC(2026, 9, 27, 12), unit: 'week', count: 2, offsetMin: london });
   assert.deepEqual(weeks.map((s) => new Date(s).toISOString()), ['2026-10-18T23:00:00.000Z', '2026-10-26T00:00:00.000Z']);
-  assert.equal(new Date(startOfLocalWeek(Date.UTC(2026, 9, 27, 12), london)).toISOString(), '2026-10-26T00:00:00.000Z');
   assert.equal(dayLabel(Date.UTC(2026, 9, 24, 23), london), 'Oct 25');
 });
 
@@ -359,62 +358,7 @@ test('readsFor with the real policy guard: a dot-walk is checked by the table it
   assert.equal(inst.calls.length, 1, 'only the allowed read reached the instance');
 });
 
-// ---- My day -----------------------------------------------------------------------------------------------------------
-
-const ticket = (n) => ({ sys_id: cell(id(n)), number: cell(`INC${n}`), short_description: cell('t'), priority: cell('2', '2 - High'), state: cell('2', 'In Progress'), sys_updated_on: cell('2026-10-27 10:00:00'), sys_class_name: cell('incident') });
-
-function myDayDeps({ rows = {}, slas = [], hidden = [], denied = [] } = {}) {
-  const calls = [];
-  return {
-    calls,
-    async queryTable(table, query) {
-      calls.push({ table, query });
-      if (denied.includes(table)) throw Object.assign(new Error('403'), { code: 'ACCESS_DENIED' });
-      if (hidden.includes(table)) return [];
-      if (query === '') return [{ sys_id: cell('f'.repeat(32)) }];
-      if (table === 'task_sla') return slas;
-      return rows[table] || [];
-    },
-  };
-}
-
-test('My day: an SLA with most of its working time left is not "at risk", even past 100% plain time', async () => {
-  const out = await readMyDay({ userId: USER }, myDayDeps({ rows: { incident: [ticket(1)] }, slas: [sla(id(1), { pct: 118, bpct: 62 })] }), { tables: ['incident'], now: NOW });
-  assert.equal(out.items[0].risk, 'ok');
-  assert.equal(out.items[0].sla.percentage, 62);
-});
-
-test('My day: no SLA row because no SLA record is visible at all says so; none for these tickets says nothing', async () => {
-  const hidden = await readMyDay({ userId: USER }, myDayDeps({ rows: { incident: [ticket(1)] }, hidden: ['task_sla'] }), { tables: ['incident'], now: NOW });
-  assert.deepEqual(hidden.access.map((a) => [a.source, a.status]), [['task_sla', 'hidden']]);
-  assert.match(hidden.access[0].note, /ordered by priority only/);
-  const none = await readMyDay({ userId: USER }, myDayDeps({ rows: { incident: [ticket(1)] } }), { tables: ['incident'], now: NOW });
-  assert.deepEqual(none.access, []);
-});
-
-test('My day: an empty list says what it means (nothing assigned / nothing visible / nothing readable)', async () => {
-  const nothing = await readMyDay({ userId: USER }, myDayDeps(), { tables: ['incident'], now: NOW });
-  assert.deepEqual([nothing.items.length, nothing.empty], [0, 'nothing']);
-  const unseen = await readMyDay({ userId: USER }, myDayDeps({ hidden: ['incident', 'sc_task'] }), { tables: ['incident', 'sc_task'], now: NOW });
-  assert.equal(unseen.empty, 'unseen');
-  const unread = await readMyDay({ userId: USER }, myDayDeps({ denied: ['incident'] }), { tables: ['incident'], now: NOW });
-  assert.equal(unread.empty, 'unread');
-  const some = await readMyDay({ userId: USER }, myDayDeps({ rows: { incident: [ticket(1)] } }), { tables: ['incident'], now: NOW });
-  assert.equal(some.empty, null);
-});
-
-test('My day: a table refused by the organisation\'s policy is "blocked", not "denied"', async () => {
-  const deps = {
-    async queryTable(table) {
-      if (table === 'problem') throw Object.assign(new Error('Your organisation does not allow Agent Buddy to read problem records.'), { code: 'BLOCKED_TABLE' });
-      return [];
-    },
-  };
-  const out = await readMyDay({ userId: USER }, deps, { tables: ['problem'], now: NOW });
-  assert.deepEqual(out.access.map((a) => a.status), ['blocked']);
-});
-
-test('reports and My day read the same SLA columns', async () => {
+test('the SLA radar reads the business percentage and the stage, as My work does', async () => {
   const inst = fakeInstance({
     rules: [
       { when: (c) => c.kind === 'aggregate' && c.table === 'task_sla', then: count(3) },
@@ -423,8 +367,6 @@ test('reports and My day read the same SLA columns', async () => {
     ],
   });
   await run({ section: 'sla', scope: { kind: 'chosen', groupIds: [GROUP_A] }, tables: ['incident'] }, inst);
-  const deps = myDayDeps({ rows: { incident: [ticket(1)] }, slas: [sla(id(1), { pct: 10, bpct: 10 })] });
-  await readMyDay({ userId: USER }, deps, { tables: ['incident'], now: NOW });
   const radar = inst.calls.find((c) => c.kind === 'query' && c.table === 'task_sla' && c.query !== '');
   assert.ok(radar.fields.includes('business_percentage') && radar.fields.includes('stage'));
   assert.ok(HOUR > 0 && DAY > 0);

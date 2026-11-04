@@ -263,8 +263,6 @@ export function resolveProviderConfig(settings = {}, apiKey = '') {
     keyOptional: Boolean(def.keyOptional || (baseUrl && base.local && def.api === 'openai')),
     // True for a server on this computer: the only kind a "local-only" PII mode accepts.
     local: Boolean(def.local || base.local),
-    // Each request is a one-off (a different record every time), so caching the prefix would only add write cost.
-    promptCache: false,
     invalidBaseUrl: base.ok ? '' : base.error,
   };
   if (def.azure) {
