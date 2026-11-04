@@ -208,9 +208,16 @@ may assume `g_form` or `g_user` exists.
 ## Additions from the second round (2026-10-30)
 
 **Firewall and pipeline**
-- `fw.buildRequest({ ..., mask: string[] })`: extra literals the person chose in the preview ("Mask this too"); every occurrence in every
-  part gets a placeholder (`[PERSON_n]` when it looks like a name, otherwise `[MASKED_n]`). It can only add masking. `stats.counts.MANUAL`
-  counts those places (a number only, for the audit).
+- `fw.buildRequest({ ..., mask: string[] })`: extra literals the person chose in the preview ("Mask this too"); everywhere one is written
+  as a word of its own in the ticket data (any case; never inside a longer word, never in the fixed prompt) it gets a placeholder
+  (`[PERSON_n]` when it looks like a name, otherwise `[MASKED_n]`). It can only add masking. `stats.counts.MANUAL` counts those places (a
+  number only, for the audit). `maskMore` (src/lib/pipeline.js) answers `PART_OF_WORD` when the text is only inside longer words.
+- A value the firewall masked once is masked again wherever it is written as a word of its own; a password, a credential, a card, an
+  IBAN, an ID number or a phone number of 6 characters or more is masked inside a longer word too ("Welcome12", "ID4471234"). The
+  final check (`verify`) follows the same rule (`placesOf` in src/pii/firewall.js), so it never refuses a place masking left alone.
+- Invisible characters (src/lib/invisible.js: zero-width and bidi marks, invisible operators, variation selectors, the tag block, C1
+  controls...) are removed before detection, so they cannot split an email or a number; ZWJ and ZWNJ stay in the text (some scripts
+  need them) and the final high-confidence check looks through them too.
 - Prose names are found by `src/pii/names.js` (`detectProseNames`): a cue before the name in Standard mode, also capitalised full
   names with no cue in Strict and Local-only. The fixed prompt text is never searched for names.
 - `fw.rehydrate(text, { keep })` leaves the placeholder kinds in `keep` as they are; the pipeline passes `NEVER_REHYDRATE` (exported

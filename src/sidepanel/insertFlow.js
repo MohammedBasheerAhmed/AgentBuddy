@@ -220,7 +220,7 @@ const MAX_REMEMBERED = 50;
 // One feature's earlier answer in one box: a hand-off brief never swaps out the summary that went into the same work notes.
 const boxKey = (page, expect, field, feature) => `${page?.tabId ?? ''}|${expect?.table || ''}|${expect?.sysId || (expect?.newRecord ? 'new' : '')}|${field}|${feature || ''}`;
 
-/** Forget what was inserted (tests; a panel that wants a clean slate). */
+/** Forget what was inserted (Settings "Clear everything" and a site turned off: src/sidepanel/forgetOnClear.js; tests). */
 export const forgetInserts = () => lastInserted.clear();
 
 /**

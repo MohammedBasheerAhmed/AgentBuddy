@@ -4,7 +4,7 @@
 export const MSG = Object.freeze({
   // panel -> content script (via chrome.tabs.sendMessage)
   PING: 'ab:ping',
-  PAGE_STATE: 'ab:page-state', // -> { href, title, record: {table, sysId, number}|null, user, form }
+  PAGE_STATE: 'ab:page-state', // { policy? } -> { href, title, record: {table, sysId, number}|null, user, form }  (pageStateMessage below)
   READ: 'ab:read', // { op: 'pack' | 'history' | 'similar' | 'knowledge' | ..., args } -> plain JSON
   FILL_FIELD: 'ab:fill-field', // { field, value, label, mode, expect } -> { ok, method?, label?, reason? }
 
@@ -28,6 +28,26 @@ export const MSG = Object.freeze({
 export const SITE_OFF_CODE = 'SITE_OFF';
 
 import { tm } from '../i18n/core.js';
+
+/**
+ * The part of the organisation's policy the content script needs for its own reads: blocked tables, the sensitive table prefixes and
+ * the HR switch. Extension pages read the managed policy and send this with their requests to the page; the content script merges it
+ * with what it reads itself (src/content/policyGuard.js mergePanelPolicy), so it can only make a read stricter. null without a policy.
+ */
+export function readPolicyOf(policy) {
+  if (!policy || typeof policy !== 'object') return null;
+  const list = (value) => (Array.isArray(value) ? value.filter((v) => typeof v === 'string') : []);
+  return { blockedTables: list(policy.blockedTables), sensitiveTablePrefixes: list(policy.sensitiveTablePrefixes), allowHrContent: policy.allowHrContent === true };
+}
+
+/**
+ * The PAGE_STATE request. To answer it the content script reads too (a number's sys_id, a task's real class, who is signed in), so
+ * it carries the policy the way every READ does (src/sidepanel/ask.js).
+ */
+export function pageStateMessage(policy) {
+  const shaped = readPolicyOf(policy);
+  return { type: MSG.PAGE_STATE, ...(shaped ? { policy: shaped } : {}) };
+}
 
 /** Errors that cross the message boundary travel as { error: { message, code } } so the panel can show plain text. */
 // (tm: this file is in the page script's bundle, which has no catalogue; the panel shows the text through plainError, which translates it)

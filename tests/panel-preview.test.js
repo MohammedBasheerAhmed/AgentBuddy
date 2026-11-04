@@ -66,7 +66,7 @@ test('the text selected in the preview is taken only when the whole selection is
 test('what "Mask" says: plain, short, never the text itself', () => {
   assert.equal(maskMessage({ ok: true, masked: 1 }), 'Masked in 1 place. Read the text again before you send.');
   assert.equal(maskMessage({ ok: true, masked: 3 }), 'Masked in 3 places. Read the text again before you send.');
-  for (const problem of ['EMPTY', 'SHORT', 'LONG', 'PLACEHOLDER', 'NOT_FOUND', 'NOT_DATA', 'FAILED', 'GONE']) {
+  for (const problem of ['EMPTY', 'SHORT', 'LONG', 'PLACEHOLDER', 'NOT_FOUND', 'PART_OF_WORD', 'NOT_DATA', 'FAILED', 'GONE']) {
     const text = maskMessage({ ok: false, problem });
     assert.ok(text.length > 10 && text.length < 80, `${problem}: ${text}`);
     assert.ok(!/[[\]{}<>]/.test(text), problem);
@@ -82,11 +82,14 @@ const dialog = (props) => renderToStaticMarkup(<PreviewDialog feature={{ title: 
 
 test('with onMask the dialog offers "Mask this too": a labelled box, a hint, a button and a status line', () => {
   const markup = dialog({ onMask: () => ({ ok: true, masked: 1 }) });
-  assert.match(markup, /<label class="ab-label" for="ab-mask-text">Mask this too<\/label>/);
-  assert.match(markup, /<input id="ab-mask-text" class="ab-input" type="text"[^>]*aria-describedby="ab-mask-hint ab-mask-status"/);
-  assert.match(markup, /id="ab-mask-hint">Select words above, or type them here\. Every place they appear is masked\./);
+  // (the ids are the dialog's own, see the test below: the label, the hint and the status line point at this dialog's box)
+  const box = markup.match(/<label class="ab-label" for="(ab-mask-text-[\w-]+)">Mask this too<\/label>/)?.[1];
+  assert.ok(box, 'a labelled box');
+  const described = markup.match(new RegExp(`<input id="${box}" class="ab-input" type="text"[^>]*aria-describedby="(ab-mask-hint-[\\w-]+) (ab-mask-status-[\\w-]+)"`));
+  assert.ok(described, 'the box is described by the hint and the status line');
+  assert.ok(markup.includes(`id="${described[1]}">Select words above, or type them here. Every place they appear is masked.`));
   assert.match(markup, /<button type="button" class="ab-btn" disabled="">Mask<\/button>/, 'nothing to mask yet');
-  assert.match(markup, /id="ab-mask-status" role="status"/);
+  assert.ok(markup.includes(`id="${described[2]}" role="status"`));
   assert.match(markup, /mask anything you still see/);
   // narrow panels: the box shrinks and the row and the footer wrap
   assert.match(markup, /min-width:0/);
@@ -97,6 +100,23 @@ test('without onMask there is no box (a caller that cannot re-seal never pretend
   const markup = dialog();
   assert.ok(!markup.includes('ab-mask-text'));
   assert.ok(!markup.includes('mask anything you still see'));
+});
+
+test('two dialogs on the page never share an id, and each one\'s label and descriptions point into itself', () => {
+  const one = { feature: { title: 'Summarise this ticket' }, prepared: prepared(), config: { provider: 'anthropic', baseUrl: '' }, canSkipNext: false, onSend: () => {}, onCancel: () => {}, onMask: () => ({}) };
+  const markup = renderToStaticMarkup(
+    <>
+      <PreviewDialog {...one} />
+      <PreviewDialog {...one} short others="3 solved tickets" />
+    </>
+  );
+  const ids = [...markup.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(ids.length, 6, 'full: title, hint, box, status; short: title, its line');
+  assert.equal(new Set(ids).size, ids.length, `no id twice: ${ids.join(', ')}`);
+  const refs = [...markup.matchAll(/ (?:for|aria-labelledby|aria-describedby)="([^"]+)"/g)].flatMap((m) => m[1].split(' '));
+  assert.equal(refs.length, 6, 'full: dialog title, label, hint + status; short: dialog title + line');
+  for (const ref of refs) assert.ok(ids.includes(ref), `${ref} points at an element`);
+  for (const id of ids) assert.match(id, /^ab-(prev|mask)-[a-z]+-[\w-]+$/, 'usable in a selector (no colons)');
 });
 
 test('the dialog shows the sealed request\'s own preview (what Send sends) and counts what the person added', () => {

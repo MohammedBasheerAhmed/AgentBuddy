@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEffective } from './useEffective.js';
+import { useForgetOnClear } from './forgetOnClear.js';
 import { usePage } from './usePage.js';
 import { useLaunch } from './useLaunch.js';
 import SetupView from './SetupView.jsx';
@@ -258,9 +259,11 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
 
 function Panel() {
   const eff = useEffective();
+  // Settings "Clear everything" or a site turned off: the answers, card reads and inserts held in memory go (forgetOnClear.js).
+  useForgetOnClear();
   const lang = useLanguage(eff.values?.language); // before anything below draws a text
   useTheme(eff.values?.theme);
-  const { page, lastGood, lastSeen, refresh } = usePage();
+  const { page, lastGood, lastSeen, refresh } = usePage(eff.policy);
   const { launch, clear: clearLaunch } = useLaunch();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [ownLaunch, setOwnLaunch] = useState(null); // an action the palette chose (src/sidepanel/palette): handled like `launch`

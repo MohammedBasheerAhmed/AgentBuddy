@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { FOCUSABLE, dialogKeyAction, focusToRestore, inertOutside, outsideKeyAction, selectedTextIn } from './dialogKeys.js';
 import { maskMessage, splitPreview } from './runLogic.js';
 import { t, tn, isolate } from '../i18n/index.js';
@@ -40,6 +40,20 @@ export function maskSummary(stats) {
   return parts.length ? parts.join(t(', ')) : t('nothing needed masking');
 }
 
+// One key per prepared run, for the dialog's `key`. A new run (another ticket's preview waiting there, Try again) gets a new dialog,
+// so the view, the "Mask this too" text and what it said never carry over to another run or ticket. "Mask this too" seals the same
+// run again with the same firewall (src/lib/pipeline.js maskMore): the key stays, and so does what the dialog says about it.
+const runKeys = new WeakMap();
+let runCount = 0;
+
+/** The dialog's key for a prepared run (prepareRun's result, or maskMore's for the same run). */
+export function previewKey(prepared) {
+  const run = prepared?.firewall || prepared?.input || prepared;
+  if (!run || typeof run !== 'object') return 'preview';
+  if (!runKeys.has(run)) runKeys.set(run, `run-${(runCount += 1)}`);
+  return runKeys.get(run);
+}
+
 /**
  * The check before anything is sent (AI0.2).
  *
@@ -55,11 +69,17 @@ export function maskSummary(stats) {
  * props: feature, prepared (from prepareRun or maskMore), config, canSkipNext, onSend({ shown }), onCancel,
  * onMask? (text) => { ok, masked } | { ok: false, problem } (useRun's maskMore; without it the box is not shown),
  * short?, others? (the other records, counted: runLogic otherRecordsSummary)
+ *
+ * Render it with key={previewKey(prepared)}: its state belongs to one run.
  */
 export default function PreviewDialog({ feature, prepared, config, canSkipNext, onSend, onCancel, onMask, short = false, others = '' }) {
   const backdropRef = useRef(null);
   const sendRef = useRef(null);
   const previewRef = useRef(null);
+  // This dialog's own ids: two previews can be in the panel at once (one waiting on a screen that is hidden), and an id must not
+  // repeat or a label and a description would point into the other one. (useId's colons go: the ids stay usable in a selector.)
+  const uid = useId().replace(/:/g, '');
+  const ids = { title: `ab-prev-title-${uid}`, short: `ab-prev-short-${uid}`, mask: `ab-mask-text-${uid}`, hint: `ab-mask-hint-${uid}`, status: `ab-mask-status-${uid}` };
   const [maskText, setMaskText] = useState('');
   const [maskStatus, setMaskStatus] = useState('');
   // 'short' (the one-line check), 'data' (ticket data first, rules folded) or 'exact' (the whole request as it is sent)
@@ -155,7 +175,9 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
   // What is shown is the sealed request's own preview: exactly what Send will send (split into data and rules only when the two
   // pieces are exactly that text again).
   const split = splitPreview(prepared);
-  const shownView = view === 'data' && !split.ok ? 'exact' : view;
+  // The one-line check only while the caller still asks for it: props that want the full check (the settings changed meanwhile) get it.
+  const wanted = view === 'short' && !(short && others) ? 'data' : view;
+  const shownView = wanted === 'data' && !split.ok ? 'exact' : wanted;
   const destination = `${config.provider}${config.baseUrl ? ` (${new URL(config.baseUrl).host})` : ''}`;
   // "Summarise this ticket · to anthropic · masked: 3 names" (the title is the feature's, the destination an address)
   const subLine = t('{title} · to {destination} · masked: {summary}', { title: feature.title, destination: isolate(destination), summary: maskSummary(prepared.stats) });
@@ -163,15 +185,15 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
   if (shownView === 'short') {
     return (
       <div className="ab-backdrop" role="presentation" ref={backdropRef} tabIndex={-1} onKeyDown={onKeyDown}>
-        <div className="ab-dialog ab-dialog-short" role="dialog" aria-modal="true" aria-labelledby="ab-prev-title" aria-describedby="ab-prev-short">
+        <div className="ab-dialog ab-dialog-short" role="dialog" aria-modal="true" aria-labelledby={ids.title} aria-describedby={ids.short}>
           <div className="ab-dialog-head">
-            <h2 className="ab-h" id="ab-prev-title">{t('Send to the AI?')}</h2>
+            <h2 className="ab-h" id={ids.title}>{t('Send to the AI?')}</h2>
             <p className="ab-sub">
               {subLine}
             </p>
           </div>
           <div className="ab-dialog-body">
-            <p className="ab-confirm-short" id="ab-prev-short">{t('Uses {others} from other records. You checked the rest of what this action sends before.', { others })}</p>
+            <p className="ab-confirm-short" id={ids.short}>{t('Uses {others} from other records. You checked the rest of what this action sends before.', { others })}</p>
           </div>
           <div className="ab-dialog-foot" style={{ flexWrap: 'wrap' }}>
             <button
@@ -195,9 +217,9 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
 
   return (
     <div className="ab-backdrop" role="presentation" ref={backdropRef} tabIndex={-1} onKeyDown={onKeyDown}>
-      <div className="ab-dialog" role="dialog" aria-modal="true" aria-labelledby="ab-prev-title">
+      <div className="ab-dialog" role="dialog" aria-modal="true" aria-labelledby={ids.title}>
         <div className="ab-dialog-head">
-          <h2 className="ab-h" id="ab-prev-title">{t('Check what will be sent')}</h2>
+          <h2 className="ab-h" id={ids.title}>{t('Check what will be sent')}</h2>
           <p className="ab-sub">
             {subLine}
           </p>
@@ -235,17 +257,17 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
           )}
           {typeof onMask === 'function' && (
             <div className="ab-field" style={{ marginTop: 10, marginBottom: 0 }}>
-              <label className="ab-label" htmlFor="ab-mask-text">{t('Mask this too')}</label>
-              <span className="ab-hint" id="ab-mask-hint">{t('Select words above, or type them here. Every place they appear is masked.')}</span>
+              <label className="ab-label" htmlFor={ids.mask}>{t('Mask this too')}</label>
+              <span className="ab-hint" id={ids.hint}>{t('Select words above, or type them here. Every place they appear is masked.')}</span>
               <div className="ab-row">
                 <input
-                  id="ab-mask-text"
+                  id={ids.mask}
                   className="ab-input"
                   type="text"
                   value={maskText}
                   autoComplete="off"
                   spellCheck={false}
-                  aria-describedby="ab-mask-hint ab-mask-status"
+                  aria-describedby={`${ids.hint} ${ids.status}`}
                   style={{ flex: '1 1 140px', width: 'auto', minWidth: 0 }}
                   onChange={(e) => setMaskText(e.target.value)}
                   onKeyDown={(e) => {
@@ -256,7 +278,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
                 />
                 <button type="button" className="ab-btn" onClick={mask} disabled={!maskText.trim()}>{t('Mask')}</button>
               </div>
-              <span className="ab-hint" id="ab-mask-status" role="status">{maskStatus}</span>
+              <span className="ab-hint" id={ids.status} role="status">{maskStatus}</span>
             </div>
           )}
         </div>

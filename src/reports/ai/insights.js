@@ -127,7 +127,9 @@ function slaLines(d, blocked) {
   return { lines, names };
 }
 
-function qualityLines(d) {
+// Top categories and configuration items are the values of the `category` and `cmdb_ci` columns (src/reports/engine/constants.js):
+// a policy that blocks the column leaves the line out, as the SLA lines do for priority and state.
+function qualityLines(d, blocked) {
   const tr = d.trend;
   const series = (label, values) => `- ${label} per ${tr.unit}: ${tr.labels.map((l, i) => `${l} ${values[i]}${tr.partial?.[i] ? ' (partial)' : ''}`).join('; ')}`;
   const lines = [`- Period: ${tr.label}`, series('Opened', tr.opened)];
@@ -136,8 +138,8 @@ function qualityLines(d) {
   if (d.mttr) lines.push(`- Time to resolve: mean ${hours(d.mttr.meanHours)}, median ${hours(d.mttr.medianHours)}, from ${d.mttr.sample} tickets (${d.mttr.window})`);
   if (d.reopen) lines.push(`- Reopened: ${pct(d.reopen.percent)} (${d.reopen.reopened} of ${d.reopen.of}, ${d.reopen.window})`);
   if (d.reassign) lines.push(`- Reassignments: ${round1(d.reassign.average)} on average; ${d.reassign.multi} of ${d.reassign.of} tickets were reassigned ${d.reassign.threshold}+ times`);
-  if ((d.categories || []).length) lines.push(`- Top categories: ${d.categories.slice(0, 5).map((c) => `${c.name} ${c.count}`).join('; ')}`);
-  if ((d.cis || []).length) lines.push(`- Top configuration items: ${d.cis.slice(0, 5).map((c) => `${c.name} ${c.count}`).join('; ')}`);
+  if ((d.categories || []).length && !blocked.has('category')) lines.push(`- Top categories: ${d.categories.slice(0, 5).map((c) => `${c.name} ${c.count}`).join('; ')}`);
+  if ((d.cis || []).length && !blocked.has('cmdb_ci')) lines.push(`- Top configuration items: ${d.cis.slice(0, 5).map((c) => `${c.name} ${c.count}`).join('; ')}`);
   // Callers are people: only the counts are sent.
   if (d.repeatCallers) lines.push(`- Callers with ${d.repeatCallers.min}+ tickets in ${d.repeatCallers.days} days: ${d.repeatCallers.total} (names are not included)`);
   return { lines, names: [] };
@@ -146,8 +148,9 @@ function qualityLines(d) {
 function fulfilmentLines(d, blocked) {
   const lines = [];
   const names = [];
+  const states = !blocked.has('state');
   (d.byTable || []).forEach((t) => {
-    lines.push(`- ${t.label}: ${figure(t.open)} open${t.states ? `; by state: ${t.states.slice(0, 8).map((s) => `${s.name} ${s.count}`).join('; ')}` : ''}`);
+    lines.push(`- ${t.label}: ${figure(t.open)} open${t.states && states ? `; by state: ${t.states.slice(0, 8).map((s) => `${s.name} ${s.count}`).join('; ')}` : ''}`);
   });
   const a = d.approvals || {};
   lines.push(`- Approvals waiting for the person who is signed in: ${figure(a.mine)}${a.team !== undefined ? `; on requested items in this scope: ${figure(a.team)}` : ''}`);
@@ -155,7 +158,7 @@ function fulfilmentLines(d, blocked) {
   if (oldest.length) {
     lines.push('Oldest open items:');
     oldest.forEach((i) => {
-      lines.push(`  - ${i.number}: ${i.ageDays ?? '?'} days old, state ${i.state}${!blocked.has('assignment_group') && i.group ? `, group ${i.group}` : ''}${!blocked.has('assigned_to') && i.owner ? `, assigned to ${i.owner}` : ''}`);
+      lines.push(`  - ${i.number}: ${i.ageDays ?? '?'} days old${states && i.state ? `, state ${i.state}` : ''}${!blocked.has('assignment_group') && i.group ? `, group ${i.group}` : ''}${!blocked.has('assigned_to') && i.owner ? `, assigned to ${i.owner}` : ''}`);
       if (i.owner) names.push(i.owner);
     });
   }

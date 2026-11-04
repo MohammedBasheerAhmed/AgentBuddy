@@ -13,7 +13,7 @@ import { t, tm } from '../../i18n/index.js';
 // every AI button carries the AI mark. The AI email drafts are offered on the Ticket screen now. Props: { page, eff, active }.
 // Notes to ticket is for the work profiles that open tickets from a call or a chat (IT, customer service); "Show everything" shows it.
 export default function WriteAssist({ page, eff, active }) {
-  const header = useTicketHeader(page, active);
+  const header = useTicketHeader(page, active, Boolean(eff?.policy?.allowHrContent));
   const notes = shownFor(profilesOfFeature(featureById('notes-to-ticket')), eff);
   return (
     <div className="ab-write" data-half="assist">

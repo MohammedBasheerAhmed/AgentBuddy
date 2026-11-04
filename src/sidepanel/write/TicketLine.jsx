@@ -7,15 +7,19 @@ import { t } from '../../i18n/index.js';
 // filled from, which form a check reads and where a rewrite goes. The title comes from the record's header read (number, title,
 // state, priority: the same small read the Ticket screen makes), once per record and only while the half is on show.
 
-/** The open record's header ({ number, short_description }), or null while unknown. Read again when another record opens. */
-export function useTicketHeader(page, active) {
+/**
+ * The open record's header ({ number, short_description }), or null while unknown. Read again when another record opens.
+ * `allowSensitive`: the organisation allows HR content (eff.policy.allowHrContent), as for every other read; without it the title of an
+ * HR or other sensitive record is not read (src/content/header.js) and the line shows the number only.
+ */
+export function useTicketHeader(page, active, allowSensitive = false) {
   const record = page?.record;
-  const key = record?.table && record?.sysId ? `${record.table}:${record.sysId}` : '';
+  const key = record?.table && record?.sysId ? `${record.table}:${record.sysId}:${allowSensitive ? 'hr' : ''}` : '';
   const [state, setState] = useState({ key: '', header: null });
   useEffect(() => {
     if (!active || !key || state.key === key) return undefined;
     let cancelled = false;
-    read(page.tabId, 'header', { table: record.table, sysId: record.sysId })
+    read(page.tabId, 'header', { table: record.table, sysId: record.sysId, allowSensitive })
       .then((header) => !cancelled && setState({ key, header: header && typeof header === 'object' ? header : null }))
       .catch(() => !cancelled && setState({ key, header: null }));
     return () => {

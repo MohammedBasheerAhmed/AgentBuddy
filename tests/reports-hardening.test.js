@@ -9,6 +9,7 @@ import { startOfLocalDay, startOfLocalWeek, bucketStarts, bucketLabels, dayLabel
 import { groupSlaByTicket, worryingQuery } from '../src/reports/engine/sla.js';
 import { slaPercent, worstSla, riskOf, isPaused, readMyDay } from '../src/reports/myDay.js';
 import { createReportOps, cleanParams, readsFor } from '../src/content/ops/reports.js';
+import { createPolicyGuard } from '../src/content/policyGuard.js';
 import { fakeInstance, cell, count, group, USER, GROUP_A, NOW, DAY, HOUR } from './reports-fixtures.js';
 
 const id = (n) => String(n).padStart(32, '0');
@@ -330,16 +331,30 @@ test('reports use the content script\'s guarded reads: a table blocked by the ma
   assert.equal(inst.callsTo('problem').length, 0);
 });
 
-test('readsFor: the Aggregate API read is refused for a blocked table and for a group-by that walks through one', async () => {
+test('readsFor: the Aggregate API read is refused for a blocked table', async () => {
   const inst = fakeInstance();
   const { deps, isBlocked } = readsFor(inst.deps, guardedCtx(inst, ['sys_user']));
   assert.equal(isBlocked('SYS_USER'), true);
   await assert.rejects(() => deps.aggregate('sys_user', { query: '' }), (e) => e.code === 'BLOCKED_TABLE');
-  await assert.rejects(() => deps.aggregate('incident', { groupBy: ['caller_id.sys_user.department'] }), (e) => e.code === 'BLOCKED_TABLE');
   await deps.aggregate('incident', { groupBy: ['assigned_to'] });
   assert.equal(inst.calls.length, 1);
   // Without the content script's context (the unit tests), the injected reads are used as they are.
   assert.equal(readsFor(inst.deps, undefined).deps, inst.deps);
+});
+
+test('readsFor with the real policy guard: a dot-walk is checked by the table its column points at, in the query too', async () => {
+  const inst = fakeInstance();
+  const realCtx = async (blockedTables) => ({
+    deps: await createPolicyGuard({ getManaged: async () => ({ known: true, raw: { blockedTables } }) }).deps({ queryTable: inst.deps.queryTable }),
+  });
+  const people = readsFor(inst.deps, await realCtx(['sys_user'])).deps;
+  // assigned_to is not a table's name: it points at sys_user. The old check compared the column's name and let this through.
+  await assert.rejects(() => people.aggregate('incident', { groupBy: ['assigned_to.department'] }), (e) => e.code === 'BLOCKED_TABLE');
+  await people.aggregate('incident', { groupBy: ['assigned_to'] });
+  // SLA counts filtered by the task they belong to walk through task: refused when task is blocked.
+  const sla = readsFor(inst.deps, await realCtx(['task'])).deps;
+  await assert.rejects(() => sla.aggregate('task_sla', { query: 'task.active=true^stage=in_progress' }), (e) => e.code === 'BLOCKED_TABLE');
+  assert.equal(inst.calls.length, 1, 'only the allowed read reached the instance');
 });
 
 // ---- My day -----------------------------------------------------------------------------------------------------------

@@ -65,3 +65,11 @@ test('modelChoices: the one in use first, then the loaded ones, then the provide
   assert.deepEqual(modelChoices({ def: PROVIDERS.custom, current: '', loaded: undefined }), []);
   assert.deepEqual(modelChoices({ def, current: 'x', loaded: 'not a list', allowed: [] }).map((c) => c.id), ['x', 'gpt-5-mini', 'gpt-5']);
 });
+
+test('modelChoices: every model the policy allows is offered, even one outside the provider\'s own list', () => {
+  const def = PROVIDERS.anthropic;
+  const known = def.models[0].id;
+  const choices = modelChoices({ def, current: known, loaded: [], allowed: [known, 'claude-opus-4-1', 'claude-haiku-4-1'] });
+  assert.deepEqual(choices.map((c) => c.id), [known, 'claude-opus-4-1', 'claude-haiku-4-1']);
+  assert.equal(choices[1].label, 'claude-opus-4-1', 'a model only the policy names is shown by its name');
+});

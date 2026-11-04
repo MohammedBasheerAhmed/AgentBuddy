@@ -6,7 +6,9 @@ import { oneLine } from '../context/util.js';
 
 const MAX_CASES = 10;
 const STATUSES = new Set(['ok', 'empty', 'empty-or-hidden', 'denied', 'error', 'skipped', 'blocked']);
-const MAX_PEOPLE = 30;
+// The people named on one case. Every one of them goes on the pack (a name left out would still be in that case's wording), so the
+// list holds at most MAX_CASES * PEOPLE_PER_CASE names.
+const PEOPLE_PER_CASE = 4;
 const isObject = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 const text = (v, max) => oneLine(typeof v === 'string' || typeof v === 'number' ? String(v) : '', max);
 
@@ -22,7 +24,7 @@ export function cleanCases(list) {
       opened_at: text(row.opened_at, 40),
       resolved_at: text(row.resolved_at, 40),
       // The people named on the case (display names): they go on the pack's people, they are not part of the text.
-      people: (Array.isArray(row.people) ? row.people : []).map((n) => text(n, 100)).filter(Boolean).slice(0, 4),
+      people: (Array.isArray(row.people) ? row.people : []).map((n) => text(n, 100)).filter(Boolean).slice(0, PEOPLE_PER_CASE),
     }))
     .filter((c) => c.number || c.short_description)
     .slice(0, MAX_CASES);
@@ -48,11 +50,9 @@ export function mergeAccountCases(pack, answer) {
     // Other customers' cases: their people are masked by name, and the person sees what is sent every time.
     people = [...(Array.isArray(pack.people) ? pack.people : [])];
     const known = new Set(people.map((p) => String(p?.name || '').toLowerCase()).filter(Boolean));
-    let added = 0;
     for (const name of cases.flatMap((c) => c.people)) {
-      if (known.has(name.toLowerCase()) || added >= MAX_PEOPLE) continue;
+      if (known.has(name.toLowerCase())) continue;
       known.add(name.toLowerCase());
-      added += 1;
       people.push({ role: 'reference_person', name, email: '', sysId: '' });
     }
     related.accountCases = cases.map(({ people: _names, ...rest }) => rest);

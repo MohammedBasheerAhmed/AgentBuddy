@@ -173,7 +173,10 @@ export const totalTokens = (entry) => num(entry?.inputTokens) + num(entry?.outpu
 
 // --- The log ----------------------------------------------------------------------------------------------------
 
-/** { time, provider, model, ms, inputTokens, outputTokens, cacheRead, cacheWrite, costUsd | null, host, kind } */
+/**
+ * { time, provider, model, ms, inputTokens, outputTokens, cacheRead, cacheWrite, costUsd | null, host, kind }: one call. A day's total
+ * (see appendEntry) has the same fields, summed, plus `calls` and `priced` (how many of them had a price), and no host.
+ */
 export function makeEntry({ now = new Date(), provider, model, ms = 0, usage = {}, price = null, host = '', kind = 'chat' } = {}) {
   return {
     time: new Date(now).toISOString(),
@@ -190,11 +193,47 @@ export function makeEntry({ now = new Date(), provider, model, ms = 0, usage = {
   };
 }
 
-/** Append, keeping only the newest `limit` entries (the buffer is stored oldest first). */
+/** A day's total rather than one call (appendEntry folds old calls into these). */
+const isTotal = (entry) => typeof entry?.calls === 'number';
+
+/** How many calls an entry stands for: 1, or a day's total's `calls`. */
+export const callsOf = (entry) => (isTotal(entry) ? Math.max(0, Math.floor(num(entry.calls))) : 1);
+
+// How many of an entry's calls had a price.
+const pricedOf = (entry) => (typeof entry?.costUsd !== 'number' ? 0 : isTotal(entry) ? Math.min(callsOf(entry), Math.floor(num(entry.priced))) : 1);
+
+/**
+ * Append, keeping the newest `limit` calls one by one (the buffer is stored oldest first). A call that falls out is not forgotten
+ * while it still counts against a cap: it is folded into one total per day, provider, model and kind (the number of calls and the
+ * sums of tokens, time and cost; the same kind of numbers, no instance), and totals from before the month of the newest call are
+ * dropped. With only the newest 500 calls kept, a daily limit above 500 calls could never be reached, and the tokens and spend of
+ * a busy day or month (and the organisation's daily token budget) were counted short.
+ */
 export function appendEntry(log, entry, limit = LOG_LIMIT) {
-  const list = Array.isArray(log) ? log : [];
-  const next = [...list, entry];
-  return next.length > limit ? next.slice(next.length - limit) : next;
+  const next = [...(Array.isArray(log) ? log : []), entry];
+  const calls = next.filter((e) => !isTotal(e));
+  if (calls.length <= limit) return next;
+  const month = monthKey(entry?.time);
+  const totals = new Map();
+  const fold = (e) => {
+    if (!e?.time || monthKey(e.time) !== month) return; // an earlier month counts against no cap
+    const key = [dayKey(e.time), e.provider, e.model, e.kind].join('|');
+    const total = totals.get(key) || { time: e.time, provider: e.provider, model: e.model, ms: 0, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, costUsd: null, host: '', kind: e.kind, calls: 0, priced: 0 };
+    total.calls += callsOf(e);
+    total.ms += num(e.ms);
+    total.inputTokens += num(e.inputTokens);
+    total.outputTokens += num(e.outputTokens);
+    total.cacheRead += num(e.cacheRead);
+    total.cacheWrite += num(e.cacheWrite);
+    if (typeof e.costUsd === 'number') {
+      total.costUsd = (total.costUsd || 0) + e.costUsd;
+      total.priced += pricedOf(e);
+    }
+    totals.set(key, total);
+  };
+  next.filter(isTotal).forEach(fold);
+  calls.slice(0, calls.length - limit).forEach(fold);
+  return [...totals.values(), ...calls.slice(calls.length - limit)];
 }
 
 // --- Day and month windows (the user's own time zone) -------------------------------------------------------------
@@ -212,15 +251,15 @@ function sum(entries) {
   let cost = 0;
   let priced = 0;
   entries.forEach((e) => {
-    calls += 1;
+    calls += callsOf(e);
     tokens += totalTokens(e);
     if (typeof e.costUsd === 'number') {
       cost += e.costUsd;
-      priced += 1;
+      priced += pricedOf(e);
     }
   });
   // `complete` is false when some calls had no price, so the cost is a lower bound.
-  return { calls, tokens, cost, priced, complete: priced === entries.length };
+  return { calls, tokens, cost, priced, complete: priced === calls };
 }
 
 /** Everything the Usage view and the chip need. Validation pings do not count against caps but are listed. */
@@ -240,7 +279,7 @@ export function summarize(log, now = new Date()) {
     today: sum(inDay),
     month: sum(inMonth),
     models: [...byModel.values()].map(({ provider, model, entries }) => ({ provider, model, ...sum(entries) })).sort((a, b) => b.calls - a.calls),
-    recent: [...list].reverse().slice(0, 25),
+    recent: list.filter((e) => !isTotal(e)).reverse().slice(0, 25),
   };
 }
 
@@ -281,7 +320,7 @@ export function checkCaps(log, capsInput, provider, now = new Date()) {
   add(t('{provider} daily spend', { provider: label }), usd(mine.filter((e) => dayKey(e.time) === today)), caps[provider]?.dailyUsd, (n) => money(n), 'day');
   add(t('{provider} monthly spend', { provider: label }), usd(mine.filter((e) => monthKey(e.time) === month)), caps[provider]?.monthlyUsd, (n) => money(n), 'month');
   const todayAll = list.filter((e) => dayKey(e.time) === today);
-  add(t('Daily calls'), todayAll.length, caps.dailyCalls, (n) => tn(Math.round(n), '{n} call', '{n} calls'), 'day');
+  add(t('Daily calls'), todayAll.reduce((total, e) => total + callsOf(e), 0), caps.dailyCalls, (n) => tn(Math.round(n), '{n} call', '{n} calls'), 'day');
   add(t('Daily tokens'), todayAll.reduce((total, e) => total + totalTokens(e), 0), caps.dailyTokens, (n) => tn(Math.round(n), '{n} token', '{n} tokens', { n: Math.round(n).toLocaleString('en-US') }), 'day');
 
   const worst = items.length ? [...items].sort((a, b) => b.pct - a.pct)[0] : null;
@@ -330,14 +369,16 @@ export const tokensTodayReader = (readLog, now = () => new Date()) => async () =
 
 const csvCell = (value) => {
   const text = value == null ? '' : String(value);
-  // A leading = + - @ would be run as a formula by a spreadsheet; the log only holds our own fields, but be safe.
-  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  // A leading = + - @ (or a tab or carriage return before one) would be run as a formula by a spreadsheet; the log only holds our
+  // own fields, but be safe. The same rule as the audit log's CSV (src/audit/auditLog.js).
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
 export function logToCsv(log) {
-  const header = ['time', 'provider', 'model', 'kind', 'ms', 'input_tokens', 'output_tokens', 'cache_read', 'cache_write', 'cost_usd', 'instance'];
-  const rows = (Array.isArray(log) ? log : []).map((e) => [e.time, e.provider, e.model, e.kind, e.ms, e.inputTokens, e.outputTokens, e.cacheRead, e.cacheWrite, e.costUsd == null ? '' : e.costUsd.toFixed(6), e.host]);
+  // `calls`: 1 for a call, more for a day's total of older calls (appendEntry).
+  const header = ['time', 'provider', 'model', 'kind', 'ms', 'input_tokens', 'output_tokens', 'cache_read', 'cache_write', 'cost_usd', 'instance', 'calls'];
+  const rows = (Array.isArray(log) ? log : []).map((e) => [e.time, e.provider, e.model, e.kind, e.ms, e.inputTokens, e.outputTokens, e.cacheRead, e.cacheWrite, e.costUsd == null ? '' : e.costUsd.toFixed(6), e.host, callsOf(e)]);
   return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
 }
 

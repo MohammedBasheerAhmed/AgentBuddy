@@ -42,6 +42,10 @@ export function foldDigits(text) {
 // ("وكلمة المرور" is "and the password").
 const NOT_LETTER_BEFORE = '(?<![\\p{L}\\p{M}\\p{N}])(?:[وفبلك](?=[\\u0621-\\u064a]))?';
 const NUMBER_AFTER = '(?![\\d])';
+// The space on either side of the optional word between a label and its value ("رقم الجوال هو 050...", "رقم الجوال: 050..."). Bounded:
+// two unbounded runs of space around an optional word can split a long run of spaces in every way, which is quadratic (16,000
+// spaces after a label took seconds). Three characters are more than people write there (a space, a line break, "\r\n").
+const GAP = '\\s{0,3}';
 
 // ---- Passwords: "كلمة المرور: x", "كلمة السر هي x", "الرقم السري 1234" ---------------------------------------------------------
 const PASSWORD_WORD =
@@ -78,7 +82,7 @@ function detectPasswords(text, out) {
 
 // ---- Phone numbers named in Arabic: "رقم الجوال: 0501234567", "واتساب +971 50 123 4567" -------------------------------------------------
 const PHONE_WORD = '(?:(?:رقم\\s*)?(?:ال)?(?:(?:هاتف|تلفون|تليفون|جوال|موبايل|محمول)(?:ي|ه|ها|ك|نا|هم)?|واتساب|واتس\\s*اب|للتواصل|للاتصال|اتصال))';
-const PHONE = new RegExp(`${NOT_LETTER_BEFORE}${PHONE_WORD}\\s*(?:هو|هي|على|:|=|-)?\\s*(\\+?\\(?\\d[\\d\\s().-]{5,18}\\d)${NUMBER_AFTER}`, 'gud');
+const PHONE = new RegExp(`${NOT_LETTER_BEFORE}${PHONE_WORD}${GAP}(?:هو|هي|على|:|=|-)?${GAP}(\\+?\\(?\\d[\\d\\s().-]{5,18}\\d)${NUMBER_AFTER}`, 'gud');
 
 function detectPhones(text, out) {
   PHONE.lastIndex = 0;
@@ -98,7 +102,7 @@ const EMIRATES_ID = /(?<![\d-])784[- ]?\d{4}[- ]?\d{7}[- ]?\d(?![\d-])/g;
 // (fourteen), the civil number of Kuwait (twelve), passports (a letter and digits).
 const ID_WORD =
   '(?:(?:رقم\\s*)?(?:ال)?(?:هوية|هويه)(?:\\s*(?:ال)?(?:وطنية|وطنيه|إماراتية|الإماراتية))?|(?:ال)?رقم\\s*(?:ال)?قومي|(?:رقم\\s*)?(?:ال)?(?:إقامة|اقامة)|(?:ال)?سجل\\s*(?:ال)?مدني|(?:رقم\\s*)?(?:ال)?بطاقة\\s*(?:ال)?(?:شخصية|مدنية)|(?:رقم\\s*)?(?:ال)?جواز(?:\\s*(?:ال)?سفر)?|(?:ال)?رقم\\s*(?:ال)?مدني)';
-const ID_NUMBER = new RegExp(`${NOT_LETTER_BEFORE}${ID_WORD}\\s*(?:هو|هي|:|=|-|#)?\\s*([A-Za-z]{0,2}\\d[\\d -]{6,20}\\d)${NUMBER_AFTER}`, 'gud');
+const ID_NUMBER = new RegExp(`${NOT_LETTER_BEFORE}${ID_WORD}${GAP}(?:هو|هي|:|=|-|#)?${GAP}([A-Za-z]{0,2}\\d[\\d -]{6,20}\\d)${NUMBER_AFTER}`, 'gud');
 
 function luhnOk(digits) {
   let sum = 0;
@@ -133,12 +137,12 @@ function detectIds(text, out) {
 
 // ---- Employee numbers and dates of birth ---------------------------------------------------------------------------------------------
 const EMPLOYEE = new RegExp(
-  `${NOT_LETTER_BEFORE}(?:(?:ال)?رقم\\s*(?:ال)?(?:موظف|وظيفي)|(?:ال)?رقم\\s*(?:ال)?شارة|رقم\\s*البطاقة\\s*الوظيفية)\\s*(?:هو|هي|:|=|-|#)?\\s*([A-Za-z]{0,4}-?\\d[A-Za-z0-9-]{2,15})${NUMBER_AFTER}`,
+  `${NOT_LETTER_BEFORE}(?:(?:ال)?رقم\\s*(?:ال)?(?:موظف|وظيفي)|(?:ال)?رقم\\s*(?:ال)?شارة|رقم\\s*البطاقة\\s*الوظيفية)${GAP}(?:هو|هي|:|=|-|#)?${GAP}([A-Za-z]{0,4}-?\\d[A-Za-z0-9-]{2,15})${NUMBER_AFTER}`,
   'gud'
 );
 const DATE = '\\d{1,4}[/.-]\\d{1,2}[/.-]\\d{1,4}';
 const BIRTH = new RegExp(
-  `${NOT_LETTER_BEFORE}(?:تاريخ\\s*(?:ال)?ميلاد(?:ي)?|(?:ال)?مواليد|مولود(?:ة)?\\s*(?:في|بتاريخ)|ولد(?:ت)?\\s*(?:في|بتاريخ))\\s*(?:هو|هي|:|=|-)?\\s*(${DATE})(?![\\d])`,
+  `${NOT_LETTER_BEFORE}(?:تاريخ\\s*(?:ال)?ميلاد(?:ي)?|(?:ال)?مواليد|مولود(?:ة)?\\s*(?:في|بتاريخ)|ولد(?:ت)?\\s*(?:في|بتاريخ))${GAP}(?:هو|هي|:|=|-)?${GAP}(${DATE})(?![\\d])`,
   'gud'
 );
 

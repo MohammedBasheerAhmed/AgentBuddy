@@ -63,7 +63,7 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     if (fresh) setHead({ phase: 'loading', header: null });
     lastRead.current = Date.now();
     let cancelled = false;
-    read(page.tabId, 'header', { table: record.table, sysId: record.sysId })
+    read(page.tabId, 'header', { table: record.table, sysId: record.sysId, allowSensitive: Boolean(eff.policy?.allowHrContent) })
       .then((h) => !cancelled && setHead({ phase: headerPhase(h), header: h }))
       .catch(() => !cancelled && fresh && setHead({ phase: 'failed', header: null }));
     return () => {

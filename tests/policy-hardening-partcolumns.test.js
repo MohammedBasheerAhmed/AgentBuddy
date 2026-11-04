@@ -152,6 +152,27 @@ test('SEC-03(b): the SLA, approvals, child tasks and answers of an incident are 
   assert.throws(() => prepare('record-summary', { ...pack, fields: {}, journal: [] }, ['assigned_to']), (e) => e.code === 'BLOCKED_FIELD' && /child_tasks|approvals/.test(e.message), 'and inside the child tasks and approvals');
 });
 
+test('the request\'s status line names who has it and what it waits on: blocking those columns stops it', () => {
+  for (const column of ['assigned_to', 'assignment_group', 'number', 'short_description']) assert.ok(columnsForPart('status').includes(column), column);
+  // a catalog task seen on its own: "This task is open and with Beth Anglin." (the assignee is not sent as a field)
+  const pack = {
+    version: 1,
+    table: 'sc_task',
+    sysId: 'c'.repeat(32),
+    number: 'SCTASK0010002',
+    kind: 'catalog_task',
+    fields: { number: 'SCTASK0010002', state: 'Work in Progress', assigned_to: 'Beth Anglin' },
+    people: [{ role: 'assigned_to', name: 'Beth Anglin', email: '', sysId: 'd'.repeat(32) }],
+    journal: [],
+    related: {},
+    access: [],
+  };
+  const status = partsFor(featureById('request-explain'), pack).find((p) => p.field === 'status');
+  assert.match(status.text, /with Beth Anglin/);
+  assert.ok(prepare('request-explain', pack, []).request, 'nothing blocked: it runs');
+  assert.throws(() => prepare('request-explain', pack, ['assigned_to']), (e) => e instanceof FirewallError && e.code === 'BLOCKED_FIELD' && /status/.test(e.message));
+});
+
 // ---- Completeness: no derived part without an entry ----------------------------------------------------------------------
 
 const ceilingColumns = new Set([...Object.values(FIELDS_BY_KIND).flat(), 'comments', 'work_notes']);

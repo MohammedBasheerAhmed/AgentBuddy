@@ -53,6 +53,7 @@ const MASK_MESSAGES = Object.freeze({
   LONG: tm('That is too long. Select a shorter piece.'),
   PLACEHOLDER: tm('Select plain text only, not a highlighted part.'),
   NOT_FOUND: tm('That text is not in what will be sent.'),
+  PART_OF_WORD: tm('Select whole words: that text is only part of longer words.'),
   NOT_DATA: tm("That is Agent Buddy's own wording, not ticket text. Nothing changed."),
   FAILED: tm('That could not be hidden. If it must not be sent, press Cancel.'),
   GONE: tm('This check has closed.'),

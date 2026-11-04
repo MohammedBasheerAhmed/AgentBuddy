@@ -77,11 +77,14 @@ export function fromOpenAIResponse(data, who = t('The AI service')) {
   const content = typeof message.content === 'string' ? message.content : '';
   const stopReason = OPENAI_STOP[choice.finish_reason] || (toolCalls.length ? 'tool_use' : 'end_turn');
   if (!content && !toolCalls.length) {
-    if (stopReason === 'content_filter') throw new AiError(t('{who} stopped the answer with its content filter. Change the text, or ask your administrator about the filter.', { who }), 'CONTENT_FILTER');
+    // An answer that came back but cannot be used was still billed: its usage goes with the error, so the usage log, the daily caps
+    // and the organisation's token budget count it (src/providers/index.js).
+    const billed = { usage: openAIUsage(data.usage) };
+    if (stopReason === 'content_filter') throw new AiError(t('{who} stopped the answer with its content filter. Change the text, or ask your administrator about the filter.', { who }), 'CONTENT_FILTER', billed);
     // A reasoning model can spend the whole output limit thinking and return nothing.
-    if (stopReason === 'max_tokens') throw new AiError(t('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.'), 'CUT_SHORT');
-    if (typeof message.refusal === 'string' && message.refusal) throw new AiError(t('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.'), 'REFUSED');
-    throw new AiError(t('{who} sent an empty answer. Try again.', { who }), 'EMPTY_ANSWER');
+    if (stopReason === 'max_tokens') throw new AiError(t('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.'), 'CUT_SHORT', billed);
+    if (typeof message.refusal === 'string' && message.refusal) throw new AiError(t('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.'), 'REFUSED', billed);
+    throw new AiError(t('{who} sent an empty answer. Try again.', { who }), 'EMPTY_ANSWER', billed);
   }
   return {
     content,
@@ -152,6 +155,15 @@ export function toAnthropicRequest(messages) {
 const ANTHROPIC_CUT = new Set(['max_tokens', 'model_context_window_exceeded']);
 
 export function fromAnthropicResponse(data) {
+  // Anthropic reports cache reads and writes separately from input_tokens (which excludes both).
+  const usage = {
+    input: data?.usage?.input_tokens || 0,
+    output: data?.usage?.output_tokens || 0,
+    cacheRead: data?.usage?.cache_read_input_tokens || 0,
+    cacheWrite: data?.usage?.cache_creation_input_tokens || 0,
+  };
+  // A refused, empty or cut-off answer was still billed: its usage goes with the error (see fromOpenAIResponse).
+  const billed = { usage };
   if (data?.stop_reason === 'refusal') {
     // stop_details is only filled for a refusal; its category is a short word such as "cyber" (never request text).
     const raw = data.stop_details?.category;
@@ -160,7 +172,8 @@ export function fromAnthropicResponse(data) {
       category
         ? t('The model declined this request ({category}). Rephrase it or try a different model in Agent Buddy settings.', { category })
         : t('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.'),
-      'REFUSED'
+      'REFUSED',
+      billed
     );
   }
   const blocks = Array.isArray(data?.content) ? data.content : [];
@@ -173,8 +186,8 @@ export function fromAnthropicResponse(data) {
     .map((b) => ({ id: b.id, name: b.name, args: parseJsonObject(b.input) }));
   const cut = ANTHROPIC_CUT.has(data?.stop_reason);
   if (!content && !toolCalls.length) {
-    if (cut) throw new AiError(t('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.'), 'CUT_SHORT');
-    throw new AiError(t('The model returned no content. Try again.'), 'EMPTY_ANSWER');
+    if (cut) throw new AiError(t('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.'), 'CUT_SHORT', billed);
+    throw new AiError(t('The model returned no content. Try again.'), 'EMPTY_ANSWER', billed);
   }
   return {
     content,
@@ -182,13 +195,7 @@ export function fromAnthropicResponse(data) {
     raw: { provider: 'anthropic', blocks },
     stopReason: cut ? 'max_tokens' : data.stop_reason === 'tool_use' || toolCalls.length ? 'tool_use' : 'end_turn',
     truncated: cut,
-    // Anthropic reports cache reads and writes separately from input_tokens (which excludes both).
-    usage: {
-      input: data.usage?.input_tokens || 0,
-      output: data.usage?.output_tokens || 0,
-      cacheRead: data.usage?.cache_read_input_tokens || 0,
-      cacheWrite: data.usage?.cache_creation_input_tokens || 0,
-    },
+    usage,
   };
 }
 

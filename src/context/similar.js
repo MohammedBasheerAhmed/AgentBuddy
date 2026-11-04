@@ -21,6 +21,18 @@ const TICKET_FIELDS = [
   'category', 'cmdb_ci', 'cat_item', 'product', 'sys_updated_on', ...HIT_PERSON_COLUMNS,
 ];
 
+// A table that holds the rows of many classes. A search on it (a record opened through /task.do whose class could not be told)
+// finds HR cases too, so each candidate's class (sys_class_name, asked for on these tables) is checked; one whose class cannot be read
+// is not used.
+const BASE_TABLES = new Set(['task']);
+
+/** May this candidate be used: its class (or, when the row does not say, the table searched) is not sensitive, or sensitive data is allowed. */
+function classAllowed(row, table, { allowSensitive, sensitivePrefixes }) {
+  if (allowSensitive) return true;
+  const cls = raw(row.sys_class_name).trim().toLowerCase() || (BASE_TABLES.has(table) ? '' : table);
+  return Boolean(cls) && !isSensitiveTable(cls, sensitivePrefixes);
+}
+
 // The display names on a row's person columns: strings only, never a bare id.
 const namesOn = (row, columns = HIT_PERSON_COLUMNS) => [...new Set(columns.map((c) => oneLine(disp(row?.[c]), 100)).filter((n) => n && !SYS_ID_RE.test(n)))];
 
@@ -122,11 +134,13 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
     const [conditions, order] = query.split('^ORDERBY');
     query = `${conditions}^close_notesISNOTEMPTY^ORDERBY${order}`;
   }
-  const fields = routing ? [...TICKET_FIELDS, ...ROUTING_FIELDS] : TICKET_FIELDS;
+  const fields = [...TICKET_FIELDS, ...(routing ? ROUTING_FIELDS : []), ...(BASE_TABLES.has(table) ? ['sys_class_name'] : [])];
   const { rows, failure } = await softRead(deps, table, query, fields, { limit: 30, displayValue: true });
   if (failure) return { hits: [], keywords, access: [accessEntry(table, failure.status, failure.note)] };
 
-  const flat = rows.filter((row) => raw(row.sys_id).toLowerCase() !== String(pack.sysId).toLowerCase());
+  const own = String(pack.sysId).toLowerCase();
+  const gate = { allowSensitive, sensitivePrefixes: deps.sensitivePrefixes };
+  const flat = rows.filter((row) => raw(row.sys_id).toLowerCase() !== own && classAllowed(row, table, gate));
   const ranked = rankSimilar(flat.map((row) => ({ ...row, short_description: disp(row.short_description), sys_updated_on: raw(row.sys_updated_on) })), keywords);
   const byId = new Map(flat.map((row) => [raw(row.sys_id), row]));
   const hits = ranked

@@ -5,6 +5,28 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Audit fixes, phase 1: privacy, the organisation's policy and the AI firewall
+- A full read-only audit (seven reviews, about 110 findings) came first; this is the first of five phases of fixes.
+- **What reaches the AI.** Invisible characters (direction marks common in Arabic text pasted from Outlook, invisible operators,
+  variation selectors, the tag block...) no longer hide an email or a number from masking; one list (`src/lib/invisible.js`) serves the
+  firewall and the answer renderer. A password, card, IBAN, ID or phone number seen once is masked again even when written against
+  other text ("ID4471234"); the final check follows the same rule, so ordinary text ("Welcome1 ... Welcome12") no longer stops a run
+  with nothing the person could do. A name inside an address no longer leaves the rest of the address readable. Arabic labels followed
+  by long runs of spaces no longer slow masking down (seconds before, milliseconds now). "Mask this too" masks whole words only, never
+  the fixed instructions, and says so when the selection is only part of longer words.
+- **Everyone named is masked.** Approvers, task owners and people on linked records past the 30th were dropped from the list the
+  firewall masks while their rows were still sent; now every person a sent row names is on it.
+- **The organisation's policy wins everywhere.** "Local only" now also stops Test connection and Load models from contacting a cloud
+  AI; AI switched off by the policy is refused by the run itself, not only hidden; a model the policy allows is used even when it is not
+  on the provider's built-in list (it was replaced, then refused, so AI never worked); a bad AI address in the policy says to ask the
+  administrator. A dot-walked column through a blocked table (`request.requested_for` with `sc_request` blocked) is refused, in reports
+  too; HR cases no longer appear in similar-ticket searches on `task`; an HR case's title is read only where HR content is allowed;
+  blocked columns in the request status line and in "Explain this dashboard" stay out.
+- **The check before sending** is a new one for every run: a full check can no longer show as the short one after switching tickets,
+  and text typed on one ticket's check no longer appears on another's. "Clear everything" and turning a site off also forget the
+  answers, card reads and inserts held in the panel's memory. AI answers that were billed and then rejected now count toward the daily
+  limits; days with more than 500 calls are counted in full.
+
 ### Build, tests and CI (audit phase 4, first half)
 - `npm run verify` runs every gate CI runs (unit tests, compile check, review map, Arabic); `npm run i18n` and
   `npm run traceability:check` exist on their own. `npm ci` installs everything the end-to-end run needs (puppeteer-core is pinned).
@@ -13,7 +35,6 @@ brackets are the `TRACKER.md` items.
 - `.gitattributes` keeps every checkout LF, so a Windows checkout builds the same bytes; CI also runs the unit tests on Windows and the
   end-to-end run on the minified build that is shipped (`npm run package -- --minify` builds into `release/unpacked/`, not `dist/`).
 - The release carries the licence files of the bundled React packages (`licenses/`). Node 22.12 or later (`.nvmrc`, `engines`).
-
 
 ### Answer formats: write the summary the way you want it (R11)
 - You asked whether the summary (and the other AI actions) can follow a format of your own, for example "Issue, Key actions performed" and

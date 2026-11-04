@@ -71,6 +71,8 @@ test('maskMore says why nothing changed, and never changes the run then', () => 
     ['[PERSON_1] said', 'PLACEHOLDER'],
     ['(EMAIL_1)', 'PLACEHOLDER'],
     ['nowhere to be seen', 'NOT_FOUND'],
+    // only inside longer words ("arol Dia" in "Carol Diaz"): masking leaves those alone, so the person is asked for whole words
+    ['arol Dia', 'PART_OF_WORD'],
     ['Rules set by the application', 'NOT_DATA'],
   ];
   for (const [text, problem] of cases) assert.deepEqual(maskMore(p, text), { ok: false, problem }, String(text).slice(0, 20));

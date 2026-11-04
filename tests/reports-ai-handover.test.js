@@ -211,6 +211,24 @@ test('the notable tickets come in a fixed order, once each, with every reason', 
   assert.deepEqual(pickNotable(d), picked, 'the same data gives the same list');
 });
 
+test('a ticket met in several lists keeps the people of every copy, so a caller read by only one list is still masked', () => {
+  // First met as an SLA row (looked up in `task`: no caller), then as an urgent ticket opened in the period (caller read).
+  const sla = item(1, { risk: 'Breached', title: 'Laptop for Priya Raman', maskNames: ['Desk Agent'] });
+  const opened = item(1, { risk: undefined, maskNames: ['Desk Agent', 'Priya Raman'] });
+  const later = item(1, { maskNames: ['Abel Tuter'] });
+  const d = data({ sla: { top: [sla] }, events: { opened: { items: [opened] }, resolved: { items: [] }, breaches: { items: [] }, reassigned: { items: [later] } } });
+  const picked = pickNotable(d);
+  assert.equal(picked.length, 1, 'once');
+  assert.deepEqual(picked[0].maskNames, ['Desk Agent', 'Priya Raman', 'Abel Tuter'], 'every copy\'s people, once each');
+  assert.equal(picked[0].title, 'Laptop for Priya Raman', 'the first copy is the one described');
+  assert.deepEqual(sla.maskNames, ['Desk Agent'], 'the engine\'s items are not changed');
+  const pack = buildHandoverPack({ scope: { label: 'Mine', groups: [] }, data: d, access: [], notes: [], tables: [], caps: [] });
+  assert.equal(pack.report.tickets[0].title, 'Laptop for Priya Raman');
+  for (const name of ['Desk Agent', 'Priya Raman', 'Abel Tuter']) assert.ok(pack.people.some((p) => p.name === name), name);
+  // an item without a list of people is fine
+  assert.deepEqual(pickNotable(data({ oldest: [item(2, { maskNames: undefined })] }))[0].maskNames, []);
+});
+
 test('at most fifteen tickets are picked, the first fifteen in order, and bad input gives nothing', () => {
   const many = Array.from({ length: 40 }, (_, i) => item(i + 1));
   assert.equal(pickNotable(data({ oldest: many })).length, NOTABLE_MAX);

@@ -5,8 +5,7 @@
 // object those runs use, the parts, the list of presets and languages, and the "names to hide" list.
 
 import { FORM_FIELD_NAMES, MAX_FORM_TEXT } from './formFields.js';
-import { isTableAllowed } from '../policy/policy.js';
-import { isSensitiveTable } from '../context/kinds.js';
+import { isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { TABLE_RE } from '../context/util.js';
 import { isolate, t, tm } from '../i18n/index.js';
 
@@ -138,7 +137,8 @@ export function buildComposePack({ text, people = [], label = 'Text to rewrite',
  */
 export function formReadRefusal(table, field, policy) {
   if (table && !isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {table} records.', { table: isolate(table) });
-  if (table && isSensitiveTable(table) && !policy?.allowHrContent) return t('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.');
+  // (the policy's own sensitive prefixes count too, as they do when the run is prepared: src/lib/pipeline.js)
+  if (table && isSensitiveByPolicy(table, policy) && !policy?.allowHrContent) return t('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.');
   if (field && (policy?.blockedFields || []).includes(String(field).toLowerCase())) return t('Your organisation does not allow the {field} field to be sent to an AI model.', { field: isolate(field) });
   return '';
 }

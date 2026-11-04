@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import PreviewDialog from './PreviewDialog.jsx';
+import PreviewDialog, { previewKey } from './PreviewDialog.jsx';
 import ResultView from './ResultView.jsx';
 import { resolveProviderConfig } from '../providers/config.js';
 import { auditInsert } from '../lib/storage.js';
@@ -49,6 +49,7 @@ export default function RunPanel({ run, eff, page, readingText = t('Reading the 
 
       {phase === 'preview' && prepared && (
         <PreviewDialog
+          key={previewKey(prepared.p)}
           feature={prepared.p.feature}
           prepared={prepared.p}
           config={prepared.cfg}

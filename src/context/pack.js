@@ -4,7 +4,7 @@
 // instance returns anyway never reaches the pack. Reads run with the signed-in user's own session; whatever is refused or
 // ambiguous is reported in `access` and the pack carries the rest.
 
-import { FEATURES, FEATURE_JOURNAL, FEATURE_TIMES, HR_HIDDEN, LIMITS, allowedFields, fieldLimit, maskOnlyFields, withheldFields } from './allowlists.js';
+import { FEATURES, FEATURE_JOURNAL, FEATURE_TIMES, HR_HIDDEN, allowedFields, fieldLimit, maskOnlyFields, withheldFields } from './allowlists.js';
 import { STATUS, entry as accessEntry, isBlockedTable } from './access.js';
 import { assignSides, readChatMessages } from './chat.js';
 import { JOURNAL_RECORD_FIELDS, applyAuthorNames, readJournal } from './journal.js';
@@ -114,13 +114,15 @@ export async function resolveRealClass({ table, sysId }, deps) {
 }
 
 // Names (display values) of the people in rows of OTHER tickets, added to the pack as people so the firewall masks them exactly.
+// All of them: a name left out would still be in that row's wording. The rows are capped where they are read (at most 20 linked
+// incidents with 3 person columns each, 10 overlapping changes and 5 recent ones with 2), which bounds this list.
 function referencePeople(names, known) {
   const seen = new Set(known.map((p) => String(p.name || '').toLowerCase()).filter(Boolean));
   const out = [];
   for (const shown of names || []) {
     const name = oneLine(shown, 100);
     const key = name.toLowerCase();
-    if (!name || SYS_ID_RE.test(name) || seen.has(key) || out.length >= LIMITS.referencePeople) continue;
+    if (!name || SYS_ID_RE.test(name) || seen.has(key)) continue;
     seen.add(key);
     const guess = splitName(name);
     out.push({ role: 'reference_person', name, email: '', sysId: '', firstName: oneLine(guess.firstName, 60), lastName: oneLine(guess.lastName, 60) });

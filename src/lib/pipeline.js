@@ -13,7 +13,8 @@
 import { checkProviderAllowed, isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { partsFor, isFeatureAvailable } from '../features/registry.js';
 import { NOT_AVAILABLE_FIELD, isJournalPart, journalCut, madeWithout, notAvailablePart, peopleFor, unavailable } from '../features/parts.js';
-import { NEVER_REHYDRATE, RULES_PREAMBLE } from '../pii/firewall.js';
+import { NEVER_REHYDRATE, RULES_PREAMBLE, placesOf } from '../pii/firewall.js';
+import { alignedLower } from '../pii/dictionary.js';
 import { truncationNote } from '../providers/messages.js';
 import { estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
 import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
@@ -85,12 +86,28 @@ export function connectionProblem(config) {
 }
 
 /**
+ * '' unless the organisation switched AI off (`aiEnabled: false`); then the sentence that says so. Switching AI off is not only a
+ * matter of hiding buttons: every send refuses, and so do the Settings page's "Test connection" and "Load models".
+ */
+export const aiOffProblem = (policy) => (policy?.aiEnabled === false ? t('Your organisation has switched AI Assist off.') : '');
+
+/**
+ * '' unless the privacy mode only allows a model on this computer and this endpoint is not one; then the sentence that says so.
+ * One rule for every send and for both Settings actions (src/lib/connectionCheck.js), which carry the key and must not reach a
+ * hosted provider either: checked before the browser is asked for permission to contact it.
+ */
+export const localOnlyProblem = (piiMode, config) =>
+  piiMode === 'local-only' && !config?.local ? t('Your privacy mode only allows an AI model running on this computer. Choose Ollama or another local server in Settings.') : '';
+
+/**
  * Everything that can be refused before a single byte is built. Throws RunBlocked with a message fit for the person.
  * @param {object} p { feature, pack, values (effective settings), policy, config (resolveProviderConfig), hasKey, pageTable }
  *   pageTable: the table of the form the person is on, when it can differ from the pack's table (Rewrite and Notes-to-ticket label
  *   their pack 'compose'). The blocked-table and HR rules apply to it as well as to `pack.table`.
  */
 export function assertRunnable({ feature, pack, values, policy, config, hasKey, pageTable = '' }) {
+  const off = aiOffProblem(policy);
+  if (off) throw new RunBlocked(off, 'AI_OFF');
   if (!isFeatureEnabled(feature.id, policy)) throw new RunBlocked(t('Your organisation has switched this feature off.'), 'FEATURE_OFF');
   // A feature that stays off until the organisation turns it on (the coaching snapshot).
   if (!isFeatureAvailable(feature, policy)) throw new RunBlocked(t('Your organisation has not switched this feature on.'), 'FEATURE_OFF');
@@ -122,13 +139,14 @@ export function assertRunnable({ feature, pack, values, policy, config, hasKey, 
       throw new RunBlocked(t('HR records need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.'), 'MODE_TOO_LOW');
     }
   }
-  const problem = connectionProblem(config);
-  if (problem) throw new RunBlocked(problem, 'BAD_URL');
+  // The organisation's rules before the address: an AI address in the policy that is not valid (policy.aiBlocked) must say "ask
+  // your administrator", not "The AI address is not valid", which sends the person to a field they cannot change.
   const allowed = checkProviderAllowed(config, policy);
   if (!allowed.ok) throw new RunBlocked(allowed.reason, 'PROVIDER_BLOCKED');
-  if (values.piiMode === 'local-only' && !config.local) {
-    throw new RunBlocked(t('Your privacy mode only allows an AI model running on this computer. Choose Ollama or another local server in Settings.'), 'NOT_LOCAL');
-  }
+  const problem = connectionProblem(config);
+  if (problem) throw new RunBlocked(problem, 'BAD_URL');
+  const notLocal = localOnlyProblem(values.piiMode, config);
+  if (notLocal) throw new RunBlocked(notLocal, 'NOT_LOCAL');
   if (!config.apiKey && !config.keyOptional) throw new RunBlocked(t('Add your AI key in Settings first.'), 'NO_KEY');
   if (!config.model) throw new RunBlocked(t('Choose an AI model in Settings first.'), 'NO_MODEL');
 }
@@ -236,14 +254,12 @@ const PLACEHOLDER_IN_TEXT = /[[(][A-Z]{2,12}_\d{1,6}[\])]/;
 const MASK_MIN = 2;
 const MASK_MAX = 200;
 
-// How often `literal` occurs in `text`, ignoring case (the firewall masks it the same way) and the placeholders themselves
-// ("masked" is not counted inside "[MASKED_1]").
-function occurrences(text, literal) {
-  const hay = String(text).replace(/\[[A-Z]{2,12}_\d{1,6}\]/g, ' ').toLowerCase();
-  const needle = literal.toLowerCase();
-  let n = 0;
-  for (let at = hay.indexOf(needle); at !== -1; at = hay.indexOf(needle, at + needle.length)) n++;
-  return n;
+// How often `literal` occurs in `text`, ignoring case and the placeholders themselves ("masked" is not counted inside
+// "[MASKED_1]"). `words`: only where it is written as a word of its own, which is where the firewall masks text masked by hand
+// (placesOf in src/pii/firewall.js: "Ali" is not masked inside "quality"), so the count says what masking will do.
+function occurrences(text, literal, words = false) {
+  const hay = alignedLower(String(text).replace(/\[[A-Z]{2,12}_\d{1,6}\]/g, (p) => ' '.repeat(p.length)));
+  return placesOf(hay, hay, alignedLower(literal), !words).length;
 }
 
 /**
@@ -254,7 +270,8 @@ function occurrences(text, literal) {
  * Returns `{ ok: true, masked, prepared }` with the new prepared run (its request, preview and stats replace the old ones; the
  * stats count the hand-masked places as MANUAL, which the audit log keeps as a number), or `{ ok: false, problem }` with the
  * old run unchanged. Problems: EMPTY, SHORT, LONG, PLACEHOLDER (the selection includes a placeholder), NOT_FOUND (not in what
- * will be sent), NOT_DATA (only in Agent Buddy's own fixed wording), FAILED (the firewall refused; the old request stands).
+ * will be sent), PART_OF_WORD (only inside longer words, which masking leaves alone), NOT_DATA (only in Agent Buddy's own fixed
+ * wording), FAILED (the firewall refused; the old request stands).
  * @param {object} prepared from prepareRun (or an earlier maskMore)
  * @param {string} text what the person selected or typed
  */
@@ -265,15 +282,16 @@ export function maskMore(prepared, text) {
   if (literal.length < MASK_MIN || !/[\p{L}\p{N}]/u.test(literal)) return { ok: false, problem: 'SHORT' };
   if (PLACEHOLDER_IN_TEXT.test(literal)) return { ok: false, problem: 'PLACEHOLDER' };
   if (!prepared?.request || !prepared.firewall || !prepared.input) return { ok: false, problem: 'FAILED' };
-  const before = occurrences(prepared.request.preview, literal);
-  if (!before) return { ok: false, problem: 'NOT_FOUND' };
+  if (!occurrences(prepared.request.preview, literal)) return { ok: false, problem: 'NOT_FOUND' };
+  const before = occurrences(prepared.request.preview, literal, true);
+  if (!before) return { ok: false, problem: 'PART_OF_WORD' };
   let request;
   try {
     request = prepared.firewall.buildRequest({ ...prepared.input, mask: [literal] });
   } catch {
     return { ok: false, problem: 'FAILED' };
   }
-  const masked = before - occurrences(request.preview, literal);
+  const masked = before - occurrences(request.preview, literal, true);
   if (masked <= 0) return { ok: false, problem: 'NOT_DATA' };
   return { ok: true, masked, prepared: { ...prepared, request, preview: request.preview, stats: request.stats, masks: (prepared.masks || 0) + 1 } };
 }

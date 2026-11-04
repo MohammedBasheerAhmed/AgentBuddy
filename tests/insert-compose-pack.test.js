@@ -118,6 +118,14 @@ test('"Use what I typed in the form" is refused on a blocked or HR table, or for
   assert.equal(formReadRefusal('incident', 'comments', undefined), '');
 });
 
+test('"Use what I typed in the form" also honours the sensitive prefixes the organisation adds (the same check the run makes)', () => {
+  const policy = normalizePolicy({ sensitiveTablePrefixes: ['x_acme_hr_'] });
+  assert.match(formReadRefusal('x_acme_hr_case', 'description', policy), /HR case content is not sent/);
+  assert.match(formReadRefusal('sn_hr_core_case', 'description', policy), /HR case content is not sent/, 'sn_hr_ always counts');
+  assert.equal(formReadRefusal('x_acme_hr_case', 'description', normalizePolicy({ sensitiveTablePrefixes: ['x_acme_hr_'], ...HR_OK })), '');
+  assert.equal(formReadRefusal('x_acme_hr_case', 'description', normalizePolicy({})), '', 'without the prefix it is an ordinary table');
+});
+
 // ---- L10: a case form has no impact and urgency -------------------------------------------------------------------------------------
 
 test('Notes to ticket does not offer impact and urgency for a case form (L10)', () => {

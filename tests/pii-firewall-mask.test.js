@@ -100,10 +100,12 @@ test('a word that is also part of a placeholder ("person", "masked") can be mask
   assert.deepEqual(bodies(req), ['[PERSON_1] is the [MASKED_1] who [MASKED_2] it.']);
 });
 
-test('the masked text is checked again on the finished request: no part of the request keeps it', () => {
+// (The fixed prompt is Agent Buddy's or the organisation's own wording, not ticket data: masking by hand leaves it as written.)
+test('the masked text is checked again on the finished request: no part of the ticket data keeps it, and the fixed prompt keeps its wording', () => {
   const fw = createFirewall({ people: PEOPLE });
   const req = fw.buildRequest(input([part('Ticket for Zanzibar Ops'), part('zanzibar ops again', 'comments')], { system: 'Help with Zanzibar Ops.', mask: ['Zanzibar Ops'] }));
-  assert.ok(!/zanzibar/i.test(everything(req)));
+  assert.ok(!/zanzibar/i.test(userOf(req)), userOf(req));
+  assert.ok(req.messages.find((m) => m.role === 'system').content.startsWith('Help with Zanzibar Ops.'));
 });
 
 test('the firewall object keeps its shape: masking more is part of building a request, not a new door', () => {

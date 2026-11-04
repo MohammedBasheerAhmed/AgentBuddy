@@ -95,10 +95,17 @@ export async function resolvePeople({ refs = [], logins = [], names = [] }, deps
   const people = [];
   const seenIds = new Set();
   const seenNames = new Set();
-  const add = (person) => {
+  let authors = 0;
+  // Every person a column or a related row names (the record's own people, approvers, task owners, people in the form's answers) is
+  // kept, however many there are: the row still carries the name, so a person left off this list would reach the AI unmasked (build
+  // rule 4). Those rows are capped where they are read (LIMITS.relatedRows, the variables read), which bounds this list too. Only note
+  // authors have a cap of their own (LIMITS.people), and a capped author is still masked: the firewall takes every note's author from
+  // the notes themselves (peopleFor, src/features/parts.js).
+  const add = (person, author = false) => {
     const key = person.name.toLowerCase();
     if (!person.name || (person.sysId && seenIds.has(person.sysId)) || (!person.sysId && seenNames.has(key))) return;
-    if (people.length >= LIMITS.people) return;
+    if (author && authors >= LIMITS.people) return;
+    if (author) authors += 1;
     if (person.sysId) seenIds.add(person.sysId);
     seenNames.add(key);
     people.push(person);
@@ -110,9 +117,9 @@ export async function resolvePeople({ refs = [], logins = [], names = [] }, deps
     const row = rowsByLogin.get(login);
     if (!row) return;
     namesByLogin.set(login, oneLine(row.name || login, 100));
-    add(personFrom('journal_author', { sysId: raw(row.sys_id).toLowerCase() }, row));
+    add(personFrom('journal_author', { sysId: raw(row.sys_id).toLowerCase() }, row), true);
   });
-  names.forEach((name) => add(personFrom('journal_author', { name, sysId: '' }, null)));
+  names.forEach((name) => add(personFrom('journal_author', { name, sysId: '' }, null), true));
 
   const withoutEmail = people.filter((p) => !p.email).length;
   const userAccess = access.find((a) => a.source === 'sys_user');

@@ -37,10 +37,19 @@ export async function sendChat(config, sealed, { host = '', kind = 'chat', skipB
   const limit = timeoutMs || (config.local ? LOCAL_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
   const common = { apiKey: config.apiKey, model: config.model, messages: sealed.messages, baseUrl: config.baseUrl || '', name: providerName(config), signal, timeoutMs: limit, fetchFn, sleep };
   const started = Date.now();
-  const reply =
-    apiOf(config.provider) === 'openai'
-      ? await sendOpenAI({ ...common, azure: config.azure || null, keyOptional: Boolean(config.keyOptional) })
-      : await sendAnthropic({ ...common, effort: 'low', promptCache: config.promptCache !== false });
-  await recordCall({ provider: config.provider, model: config.model, ms: Date.now() - started, usage: reply.usage, host, kind });
+  const record = (usage) => recordCall({ provider: config.provider, model: config.model, ms: Date.now() - started, usage, host, kind });
+  let reply;
+  try {
+    reply =
+      apiOf(config.provider) === 'openai'
+        ? await sendOpenAI({ ...common, azure: config.azure || null, keyOptional: Boolean(config.keyOptional) })
+        : await sendAnthropic({ ...common, effort: 'low', promptCache: config.promptCache !== false });
+  } catch (err) {
+    // An answer that came back but could not be used (cut short before any text, empty, declined, stopped by a filter) was billed
+    // all the same: the adapters put its usage on the error, and it counts against the caps and the daily budget like any call.
+    if (err?.usage) await record(err.usage);
+    throw err;
+  }
+  await record(reply.usage);
   return { ...reply, truncated: Boolean(reply.truncated) };
 }

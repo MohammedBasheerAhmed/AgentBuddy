@@ -13,6 +13,8 @@
 //         | { type: 'quote', blocks } | { type: 'code', lang, text } | { type: 'rule' }
 // Inline  = { type: 'text'|'bold'|'italic'|'code'|'url', text }   (text may contain "\n" for a line break)
 
+import { invisibleChars } from '../lib/invisible.js';
+
 export const DEFAULT_MAX_CHARS = 60000;
 export const DEFAULT_MAX_DEPTH = 4;
 const HARD_MAX_CHARS = 1000000;
@@ -25,18 +27,13 @@ const TRUNCATED_NOTICE = '[Output truncated: it was too long to display in full.
 
 // ---- Cleaning ------------------------------------------------------------------------------------------------------
 
-// Characters that change how text reads without showing: C0/C1 controls (not tab or newline), soft hyphen, grapheme
-// joiner, Arabic letter mark, Hangul/Khmer/Mongolian fillers, zero-width and direction marks (200B-200F), bidi
-// embeddings and overrides (202A-202E), word joiner and invisible operators (2060-2064), bidi isolates (2066-2069),
-// deprecated format characters (206A-206F), variation selectors other than the emoji pair FE0E/FE0F, the byte order
-// mark, annotation characters, and the plane 14 tag block (used to smuggle hidden text).
+// Characters that change how text reads without showing (controls, zero-width and direction marks, fillers, tag characters):
+// the one list the PII firewall uses too (src/lib/invisible.js). The emoji variation selectors FE0E/FE0F stay here (they only
+// pick how an emoji is drawn), and so does a zero-width joiner between two emoji (see joinsEmoji).
 // Written as numbers so this file stays plain ASCII (no hidden characters in the source itself).
 const hex4 = (n) => `\\u${n.toString(16).padStart(4, '0')}`;
 const charClass = (items) => `[${items.map((x) => (Array.isArray(x) ? `${hex4(x[0])}-${hex4(x[1])}` : hex4(x))).join('')}]`;
-const INVISIBLE = new RegExp(
-  `${charClass([[0x00, 0x08], [0x0b, 0x1f], [0x7f, 0x9f], 0xad, 0x34f, 0x61c, 0x115f, 0x1160, 0x17b4, 0x17b5, [0x180b, 0x180f], [0x200b, 0x200f], [0x202a, 0x202e], [0x2060, 0x206f], 0x3164, [0xfe00, 0xfe0d], 0xfeff, 0xffa0, [0xfff9, 0xfffc]])}|\\udb40[\\udc00-\\udfff]`,
-  'g'
-);
+const INVISIBLE = invisibleChars({ keep: [0xfe0e, 0xfe0f] });
 const ODD_SPACES = new RegExp(charClass([0xa0, 0x1680, [0x2000, 0x200a], 0x202f, 0x205f, 0x3000]), 'g');
 const LINE_BREAKS = new RegExp(`\\r\\n?|${charClass([0x85, 0x2028, 0x2029])}`, 'g');
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;

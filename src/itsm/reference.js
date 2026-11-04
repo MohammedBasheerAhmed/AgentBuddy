@@ -18,9 +18,9 @@ export const KNOWLEDGE_LIMIT = 3;
 const STATUSES = new Set(['ok', 'empty', 'empty-or-hidden', 'denied', 'skipped', 'error', 'blocked']);
 
 // The people named on the rows of the other tickets and articles (display names only). They go on the pack's people list, so the
-// firewall masks them exactly wherever the wording of those tickets mentions them.
+// firewall masks them exactly wherever the wording of those tickets mentions them. Every one of them goes on it (a name left out would
+// still be in the hit's wording): at most SIMILAR_LIMIT + KNOWLEDGE_LIMIT hits of MAX_HIT_PEOPLE names each.
 export const MAX_HIT_PEOPLE = 8;
-export const MAX_REFERENCE_PEOPLE = 40;
 const namesOf = (list) =>
   (Array.isArray(list) ? list : [])
     .filter((n) => typeof n === 'string')
@@ -165,12 +165,10 @@ export async function addReference(pack, { read, allowSensitive = false } = {}, 
   // The people on the other tickets: exact masking for their names. Display names only; no email, no other table.
   const people = [...(Array.isArray(pack.people) ? pack.people : [])];
   const known = new Set(people.map((p) => String(p?.name || '').toLowerCase()).filter(Boolean));
-  let added = 0;
   for (const hit of [...(reference.similar?.hits || []), ...(reference.knowledge?.hits || [])]) {
     for (const name of hit.people || []) {
-      if (known.has(name.toLowerCase()) || added >= MAX_REFERENCE_PEOPLE) continue;
+      if (known.has(name.toLowerCase())) continue;
       known.add(name.toLowerCase());
-      added += 1;
       people.push({ role: 'reference_person', name, email: '', sysId: '' });
     }
   }

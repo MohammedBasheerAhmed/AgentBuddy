@@ -794,6 +794,9 @@ export function effectiveSettings(user, policyInput) {
   } else if (policy.allowedModels?.length) {
     lock('model', t('Allowed by your organisation: {list}.', { list: policy.allowedModels.join(', ') }));
   }
+  // The allowed models go with the settings, so resolveProviderConfig uses the chosen one even where the provider's own list does not
+  // have it (src/providers/config.js). Always taken from the policy, never from what is stored.
+  values.allowedModels = policy.allowedModels?.length ? [...policy.allowedModels] : null;
   if (policy.allowedInstances) {
     values.instances = (Array.isArray(values.instances) ? values.instances : []).filter((o) => isInstanceAllowed(o, policy));
     lock('instances', t('Only instances approved by your organisation can be enabled.'));

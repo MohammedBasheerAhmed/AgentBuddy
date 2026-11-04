@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import PreviewDialog from '../../../PreviewDialog.jsx';
+import PreviewDialog, { previewKey } from '../../../PreviewDialog.jsx';
 import { resolveProviderConfig } from '../../../../providers/config.js';
 import { isBusyPhase } from '../../../useRun.js';
 import { otherRecordsSummary, previewStyle } from '../../../runLogic.js';
@@ -71,8 +71,10 @@ export default function AnswerArea({ assist, page, eff, record, active = true })
     <div className="ab-answers" ref={root} aria-label={t('Answers')} role="region">
       <RunProgress run={assist} onStop={assist.reset} />
       {phase === 'error' && <RunError error={assist.error} code={assist.errorCode} onRetry={assist.again} onDismiss={assist.reset} />}
+      {/* One dialog per run: this area stays on screen from ticket to ticket, and each ticket's run has its own preview waiting. */}
       {prepared && (
         <PreviewDialog
+          key={previewKey(prepared.p)}
           feature={prepared.p.feature}
           prepared={prepared.p}
           config={prepared.cfg || config}

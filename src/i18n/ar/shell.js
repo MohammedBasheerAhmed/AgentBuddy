@@ -653,6 +653,7 @@ export const AR_SHELL = {
   'That is too long. Select a shorter piece.': 'هذا أطول مما يجب. حدد جزءا أقصر.',
   'Select plain text only, not a highlighted part.': 'حدد نصا عاديا فقط، وليس جزءا مظللا.',
   'That text is not in what will be sent.': 'هذا النص ليس فيما سيرسل.',
+  'Select whole words: that text is only part of longer words.': 'حدد كلمات كاملة: هذا النص جزء من كلمات أطول فقط.',
   'That is Agent Buddy\'s own wording, not ticket text. Nothing changed.': 'هذه صياغة Agent Buddy نفسه وليست من نص التذكرة. لم يتغير شيء.',
   'That could not be hidden. If it must not be sent, press Cancel.': 'تعذر إخفاء هذا. إذا كان يجب ألا يرسل فاضغط إلغاء.',
   'This check has closed.': 'تم إغلاق هذه المراجعة.',

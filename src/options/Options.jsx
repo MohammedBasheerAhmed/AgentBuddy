@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PROVIDERS, resolveProviderConfig } from '../providers/config.js';
-import { sendChat, truncationNote } from '../providers/index.js';
-import { createFirewall } from '../pii/index.js';
+import { PROVIDERS } from '../providers/config.js';
 import { validateBaseUrl, splitAzureAddress, azureOptions, isAzureHost, AZURE_DEFAULT_API_VERSION, summarize, tokensUsedToday, USAGE_KEY } from '../lib/aiUsage.js';
-import { ensureAiPermission } from '../lib/aiPermission.js';
+import { testConnection, loadModelList } from '../lib/connectionCheck.js';
 import { loadEffective, loadSettings, saveSettings, keyStore, keyVault, readAudit, clearAudit } from '../lib/storage.js';
 import { cleanKey, keyPreview, MIN_PASSPHRASE } from '../lib/keyStore.js';
-import { listModels, canListModels } from '../providers/models.js';
+import { canListModels } from '../providers/models.js';
 import { readBudgetState, saveCaps } from '../providers/budget.js';
 import { modelChoices } from '../lib/modelChoices.js';
 import { auditToCsv } from '../audit/auditLog.js';
-import { connectionProblem } from '../lib/pipeline.js';
 import { MSG } from '../lib/messages.js';
 import { clearAllStored, summarizeStored } from '../lib/storedData.js';
-import { instancePattern, normalizeInstance, isInstanceAllowed, checkProviderAllowed, PII_MODES, PREVIEW_MODES, KEY_STORAGE_MODES } from '../policy/policy.js';
+import { instancePattern, normalizeInstance, isInstanceAllowed, PII_MODES, PREVIEW_MODES, KEY_STORAGE_MODES } from '../policy/policy.js';
 import { allowedProviderIds, dailyTokenLimit, hostAccessMode, looserThanFloor, parseDeployments, parseLimit, unknownDisabledFeatures } from './policyNotes.js';
 import { diagnosticsText } from './diagnostics.js';
 import ProfilePicker from './ProfilePicker.jsx';
@@ -433,46 +430,21 @@ export function ProviderSection({ eff, reload }) {
     }
   }
 
+  // The checks (the organisation's rules, the address, the privacy mode), the browser permission, the firewall and the call are all in
+  // src/lib/connectionCheck.js: the same refusals as every run, made before the browser is asked for permission. This only shows it.
   const test = () =>
     withCancel('test', async (signal) => {
-      const useKey = keyForUse();
-      const cfg = resolveProviderConfig(v, useKey);
-      // The same refusal as every real send: no address for "my own server" must never fall back to a public API with this key.
-      const problem = connectionProblem(cfg);
-      if (problem) throw new Error(problem);
-      // The organisation's provider, address and model rules apply to a test as to every run: the key never goes to an address
-      // the policy does not allow, and the browser is not even asked for permission to contact it.
-      const permitted = checkProviderAllowed(cfg, eff.policy);
-      if (!permitted.ok) throw new Error(permitted.reason);
-      if (def.azure && !cfg.model) throw new Error(t('Enter the name of your Azure deployment first.'));
-      if (!useKey && !cfg.keyOptional) throw new Error(t('There is no {label} key yet. Paste it in the key box, press Save key, then test again.', { label: def.label }));
-      // A hosted provider needs the browser's permission for its address first (requested from this click).
-      await ensureAiPermission(cfg);
-      // The test goes through the same firewall as everything else: there is no side door to the provider.
-      const fw = createFirewall({ mode: 'standard', people: [], blockedFields: [], endpointIsLocal: cfg.local });
-      const request = fw.buildRequest({ feature: 'connection-test', table: '', system: 'Reply with the single word OK.', userInstruction: 'ping', parts: [] });
-      const reply = await sendChat(cfg, request, { kind: 'validate', skipBudget: true, signal, timeoutMs: cfg.local ? undefined : TEST_TIMEOUT_MS });
+      const reply = await testConnection({ values: v, policy: eff.policy, apiKey: keyForUse(), signal, timeoutMs: TEST_TIMEOUT_MS });
       const typed = cleanKey(key);
       const unsaved = typed && typed !== eff.apiKey ? ` ${t('This key is not saved yet: press Save key to keep it.')}` : '';
-      const cut = reply.truncated ? ` ${truncationNote(reply)}` : '';
-      setStatus({ kind: 'ok', text: `${t('Connected. The model answered: {answer}', { answer: isolate(String(reply.content).slice(0, 40)) })}${unsaved}${cut}` });
+      const cut = reply.note ? ` ${reply.note}` : '';
+      setStatus({ kind: 'ok', text: `${t('Connected. The model answered: {answer}', { answer: isolate(reply.answer) })}${unsaved}${cut}` });
     });
 
   // The models the server offers, so one can be picked instead of typed. Only the key goes out (to the address chats go to).
   const loadModels = () =>
     withCancel('models', async (signal) => {
-      const cfg = resolveProviderConfig(v, keyForUse());
-      const problem = connectionProblem(cfg);
-      if (problem) throw new Error(problem);
-      // The list call carries the key too: same provider and address rules. The model is not checked here (the list is cut to the
-      // allowed models below), so allowedModels is left out of this check.
-      const permitted = checkProviderAllowed({ provider: cfg.provider, baseUrl: cfg.baseUrl, model: '' }, { ...eff.policy, allowedModels: null });
-      if (!permitted.ok) throw new Error(permitted.reason);
-      if (!cfg.apiKey && !cfg.keyOptional) throw new Error(t('There is no {label} key yet. Paste it in the key box, press Save key, then load the models.', { label: def.label }));
-      await ensureAiPermission(cfg);
-      let ids = await listModels(cfg, undefined, { signal });
-      const allowed = eff.policy?.allowedModels;
-      if (allowed?.length) ids = ids.filter((id) => allowed.includes(id));
+      const ids = await loadModelList({ values: v, policy: eff.policy, apiKey: keyForUse(), signal });
       if (!(await change({ modelLists: { ...v.modelLists, [v.provider]: ids } }))) return;
       setStatus({ kind: 'ok', text: t('Found {models}. Pick one from the list, or type a name.', { models: tn(ids.length, '{n} model', '{n} models') }) });
     });

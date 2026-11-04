@@ -101,6 +101,29 @@ test('similar tickets: nothing to search, a denied table, a sensitive table', as
   assert.equal(hrDeps.calls.length, 0, 'other people\'s HR cases are not searched');
 });
 
+test('a similar search on `task` (a record whose class could not be told) leaves out HR cases unless sensitive data is allowed', async () => {
+  const row = (n, cls, extra = {}) => ({
+    sys_id: v(`${n}`.padStart(32, 'b')),
+    number: v(`TASK00${10 + n}`),
+    short_description: v('VPN payroll access'),
+    close_notes: v(`Fixed ${n}`),
+    ...(cls ? { sys_class_name: v(cls) } : {}),
+    sys_updated_on: v(`2026-10-2${n} 09:00:00`),
+    ...extra,
+  });
+  const tables = { task: [row(1, 'sn_hr_core_case'), row(2, 'incident'), row(3, 'x_acme_hr_case'), row(4, '')] };
+  const pack = { table: 'task', sysId: 'a'.repeat(32), fields: { short_description: 'VPN payroll access' }, people: [], sensitive: true };
+  const deps = { ...fakeDeps(tables), sensitivePrefixes: ['sn_hr_', 'x_acme_hr_'] };
+  const found = await findSimilarTickets(pack, deps, { resolvedOnly: true });
+  assert.deepEqual(found.hits.map((h) => h.number), ['TASK0012'], 'the HR classes (built-in and the policy\'s) and the row whose class is unknown are left out');
+  assert.ok(deps.calls[0].fields.includes('sys_class_name'), 'the class is asked for');
+  const allowed = await findSimilarTickets(pack, deps, { resolvedOnly: true, allowSensitive: true });
+  assert.deepEqual(allowed.hits.map((h) => h.number).sort(), ['TASK0011', 'TASK0012', 'TASK0013', 'TASK0014']);
+  // a search on a table of one class does not need the column: a row that does not say is of that table
+  const plain = await findSimilarTickets({ ...pack, table: 'incident', sensitive: undefined }, fakeDeps({ incident: [row(5, '')] }));
+  assert.deepEqual(plain.hits.map((h) => h.number), ['TASK0015']);
+});
+
 test('similar tickets: nothing matches is "empty" on the ticket\'s own table', async () => {
   const pack = await incidentPack();
   const tables = buildInstance();

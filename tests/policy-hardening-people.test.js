@@ -3,7 +3,7 @@
 // carries other tickets' resolution text).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FEATURES as SPEC_IDS, FEATURE_FIELDS, FEATURE_MASK_ONLY, FIELDS_BY_KIND, HR_HIDDEN, LIMITS, PERSON_COLUMNS, SEARCH_ONLY_FEATURES, allowedFields, maskOnlyFields } from '../src/context/allowlists.js';
+import { FEATURES as SPEC_IDS, FEATURE_FIELDS, FEATURE_MASK_ONLY, FIELDS_BY_KIND, HR_HIDDEN, PERSON_COLUMNS, SEARCH_ONLY_FEATURES, allowedFields, maskOnlyFields } from '../src/context/allowlists.js';
 import { PERSON_FIELDS } from '../src/context/people.js';
 import { FEATURES, contextFor, featureById } from '../src/features/registry.js';
 import { readContextPack } from '../src/context/pack.js';
@@ -278,7 +278,8 @@ test('SEC-05: problem-rca: the people on the linked incidents are on the pack an
   const names = pack.people.filter((p) => p.role === 'reference_person').map((p) => p.name);
   assert.ok(names.includes('Priya Raman') && names.includes('Dev Mehta'), JSON.stringify(names));
   assert.equal(pack.requirePreview, true);
-  assert.ok(pack.people.length <= LIMITS.people + LIMITS.referencePeople);
+  // (these names have no cap: every one of them is on the list; tests/policy-hardening-people-cap.test.js)
+  assert.equal(new Set(pack.people.map((p) => p.name.toLowerCase())).size, pack.people.length, 'each person once');
   const text = outgoing(run('problem-rca', pack));
   assert.ok(!/Priya|Raman|Dev Mehta/.test(text));
   assert.match(text, /Gateway timeout reported by \[PERSON_\d+\]/);

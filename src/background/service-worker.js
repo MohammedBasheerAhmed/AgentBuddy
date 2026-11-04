@@ -2,7 +2,7 @@
 // Its jobs are (1) open the side panel from the toolbar button, (2) register the content scripts on exactly the
 // instances the person enabled (and the browser granted), (3) keep that registration in sync with the permissions, and
 // (4) answer the bar on the ServiceNow page: which actions it may show, and "open the panel and run this one" (bar.js).
-import { MSG, toWireError } from '../lib/messages.js';
+import { MSG, pageStateMessage, toWireError } from '../lib/messages.js';
 import { tm } from '../i18n/core.js'; // (an English text marked for the catalogue: the panel shows it in its language, see plainError)
 import { checkExtensionSender } from '../lib/senderCheck.js';
 import { keyStore, loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
@@ -132,8 +132,9 @@ const barDeps = {
 
 // The keyboard shortcuts (manifest commands; src/background/commands.js): open the panel, or open it and start Summarise / Draft a reply.
 // (No await before handleCommand: the panel can only be opened while the key press is still being handled.)
+// The page is asked with the organisation's policy, as the panel asks it (the content script reads to answer; src/lib/messages.js).
 chrome.commands?.onCommand.addListener((command, tab) => {
-  handleCommand(command, tab, { ...barDeps, pageState: (tabId) => chrome.tabs.sendMessage(tabId, { type: MSG.PAGE_STATE }) }).catch(() => {});
+  handleCommand(command, tab, { ...barDeps, pageState: async (tabId) => chrome.tabs.sendMessage(tabId, pageStateMessage(await loadPolicy())) }).catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

@@ -43,8 +43,11 @@ export function pickNotable(data, max = NOTABLE_MAX) {
     for (const item of items) {
       if (!item || !item.number) continue;
       const key = item.sysId ? `${item.table}:${item.sysId}` : `number:${item.number}`;
-      if (!byKey.has(key)) byKey.set(key, { ...item, reasons: [] });
+      if (!byKey.has(key)) byKey.set(key, { ...item, maskNames: [], reasons: [] });
       const entry = byKey.get(key);
+      // The lists read different columns: an SLA row is looked up in `task`, which has no caller, while the same ticket in the list of
+      // opened tickets has one. The first copy's title is the one sent, so every copy's people go on the pack to be masked in it.
+      for (const name of Array.isArray(item.maskNames) ? item.maskNames : []) if (!entry.maskNames.includes(name)) entry.maskNames.push(name);
       const reason = why(item);
       if (!entry.reasons.includes(reason)) entry.reasons.push(reason);
     }

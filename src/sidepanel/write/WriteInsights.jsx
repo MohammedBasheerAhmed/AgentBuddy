@@ -10,7 +10,7 @@ import { t } from '../../i18n/index.js';
 // snippets (N21). The email templates and "Which email fits" moved to the Ticket screen (N20). Props: { page, eff, active }.
 // Both cards stay mounted while folded, so a half-written snippet or a pasted text survives.
 export default function WriteInsights({ page, eff, active }) {
-  const header = useTicketHeader(page, active);
+  const header = useTicketHeader(page, active, Boolean(eff?.policy?.allowHrContent));
   const [check, setCheck] = useState({ text: '', attention: '' });
   const [snippets, setSnippets] = useState('');
   return (

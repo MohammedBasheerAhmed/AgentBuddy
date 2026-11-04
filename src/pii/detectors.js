@@ -2,7 +2,7 @@
 //
 // Every detector returns findings { kind, start, end, value, confidence } over the ORIGINAL text, so a caller can
 // replace them by offset. detect() runs the detectors, drops weak findings and resolves overlaps (the finding with the
-// higher confidence wins, then the longer one).
+// higher confidence wins, then the longer one; a name inside a wider finding yields to it, see resolveOverlaps).
 //
 // What this is NOT: a name detector. Free-form personal names in prose cannot be found by patterns; the record-aware
 // dictionary (dictionary.js) covers the people the ticket already tells us about, and nothing else.
@@ -815,26 +815,44 @@ export function detectCandidates(text, options = {}) {
   return text === written ? kept : kept.map((f) => ({ ...f, value: written.slice(f.start, f.end) }));
 }
 
+// Names (from the record's people or found in prose) and text masked by hand are found by what they are, not by the format around
+// them. Inside a wider finding (an address, a password) the wider one is masked, so the rest of it is not left readable: "42 [PERSON_1]
+// Street" still says where the person lives. Between the detectors' own findings the confidence order decides, as it always has.
+const YIELDS_TO_WIDER = new Set(['PERSON', 'MANUAL']);
+
+// The first index of `kept` (sorted by start) whose finding starts at or after `at`.
+function firstFrom(kept, at) {
+  let lo = 0;
+  let hi = kept.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (kept[mid].start < at) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 /**
- * Resolve overlapping findings: the higher confidence wins, then the longer span, then the earlier start.
- * Runs in O(n log n) so a flood of matches cannot make it quadratic. Returns the survivors sorted by start.
+ * Resolve overlapping findings: the higher confidence wins, then the longer span, then the earlier start. A weaker finding that is
+ * wider and holds the winners whole takes their place when they are all names or text masked by hand (YIELDS_TO_WIDER): in
+ * "42 Raman Street" the address is masked, not just the name inside it. Runs in O(n log n) so a flood of matches cannot make it
+ * quadratic (a finding holds a bounded number of others). Returns the survivors sorted by start.
  */
 export function resolveOverlaps(findings) {
   const order = [...findings].sort((a, b) => b.confidence - a.confidence || b.end - b.start - (a.end - a.start) || a.start - b.start);
   const kept = []; // sorted by start, never overlapping
   for (const f of order) {
-    // binary search for the first kept finding that starts at or after f.start
-    let lo = 0;
-    let hi = kept.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (kept[mid].start < f.start) lo = mid + 1;
-      else hi = mid;
-    }
+    const lo = firstFrom(kept, f.start);
     const prev = kept[lo - 1];
-    const next = kept[lo];
-    if ((prev && prev.end > f.start) || (next && next.start < f.end)) continue;
-    kept.splice(lo, 0, f);
+    if (prev && prev.end > f.start) continue;
+    const hi = firstFrom(kept, f.end); // kept[lo..hi) start inside f
+    if (hi === lo) {
+      kept.splice(lo, 0, f);
+      continue;
+    }
+    const last = kept[hi - 1];
+    if (last.end > f.end || (hi - lo === 1 && last.start === f.start && last.end === f.end)) continue; // runs past f, or is the same span
+    if (kept.slice(lo, hi).every((k) => YIELDS_TO_WIDER.has(k.kind))) kept.splice(lo, hi - lo, f);
   }
   return kept;
 }

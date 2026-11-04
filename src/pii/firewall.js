@@ -14,8 +14,9 @@
 // Schmidt". A name found that way is remembered for the rest of this firewall's life, so a later bare "María-José" gets the
 // same [PERSON_n]. Strict and Local-only modes also take capitalised full names with no cue in front of them.
 //
-// MASKED BY HAND. The person can select text in the preview and mask it too (`request.mask`): every occurrence, in every part,
-// from then on. The request is built again here and sealed again; nothing outside this module can change a sealed request.
+// MASKED BY HAND. The person can select text in the preview and mask it too (`request.mask`): everywhere it is written as a word
+// of its own, in every part, from then on ("Ali" is not masked inside "quality"; the fixed prompt keeps its wording). The request
+// is built again here and sealed again; nothing outside this module can change a sealed request.
 //
 // WHAT IT CANNOT DO (read this before trusting it). Pattern detection is imperfect:
 //  - A name with no cue around it ("Please ask Priya from facilities") is still missed in Standard mode, and a name made only
@@ -35,6 +36,7 @@ import { alignedLower, createDictionary, fold } from './dictionary.js';
 import { detectProseNames, looksLikeName } from './names.js';
 import { createTokenizer, labelFor } from './tokenizer.js';
 import { seal } from './seal.js';
+import { invisibleChars } from '../lib/invisible.js';
 import { columnsForPart } from '../features/partColumns.js';
 import { UNTRUSTED } from '../prompts/rules.js';
 
@@ -122,14 +124,15 @@ function isFreeText(part) {
 // ---------------------------------------------------------------------------------------------------------------
 
 // Look-alike and invisible characters can hide a value from a detector: zero-width and soft-hyphen characters ("a<ZWSP>b@x.com"),
-// full-width digits and "@" (a card number typed in full-width digits), bidi controls that reorder text on screen. The text is
-// put through Unicode compatibility normalisation (NFKC), which turns full-width and similar forms into their plain
-// equivalents, and the invisible characters are removed, along with control characters other than tab and newline. ZWJ and
-// ZWNJ stay (they matter in some scripts). The cost: exotic characters in a ticket reach the model in their plain form.
-const INVISIBLE = new RegExp(
-  `[${String.fromCharCode(0x200b, 0x2060, 0xfeff, 0xad, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069)}\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]`,
-  'g'
-);
+// full-width digits and "@" (a card number typed in full-width digits), bidi controls that reorder text on screen. The invisible
+// characters are removed (the same list the answer renderer removes, src/lib/invisible.js: direction marks, invisible operators,
+// fillers, variation selectors, tag characters, controls other than tab and the line breaks) and the text is put through Unicode
+// compatibility normalisation (NFKC), which turns full-width and similar forms into their plain equivalents. ZWJ and ZWNJ stay
+// (they matter in some scripts), and so do carriage return and next line (line breaks, see BREAK_CHARS). The cost: exotic
+// characters in a ticket reach the model in their plain form.
+const INVISIBLE = invisibleChars({ keep: [0x0d, 0x85, 0x200c, 0x200d] });
+// The final check reads through ZWJ and ZWNJ as well: a value that only a joiner keeps from being found is refused, not sent.
+const HIDDEN = invisibleChars({ keep: [0x0d, 0x85] });
 
 function sanitize(text) {
   return text.replace(INVISIBLE, '').normalize('NFKC');
@@ -142,13 +145,45 @@ const escapeData = (s) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const attrSafe = (s) => s.replace(/[^A-Za-z0-9_.:[\] -]/g, '_').slice(0, 80);
 
 const isString = (v) => typeof v === 'string';
-const isAlnum = (ch) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 
 // Kinds whose exact text is remembered once seen (names are the dictionary's job, emails are found anywhere anyway).
 const LEARN_KINDS = new Set(['SECRET', 'URL_CREDENTIALS', 'CARD', 'IBAN', 'NATIONAL_ID', 'EMPLOYEE_ID', 'PHONE', 'IP', 'MAC', 'DOB', 'ADDRESS']);
 const MAX_LEARNED = 500;
 // A short password found after "password:" ("pwd: Pa5!") is still a password where it is repeated bare.
 const learnLength = (kind) => (kind === 'SECRET' || kind === 'URL_CREDENTIALS' ? 4 : 6);
+// The final check looks for every masked value at least this long that is still written somewhere (see verify).
+const CHECKED_LENGTH = 6;
+
+// Where a value is written again. Masking (learned values, text masked by hand) and the final check use the same rule, so the
+// check never refuses a request over a place that masking left alone on purpose:
+//  - in any case ("WELCOME1" is still Welcome1; the check has always compared without case);
+//  - a place inside a longer word or number is a different value ("10.20.30.40" in "v10.20.30.40" is a version, "Ali" in
+//    "quality" a word) and is left as written,
+//  - except for the values that identify a person or open an account, CHECKED_LENGTH or more: a password or a credential
+//    ("Welcome12" shows the password Welcome1 to anyone who reads it), a card, an IBAN, an ID number and a phone number ("Phone
+//    5551234567" written as "Phone5551234567", "ID4471234"). Those are masked inside a longer word too: masking a few characters too
+//    many costs a little readability, leaving the number costs the person's privacy. (A shorter one only as a word of its own: four
+//    letters inside a longer word are too often just part of that word.)
+const isAlnum = (ch) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
+const insideWord = (text, start, end) => (isAlnum(text[start]) && isAlnum(text[start - 1])) || (isAlnum(text[end - 1]) && isAlnum(text[end]));
+// By placeholder label (src/pii/tokenizer.js), so masking (by finding kind) and the final check (by label) cannot disagree.
+const ANYWHERE_LABELS = new Set(['SECRET', 'CARD', 'IBAN', 'ID', 'PHONE']);
+const maskedAnywhere = (label, value) => ANYWHERE_LABELS.has(label) && value.length >= CHECKED_LENGTH;
+
+/** Start offsets of `needle` (already alignedLower) in `text` (`lower` is alignedLower(text)), without overlaps. */
+export function placesOf(text, lower, needle, anywhere) {
+  const places = [];
+  for (let at = lower.indexOf(needle); at !== -1; ) {
+    const end = at + needle.length;
+    if (anywhere || !insideWord(text, at, end)) {
+      places.push(at);
+      at = lower.indexOf(needle, end);
+    } else {
+      at = lower.indexOf(needle, at + 1);
+    }
+  }
+  return places;
+}
 
 // Names found in prose that are remembered (and so masked wherever they are written capitalised) for the firewall's life.
 const MAX_PROSE_NAMES = 200;
@@ -175,10 +210,11 @@ function summarise(counts) {
 /**
  * The last gate: throws REDACTION_FAILED when `text` still contains a high-confidence PII or secret pattern. Placeholders are
  * not PII. buildRequest() runs it on the finished outgoing text, independently of how that text was produced, so a pattern
- * the first pass could not see (one that only appears once its neighbour is replaced) still stops the request.
+ * the first pass could not see (one that only appears once its neighbour is replaced) still stops the request. It reads the text
+ * with every invisible character taken out (ZWJ and ZWNJ too) and normalised, so no hidden character can split a value past it.
  */
 export function assertNoHighConfidencePii(text, regions) {
-  const left = detect(text, { regions }).filter((f) => f.confidence >= HIGH_CONFIDENCE);
+  const left = detect(String(text).replace(HIDDEN, '').normalize('NFKC'), { regions }).filter((f) => f.confidence >= HIGH_CONFIDENCE);
   if (!left.length) return;
   const counts = {};
   for (const f of left) counts[f.kind] = (counts[f.kind] || 0) + 1;
@@ -224,8 +260,8 @@ export function createFirewall(options = {}) {
   const totals = { requests: 0, refused: 0, total: 0, counts: {} };
 
   // Values found once (by a label, a checksum) are masked everywhere they appear in this firewall's life: a password found
-  // after "password:" is also hidden where it is repeated bare. Exact text, memory only, capped.
-  const learned = new Map(); // text -> kind
+  // after "password:" is also hidden where it is repeated bare. Memory only, capped.
+  const learned = new Map(); // alignedLower(text) -> kind
 
   // Names found in prose, remembered as extra people of the dictionary (matched only where capitalised).
   const proseNames = [];
@@ -241,8 +277,8 @@ export function createFirewall(options = {}) {
     let grew = false;
     let names = false;
     for (const f of findings) {
-      if (LEARN_KINDS.has(f.kind) && f.value.length >= learnLength(f.kind) && f.value.length <= 200 && learned.size < MAX_LEARNED && !learned.has(f.value)) {
-        learned.set(f.value, f.kind);
+      if (LEARN_KINDS.has(f.kind) && f.value.length >= learnLength(f.kind) && f.value.length <= 200 && learned.size < MAX_LEARNED && !learned.has(alignedLower(f.value))) {
+        learned.set(alignedLower(f.value), f.kind);
         grew = true;
       }
       if (f.kind === 'PERSON' && f.source === 'prose' && proseNames.length < MAX_PROSE_NAMES) {
@@ -271,10 +307,12 @@ export function createFirewall(options = {}) {
         out.push(p);
         continue;
       }
+      // One flag per UTF-16 unit of the prose name, like the offsets (a letter outside the first plane takes two).
       const covered = new Array(p.end - p.start).fill(false);
       for (const d of over) for (let k = Math.max(d.start, p.start); k < Math.min(d.end, p.end); k++) covered[k - p.start] = true;
       if (over.every((d) => d.start >= p.start && d.end <= p.end)) {
-        const rest = [...p.value].filter((_, k) => !covered[k]).join('');
+        let rest = '';
+        for (let k = 0; k < covered.length; k++) if (!covered[k]) rest += p.value[k];
         if (/\p{L}{2,}/u.test(rest)) out.push({ ...p, confidence: PROSE_OVER_DICTIONARY });
         continue;
       }
@@ -300,12 +338,13 @@ export function createFirewall(options = {}) {
     return out;
   }
 
+  // Text masked by hand, as a word of its own ("Ali" is not masked inside "quality"); in ticket text only, never in the fixed prompt.
   function manualFindings(text) {
     if (!manual.length) return [];
     const found = [];
     const lower = alignedLower(text);
     for (const m of manual) {
-      for (let at = lower.indexOf(m.lower); at !== -1; at = lower.indexOf(m.lower, at + m.lower.length)) {
+      for (const at of placesOf(text, lower, m.lower, false)) {
         const end = at + m.lower.length;
         found.push({ kind: 'MANUAL', label: m.label, start: at, end, value: text.slice(at, end), confidence: MANUAL_CONFIDENCE, entity: m.entity, canonical: m.value });
       }
@@ -344,24 +383,23 @@ export function createFirewall(options = {}) {
   }
 
   function learnedFindings(text) {
+    if (!learned.size) return [];
     const found = [];
+    const lower = alignedLower(text);
     for (const [value, kind] of learned) {
-      for (let at = text.indexOf(value); at !== -1; at = text.indexOf(value, at + value.length)) {
-        const end = at + value.length;
-        if (isAlnum(value[0]) && isAlnum(text[at - 1])) continue; // inside a longer word
-        if (isAlnum(value[value.length - 1]) && isAlnum(text[end])) continue;
-        found.push({ kind, start: at, end, value, confidence: 0.9 });
-      }
+      const anywhere = maskedAnywhere(labelFor(kind), value);
+      for (const at of placesOf(text, lower, value, anywhere)) found.push({ kind, start: at, end: at + value.length, value: text.slice(at, at + value.length), confidence: 0.9 });
     }
     return found;
   }
 
   // Detectors, dictionary, learned values, hand-masked text and names found in prose together, overlaps resolved once.
-  // `prose: false` for the trusted prompt text, which carries no ticket data and must keep its wording.
+  // `prose: false` for the trusted prompt text, which carries no ticket data and must keep its wording: no names found in prose
+  // and no text masked by hand there.
   function findAll(text, { prose = true } = {}) {
     const dict = (prose ? dictionary : recordDictionary).find(text);
-    const candidates = [...detectCandidates(text, { regions }), ...dict, ...learnedFindings(text), ...manualFindings(text)];
-    if (prose) candidates.push(...reconcile(detectProseNames(text, { mode: proseMode }), dict));
+    const candidates = [...detectCandidates(text, { regions }), ...dict, ...learnedFindings(text)];
+    if (prose) candidates.push(...manualFindings(text), ...reconcile(detectProseNames(text, { mode: proseMode }), dict));
     return resolveOverlaps(candidates.filter((c) => c.confidence >= DEFAULT_MIN_CONFIDENCE));
   }
 
@@ -423,16 +461,23 @@ export function createFirewall(options = {}) {
   //  - no value that got a placeholder is still written somewhere else. Names found in prose are left to the dictionary check
   //    below, which knows that they count only where capitalised ("Morgan" the person, "JPMorgan" the bank);
   //  - no name of the record's people (or of the prose names) is left where the dictionary would always mask it;
-  //  - no text the person masked by hand is left anywhere (placeholders themselves aside: "PERSON" is inside "[PERSON_1]").
+  //  - no text the person masked by hand is left in the ticket text (placeholders themselves aside: "PERSON" is inside
+  //    "[PERSON_1]"; the fixed prompt is not masked by hand, so it is not looked at for it).
+  // "Still written" follows the rule masking follows (placesOf): any case, a word of its own, a password or a number that identifies
+  // someone inside a longer word too (maskedAnywhere).
   function verify(redactedPieces, finalText) {
     assertNoHighConfidencePii(finalText, regions);
     const own = new Set([...proseNames.map((p) => p.name.toLowerCase()), ...manual.map((m) => m.value.toLowerCase())]);
-    const originals = tokenizer.originals().filter((o) => o.length >= 6 && !own.has(o.replace(/\s+/g, ' ').trim().toLowerCase())).map((o) => o.toLowerCase());
+    const originals = tokenizer
+      .originals()
+      .filter(({ value }) => value.length >= CHECKED_LENGTH && !own.has(value.replace(/\s+/g, ' ').trim().toLowerCase()))
+      .map(({ label, value }) => ({ lower: alignedLower(value), anywhere: maskedAnywhere(label, value) }));
+    const written = (bare, needle, anywhere) => placesOf(bare, bare, needle, anywhere).length > 0;
     for (const { text: piece, trusted } of redactedPieces) {
-      const lower = piece.toLowerCase();
-      const bare = manual.length ? alignedLower(piece.replace(PLACEHOLDER_ANY, (t) => ' '.repeat(t.length))) : '';
+      // The placeholders are not data (a password "Secret" is not left in "[SECRET_1]"): blanked before looking.
+      const bare = alignedLower(piece.replace(PLACEHOLDER_ANY, (t) => ' '.repeat(t.length)));
       const names = (trusted ? recordDictionary : dictionary).find(piece, { unconditionalOnly: true });
-      if (originals.some((o) => lower.includes(o)) || names.length || manual.some((m) => bare.includes(m.lower))) {
+      if (originals.some((o) => written(bare, o.lower, o.anywhere)) || names.length || (!trusted && manual.some((m) => written(bare, m.lower, false)))) {
         throw new FirewallError('REDACTION_FAILED', 'A value that should be masked is still in the text, so nothing was sent.');
       }
     }

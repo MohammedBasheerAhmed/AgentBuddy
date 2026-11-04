@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MSG } from '../lib/messages.js';
+import { MSG, pageStateMessage } from '../lib/messages.js';
 import { initialPageState, reducePage } from './pageState.js';
 import { hostLooksLikeServiceNow, siteVerdict } from './firstRun.js';
 
@@ -34,12 +34,13 @@ export function cleanPortal(portal, surface) {
   return PORTAL_BASE_RE.test(base) && PORTAL_PAGE_RE.test(pageId) ? { base, pageId } : null;
 }
 
-// One look at the active tab, as an event for reducePage (src/sidepanel/pageState.js).
-async function observeActivePage() {
+// One look at the active tab, as an event for reducePage (src/sidepanel/pageState.js). `policy`: the organisation's, sent along as
+// with every READ (the content script reads to answer: a number's sys_id, a task's real class, who is signed in).
+async function observeActivePage(policy) {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab?.id) return { type: 'silent', tabId: 0, origin: '' };
   try {
-    const state = await chrome.tabs.sendMessage(tab.id, { type: MSG.PAGE_STATE });
+    const state = await chrome.tabs.sendMessage(tab.id, pageStateMessage(policy));
     if (!state || state.error) throw new Error(state?.error?.message || 'No answer.');
     return { type: 'answer', page: { ...state, portal: cleanPortal(state.portal, state.surface), status: state.record ? 'record' : 'no-record', tabId: tab.id } };
   } catch {
@@ -52,12 +53,16 @@ async function observeActivePage() {
  * { page, stale, lastGood, lastSeen, refresh }. `page` is the current page; while the active tab misses an answer for a moment it
  * stays the last answer with `stale: true` (see pageState.js). `lastGood` is the last page that answered while its tab is still
  * open: the sections keep working on it when the active tab is not a ServiceNow page. `lastSeen` also survives that tab closing.
+ * @param {object|null} [policy] the organisation's normalised policy (eff.policy): every look at the page carries it, as every READ does
  */
-export function usePage() {
+export function usePage(policy = null) {
   const [state, setState] = useState(initialPageState);
   const busy = useRef(false);
   const again = useRef(false); // something happened (a tab switch, a navigation) while a look was on its way: look once more after it
   const alive = useRef(true);
+  // The latest policy, read by the next look (a policy that loads after the panel opened does not restart the polling).
+  const policyRef = useRef(policy);
+  policyRef.current = policy;
 
   // One look at a time, and none lost: a tab switch while a look waits for its answer used to be dropped, so the panel showed the
   // tab it had for up to one poll. Now the look that is running is followed by one more.
@@ -71,7 +76,7 @@ export function usePage() {
       do {
         again.current = false;
         // eslint-disable-next-line no-await-in-loop -- one look after the other, in order
-        const event = await observeActivePage();
+        const event = await observeActivePage(policyRef.current);
         if (!alive.current) return;
         setState((prev) => reducePage(prev, { ...event, at: Date.now() }));
       } while (again.current && alive.current);

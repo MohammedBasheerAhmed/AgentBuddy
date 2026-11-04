@@ -123,7 +123,8 @@ export function KeyUnlock({ eff, primary = false }) {
  * props: eff, what (finishes "...to use <what>."), also (a second sentence: what works without a key)
  */
 export default function AiKeyNote({ eff, what = 'these actions', also = '' }) {
-  if (aiNeeds(eff) === 'unlock') return <KeyUnlock eff={eff} />;
+  const needs = aiNeeds(eff);
+  if (needs === 'unlock') return <KeyUnlock eff={eff} />;
   const text = aiNeedsText(eff, what);
   if (!text) return null;
   return (
@@ -132,9 +133,12 @@ export default function AiKeyNote({ eff, what = 'these actions', also = '' }) {
         {text}
         {also ? ` ${also}` : ''}
       </p>
-      <button type="button" className="ab-btn ab-btn-sm" onClick={() => openSettings('ai')}>
-        {t('Open Settings')}
-      </button>
+      {/* The organisation's policy is not something Settings can change: no button that leads nowhere. */}
+      {needs !== 'policy' && (
+        <button type="button" className="ab-btn ab-btn-sm" onClick={() => openSettings('ai')}>
+          {t('Open Settings')}
+        </button>
+      )}
     </div>
   );
 }

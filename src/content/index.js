@@ -17,8 +17,9 @@ import { getSessionUser } from './sessionToken.js';
 import { queryTable } from './tableApi.js';
 import { parseNewRecordRef, parseRecordRef, kindForTable } from '../context/kinds.js';
 import { resolveRealClass } from '../context/pack.js';
-import { SYS_ID_RE, TABLE_RE, disp } from '../context/util.js';
+import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
 import { handleRead } from './reads.js';
+import { readHeader } from './header.js';
 import { portalInfo, surfaceOf } from '../context/surface.js';
 import { contentMessageAction } from '../lib/senderCheck.js';
 import { handleFillField } from './fill.js';
@@ -85,12 +86,12 @@ if (decision !== 'skip') {
   // A record opened through the base class (/task.do?sys_id=..., a Workspace /record/task/<id>) is really an incident, a case, an HR
   // case...: its real class is looked up once (one small read through the policy guard), so the panel's header, the bar's actions and
   // the record's kind are those of the real type. A class that cannot be looked up stays 'task' (the pack read then treats the record
-  // as sensitive). sys_id -> class, bounded like the number cache.
+  // as sensitive). sys_id -> class, bounded like the number cache. `policy`: the panel's, when it sent one (the guard merges it).
   const realClasses = new Map();
-  async function realClassOf(table, sysId) {
+  async function realClassOf(table, sysId, policy) {
     if (table !== 'task') return table;
     if (realClasses.has(sysId)) return realClasses.get(sysId);
-    const guarded = await policyGuard.deps({ queryTable });
+    const guarded = await policyGuard.deps({ queryTable }, policy);
     const found = await resolveRealClass({ table, sysId }, guarded).catch(() => ({ table, unresolved: true }));
     if (found.unresolved || !TABLE_RE.test(found.table)) return table;
     remember(realClasses, sysId, found.table);
@@ -98,11 +99,12 @@ if (decision !== 'skip') {
   }
 
   // `known`: the form's description when the caller has already asked the page for it (pageState asks once for everything).
-  async function resolveRecord(href, known) {
+  // `policy`: the panel's, sent with PAGE_STATE and READ; the bar and Insert send none (the managed policy applies on its own).
+  async function resolveRecord(href, known, policy) {
     // 1) The classic form knows exactly which record it shows.
     const meta = known === undefined ? await tryCallPage('getFormMeta') : known;
     if (meta?.table && SYS_ID_RE.test(meta.sysId || '') && !meta.isNewRecord && TABLE_RE.test(meta.table)) {
-      const table = await realClassOf(meta.table, meta.sysId);
+      const table = await realClassOf(meta.table, meta.sysId, policy);
       return { table, sysId: meta.sysId, number: meta.number || '', kind: kindForTable(table) };
     }
     // 2) Workspaces, Next Experience and portals: the address (read afresh on every request).
@@ -113,7 +115,7 @@ if (decision !== 'skip') {
       const cacheKey = `${ref.table}:${number}`;
       if (!numberCache.has(cacheKey) && Date.now() - (numberMisses.get(cacheKey) || 0) > MISS_MS) {
         // (through the policy guard: a blocked table is not looked up)
-        const guarded = await policyGuard.deps({ queryTable });
+        const guarded = await policyGuard.deps({ queryTable }, policy);
         const rows = await guarded.queryTable(ref.table, `number=${number}`, ['sys_id', 'number'], { limit: 1 }).catch(() => []);
         if (rows[0]?.sys_id) remember(numberCache, cacheKey, rows[0].sys_id);
         else remember(numberMisses, cacheKey, Date.now());
@@ -121,7 +123,7 @@ if (decision !== 'skip') {
       sysId = numberCache.get(cacheKey) || '';
     }
     if (!SYS_ID_RE.test(sysId || '')) return null;
-    const table = await realClassOf(ref.table, sysId);
+    const table = await realClassOf(ref.table, sysId, policy);
     return { table, sysId, number: number || '', kind: kindForTable(table) };
   }
 
@@ -162,14 +164,15 @@ if (decision !== 'skip') {
   // What the page world said is data: only a plain whole number gets through.
   const formStamp = (meta) => `${Number.isSafeInteger(meta?.loadedAt) && meta.loadedAt > 0 ? meta.loadedAt : ''}:${saves}`;
 
-  async function pageState() {
+  async function pageState(policy) {
     // The address is read ONCE per request and used for the record, the surface and the portal alike: a portal changes it
     // with history.pushState and no reload, so nothing here may remember an earlier one.
     const href = location.href;
-    // (the one read here, "who is Me" in sys_user, goes through the policy guard like every other read)
-    const guarded = await policyGuard.deps({ queryTable }).catch(() => null);
+    // (the reads made here, "who is Me" in sys_user, a number's sys_id and a task's real class, go through the policy guard like every
+    // other read, with the panel's policy merged in as for READ: the managed policy stays the floor, the panel's can only add to it)
+    const guarded = await policyGuard.deps({ queryTable }, policy).catch(() => null);
     const meta = await tryCallPage('getFormMeta'); // asked once, for the record, a blank form and the save stamp alike
-    const [record, session, newRecord] = await Promise.all([resolveRecord(href, meta).catch(() => null), guarded ? getSessionUser(guarded).catch(() => null) : null, newRecordState(meta).catch(() => null)]);
+    const [record, session, newRecord] = await Promise.all([resolveRecord(href, meta, policy).catch(() => null), guarded ? getSessionUser(guarded).catch(() => null) : null, newRecordState(meta).catch(() => null)]);
     const surface = surfaceOf(href);
     const portal = surface === 'portal' ? portalInfo(href) : null;
     return {
@@ -182,21 +185,6 @@ if (decision !== 'skip') {
       formStamp: formStamp(meta),
       user: session && (session.userId || session.name || session.userName) ? { name: session.name, roles: session.roles, userId: session.userId } : null,
     };
-  }
-
-  async function header({ table, sysId }, policy) {
-    assertRecord(table, sysId);
-    // The panel's policy rides along with the message (see src/sidepanel/ask.js); the guard merges it with the managed policy.
-    const guarded = await policyGuard.deps({ queryTable }, policy);
-    // An incident also says whether it is a major one (the Major Incident plugin's column; absent elsewhere, then simply not returned).
-    const columns = ['number', 'short_description', 'state', 'priority', ...(table === 'incident' ? ['major_incident_state'] : [])];
-    const rows = await guarded.queryTable(table, `sys_id=${sysId}`, columns, { limit: 1, displayValue: true });
-    const row = rows[0] || {};
-    return { number: disp(row.number), short_description: disp(row.short_description), state: disp(row.state), priority: disp(row.priority), ...(row.major_incident_state !== undefined ? { major_incident_state: disp(row.major_incident_state) } : {}) };
-  }
-
-  function assertRecord(table, sysId) {
-    if (!TABLE_RE.test(table || '') || !SYS_ID_RE.test(sysId || '')) throw new Error('That is not a valid record.');
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -217,10 +205,12 @@ if (decision !== 'skip') {
         case MSG.PING:
           return { ok: true };
         case MSG.PAGE_STATE:
-          return pageState();
+          // (the panel's policy, as with READ: the guard checks its shape and merges it, so it can only make these lookups stricter)
+          return pageState(message.policy);
         case MSG.READ:
-          if (message.op === 'header') return header(message.args || {}, message.policy);
-          return handleRead(message.op, message.args || {}, { policy: message.policy, currentRecord: () => resolveRecord(location.href) });
+          // The panel's policy rides along with the message (see src/sidepanel/ask.js); the guard merges it with the managed policy.
+          if (message.op === 'header') return readHeader(message.args || {}, { guard: policyGuard, deps: { queryTable }, policy: message.policy });
+          return handleRead(message.op, message.args || {}, { policy: message.policy, currentRecord: () => resolveRecord(location.href, undefined, message.policy) });
         case MSG.FILL_FIELD:
           return handleFillField(message, { callPage, currentRecord: () => resolveRecord(location.href), currentNewRecord: newRecordState, href: () => location.href });
         default:

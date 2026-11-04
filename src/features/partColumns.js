@@ -44,8 +44,12 @@ export const DERIVED_PART_COLUMNS = Object.freeze({
   // ---- Computed by Agent Buddy from the record ----
   // Counts and a sentence from the wording of the notes, the SLAs, the priority and the reopen / reassignment counts.
   signals: ['short_description', 'description', 'comments', 'work_notes', 'priority', 'state', 'reopen_count', 'reassignment_count', 'has_breached'],
-  // "The ticket is on hold", "an approval was rejected", due date: worked out from these.
-  status: ['state', 'request_state', 'stage', 'hold_reason', 'approval', 'due_date', 'opened_at', 'resolved_at', 'closed_at', ...SLA_ROW, ...APPROVAL_ROW],
+  // "The ticket is on hold", "an approval was rejected", due date: worked out from these. The request's status line also names who has
+  // it and the task or item it waits on ("Waiting on SCTASK0010002 (Order the laptop), with Beth Anglin": src/checks/requestStatus.js).
+  status: [
+    'state', 'request_state', 'stage', 'hold_reason', 'approval', 'due_date', 'opened_at', 'resolved_at', 'closed_at', ...SLA_ROW, ...APPROVAL_ROW,
+    'number', 'short_description', 'cat_item', 'assigned_to', 'assignment_group',
+  ],
   // Names the columns that have no value ("Back-out plan"): says nothing about their content.
   not_recorded: ['implementation_plan', 'backout_plan', 'test_plan', 'risk_impact_analysis', 'justification'],
   // Which reads could not be made: fixed wording, no record content.

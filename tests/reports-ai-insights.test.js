@@ -180,6 +180,22 @@ test('fields the organisation blocks are left out of the lines, but the assignee
   assert.deepEqual(pack.people.map((p) => p.name).sort(), [MARCUS, PRIYA].sort(), 'still masked wherever they turn up');
 });
 
+test('a blocked category, configuration item or state column leaves its values out of the quality and fulfilment lines', async () => {
+  const entries = await loadAll();
+  const open = insightsParts(buildInsightsPack(entries)).map((p) => p.text).join('\n');
+  // the values are there when nothing is blocked (what the check below takes away)
+  for (const value of ['Top categories: Hardware', 'Top configuration items: mail-server-01', 'by state: In Progress', 'state Work in Progress']) assert.ok(open.includes(value), value);
+  const pack = buildInsightsPack(entries, { blockedFields: ['Category', 'cmdb_ci', 'state'] });
+  const text = insightsParts(pack).map((p) => p.text).join('\n');
+  assert.ok(!/Top categories|Hardware/.test(text), 'no category names');
+  assert.ok(!/Top configuration items|mail-server-01/.test(text), 'no configuration item names');
+  assert.ok(!/by state:|In Progress|On Hold|Work in Progress/.test(text), 'no state names');
+  assert.match(text, /RITM9: \d+ days old/, 'the oldest item is still listed, without its state');
+  // one blocked column takes only its own line
+  const noCi = insightsParts(buildInsightsPack(entries, { blockedFields: ['cmdb_ci'] })).map((p) => p.text).join('\n');
+  assert.ok(noCi.includes('Top categories: Hardware') && !noCi.includes('mail-server-01') && noCi.includes('state Work in Progress'));
+});
+
 test('a "mine" dashboard has no per-person board to describe', async () => {
   const inst = dashboardWorld();
   const entries = [];

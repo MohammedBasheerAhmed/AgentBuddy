@@ -119,9 +119,12 @@ export function createTokenizer() {
       };
     },
 
-    /** Original values handed out so far. For the firewall's own leak check only; never exposed by the firewall. */
+    /**
+     * Original values handed out so far, with their label ({ label: 'SECRET', value }): the leak check looks for a password inside
+     * a longer word too. For the firewall's own leak check only; never exposed by the firewall.
+     */
     originals() {
-      return [...reverse.values()];
+      return [...reverse].map(([placeholder, value]) => ({ label: placeholder.slice(1, placeholder.lastIndexOf('_')), value }));
     },
 
     /** How many distinct placeholders exist. */

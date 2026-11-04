@@ -52,7 +52,7 @@ export function cleanParams(input) {
  * src/content/policyGuard.js from the managed policy merged with the panel's): the Table API read is taken from there, so the
  * guard's checks apply to reports exactly as to every other read (blocked tables, dot-walked columns through a blocked table, rows
  * of a blocked class in `task`). The guarded reads carry no Aggregate API call, so `aggregate` is the table client's own, behind the
- * same guard's isBlocked() for the table and for every table a dot-walked group-by column passes through.
+ * same guard's checkRead(): the table, and every table a dot-walked group-by, average or query column passes through.
  * Tests call the operations without `ctx`: then the injected deps are used as they are.
  */
 export function readsFor(base, ctx) {
@@ -62,9 +62,13 @@ export function readsFor(base, ctx) {
   // If the content script's reads ever carry their own (guarded) Aggregate API call, that one is used underneath.
   const aggregateRead = typeof guarded.aggregate === 'function' ? guarded.aggregate : base.aggregate;
   const aggregate = async (table, options = {}) => {
-    const steps = [...(options.groupBy || []), ...(options.avgFields || [])].flatMap((f) => String(f).toLowerCase().split('.').slice(0, -1));
-    const hit = [table, ...steps].find((t) => isBlocked(t));
-    if (hit) throw blockedError(hit);
+    // The guard's own check for a read it does not make: the table, every table a dot-walked column passes through (by the table the
+    // reference column points at, not by the column's name), in the group-by and average columns and in the query's conditions.
+    if (typeof guarded.checkRead === 'function') {
+      guarded.checkRead(table, options.query, [...(options.groupBy || []), ...(options.avgFields || [])]);
+    } else if (isBlocked(table)) {
+      throw blockedError(String(table || '').toLowerCase());
+    }
     return aggregateRead(table, options);
   };
   return { deps: { queryTable: guarded.queryTable, aggregate }, isBlocked };

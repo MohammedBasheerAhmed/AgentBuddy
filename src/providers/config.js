@@ -242,6 +242,9 @@ function azureProblem({ baseUrl, model, options }) {
  * The active { provider, model, apiKey, baseUrl, keyOptional, local, azure? } from the effective settings (see
  * src/policy/policy.js) and a key from the key store. The key is passed in because it lives in the key store, not in settings.
  * With a custom base URL, or a provider with a free model id, the model is whatever was typed; otherwise it must be listed.
+ * A model the organisation's policy allows (`settings.allowedModels`, which effectiveSettings sets from the policy) counts as listed:
+ * otherwise the policy's model would be swapped for the provider's default here and then refused by checkProviderAllowed, and no
+ * AI call could ever be made.
  * For Azure the model is the deployment name and `azure` is { form: 'v1' | 'deployment', apiVersion }.
  */
 export function resolveProviderConfig(settings = {}, apiKey = '') {
@@ -250,7 +253,7 @@ export function resolveProviderConfig(settings = {}, apiKey = '') {
   const base = effectiveBaseUrl(provider, settings.baseUrls?.[provider]);
   const baseUrl = base.ok ? base.url : '';
   const chosen = typeof settings.models?.[provider] === 'string' ? settings.models[provider].trim() : '';
-  const known = def.models.some((m) => m.id === chosen);
+  const known = def.models.some((m) => m.id === chosen) || (Array.isArray(settings.allowedModels) && settings.allowedModels.includes(chosen));
   const model = chosen && (known || def.freeModel || baseUrl) ? chosen : def.defaultModel;
   const config = {
     provider,

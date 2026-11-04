@@ -7,7 +7,9 @@
 // the error code 'BLOCKED_TABLE' before a request is made:
 //
 //   - the table named in the call, case-insensitively;
-//   - a table named by a dot-walked column ('sc_item_option.item_option_new.question_text' reads sc_item_option and item_option_new);
+//   - every table a dot-walked column passes through, in the columns asked for and in the query's conditions: each step is a reference
+//     column, checked by the table it points at (DOT_WALK_TABLES: 'request.requested_for' reads sc_request, 'user.user_name' reads
+//     sys_user); a step that is not on that list is refused while anything is blocked;
 //   - sys_journal_field rows whose `name` is a blocked table (the notes of a record of a blocked table), by the query and, as a
 //     second check, by the rows that come back;
 //   - `task` reads whose rows are of a blocked class (a child task that is an incident when incident is blocked): sys_class_name is
@@ -76,6 +78,56 @@ export function mergePanelPolicy(state, panel) {
   return { known: true, policy: { ...state.policy, allowHrContent }, blocked, sensitivePrefixes };
 }
 
+// The table each reference column Agent Buddy dot-walks through points at. A step's own name says nothing about the table it reads
+// ('request' leads to sc_request, 'user' to sys_user), so a blocked table is matched against these. Only the columns some read in
+// src/ walks are listed: tests/policy-hardening-dotwalk.test.js finds every dot-walk in src/ and fails when a step is missing here, and
+// the guard refuses a step it does not know while anything is blocked, so a new dot-walk cannot pass a blocked table unnoticed.
+export const DOT_WALK_TABLES = Object.freeze({
+  __proto__: null,
+  // a requested item's variables (sc_item_option_mtom -> sc_item_option -> item_option_new)
+  sc_item_option: Object.freeze(['sc_item_option']),
+  item_option_new: Object.freeze(['item_option_new']),
+  // a requested item's request, a catalog task's requested item
+  request: Object.freeze(['sc_request']),
+  request_item: Object.freeze(['sc_req_item']),
+  // the ticket an SLA or an approval belongs to
+  task: Object.freeze(['task']),
+  sysapproval: Object.freeze(['task']),
+  // a membership's group and user; a ticket's customer (a customer contact is a sys_user row too: customer_contact extends it)
+  group: Object.freeze(['sys_user_group']),
+  user: Object.freeze(['sys_user']),
+  caller_id: Object.freeze(['sys_user']),
+  requested_for: Object.freeze(['sys_user']),
+  requested_by: Object.freeze(['sys_user']),
+  opened_for: Object.freeze(['sys_user']),
+  contact: Object.freeze(['customer_contact', 'sys_user']),
+});
+
+/**
+ * The tables a dot-walked column reads on its way ('request.requested_for' -> ['sc_request']; a plain column -> []), or null when a
+ * step is not in DOT_WALK_TABLES. The last part is the column read at the end, not a table.
+ */
+export function walkTables(column) {
+  const steps = String(column ?? '').trim().toLowerCase().split('.').slice(0, -1);
+  const tables = [];
+  for (const step of steps) {
+    const to = DOT_WALK_TABLES[step];
+    if (!to) return null;
+    tables.push(...to);
+  }
+  return tables;
+}
+
+// The columns the conditions (and sort orders) of an encoded query name: "active=true^ORtask.assigned_to=x^ORDERBYDESCopened_at" ->
+// ['active', 'task.assigned_to', 'opened_at']. A doubled caret is a caret inside a value, not the start of a condition.
+const QUERY_COLUMN_RE = /^(?:NQ|OR|ORDERBYDESC|ORDERBY|GROUPBY)?([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)/;
+const queryColumns = (query) =>
+  String(query || '')
+    .replace(/\^\^/g, '\u0000')
+    .split('^')
+    .map((part) => QUERY_COLUMN_RE.exec(part.trim())?.[1] || '')
+    .filter(Boolean);
+
 // Clauses of an encoded query: "name=incident^element_id=...^ORDERBYDESCsys_created_on" -> [['name', '=', 'incident'], ...].
 // Column names are lower case and operators upper case in an encoded query, which keeps "business_service" from being read as "bus" + IN.
 function clausesOf(query) {
@@ -141,9 +193,14 @@ export function createPolicyGuard({ getManaged = readManaged, now = Date.now, tt
       if (!blocked.size) return;
       const name = lower(table);
       if (blocked.has(name)) refuse(name);
-      for (const field of Array.isArray(fields) ? fields : []) {
-        if (typeof field !== 'string' || !field.includes('.')) continue;
-        for (const step of field.toLowerCase().split('.').slice(0, -1)) if (blocked.has(step)) refuse(step);
+      const columns = [...(Array.isArray(fields) ? fields : []), ...queryColumns(query)];
+      for (const column of columns) {
+        if (typeof column !== 'string' || !column.includes('.')) continue;
+        const walked = walkTables(column);
+        // A dot-walk through a column this file does not know: which table it reads cannot be told, so it is not read.
+        if (!walked) refuse(column.toLowerCase().split('.').find((step) => !DOT_WALK_TABLES[step]));
+        const hit = walked.find((t) => blocked.has(t));
+        if (hit) refuse(hit);
       }
       if (name === 'sys_journal_field') {
         for (const [column, op, value] of clausesOf(query)) {
@@ -197,7 +254,8 @@ export function createPolicyGuard({ getManaged = readManaged, now = Date.now, tt
     for (const op of ['countRecords', 'countByColumn']) {
       if (typeof deps[op] === 'function') {
         wrapped[op] = async (table, query, ...rest) => {
-          checkCall(table, query, []);
+          // (countByColumn's third argument is the column it groups by: a dot-walk there reads its tables too)
+          checkCall(table, query, op === 'countByColumn' && typeof rest[0] === 'string' ? [rest[0]] : []);
           return deps[op](table, query, ...rest);
         };
       }
@@ -215,7 +273,9 @@ export function createPolicyGuard({ getManaged = readManaged, now = Date.now, tt
         return checkRows(table, await deps.queryAll(table, query, fieldsFor(table, fields), options));
       };
     }
-    return Object.freeze({ ...deps, ...wrapped, isBlocked, sensitivePrefixes: s.known ? s.sensitivePrefixes : undefined });
+    // checkRead(table, query, columns): the same checks for a read made some other way (the reports' Aggregate API call): throws
+    // BLOCKED_TABLE for a blocked table or a dot-walk through one, in the columns or the query's conditions.
+    return Object.freeze({ ...deps, ...wrapped, isBlocked, checkRead: checkCall, sensitivePrefixes: s.known ? s.sensitivePrefixes : undefined });
   }
 
   return {

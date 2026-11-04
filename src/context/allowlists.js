@@ -30,8 +30,9 @@ export const LIMITS = {
   variables: 40,
   relatedRows: 20,
   relatedText: 200,
+  // Note authors put on the people list. Everyone a column or a related row names is always on it, however many (src/context/people.js);
+  // so are the people named on rows of OTHER tickets (pack.js referencePeople): those rows are capped where they are read.
   people: 30,
-  referencePeople: 40, // names read from rows of OTHER tickets (linked incidents, look-alikes...), added to the pack only to be masked
   historyRows: 10,
   historyCloseNotes: 400,
   similarCloseNotes: 600,

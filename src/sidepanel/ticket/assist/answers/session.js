@@ -117,7 +117,10 @@ export const peekRun = (key) => runs.get(key) || null;
 /** Every ticket's run, for the line about other tickets: { key, phase, number }. */
 export const allRuns = () => [...runs.values()].map((r) => ({ key: r.key, phase: r.state.phase, number: r.number }));
 
-/** Forget every answer and stop every run (the site was turned off, Settings "Clear all", a test). */
+/**
+ * Forget every answer and stop every run: Settings "Clear everything stored by Agent Buddy" and a site turned off (the panel hears of
+ * both through chrome.storage: src/sidepanel/forgetOnClear.js), and tests.
+ */
 export function forgetAnswers() {
   for (const r of runs.values()) r.ctl.dispose();
   runs.clear();
