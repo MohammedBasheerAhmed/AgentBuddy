@@ -15,6 +15,7 @@ const FEATURE_ICONS = {
   'problem-rca': 'search',
   'change-cab-brief': 'clipboard',
   'account-briefing': 'users',
+  'caller-briefing': 'user',
   'case-eng-escalation': 'arrowUp',
   'hr-case-brief': 'clipboard',
   'article-optimise': 'pen',
@@ -44,6 +45,7 @@ const CARD_ICONS = {
   article: 'file',
   chat: 'message',
   account: 'users',
+  caller: 'user',
   missing: 'help',
   routing: 'navigation',
   steps: 'enter',
@@ -60,6 +62,12 @@ const CARD_ICONS = {
 
 /** The icon name for an Insights card id; a plain chevron for one this table does not know (never the AI spark: a card sends nothing). */
 export const cardIcon = (id) => CARD_ICONS[id] || 'chevronRight';
+
+// The icon of each of the five pain points (src/features/focus.js PAIN_POINTS): their rows in Insights and the side rail.
+const PAIN_ICONS = { understand: 'eye', fix: 'tool', caller: 'user', reply: 'reply', close: 'checkCircle' };
+
+/** The icon name for a pain point id. */
+export const painIcon = (id) => PAIN_ICONS[id] || 'chevronRight';
 
 // The icon of each screen of the panel (src/profiles/profiles.js SCREENS): the icon bar at the bottom of the panel shows these.
 const SCREEN_ICONS = { ticket: 'ticket', mywork: 'inbox', team: 'users', write: 'pen', knowledge: 'book' };

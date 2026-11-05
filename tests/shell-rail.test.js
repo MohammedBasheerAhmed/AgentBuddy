@@ -4,12 +4,11 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRailStore, railShape } from '../src/sidepanel/shell/railStore.js';
 import { SideRail, railItemName, goToSection } from '../src/sidepanel/shell/SideRail.jsx';
-import { arrangeRail, assistDefaultOrder, cleanRailLayout, railPrefsFor, setRailPrefs } from '../src/features/railLayout.js';
 import { DEFAULT_SETTINGS } from '../src/policy/policy.js';
 
-// The side rail (2026-11-05 layout): the store between the screens and the shell, the rail itself (first render), and the person's
-// arrangement of the Ticket screen's rail (Settings > Side rail). Clicking, the tip and the keyboard are covered in a real browser by
-// the e2e scenarios.
+// The side rail (2026-11-05 layout): the store between the screens and the shell, the rail itself (first render), and the settings
+// that draw it (off until the person turns it on: docs/focus-layout.md). Clicking, the tip and the keyboard are covered in a real
+// browser by the e2e scenarios.
 
 const item = (id, more = {}) => ({ id, label: id.toUpperCase(), icon: 'link', ...more });
 
@@ -97,38 +96,10 @@ test('goToSection opens a folded section first, then brings it into view and foc
   assert.deepEqual(calls, ['open', 'scroll auto', 'attr tabindex=-1', 'focus']);
 });
 
-test('railLayout: the person\'s order first (only what the record offers), then the rest in the default order; hidden left out', () => {
-  const ids = ['sla', 'related', 'knowledge', 'outage'];
-  assert.deepEqual(arrangeRail(ids, {}).shown, ids);
-  const got = arrangeRail(ids, { order: ['outage', 'gone', 'related'], hidden: ['knowledge'] });
-  assert.deepEqual(got.shown, ['outage', 'related', 'sla']);
-  assert.deepEqual(got.hidden, ['knowledge']);
-  assert.deepEqual(got.all.map((x) => `${x.id}${x.hidden ? '-' : ''}`), ['outage', 'related', 'sla', 'knowledge-']);
-});
-
-test('railLayout: the AI actions follow the ticket\'s state unless that is switched off', () => {
-  const ids = ['record-summary', 'reply-draft', 'resolution-notes', 'kb-article-draft', 'handoff-brief'];
-  assert.deepEqual(assistDefaultOrder(ids, { kind: 'incident', stage: 'resolve' }).slice(0, 2), ['resolution-notes', 'kb-article-draft']);
-  assert.deepEqual(assistDefaultOrder(ids, { kind: 'incident', stage: 'resolve', byState: false }), ids);
-  assert.equal(assistDefaultOrder(ids, { kind: 'incident' }).length, ids.length, 'nothing lost, nothing added');
-});
-
-test('railLayout: setting, reading back and cleaning a stored layout', () => {
-  let layout = setRailPrefs({}, 'incident', 'assist', { order: ['reply-draft'], hidden: ['handoff-brief'] });
-  assert.deepEqual(railPrefsFor(layout, 'incident', 'assist'), { order: ['reply-draft'], hidden: ['handoff-brief'], arranged: true });
-  assert.deepEqual(railPrefsFor(layout, 'incident', 'insights'), { order: [], hidden: [], arranged: false });
-  layout = setRailPrefs(layout, 'incident', 'assist', null);
-  assert.deepEqual(layout, {}, 'back to the defaults leaves nothing behind');
-  assert.deepEqual(cleanRailLayout({ incident: { insights: { order: ['a', 'a', 3, 'b'] }, other: { order: ['x'] } }, bad: 'x', change: [] }), {
-    incident: { insights: { order: ['a', 'b'], hidden: [] } },
-  });
-  assert.deepEqual(cleanRailLayout('nonsense'), {});
-});
-
-test('the settings know the rail: names hidden, nothing arranged, the AI actions following the ticket\'s state', () => {
+test('the settings know the rail: not drawn and its names hidden until the person turns them on; nothing left to arrange', () => {
+  assert.equal(DEFAULT_SETTINGS.railShow, false);
   assert.equal(DEFAULT_SETTINGS.railNames, false);
-  assert.deepEqual(DEFAULT_SETTINGS.railLayout, {});
-  assert.equal(DEFAULT_SETTINGS.railByState, true);
+  assert.ok(!('railLayout' in DEFAULT_SETTINGS) && !('railByState' in DEFAULT_SETTINGS), 'the per-kind order and hide lists are gone');
 });
 
 test('every Insights card has its own icon in the set, and none of them is the AI spark', async () => {

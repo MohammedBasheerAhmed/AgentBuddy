@@ -5,9 +5,9 @@ import { needsNow } from './needsNow.js';
 
 /**
  * What needs the agent now on the record on screen (needsNow.js: the SLA, a customer waiting, a possible outage), for the first rows of
- * the Insights half and the number on its tab. It listens to the Glance's read and makes none of its own (`active: false`: the Glance
- * at the top always reads it), with a clock that moves once a minute ("due in 40 min").
- * @param {{ page, record, eff, header, headPhase: string, cards: { id: string }[] }} input   cards: the Insights cards this record shows
+ * "Understand the ticket" (its line and its dot, and so the number on the Insights tab). It listens to the Glance's read and makes
+ * none of its own (`active: false`: the Glance at the top always reads it), with a clock that moves once a minute ("due in 40 min").
+ * @param {{ page, record, eff, header, headPhase: string, cards: { id: string }[] }} input   cards: the Insights cards drawn in the list
  */
 export function useNeeds({ page, record, eff, header, headPhase, cards }) {
   const facts = useTicketFacts({ page, record, eff, active: false });

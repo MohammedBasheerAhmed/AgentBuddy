@@ -2,7 +2,7 @@
 // docs/round3.md; TRACKER.md AI0.4, AI0.5, AI0.2 preview, AI23 on an answer).
 //
 // useAnswers({ page, eff, record }) -> { run(feature, options), busy, reset, ... }   every AI call still goes through useRun's flow
-// AnswerArea props: { assist, page, eff, record, active }      AskBox props: { assist, page, eff, record }
+// AnswerArea props: { assist, page, eff, record, active }      AskBox props: { assist, page, eff, record, focusAt }
 //
 // The runs and answers are kept per ticket in memory (session.js), not per view: TicketView stays mounted across records and this
 // hook switches to the ticket on show by itself. Nobody needs to call reset() when the record changes.

@@ -79,7 +79,7 @@ module.exports = {
       // ---- Ticket -------------------------------------------------------------------------------------------------------------
       await openScreen(p, 'Ticket');
       await openHalf(p, 'insights');
-      await waitForText(p, 'Related tickets', { timeout: 20000 });
+      await waitForText(p, 'Understand the ticket', { timeout: 20000 });
       await settle();
       await look(p, 'Ticket / Insights', scheme);
       const opened = await openCards(p);

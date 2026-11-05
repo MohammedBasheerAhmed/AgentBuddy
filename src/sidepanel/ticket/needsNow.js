@@ -1,14 +1,14 @@
-// What needs the agent now, as the first rows of the Ticket screen's Insights half (the 2026-11-05 layout: they used to be a block
-// called "Needs you now" at the top of the screen). Plain sentences built only from what the screen already has, the most urgent
-// first. No read of its own and no AI: the SLA, a customer waiting and a possible outage come from the Glance (the `glance` read every
-// card shares, src/insights/glance.js buildGlance). The Insights cards that need a look are not repeated here: their own rows come
-// first among the cards (TicketInsights arrangeRows). Pure: tests/ticket-needs-now.test.js.
+// What needs the agent now, as the first rows of "Understand the ticket", the first of the five rows of the Ticket screen's Insights
+// half (docs/focus-layout.md; they used to be a block called "Needs you now" at the top of the screen). Plain sentences built only from
+// what the screen already has, the most urgent first. No read of its own and no AI: the SLA, a customer waiting and a possible outage
+// come from the Glance (the `glance` read every card shares, src/insights/glance.js buildGlance). The first of them is that row's one
+// line, and they count for its dot (focusView.js). The Insights cards that need a look are not repeated here: their own rows say so.
+// Pure: tests/ticket-needs-now.test.js.
 
 import { shortSpan } from '../../insights/time.js';
 import { t, tn } from '../../i18n/index.js';
 
 const RANK = { danger: 0, warn: 1 };
-const LOOK = new Set(['danger', 'warn']);
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
 /** The SLA as one item, or null: breached (danger) or due within the hour (warn). */
@@ -38,11 +38,12 @@ function waitingItem(wait) {
 
 /**
  * The facts of the Glance that need a look: the SLA, a customer waiting, a possible outage; the most urgent first (danger before
- * warn). Empty when nothing needs a look. A possible outage is said here only when the record does not show the Outage spotter card:
- * that card says the same line from the same read, and its row comes first among the cards when it does (said once, never twice).
+ * warn). Empty when nothing needs a look. A possible outage is said here only when the Outage spotter card is not among the cards
+ * drawn in the list: that card says the same line from the same read (said once, never twice). Since the focus layout it is under
+ * All tools, so the list never has it and the outage is said here.
  * @param {{
  *   glance: { sla?: object, waiting?: object, outage?: { line: string }|null }|null,   buildGlance's answer
- *   cards?: { id: string }[],   the Insights cards this record shows
+ *   cards?: { id: string }[],   the Insights cards drawn in the list (the five rows' cards)
  * }} input
  * @returns {{ id: 'sla'|'waiting'|'outage', level: 'danger'|'warn', text: string, sub: string }[]}
  */
@@ -54,13 +55,4 @@ export function needsNow({ glance = null, cards = [] } = {}) {
     .map((item, i) => ({ item, i }))
     .sort((a, b) => RANK[a.item.level] - RANK[b.item.level] || a.i - b.i)
     .map((x) => x.item);
-}
-
-/**
- * How many rows of the Insights half need a look: these facts and the cards that reported 'danger' or 'warn'. The Insights tab shows
- * the number. Pure.
- * @param {{ needs?: object[], cards?: { id: string }[], reports?: Record<string, { attention?: string }> }} input
- */
-export function needsCount({ needs = [], cards = [], reports = {} } = {}) {
-  return needs.length + cards.filter((c) => LOOK.has(reports?.[c.id]?.attention)).length;
 }

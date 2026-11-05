@@ -66,12 +66,12 @@ test('no key ever: not the person\'s, not the organisation\'s, not a preview or 
   assert.match(diagnosticsText({ eff: personal }), /Model: \[hidden\]/, 'a key pasted as the model name is hidden');
 });
 
-test('the side rail: how many kinds have an arranged rail, and whether a kind left alone follows the ticket\'s state; never the ids', () => {
-  const layout = { incident: { insights: { order: ['related'], hidden: [] } }, change: { assist: { order: [], hidden: ['reply-draft'] } }, problem: { insights: {} }, '<b>': 'x' };
-  const text = diagnosticsText({ eff: effOf({ railLayout: layout, railByState: false }) });
-  assert.match(text, /Side rail: arranged for 2 kind\(s\); what fits the ticket's state first: no\n/);
-  assert.ok(!/related|reply-draft/.test(text), 'what was arranged stays on the computer');
-  assert.match(diagnosticsText({ eff: effOf() }), /Side rail: arranged for 0 kind\(s\); what fits the ticket's state first: yes\n/);
+test('the side rail: whether it is drawn and whether it shows its names; an old arrangement left in storage is not copied', () => {
+  assert.match(diagnosticsText({ eff: effOf() }), /Side rail: no; names shown: no\n/);
+  assert.match(diagnosticsText({ eff: effOf({ railShow: true, railNames: true }) }), /Side rail: yes; names shown: yes\n/);
+  assert.match(diagnosticsText({ eff: effOf({ railShow: 'yes' }) }), /Side rail: no;/, 'only true is on');
+  const old = diagnosticsText({ eff: effOf({ railLayout: { incident: { insights: { order: ['related'], hidden: [] } } }, railByState: false }) });
+  assert.ok(!/related|arranged|state first/.test(old), 'the removed settings say nothing');
 });
 
 test('anything odd in settings or the log is left out rather than copied', () => {
@@ -147,8 +147,8 @@ test('the two pages are tabs, not filled buttons; a section has at most one fill
 });
 
 test('on/off choices are switches: a real check box with role="switch", inside its label; a locked one is off and says why', () => {
-  const quick = draw(RailSection, { eff: effOf(), reload: () => {} });
-  for (const id of ['rail-by-state', 'page-bar']) {
+  const quick = draw(RailSection, { eff: effOf({ railShow: true, railNames: true }), reload: () => {} });
+  for (const id of ['rail-show', 'rail-names', 'page-bar']) {
     assert.match(quick, new RegExp(`<label class="ab-set-switch" for="${id}"><span class="ab-set-switch-text">[^<]+</span><input id="${id}" type="checkbox" role="switch"[^>]*checked=""`), id);
   }
   const locked = draw(RailSection, { eff: effOf({}, { disablePageBar: true }), reload: () => {} });

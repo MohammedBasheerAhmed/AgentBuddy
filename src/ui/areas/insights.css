@@ -1,7 +1,8 @@
-/* insights: the Ticket screen (src/sidepanel/ticket): the ticket at the top, the Insights / AI Assist tabs and the Insights half's rows
-   (what needs the agent now, then the cards; one card alone when the side rail chose it). Only --ab-* tokens. Calm: no box around the
-   ticket, no boxes inside a card, long text wraps and nothing scrolls sideways at 320 px (the rail takes 48 px of it). No AI colours
-   here: Insights uses the green accent. */
+/* insights: the Ticket screen (src/sidepanel/ticket): the ticket at the top, the Insights / AI Assist tabs and the Insights half's five
+   rows (one per pain point; "Understand the ticket" starts with what needs the agent now; one card alone when All tools, the rail or a
+   link asked for it), and the quiet way to All tools at the end of each half. Only --ab-* tokens. Calm: no box around the ticket, no
+   boxes inside a card, long text wraps and nothing scrolls sideways at 320 px (the rail takes 48 px of it). No AI colours here:
+   Insights uses the green accent. */
 
 /* ---- N1, the ticket at the top: compact, no box ---- */
 .ab-glance { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 2px; }
@@ -37,29 +38,50 @@
 /* the line that says where data goes, at the end of each half (in AI Assist with the model in use beside it) */
 .ab-ticket .ab-halfrule { margin: 0; }
 .ab-ticket .ab-ticket-foot { margin-top: 4px; }
-/* a heading the rail put the focus on: no ring around words (the rail item shows where the person is) */
-.ab-ticket :is(.ab-ins-focus-title, .ab-act-head)[tabindex='-1']:focus { outline: none; box-shadow: none; }
+/* a heading the focus was put on: no ring around words (the person chose the card a moment ago) */
+.ab-ticket .ab-ins-focus-title[tabindex='-1']:focus { outline: none; box-shadow: none; }
 
-/* ---- the Insights half: one list of rows ---- */
+/* ---- the Insights half: the five rows (one per pain point); each opens in place ---- */
 .ab-ins { display: flex; flex-direction: column; min-width: 0; }
-.ab-ins-card-toggle, .ab-ins-clear-toggle { min-height: 44px; }
+.ab-ins-group-row { align-items: center; min-height: 56px; }
+.ab-ins-group-row:focus-visible { box-shadow: inset 0 0 0 2px var(--ab-accent); border-radius: 0; }
+/* the pain point's icon in a small tile; a dot on its corner when the row needs a look */
+.ab-ins-tile { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); color: var(--ab-fg-soft); }
+.ab-ins-tile-dot { position: absolute; top: -3px; inset-inline-end: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--ab-warn); box-shadow: 0 0 0 2px var(--ab-bg); }
+.ab-ins-tile-dot.is-danger { background: var(--ab-danger); }
+.ab-ins-pain-title { font-weight: 600; }
+/* the row's one line: one line, cut with an ellipsis (the row opens to the rest) */
+.ab-ins-pain-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.ab-ins-pain-body { display: flex; flex-direction: column; min-width: 0; }
+.ab-ins-pain-body[hidden] { display: none; }
+/* inside a row: the facts, then its cards, parted by one divider */
+.ab-ins-pain-body > :not([hidden]) ~ :not([hidden]) { border-top: 1px solid var(--ab-divider); }
+/* the only card of a row: its content straight under the row, in line with the panel's text */
+.ab-ins-solo > .ab-ins-card-body { padding-inline-start: 16px; }
+
+/* ---- a card as a row (a row of the five with several cards, or a card shown alone) ---- */
+.ab-ins-card-toggle { min-height: 44px; }
 .ab-ins-card-toggle > .ab-dot { margin-top: 7px; }
 /* a card's one-line answer: two lines at most on its row (the card itself has the rest) */
 .ab-ins-card-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ab-ins-card-chevron { margin-top: 3px; }
-.ab-ins-card-toggle:focus-visible, .ab-ins-clear-toggle:focus-visible { box-shadow: inset 0 0 0 2px var(--ab-accent); border-radius: 0; }
+.ab-ins-group-row > .ab-ins-card-chevron { margin-top: 0; }
+.ab-ins-card-toggle:focus-visible { box-shadow: inset 0 0 0 2px var(--ab-accent); border-radius: 0; }
 .ab-ins-card-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-block: 0 14px; padding-inline: 36px 16px; }
 .ab-ins-card-body[hidden] { display: none; }
-/* the cards with nothing to report, under "All clear in ...": set in one step */
-.ab-ins-card.is-clear > .ab-ins-card-toggle { padding-inline-start: 36px; }
-.ab-ins-card.is-clear > .ab-ins-card-body { padding-inline-start: 56px; }
-.ab-ins-clear-mark { flex: none; display: inline-flex; margin-top: 1px; color: var(--ab-ok); }
-.ab-ins-clear-text { color: var(--ab-fg-muted); }
 
-/* ---- what needs the agent now: the first rows, plain (a dot, one sentence, a quiet line); nothing to click ---- */
+/* ---- what needs the agent now: the first rows of "Understand the ticket", plain (a dot, one sentence, a quiet line); nothing to click ---- */
 .ab-ins-need-row > .ab-dot { margin-top: 7px; }
 
-/* ---- one card alone (the side rail chose it): "All insights" to go back, the card's name as a heading, its content open ---- */
+/* ---- "More for this ticket: n ...": the quiet way to All tools at the end of each half (AI Assist's too): accent words, no fill ---- */
+button.ab-row.ab-more-tools { align-items: center; min-height: 44px; color: var(--ab-accent); font-size: var(--ab-text-md); font-weight: 500; }
+button.ab-row.ab-more-tools:hover { color: var(--ab-accent-hover); }
+button.ab-row.ab-more-tools:focus-visible { box-shadow: inset 0 0 0 2px var(--ab-accent); border-radius: 0; }
+.ab-more-tools > .ab-icon { flex: none; color: currentColor; }
+.ab-more-tools-text { overflow-wrap: anywhere; }
+div.ab-more-row { border-top: 1px solid var(--ab-divider); }
+
+/* ---- one card alone (All tools, the rail, the bar on the page, a link): "Back" to the five, the card's name as a heading, its content open ---- */
 .ab-ins-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: 0; padding-block: 0; padding-inline: 0 4px; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-accent); font-size: var(--ab-text-md); font-weight: 500; cursor: pointer; }
 .ab-ins-back:hover { color: var(--ab-accent-hover); text-decoration: underline; text-underline-offset: 2px; }
 .ab-ins.is-focus > .ab-ins-cards > .ab-ins-card.is-focus { border-top: 0; }

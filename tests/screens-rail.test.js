@@ -132,12 +132,14 @@ async function onScreen(screen, label, { Insights, Assist = null, page, eff, ext
   );
   assert.equal(ui.errors.length, 0, ui.errors.join('\n'));
   const rail = () => store.getSnapshot()[screen] || null;
+  // The sections; "All tools" closes every rail that has any (docs/focus-layout.md) and is checked on its own below.
+  const sections = () => (rail()?.items || []).filter((it) => it.id !== 'all-tools');
   return {
     ui,
     store,
     rail,
-    items: () => (rail()?.items || []).map(({ id, label: name, icon, attention }) => ({ id, label: name, icon, attention })),
-    ids: () => (rail()?.items || []).map((it) => it.id),
+    items: () => sections().map(({ id, label: name, icon, attention }) => ({ id, label: name, icon, attention })),
+    ids: () => sections().map((it) => it.id),
     select: (id) => during(() => store.select(screen, id)),
   };
 }
@@ -181,6 +183,8 @@ test('My work: the rail lists its four sections in the page\'s order, named as o
   assert.equal(s.rail().title, 'My work', 'one half: the rail is titled by the screen');
   const S = MYWORK_SECTIONS;
   assert.deepEqual(s.items(), [entry(S.queue, { attention: 'warn' }), entry(S.approvals, { attention: 'warn' }), entry(S.followUps), entry(S.groups)]);
+  const last = s.rail().items.at(-1);
+  assert.deepEqual({ id: last.id, label: last.label, icon: last.icon, separator: last.separator }, { id: 'all-tools', label: 'All tools', icon: 'grid', separator: true }, '"All tools" closes the rail, below a line');
   // The cards are still siblings (the line between two cards needs that): nothing is wrapped around them, the rail's mark is hidden.
   const cards = s.ui.$$('.ab-mywork > .ab-cardx');
   assert.deepEqual(cards.map((c) => c.getAttribute('data-card')), ['mywork-queue', 'mywork-approvals', 'mywork-followups', 'mywork-groups']);

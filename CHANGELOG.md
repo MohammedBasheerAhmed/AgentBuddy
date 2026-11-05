@@ -5,6 +5,36 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Five pain points first, everything else in All tools (the focus layout you approved as a mockup, 2026-11-05)
+- Your leaders saw Agent Buddy: "looks promising but has too many features and looks cluttered"; solve the main pain points, three to
+  five at most. You chose the five (understand the ticket, find the fix, the same caller, reply, close well) and that every function
+  stays, reached "through some other way". Mockup boards "Focused" and "All tools" on https://claude.ai/artifact/WMmZMaVbxigc1WP3UrUgj3;
+  spec `docs/focus-layout.md`. Built by three agents in parallel.
+- **Ticket, Insights: five rows**, one per pain point, each with its one-line answer and a dot when it needs a look: Understand the
+  ticket (the SLA, a customer waiting, a possible outage, the ticket's journey; a request's status, a chat's facts), Find the fix (the
+  steps that worked before, the knowledge for this ticket; a request's checklist), Same caller (the caller's other tickets: a new card,
+  "Caller's other tickets"; the account on a case), Reply (the email that fits), Close well (Ready to resolve?). A row opens in place.
+  The number on the tab counts the rows that need a look.
+- **Ticket, AI Assist: five actions**, one per pain point: Summarise, Next best action, **Brief me on this caller** (new), Draft a
+  reply, Resolution notes (on other kinds of record the first one that kind has: the HR case brief, the RCA, the account briefing...).
+  One filled "Start": the one that fits the ticket's state. "Ask about this ticket" opens from All tools.
+- **New AI action, "Brief me on this caller"** (short label "Caller briefing"): what this caller raised before, whether this looks like
+  a repeat, what fixed it last time, what to watch out for. Reads the caller's other tickets (at most 10, GET only, the history read
+  Insights already uses); no name is sent; the check before sending shows the list every time. On an HR case only with the HR rules.
+- **All tools** (was the command palette): the header's grid button or Ctrl+K, a sheet over the panel with a search box, in groups:
+  more for this ticket (the other Insights cards, shown alone with "Back"; Ask about this ticket and the other AI actions, the check
+  before sending first), Go to, Panel (the halves, Settings, colours, languages). Each half ends with "More for this ticket: N ...",
+  which opens All tools at its group.
+- **The header:** the mark, the name, the instance, All tools and Settings (the colours button moved to Settings and All tools).
+- **The side rail is off** unless Settings > Side rail turns it on ("Show the side rail"); then it lists the five (or a screen's
+  sections) and ends with All tools. The per-kind hide and order lists are gone (nothing left to arrange); the page tab's actions stay.
+- The bottom bar keeps the five screens on every screen; My work, Team, Write and Knowledge already show five or fewer per half.
+- Found while integrating: All tools built its list without the ticket's header and without the Ticket screen's own checks, so it missed
+  the major incident updates on a priority 1 incident and offered the checklist from the instructions where the instructions already
+  have steps; the Ticket screen now hands both to All tools. While typing, the best match is the highlighted one (Enter runs it).
+- Unit 3,118; end-to-end 1,193 of 1,193 (scenario x covers the five, All tools and the caller briefing; zx All tools; zw the rail, off by
+  default), with the accessibility audit in light, dark, Arabic and at 320 px.
+
 ### Screens at the bottom, every option in a side rail (the layout you approved as a mockup, 2026-11-05)
 - You said the Ticket screen spent its first screen on the ticket, "Needs you now", one Summarise step and a big quick-actions block,
   with Insights and AI Assist only near the bottom. From a mockup (https://claude.ai/artifact/WMmZMaVbxigc1WP3UrUgj3) you chose: the

@@ -3,7 +3,7 @@
 //    The point: no raw personal data reaches the AI server, the preview shows exactly what is sent, and the answer is
 //    rehydrated locally and rendered as plain text (no image, no link that loads anything).
 const { findLeaks } = require('../leaks.js');
-const { clickButton, waitForText, textOf, waitForRecord, openHalf } = require('../ui.js');
+const { clickButton, waitForText, textOf, waitForRecord, openHalf, chooseTool } = require('../ui.js');
 const { leftoverPlaceholders } = require('../common.js');
 
 const AUDIT_KEYS = ['time', 'feature', 'table', 'record', 'provider', 'model', 'host', 'piiMode', 'preview', 'masked', 'counts', 'inputTokens', 'outputTokens', 'outcome', 'ms', 'reason'];
@@ -32,10 +32,11 @@ module.exports = {
     const shown = await panel.text();
     t.check('panel shows the open record (number and title)', shown.includes('INC0010001') && shown.includes('VPN keeps disconnecting'));
     t.check('panel is ready to use AI (key found by the key store)', !/Add an AI key|Your AI key is locked/.test(shown));
-    // Round 3: the AI actions, the answers and the question box are in the AI Assist half of the Ticket screen.
+    // Round 3: the AI actions and the answers are in the AI Assist half of the Ticket screen; since the focus layout the question box
+    // opens from All tools ("Ask about this ticket", docs/focus-layout.md).
     await openHalf(p, 'assist');
     const assistText = await panel.text();
-    t.check('AI Assist offers the incident actions and the question box', ['Summarise this ticket', 'Draft a reply'].every((s) => assistText.includes(s)) && assistText.includes('Ask about this ticket'), assistText.replace(/\s+/g, ' ').slice(0, 200));
+    t.check('AI Assist offers the incident actions', ['Summarise this ticket', 'Draft a reply'].every((s) => assistText.includes(s)), assistText.replace(/\s+/g, ' ').slice(0, 200));
 
     // ---- 1. Summarise: preview first -----------------------------------------------------------------------------
     await clickButton(p, /^Summarise this ticket/);
@@ -130,6 +131,8 @@ module.exports = {
 
     // ---- 6. Ask about this ticket: the question is data like the ticket, masked, never in the system message -----------------
     const question = `Has ${data.SEED.callerName} tried the new client yet?`;
+    await chooseTool(p, /^Ask about this ticket/);
+    await p.waitForSelector('.ab-ask-input', { visible: true, timeout: 8000 });
     await p.click('.ab-ask-input');
     await p.type('.ab-ask-input', question);
     await p.keyboard.press('Enter');

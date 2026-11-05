@@ -19,7 +19,7 @@ export function AppearanceSection({ eff, reload }) {
             <option key={id} value={id}>{t(THEME_WORDS[id])}</option>
           ))}
         </select>
-        <span className="ab-hint" id="theme-hint">{t('The panel, this page, the team page and the bar on the ServiceNow page. The sun and moon button in the panel switches it too.')}</span>
+        <span className="ab-hint" id="theme-hint">{t('The panel, this page, the team page and the bar on the ServiceNow page. All tools in the panel switches it too.')}</span>
       </div>
       <Status status={status} />
     </section>

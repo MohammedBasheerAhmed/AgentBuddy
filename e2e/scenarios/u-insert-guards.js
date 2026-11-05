@@ -7,19 +7,10 @@
 //    - the knowledge article body is HTML: markup in the text arrives escaped
 //    - a feature that sends other tickets' text as reference material always shows its preview, even in "first time per action" mode
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf } = require('../common.js');
-const { runFeature, waitForVisible, openHalf } = require('../ui.js');
+const { runFeature, waitForVisible, actionOffered, startAction } = require('../ui.js');
 
-/** Unfold "More actions" in AI Assist (round 3: what does not fit the ticket's state waits there). */
 /** Put every answer on screen away (round 3 keeps several answers; a run's own result is then the only one). */
 const closeAnswers = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
-
-async function openMoreActions(p) {
-  await openHalf(p, 'assist');
-  await p.evaluate(() => {
-    const more = window.__vis(document.querySelectorAll('.ab-act-moretoggle')).find((b) => b.getAttribute('aria-expanded') === 'false');
-    if (more) more.click();
-  });
-}
 
 function replier({ system }) {
   if (/work through a ticket step by step/.test(system)) return '- [ ] Check the certificate (general practice)';
@@ -140,15 +131,14 @@ module.exports = {
     const p = panel.page;
     const t2 = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-classic');
     await waitForText(p, data.INCIDENT_NUMBER, { timeout: 20000 });
-    await openMoreActions(p);
-    await waitForText(p, 'Catch up on the discussion', { timeout: 15000 });
+    await ctx.waitUntil('the discussion catch-up to be offered (in All tools)', () => actionOffered(p, /^Catch up on the discussion/), { timeout: 15000 });
     // "Stop waiting" (the progress button of a run; the preview dialog has its own Cancel): the run is dropped, an answer that arrives
     // later is not shown, and the request itself was NOT recalled (it had left)
     await ctx.configure({ previewMode: 'never' });
     await ctx.sleep(400);
     ai.setMode('slow');
     const sentBefore = ai.requests.length;
-    await clickButton(p, /^Catch up on the discussion/);
+    await startAction(p, /^Catch up on the discussion/);
     await waitForText(p, 'Waiting for the AI', { timeout: 10000 });
     await clickButton(p, /^Stop waiting/);
     await ctx.sleep(2300); // the slow answer comes back now

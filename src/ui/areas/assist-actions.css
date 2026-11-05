@@ -1,12 +1,12 @@
 /* assist-actions: the AI actions of the Ticket screen (src/sidepanel/ticket/assist/actions). Only --ab-* tokens; the AI mark is the
-   small grey spark. "Suggested" is a list of rows across the panel (an icon tile, the name, one line); the first row carries the
-   screen's one filled mark, "Start". "More actions" folds the rest into small round buttons by group (TRACKER.md 2.4). */
+   small grey spark. Five rows across the panel, one per pain point (docs/focus-layout.md): the pain point as a small label, then the
+   action (an icon tile, the name, one line); the one that fits the ticket's state best carries the screen's one filled mark,
+   "Start". The rest are in All tools ("More for this ticket", insights.css). */
 
 .ab-acts { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ab-act-head { margin: 0; }
 .ab-act-item { min-width: 0; }
 
-/* ---- a suggested action: the whole row is the button ---- */
+/* ---- an action: the whole row is the button ---- */
 .ab-act-row { align-items: center; padding-block: 9px; }
 .ab-act-row:disabled { cursor: not-allowed; opacity: 0.6; }
 .ab-act-row:disabled:hover { background: transparent; }
@@ -28,24 +28,9 @@
 .ab-act-link .ab-chevron { color: currentColor; }
 .ab-act-empty { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-md); }
 
-/* ---- More actions ---- */
-.ab-acts-more { gap: 6px; }
-.ab-act-moretoggle { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px; padding: 0; border: 0; background: transparent; color: var(--ab-fg); font-weight: 500; text-align: start; cursor: pointer; }
-.ab-act-moretext { flex: 1; min-width: 0; }
-.ab-act-moretoggle .ab-chevron { color: var(--ab-fg-muted); }
-.ab-act-groups { display: flex; flex-direction: column; gap: 12px; padding-bottom: 4px; }
-.ab-act-groups[hidden] { display: none; }
-.ab-act-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ab-act-grouphead { margin: 0; font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-muted); }
-.ab-act-pills { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.ab-act-pill-item { max-width: 100%; }
-.ab-act-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; padding: 4px 12px; border: 1px solid var(--ab-border-strong); border-radius: 999px; background: var(--ab-bg); color: var(--ab-fg); font-size: var(--ab-text-md); font-weight: 500; line-height: 1.3; text-align: start; cursor: pointer; }
-.ab-act-pill:hover:not(:disabled) { background: var(--ab-bg-subtle); border-color: var(--ab-input-border); }
-.ab-act-pill:disabled { opacity: 0.55; cursor: not-allowed; }
-.ab-act-pill .ab-ai-badge { flex: none; }
-.ab-act-note { margin: 0; font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
-.ab-act-note.ab-act-reason { color: var(--ab-fg-soft); }
-.ab-act-note.ab-act-caution { margin: 0; }
+/* ---- the pain point an action answers: a small label above its row, in line with the row's text (16px + 32px tile + 12px) ---- */
+.ab-act-pain { margin: 0; padding-block: 10px 0; padding-inline: 60px 16px; font-size: var(--ab-text-xs); font-weight: 500; line-height: 1.35; color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-act-item > .ab-act-pain + .ab-act-row { padding-top: 2px; }
 
 /* An AI email draft waiting on the email form of its ticket (src/sidepanel/PendingDraft.jsx, AI9): a soft panel like an answer. */
 .ab-pending-email { display: flex; flex-direction: column; gap: 8px; min-width: 0; }

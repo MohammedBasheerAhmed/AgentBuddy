@@ -114,8 +114,9 @@ export function showCard(id, onShowCard) {
   const frame = document.querySelector(`[data-card="${id}"]`);
   if (!frame) return;
   const open = () => {
-    // A card with nothing to report waits under "All clear in ...": open that row first.
-    if (frame.hasAttribute('hidden')) frame.parentElement?.querySelector('.ab-ins-clear-toggle[aria-expanded="false"]')?.click();
+    // The card is inside one of the five rows (TicketInsights): open that row first.
+    const row = frame.closest('[data-group]')?.querySelector('.ab-ins-group-row');
+    if (row && row.getAttribute('aria-expanded') === 'false') row.click();
     const toggle = frame.querySelector('.ab-ins-card-toggle');
     if (toggle && toggle.getAttribute('aria-expanded') === 'false') toggle.click();
     frame.scrollIntoView?.({ block: 'start', behavior: 'smooth' });

@@ -2,6 +2,7 @@
 // and the existing reads), GET only, with the person's own session; the answers stay in panel memory (useInsight.js).
 import { read } from '../../ask.js';
 import { insightStore, recordKey, useInsight } from './useInsight.js';
+import { callerOf } from '../../../domain/callerTickets.js';
 import { t } from '../../../i18n/index.js';
 
 export const allowSensitiveOf = (eff) => Boolean(eff?.policy?.allowHrContent);
@@ -34,8 +35,6 @@ export function slimPack(pack) {
   return { table: pack.table, sysId: pack.sysId, number: pack.number, fields, people };
 }
 
-const CALLER_ROLES = ['caller', 'requested_for', 'contact', 'consumer', 'opened_for', 'opened_by'];
-
 /** Solved look-alikes with their group and category (N2, N10, N12). */
 export function useLookalikes({ page, record, eff, active }) {
   return useInsight({
@@ -56,14 +55,19 @@ export function useKnowledge({ page, record, eff, active }) {
   });
 }
 
-/** The caller's earlier tickets (N2). { items, signals, access, callerName } ; no caller: { items: [], signals: null, noCaller: true } */
+/**
+ * The caller's earlier tickets ("Caller's other tickets"). { items, signals, access, callerName } ; no caller: { items: [], signals:
+ * null, noCaller: true }. The caller is found as the caller briefing finds it (callerOf: the same roles in the same order, and an HR
+ * case's employee under subject_person), so the card and the briefing always talk about the same person.
+ */
 export function useHistory({ page, record, eff, active }) {
   return useInsight({
     key: `${recordKey(page, record)}|history`,
     load: async () => {
       const pack = await ticketPack(page, record, eff);
       const people = Array.isArray(pack.people) ? pack.people : [];
-      const caller = CALLER_ROLES.map((role) => people.find((p) => p.role === role && p.sysId)).find(Boolean);
+      const who = callerOf(pack);
+      const caller = who ? people.find((p) => p?.role === who.role && String(p.sysId || '').toLowerCase() === who.sysId) || { sysId: who.sysId } : null;
       if (!caller) return { items: [], signals: null, access: [], noCaller: true, callerName: '' };
       const answer = await read(page.tabId, 'history', { callerSysId: caller.sysId, excludeSysId: pack.sysId, allowSensitive: allowSensitiveOf(eff) });
       return { ...answer, callerName: caller.name || '' };

@@ -17,8 +17,9 @@ import compose from './packs/compose.js';
 import reports from './packs/reports.js';
 import checks from './packs/checks.js';
 import assist from './packs/assist.js';
+import caller from './packs/caller.js';
 
-export const FEATURES = [...core, ...itsm, ...domain, ...knowledge, ...compose, ...reports, ...checks, ...assist];
+export const FEATURES = [...core, ...itsm, ...domain, ...knowledge, ...compose, ...reports, ...checks, ...assist, ...caller];
 
 export const featureById = (id) => FEATURES.find((f) => f.id === id) || null;
 

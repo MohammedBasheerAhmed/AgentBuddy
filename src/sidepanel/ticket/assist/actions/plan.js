@@ -6,22 +6,22 @@
 //   recordBlock()       a reason that stops EVERY AI action on this record (a blocked table, HR content not allowed). Said once,
 //                       above the actions, never on each button.
 //   featureBlock()      a reason that stops ONE action (it needs Strict privacy mode). Said on that button, which is disabled.
-//   actionPlan()        the 3 suggested for the ticket's stage (the first is the one primary button) and the rest by group; and
-//                       every action in the registry's order (`items`: the side rail lists them all).
+//   primaryAction()     the one action that carries the screen's filled mark ("Start"): the first of the stage's list that is among
+//                       the five and can run
+//   actionPlan()        every action the record offers, in the registry's order (`items`); the five shown in AI Assist (one per pain
+//                       point, src/features/focus.js), the rest (under All tools) and the primary.
 //
 // The checks mirror the ones src/lib/pipeline.js assertRunnable makes when the action runs (same rules, same words), so a button that
 // is enabled here does not fail on the first step for a reason that was known all along. The pipeline still decides: nothing here
 // lets anything through that it would refuse.
 import { FEATURES, isFeatureAvailable } from '../../../../features/registry.js';
 import { profilesOfFeature, shownFor } from '../../../../profiles/profiles.js';
-import { GROUPS, STAGE_WORDS, SUGGEST, cautionFor, groupOf, stageOf, whenAllows } from '../../../../features/stages.js';
+import { SUGGEST, cautionFor, stageOf, whenAllows } from '../../../../features/stages.js';
+import { focusActions } from '../../../../features/focus.js';
 import { isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../../../../policy/policy.js';
 import { resolveProviderConfig } from '../../../../providers/config.js';
 import { requiredMode } from '../../../../lib/pipeline.js';
 import { isolate, t } from '../../../../i18n/index.js';
-
-/** How many actions show as the main choices before "More actions". */
-export const MAX_SUGGESTED = 3;
 
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
 const modeLabel = (mode) => ({ strict: t('Strict'), 'local-only': t('Local-only') })[mode] || mode;
@@ -91,41 +91,31 @@ export function offeredFeatures({ record, header = null, eff, features = FEATURE
 }
 
 /**
+ * The action of the five that carries the screen's one filled mark ("Start"): the first of the stage's list (SUGGEST, best first) that
+ * is among the five and can run (no reason of its own), or '' when none is. Only the stage's list counts: an action that does not
+ * fit the ticket's state is never the main choice, so on such a record no row is filled. (Whether AI can be used right now, and an
+ * answer with its own main button on screen, are the view's to add.)
+ * @param {{ item: { feature: { id: string }, reason?: string } }[]} five   @param {string|null} stage
+ */
+export function primaryAction(five = [], stage = null) {
+  const ready = new Set(five.filter((f) => f?.item?.feature?.id && !f.item.reason).map((f) => f.item.feature.id));
+  return (SUGGEST[stage || 'unknown'] || []).find((id) => ready.has(id)) || '';
+}
+
+/**
  * @returns {{
- *   stage: string|null, words: string, block: string,
- *   suggested: { feature, reason, caution }[],             the main choices; suggested[0] is the primary button
- *   groups: { id, label, items: { feature, reason, caution }[] }[],   the rest, under "More actions", by group (empty groups left out)
- *   items: { feature, reason, caution }[],                  every action the record offers, in the registry's order (the side rail)
- *   more: number, total: number,
+ *   stage: string|null, block: string,
+ *   items: { feature, reason, caution }[],                       every action the record offers, in the registry's order
+ *   five: { pain, painTitle, item: { feature, reason, caution } }[],   AI Assist's rows: one per pain point the record has an action for
+ *   rest: { feature, reason, caution }[],                        the others (All tools)
+ *   primary: string,                                             the feature id of the one filled mark, or ''
+ *   total: number,
  * }}
  */
-export function actionPlan({ record, header = null, eff, features = FEATURES, gates = {}, max = MAX_SUGGESTED }) {
+export function actionPlan({ record, header = null, eff, features = FEATURES, gates = {} }) {
   const stage = stageOf(record, header);
   const offered = offeredFeatures({ record, header, eff, features, gates });
-  const item = (feature) => ({ feature, reason: featureBlock(feature, eff, record), caution: cautionFor(feature, record) });
-  const items = offered.map(item);
-  const byId = new Map(items.map((i) => [i.feature.id, i]));
-
-  // The stage's list first, then whatever else the record offers; only actions that can run are suggested (a disabled button is no
-  // main choice), and never more than `max`.
-  const order = [...(SUGGEST[stage || 'unknown'] || []), ...offered.map((f) => f.id)];
-  const suggested = [];
-  for (const id of order) {
-    const it = byId.get(id);
-    if (!it || it.reason || suggested.includes(it)) continue;
-    suggested.push(it);
-    if (suggested.length >= max) break;
-  }
-  const rest = items.filter((i) => !suggested.includes(i));
-  const groups = GROUPS.map((g) => ({ id: g.id, label: g.label, items: rest.filter((i) => groupOf(i.feature) === g.id) })).filter((g) => g.items.length);
-  return {
-    stage,
-    words: STAGE_WORDS[stage || 'unknown'],
-    block: recordBlock({ record, eff }),
-    suggested,
-    groups,
-    items,
-    more: rest.length,
-    total: items.length,
-  };
+  const items = offered.map((feature) => ({ feature, reason: featureBlock(feature, eff, record), caution: cautionFor(feature, record) }));
+  const { five, rest } = focusActions(items);
+  return { stage, block: recordBlock({ record, eff }), items, five, rest, primary: primaryAction(five, stage), total: items.length };
 }

@@ -118,7 +118,8 @@ async function insightsChrome() {
   return fake;
 }
 
-const summaryOf = (ui, id) => ui.container.querySelector(`[data-card="${id}"] .ab-ins-card-summary`)?.textContent || '';
+// The one line of a row of the five, shown without opening it ("Reply" holds the email card alone, which reports from the glance read).
+const lineOf = (ui, group) => ui.container.querySelector(`li[data-group="${group}"] .ab-ins-pain-line`)?.textContent || '';
 
 test('Insights opened after the Glance has read the facts (AI Assist was the half on show): the folded cards keep their summary', async () => {
   await insightsChrome();
@@ -127,8 +128,7 @@ test('Insights opened after the Glance has read the facts (AI Assist was the hal
   const ui = await mount(<TicketInsights page={page} eff={eff} record={record} header={header} active />);
   await settle(6);
   try {
-    assert.ok(summaryOf(ui, 'risk'), 'the risk card reported its summary from memory, and it stayed');
-    assert.ok(summaryOf(ui, 'missing'));
+    assert.match(lineOf(ui, 'reply'), /fits best|No email needed/, 'the email card reported its summary from memory, and it stayed on its row');
   } finally {
     await ui.unmount();
     await glance.unmount();
@@ -140,12 +140,11 @@ test('another record: the last record\'s summaries are not shown on it', async (
   const ui = await mount(<TicketInsights page={page} eff={eff} record={record} header={header} active />);
   await settle(6);
   try {
-    assert.ok(summaryOf(ui, 'risk'));
+    assert.ok(lineOf(ui, 'reply'));
     const other = { ...record, sysId: SYS_B, number: 'INC0010002' };
     await ui.rerender(<TicketInsights page={{ ...page, href: `${ORIGIN}/incident.do?sys_id=${SYS_B}`, record: other }} eff={eff} record={other} header={{ ...header, number: 'INC0010002' }} active />);
     await settle(6);
-    assert.equal(summaryOf(ui, 'risk'), '', 'B has not been read (its glance never answers here): nothing, not A\'s line');
-    assert.equal(summaryOf(ui, 'missing'), '');
+    assert.equal(lineOf(ui, 'reply'), '', 'B has not been read (its glance never answers here): nothing, not A\'s line');
   } finally {
     await ui.unmount();
   }

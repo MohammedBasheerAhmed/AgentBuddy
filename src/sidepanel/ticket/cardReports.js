@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 
 // What the Insights cards report about the record on screen: each card's one-line summary and its status. The Insights half draws
-// them on its rows (the summary without opening a card, the status as the row's dot); the side rail marks the ones that need a look
-// and the Insights tab counts them. Kept in the Ticket screen, so all of them see the same reports.
+// them on its rows (the summary without opening a card, the status as the row's dot) and makes the line and the dot of each of the
+// five rows from them (focusView.js); the side rail marks the rows that need a look and the Insights tab counts them. Kept in the
+// Ticket screen, so all of them see the same reports.
 //
 // The reports carry the record they were made for: { key, cards: card id -> { summary, attention } }. A set left from the last record
 // is not shown, and the first report for a new record starts a fresh one. (Not an effect that empties them when the record changes:
@@ -11,8 +12,8 @@ import { useCallback, useRef, useState } from 'react';
 
 const NO_REPORTS = Object.freeze({});
 
-// A card's status: 'danger' or 'warn' (it needs a look), 'ok' (good news: a fix was found), 'clear' (nothing to report: the card
-// goes into the last row, "All clear in ..."), '' (plain information).
+// A card's status: 'danger' or 'warn' (it needs a look), 'ok' (good news: a fix was found), 'clear' (nothing to report), '' (plain
+// information).
 const LEVELS = Object.freeze(['danger', 'warn', 'ok', 'clear']);
 
 /** The status a card reported, or '' for anything else. */

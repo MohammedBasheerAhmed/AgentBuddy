@@ -1,7 +1,8 @@
 /* The panel frame and the shared building blocks (src/sidepanel/ui/primitives.jsx, App.jsx). Owned by the lead (docs/round3.md).
    Only --ab-* tokens. Calm and focused: one primary button per screen, quiet chrome, short lines, space and dividers instead of boxes. */
 
-/* ---- header: the mark, the name and the instance it reads, then three quiet icon buttons (the palette, the colours, Settings) ---- */
+/* ---- header: the mark, the name and the instance it reads, then two quiet icon buttons (All tools, Settings). All tools opens as a
+   sheet right under the header (palette.css), so the header's height is measured (--ab-head-h) for it as for the rail. ---- */
 .ab-header { gap: 10px; padding-block: 10px; padding-inline: 16px 10px; background: var(--ab-bg); }
 .ab-brandmark { flex: none; }
 .ab-brandmark-tile { fill: var(--ab-accent); }
@@ -27,8 +28,8 @@
 .ab-screen-tab:focus-visible { border-radius: var(--ab-radius-sm); }
 .ab-screen-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ---- the side rail (SideRail.jsx): a slim column of icons on the inline end of the panel (right in English, left in Arabic) that lists
-   what the screen on show offers. It sticks between the header and the bar of screens (both measured: --ab-head-h, --ab-bar-h) while
+/* ---- the side rail (SideRail.jsx), drawn only for a person who turned it on (Settings > Side rail): a slim column of icons on the
+   inline end of the panel (right in English, left in Arabic) that lists the five of the screen on show. It sticks between the header and the bar of screens (both measured: --ab-head-h, --ab-bar-h) while
    the screen scrolls; its own list scrolls when it is taller than that. "Show names" widens it over the screen. ---- */
 .ab-body { flex: 1; display: flex; align-items: flex-start; min-width: 0; }
 .ab-body > .ab-main { flex: 1; min-width: 0; align-self: stretch; }

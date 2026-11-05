@@ -1,5 +1,5 @@
 // Turn a ContextPack into the untrusted "parts" the domain features send, including the per-kind extras (SLAs, approvals,
-// linked incidents, schedule conflicts, the account's other cases). Pure. Every line is built from data already on the pack, so
+// linked incidents, schedule conflicts, the account's other cases, the caller's other tickets). Pure. Every line is built from data already on the pack, so
 // the allowlists in src/context decide what can appear; nothing here reads anything. Whatever text these lines carry is
 // ticket text: it reaches the AI only as a part, through the firewall, which masks it.
 //
@@ -9,6 +9,7 @@
 //  - Part field names avoid the words Strict mode treats as sensitive (see isSensitiveField in src/pii/firewall.js).
 
 import { notAvailablePart, packToParts, unavailable, unavailableText as listText } from '../features/parts.js';
+import { callerTicketsText } from './callerTickets.js';
 
 const present = (value) => String(value ?? '').trim();
 const join = (bits, sep = ', ') => bits.map(present).filter(Boolean).join(sep);
@@ -53,6 +54,7 @@ const TITLE = {
   conflicts: ['Other changes overlapping the planned window', 'schedule_conflicts'],
   recentChanges: ['Recent changes on the same configuration item', 'recent_changes'],
   accountCases: ["The account's other cases", 'account_cases'],
+  callerTickets: ["The caller's other tickets", 'caller_tickets'],
 };
 
 // A note about a list that is longer than what is shown.
@@ -72,6 +74,8 @@ function trailer(key, pack) {
 
 /** The text of one extra, or '' when the pack does not have it (it could not be read: see unavailableText). */
 export function relatedText(key, pack) {
+  // The caller's other tickets say who the caller is (by role) before the rows, and what could not be checked after them.
+  if (key === 'callerTickets') return callerTicketsText(pack);
   const rows = pack?.related?.[key];
   const render = RENDER[key];
   if (!Array.isArray(rows) || !render) return '';

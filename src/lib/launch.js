@@ -11,8 +11,11 @@ import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
 export const LAUNCH_KEY = 'ab:launch';
 export const LAUNCH_TTL_MS = 30000;
 // A feature id ('reply-draft'), or an Insights card of the Ticket screen ('card:ready', src/features/quick.js QUICK_CARDS): the bar
-// offers the cards when AI is off, and the panel then opens that card instead of running an action.
-export const FEATURE_ID_RE = /^(?:card:)?[a-z][a-z0-9-]{0,63}$/;
+// offers the cards when AI is off, and the panel then opens that card instead of running an action. All tools (in the panel) also
+// sends 'show:<card id>' (any Insights card of the record, alone; card ids are camelCase: 'show:knownErrors') and 'ask:ticket' (AI
+// Assist with "Ask about this ticket" open): docs/focus-layout.md. Neither starts an AI request, so the worker accepting them from the
+// bar too (src/background/bar.js) lets nothing new happen.
+export const FEATURE_ID_RE = /^(?:(?:card:)?[a-z][a-z0-9-]{0,63}|show:[a-zA-Z][a-zA-Z0-9]{0,39}|ask:ticket)$/;
 
 /** A request for the panel, or null when any part of it is not valid. `now` is passed in so tests do not wait. */
 export function makeLaunch({ tabId, table, sysId, featureId, now }) {

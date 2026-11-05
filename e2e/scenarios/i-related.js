@@ -4,7 +4,7 @@
 const { waitForText, textOf, waitForRecord, openScreen, openHalf } = require('../ui.js');
 const { prepare } = require('../common.js');
 // The redesign: the cards are one list of rows; a row shows the card's one line without being opened (e2e/insightsUi.js).
-const { openCard, openGroup, summaryOf } = require('../insightsUi.js');
+const { openCard, openGroup, painLine } = require('../insightsUi.js');
 
 module.exports = {
   id: 'i',
@@ -40,15 +40,18 @@ module.exports = {
 
     t.check('the Insights half carries no AI mark', (await p.evaluate(() => [...document.querySelectorAll('[id$="-half-panel-insights"] .ab-ai-badge')].filter((e) => e.getClientRects().length > 0).length)) === 0);
 
-    // ---- N2: related tickets ----------------------------------------------------------------------------------------------------------
+    // ---- N2: the same caller (the "Same caller" row) and related tickets (All tools) -----------------------------------------------------
+    await openCard(p, "Caller's other tickets");
+    await ctx.waitUntil('the caller\'s earlier tickets', async () => /Earlier tickets from Abel Tuter/.test((await textOf(p, '[data-card="caller"]')) || ''), { timeout: 20000 });
+    const callerText = (await textOf(p, '[data-card="caller"]')) || '';
+    t.check('Same caller: the caller\'s earlier tickets (read locally, so the real name is fine on screen)', /Earlier tickets from Abel Tuter/.test(callerText) && /INC\d{7}/.test(callerText), callerText.replace(/\s+/g, ' ').slice(0, 400));
+    t.check('Same caller: its row\'s one line counts the earlier tickets', /\d+ earlier ticket/.test(await painLine(p, 'caller')), await painLine(p, 'caller'));
     await openCard(p, 'Related tickets');
-    await p.waitForFunction(() => [...document.querySelectorAll('.ab-ins-group-toggle')].some((b) => b.getClientRects().length > 0 && /Earlier tickets from Abel Tuter/.test(b.innerText)), { timeout: 20000 });
-    await openGroup(p, /^Earlier tickets from/);
     await openGroup(p, /^Solved look-alikes/);
     await waitForText(p, 'INC0009640', { timeout: 15000 });
     const text = await panel.text();
-    t.check('Related tickets: the caller\'s earlier tickets (read locally, so the real name is fine on screen)', text.includes('Earlier tickets from Abel Tuter') && text.includes('INC0009640'), text.replace(/\s+/g, ' ').slice(0, 400));
-    t.check('Related tickets: the summary line counts what was found ("N earlier · N solved")', /\d+ earlier/.test(await summaryOf(p, 'Related tickets')), await summaryOf(p, 'Related tickets'));
+    t.check('Related tickets (from All tools): the solved look-alikes, and no second list of the caller\'s tickets', text.includes('INC0009640') && !/Earlier tickets from/.test((await textOf(p, '[data-card="related"]')) || ''), text.replace(/\s+/g, ' ').slice(0, 400));
+    await p.evaluate(() => [...document.querySelectorAll('.ab-ins-back')].find((b) => b.getClientRects().length > 0)?.click());
 
     // ---- N3 and N12: knowledge and the steps that worked --------------------------------------------------------------------------------
     await openCard(p, 'Knowledge for this ticket');
@@ -59,9 +62,16 @@ module.exports = {
     t.check('Steps that worked before: the fix of a solved look-alike is listed', true);
 
     // ---- N9, N11, N24: from the same glance read --------------------------------------------------------------------------------------
-    // (The folded cards fill their summary lines from their own reads: give them a moment under load.)
-    await ctx.waitUntil('the three summary lines', async () => Boolean(await summaryOf(p, 'Risk signals')) && Boolean(await summaryOf(p, 'Missing details')) && Boolean(await summaryOf(p, 'Ticket journey')), { timeout: 10000 }).catch(() => {});
-    t.check('Risk signals, Missing details and Ticket journey show a summary line without being opened', Boolean(await summaryOf(p, 'Risk signals')) && Boolean(await summaryOf(p, 'Missing details')) && Boolean(await summaryOf(p, 'Ticket journey')), [await summaryOf(p, 'Risk signals'), await summaryOf(p, 'Missing details'), await summaryOf(p, 'Ticket journey')].join(' | '));
+    // The five rows answer at a look (their one line, without being opened); Risk signals and Missing details are in All tools now.
+    await ctx.waitUntil('the five lines', async () => (await Promise.all(['understand', 'fix', 'caller', 'reply', 'close'].map((g) => painLine(p, g)))).filter(Boolean).length >= 4, { timeout: 10000 }).catch(() => {});
+    const lines = await Promise.all(['understand', 'fix', 'caller', 'reply', 'close'].map((g) => painLine(p, g)));
+    t.check('the five rows show their one line without being opened', lines.filter(Boolean).length >= 4, lines.join(' | '));
+    await openCard(p, 'Risk signals');
+    await waitForText(p, /Risk signals/, { timeout: 10000 });
+    t.check('Risk signals (from All tools) opens alone with its content', ((await textOf(p, '[data-card="risk"]')) || '').trim().length > 0);
+    await openCard(p, 'Missing details');
+    t.check('Missing details (from All tools) opens alone with its content', ((await textOf(p, '[data-card="missing"]')) || '').trim().length > 0);
+    await p.evaluate(() => [...document.querySelectorAll('.ab-ins-back')].find((b) => b.getClientRects().length > 0)?.click());
     t.check('no AI request was made while the Insights cards loaded', ai.requests.length === 0);
     t.check('no error banner', (await textOf(p, '.ab-note-danger')) === null);
 
@@ -76,7 +86,7 @@ module.exports = {
     // (The note's label and its sentence are on separate lines in the card.)
     await waitForText(p, /Knowledge articles:\s*[^\n]*cannot read/i, { timeout: 15000 });
     t.check('knowledge table denied (403): a plain note, not an error', (await textOf(p, '[data-card="knowledge"] .ab-note-danger')) === null);
-    t.check('the other cards still show', (await panel.text()).includes('Earlier tickets from Abel Tuter'));
+    t.check('the other cards still show', (await p.evaluate(() => document.querySelector('[data-card="caller"]')?.textContent || '')).includes('Earlier tickets from Abel Tuter'));
     inst.setBehaviour();
 
     // ---- links: a ticket opens in a NEW tab, the ticket being worked on stays ----------------------------------------------------------

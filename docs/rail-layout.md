@@ -1,5 +1,10 @@
 # The side rail layout (2026-11-05)
 
+> **Partly superseded the same day by `docs/focus-layout.md`** (after the leaders' review: five pain points first, everything else in
+> All tools). Still true: the screens in a bar at the bottom, the compact ticket header, the rail's mechanics (SideRail, railStore,
+> sections). Changed: the rail is off unless Settings turns it on, and lists the five and "All tools", not every card and action;
+> Settings > Side rail has no per-kind hide and order lists any more.
+
 The spec for the "screens at the bottom, everything a screen offers in the right rail" layout. Read `docs/build-rules.md` first: its
 rules (own your files only, no commit, no `node build.js` or e2e, tests required, `--ab-*` tokens only, Arabic for every text) hold here.
 

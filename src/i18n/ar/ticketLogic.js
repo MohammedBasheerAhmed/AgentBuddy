@@ -353,7 +353,6 @@ export const AR_TICKET_LOGIC = {
   ),
   'Priority account': 'حساب ذو أولوية',
   'Your organisation lists this account as a priority account.': 'مؤسستك تصنف هذا الحساب على أنه حساب ذو أولوية.',
-  '{n} earlier': '{n} سابقة',
   '{n} still open': '{n} لا تزال مفتوحة',
   '{n} solved': '{n} محلولة',
   '{n} open on the same item': '{n} مفتوحة على العنصر نفسه',

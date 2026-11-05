@@ -729,12 +729,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   previewSeen: [],
   instances: [],
   quickPins: {}, // per kind of record: the feature ids the person pinned to the bar (src/features/quick.js); {} = the defaults
-  // The side rail of the panel (src/sidepanel/shell/SideRail.jsx): its names shown (the wide rail); per kind of record and half, the
-  // order and the hidden items of the Ticket screen's rail (src/features/railLayout.js; {} = the defaults); and whether the AI actions
-  // of a kind not arranged by hand follow the ticket's state (what fits it first).
+  // The side rail of the panel (src/sidepanel/shell/SideRail.jsx): drawn at all (off by default: the five of each screen and All tools
+  // hold everything, docs/focus-layout.md), and its names shown (the wide rail).
+  railShow: false,
   railNames: false,
-  railLayout: {},
-  railByState: true,
   pageBar: true, // the small bar on the ServiceNow page itself (src/content/bar.js)
   // Work profiles (src/profiles): what the person works on decides which cards and actions show. [] until they confirm the suggestion.
   profiles: [],

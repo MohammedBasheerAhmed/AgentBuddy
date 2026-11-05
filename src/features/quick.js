@@ -62,6 +62,9 @@ export const QUICK_LABELS = Object.freeze({
   get 'account-briefing'() {
     return t('Brief me before the call');
   },
+  get 'caller-briefing'() {
+    return t('Caller briefing');
+  },
   get 'case-eng-escalation'() {
     return t('Engineering escalation');
   },

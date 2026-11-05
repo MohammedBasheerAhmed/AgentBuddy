@@ -132,6 +132,8 @@ export const FEATURE_PROFILES = Object.freeze({
   'sentiment-risk': ['it', 'csm'],
   'hr-case-brief': ['hr'],
   'account-briefing': ['csm'],
+  // The "Same caller" pain point (docs/focus-layout.md): every fulfiller has a caller.
+  'caller-briefing': ALL,
   'request-explain': ['req', 'it'],
   'reply-draft': ALL,
   'missing-info': ALL,

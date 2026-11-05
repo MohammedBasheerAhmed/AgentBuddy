@@ -5,6 +5,7 @@ import { HalfPanel, HalfRule, HalfSwitch } from '../ui/primitives.jsx';
 import { aiOffByPolicy } from '../../profiles/profiles.js';
 import { AiSkippedNote, destinationOf, useHalf } from './shellParts.jsx';
 import { RailSectionsContext, goToSection, useRailPublish, useSectionRegistry } from './SideRail.jsx';
+import { useAllTools } from '../palette/allToolsContext.js';
 
 /**
  * A screen with an Insights half and, when it has one and the organisation allows AI, an AI Assist half (TRACKER.md 2.1).
@@ -30,30 +31,27 @@ export default function ScreenView({ screen, label = '', Insights, Assist = null
   const mounted = (h) => visited.has(h) || shown === h;
   const skipped = Boolean(eff.values?.aiSkipped);
 
-  // The rail: the sections of the half on show; the one last chosen is marked.
+  // The rail (drawn only when Settings > Side rail has it on): the sections of the half on show, the one last chosen marked, then
+  // "All tools" at its foot, as on the Ticket screen (docs/focus-layout.md).
   const [insightsRegistry, insightsSections] = useSectionRegistry();
   const [assistRegistry, assistSections] = useSectionRegistry();
   const [current, setCurrent] = useState('');
+  const openAllTools = useAllTools();
   const sections = shown === 'assist' ? assistSections : insightsSections;
   const title = hasAssist ? (shown === 'assist' ? t('AI Assist') : t('Insights')) : label;
-  useRailPublish(
-    screen,
-    {
-      title,
-      items: sections.map((s) => ({
-        id: s.id,
-        label: s.label,
-        icon: s.icon,
-        attention: s.attention,
-        current: current === `${shown}:${s.id}`,
-        onSelect: () => {
-          setCurrent(`${shown}:${s.id}`);
-          goToSection(s);
-        },
-      })),
+  const items = sections.map((s) => ({
+    id: s.id,
+    label: s.label,
+    icon: s.icon,
+    attention: s.attention,
+    current: current === `${shown}:${s.id}`,
+    onSelect: () => {
+      setCurrent(`${shown}:${s.id}`);
+      goToSection(s);
     },
-    active
-  );
+  }));
+  if (items.length) items.push({ id: 'all-tools', label: t('All tools'), icon: 'grid', separator: true, onSelect: () => openAllTools() });
+  useRailPublish(screen, { title, items }, active);
 
   return (
     <div className="ab-pane">

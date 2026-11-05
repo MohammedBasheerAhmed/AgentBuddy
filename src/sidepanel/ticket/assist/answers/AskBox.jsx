@@ -1,10 +1,11 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { AiBadge } from '../../../ui/primitives.jsx';
 import { Icon } from '../../../ui/icons.jsx';
 import { featureById, isFeatureAvailable } from '../../../../features/registry.js';
 import { profilesOfFeature, shownFor } from '../../../../profiles/profiles.js';
 import { MAX_ASK_CHARS, askProblem, clipAsk, withQuestion } from '../../../../features/packs/assist.js';
 import { recordBlock } from '../actions/plan.js';
+import { reveal } from '../../ticketRail.js';
 import { t } from '../../../../i18n/index.js';
 
 /**
@@ -12,13 +13,28 @@ import { t } from '../../../../i18n/index.js';
  * preview, policy), as one more untrusted data part next to the ticket (src/features/packs/assist.js), never as prompt text. The
  * answer appears at the top of the answer area, with the question above it.
  *
- * props: assist (useAnswers), page, eff, record
+ * Since the focus layout (docs/focus-layout.md) the Ticket screen draws it only when it is asked for (All tools, 'ask:ticket'): then
+ * at the top of AI Assist, with the focus in its box (`focusAt` changes with every request), and it stays for that record.
+ *
+ * props: assist (useAnswers), page, eff, record, focusAt (a time: put the focus in the box once it is drawn; 0: leave the focus be)
  */
-export default function AskBox({ assist, eff, record }) {
+export default function AskBox({ assist, eff, record, focusAt = 0 }) {
   const id = `ab-ask${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`; // (no colons: the id must work in a CSS selector)
   const [text, setText] = useState('');
   const [problem, setProblem] = useState('');
+  const form = useRef(null);
   const feature = featureById('ask-ticket');
+  // Asked for: once the half it is in is on screen (the same draw that shows it), the box comes into view and takes the focus.
+  useEffect(() => {
+    if (!focusAt) return undefined;
+    const timer = setTimeout(() => {
+      const box = form.current;
+      if (!box) return;
+      reveal(box);
+      box.querySelector('input')?.focus({ preventScroll: true });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [focusAt]);
   // Switched off by the organisation (disabledFeatures: ask-ticket), outside the person's profiles, or a record no AI action may use
   // (a blocked table, HR content not allowed: the actions below say why, once; src/sidepanel/ticket/assist/actions/plan.js): no box.
   // The pipeline would refuse the run anyway; this only spares the person a question that cannot be sent.
@@ -40,7 +56,7 @@ export default function AskBox({ assist, eff, record }) {
 
   const hover = t('Your question and the ticket go to the AI, masked, after a preview.');
   return (
-    <form className="ab-ask" onSubmit={submit} aria-label={t('Ask about this ticket')}>
+    <form className="ab-ask" ref={form} onSubmit={submit} aria-label={t('Ask about this ticket')}>
       <label className="ab-ask-label" htmlFor={`${id}-q`}>
         <AiBadge label="" title={hover} />
         <span>{t('Ask about this ticket')}</span>

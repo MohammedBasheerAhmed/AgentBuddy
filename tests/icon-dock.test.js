@@ -59,3 +59,15 @@ test('the panel draws its bar of screens from the same table, after the screens,
   assert.match(css, /\.ab-rail \{[^}]*position: sticky;[^}]*top: var\(--ab-head-h/, 'the rail sticks under the header');
   assert.ok(/\.ab-sr \{/.test(css));
 });
+
+test('the header has two icon buttons from the same set: All tools (the four squares) and Settings; the sun and moon left it', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'src', 'sidepanel', 'App.jsx'), 'utf8');
+  const header = app.slice(app.indexOf('function Header('), app.indexOf('function useHeightVar('));
+  assert.match(header, /<Icon name="grid" size=\{18\} \/>/, 'All tools: the grid');
+  assert.match(header, /<SettingsButton \/>/);
+  assert.equal((header.match(/<button /g) || []).length, 1, 'one button of its own, then Settings');
+  assert.ok(!/ThemeButton|name=\{dark \? 'sun' : 'moon'\}/.test(app), 'no colours button in the panel');
+  assert.ok(drawn('grid'), 'the grid can be drawn');
+});

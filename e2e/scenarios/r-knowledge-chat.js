@@ -14,8 +14,8 @@
 //                     and replies from AI Assist through the firewall, a chat that lives only in Connect Support tables, a chat with nothing readable and a denied table
 const { findLeaks } = require('../leaks.js');
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun, runAfter, waitPanel, captureClipboard, clipboardLog, settleOnRecord } = require('../common.js');
-const { openHalf, openScreen, buttonShown, showAction } = require('../ui.js');
-const { openCard, showAllIn } = require('../insightsUi.js');
+const { openHalf, openScreen, buttonShown, actionOffered, startAction } = require('../ui.js');
+const { openCard, showAllIn, cardLine } = require('../insightsUi.js');
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
 
@@ -42,7 +42,7 @@ function replier({ system, user }) {
 const text = (p) => p.evaluate(() => document.body.innerText);
 const tagsOf = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-tags .ab-tag')).map((x) => x.innerText.trim()));
 // The AI half of the Ticket screen holds the AI actions (Actions agent). A scenario part that needs one runs only when it is there.
-const assistOffers = (p, re) => showAction(p, re);
+const assistOffers = (p, re) => actionOffered(p, re); // one of AI Assist's five, or in All tools
 // The Knowledge screen's sections (data-card="kb-ticket" | "kb-search" | "kb-duplicates" | "kb-gaps" | "kb-merge" | "kb-outline"). The
 // duplicate finder and the gap radar open in place (their heading is a button with a chevron); the others are always open.
 async function openKb(p, half, cardId) {
@@ -58,7 +58,7 @@ async function openKb(p, half, cardId) {
   }, half, cardId);
 }
 // (the Ticket screen's Insights cards are rows since the redesign: their one line is .ab-ins-card-summary; a folding card elsewhere keeps .ab-cardx-summary)
-const summaryIn = (p, id) => p.evaluate((cid) => document.querySelector(`[data-card="${cid}"] .ab-ins-card-summary, [data-card="${cid}"] .ab-cardx-summary`)?.textContent || '', id);
+const summaryIn = (p, id) => cardLine(p, id); // its own row, or the row of its pain point when it is alone there (e2e/insightsUi.js)
 
 module.exports = {
   id: 'r',
@@ -87,7 +87,7 @@ module.exports = {
     // (an AI-side step that fails is reported as a failure; the card checks after it still run)
     if (await assistOffers(p, /^Suggest improvements/)) try {
       const before = ai.requests.length;
-      const ran = await runAfter(p, () => clickButton(p, /^Suggest improvements/));
+      const ran = await runAfter(p, () => startAction(p, /^Suggest improvements/));
       const req = await checkAiRun(t, ctx, p, 'article-optimise', ran, { before, system: /improve one ServiceNow knowledge article/, userHas: [/Guest Wi-Fi/] });
       t.check('article-optimise: the password in the article text reached the AI only as a placeholder', req ? !req.raw.includes(data.MORE_SEED.articleSecret) && /\[SECRET_\d+\]/.test(req.raw) : false);
       const buttons = await p.evaluate(() => window.__vis(document.querySelectorAll('button')).map((b) => b.innerText.trim()));
@@ -110,13 +110,13 @@ module.exports = {
     const chatText = await text(p);
     t.check('Chat tab: the customer has been waiting for an answer, who took part (by name, on screen only), and the last customer message', /The customer has been waiting/.test(chatText) && /Abel Tuter \(customer\)/.test(chatText) && /Beth Anglin \(agent\)/.test(chatText) && /Version 5\.2\. It disconnects every ten minutes/.test(chatText), chatText.replace(/\s+/g, ' ').slice(0, 100));
     t.check('Chat facts: under "Stays in ServiceNow", and no AI request', /Nothing is sent anywhere/.test(chatText) && ai.requests.length === chatBase);
-    t.check('Chat facts: the summary line counts the messages', /3 messages/.test(await summaryIn(p, 'chat')), await summaryIn(p, 'chat'));
+    t.check('Understand the ticket (where the chat facts are): its line says what needs the agent now, the customer waiting, or counts the messages', /waited|3 messages/.test(await summaryIn(p, 'chat')), await summaryIn(p, 'chat'));
 
     if (!(await assistOffers(p, /^Summarise this chat/))) t.warning('the chat actions are not offered in AI Assist yet: chat-summary and chat-reply did not run (Actions agent)');
     else try {
-      t.check('a chat (interaction) offers the chat actions in AI Assist', await buttonShown(p, /^Suggest replies/));
+      t.check('a chat (interaction) offers the chat actions in AI Assist', await actionOffered(p, /^Suggest replies/));
       let b4 = ai.requests.length;
-      let chatRun = await runAfter(p, () => clickButton(p, /^Summarise this chat/));
+      let chatRun = await runAfter(p, () => startAction(p, /^Summarise this chat/));
       let creq = await checkAiRun(t, ctx, p, 'chat-summary', chatRun, { before: b4, system: /wrap up a live chat/, userHas: [/VPN keeps dropping/i, /ten minutes/] });
       t.check('chat-summary: the customer\'s email, phone and name in the chat never reached the AI (placeholders only)', creq ? !creq.raw.includes(data.MORE_SEED.chatEmail) && !creq.raw.includes(data.MORE_SEED.chatPhone) && /\[EMAIL_\d+\]/.test(creq.raw) && /\[PHONE_\d+\]/.test(creq.raw) : false);
       const insertLabel = await p.evaluate(() => window.__vis(document.querySelectorAll('button')).map((b) => b.innerText.trim()).find((x) => /^Add notes to work notes/.test(x)) || '');
@@ -129,7 +129,7 @@ module.exports = {
 
       b4 = ai.requests.length;
       const kbReadsBefore = inst.requests.length;
-      chatRun = await runAfter(p, () => clickButton(p, /^Suggest replies/));
+      chatRun = await runAfter(p, () => startAction(p, /^Suggest replies/));
       creq = await checkAiRun(t, ctx, p, 'chat-reply', chatRun, { before: b4, system: /answer a customer in a live chat/, userHas: [/still not working|Version 5\.2/] });
       const kbReads = inst.requests.slice(kbReadsBefore).filter((r) => r.path === '/api/now/table/kb_knowledge');
       t.check('chat-reply: it looked for knowledge articles that match the chat (one GET) before asking, and the answer is Copy only', kbReads.length >= 1 && !(await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-card .ab-row button')).map((b) => b.innerText.trim()).some((x) => /^(Add|Insert)/.test(x)))));

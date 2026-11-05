@@ -8,6 +8,8 @@ import { effectiveSettings } from '../src/policy/policy.js';
 import ScreenView from '../src/sidepanel/shell/ScreenView.jsx';
 import TicketView from '../src/sidepanel/ticket/TicketView.jsx';
 import SetupView from '../src/sidepanel/SetupView.jsx';
+import { SideRail } from '../src/sidepanel/shell/SideRail.jsx';
+import { AllToolsContext } from '../src/sidepanel/palette/allToolsContext.js';
 
 // The panel's routing (integration review H1, carried over to the round-3 screens): which screens exist, which one shows and what
 // each is given, without a browser. What is INSIDE a screen belongs to its area and is tested there.
@@ -115,14 +117,17 @@ test('drawn on a record page: the screens for the profiles, one panel each, only
   assert.ok(!markup.includes('id="ab-knowledge-half-panel-insights"'), 'a screen never opened is not mounted');
 });
 
-test('the header is quiet: name, the instance, the privacy promise and three icon buttons; no footer sentence, no model picker', () => {
+test('the header is quiet: name, the instance, the privacy promise and two icon buttons; no footer sentence, no model picker', () => {
   const markup = draw({ page: record, lastGood: record, lastSeen: record, section: 'ticket', visited: new Set(['ticket']) });
   const header = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'));
   assert.match(header, /Agent Buddy/);
   assert.match(header, /class="ab-instance"[^>]*>acme</);
   assert.match(header, /aria-label="Settings"/);
   const buttons = [...header.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(buttons, ['Search commands', 'Switch to dark colours', 'Settings'], 'at most three icon buttons: the palette, the colours, Settings');
+  assert.deepEqual(buttons, ['All tools', 'Settings'], 'two icon buttons: All tools and Settings (the colours are in All tools and Settings)');
+  // All tools: a dialog, its key said to a screen reader and on hover, its icon the four squares.
+  assert.match(header, /<button type="button" class="ab-iconbtn ab-alltools-btn" aria-label="All tools" title="All tools \((?:Ctrl\+K|⌘K)\)" aria-keyshortcuts="Control\+K Meta\+K" aria-haspopup="dialog">/);
+  assert.ok(!/Switch to (dark|light) colours/.test(header), 'no sun and moon button');
   // The promise the shield mark carried stays in the header: on hover over the name, and as text for a screen reader.
   const promise = 'Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.';
   assert.match(header, new RegExp(`class="ab-brandtext" title="${promise.replace(/\./g, '\\.')}"`));
@@ -189,13 +194,14 @@ test('a held page (a page that is reloading) draws exactly like the live one, wi
 // useSyncExternalStore to read it, so it can be called with stubs for them: nothing has published a rail yet, as on a first render.)
 
 const internals = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-const treeOf = (props) => {
+// `published`: what the screens put in the rail's store (stands in for useSyncExternalStore; by default, the store as made: nothing).
+const treeOf = (props, published = null) => {
   const slot = internals.ReactCurrentDispatcher;
   const before = slot.current;
   slot.current = {
     useRef: (value) => ({ current: value }),
     useState: (init) => [typeof init === 'function' ? init() : init, () => {}],
-    useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot(),
+    useSyncExternalStore: (subscribe, getSnapshot) => published || getSnapshot(),
   };
   try {
     return AppView({ eff, onChoose() {}, onChanged() {}, Pending: () => null, ...props });
@@ -244,4 +250,32 @@ test('H1: the panel is built so that every screen and the ticket view never move
   // The setup help is a different thing in a different place: it never takes the place of a screen.
   const s = { ...states['the wiki page, the Ticket screen on show'], visited };
   assert.notEqual(where(s, (el) => el.type === SetupView), where(s, screen('write')));
+});
+
+// ---- the side rail and All tools, as the shell wires them (docs/focus-layout.md, part C) ------------------------------------------------
+
+test('the side rail is drawn only for a person who turned it on (Settings > Side rail); off by default', () => {
+  const published = { ticket: { title: 'Insights', items: [{ id: 'understand', label: 'Understand the ticket', icon: 'eye', attention: '', ai: false, current: false, disabled: false, separator: false }] } };
+  const props = { page: record, lastGood: record, lastSeen: record, section: 'ticket', visited: new Set(['ticket']) };
+  const railIn = (e) => pathTo(treeOf({ ...props, eff: e }, published), (el) => el.type === SideRail);
+  assert.equal(railIn(eff), null, 'off by default: nothing beside the screens');
+  assert.equal(railIn(effFor({ railShow: 'yes' })), null, 'only true turns it on');
+  assert.ok(railIn(effFor({ railShow: true })), 'on: the rail of the screen on show');
+  const body = (e) => {
+    let found = null;
+    pathTo(treeOf({ ...props, eff: e }, published), (el) => {
+      if (typeof el.props?.className === 'string' && el.props.className.startsWith('ab-body')) found = el.props.className;
+      return false;
+    });
+    return found;
+  };
+  assert.equal(body(eff), 'ab-body');
+  assert.equal(body(effFor({ railShow: true })), 'ab-body has-rail');
+});
+
+test('the shell hands every part of the panel the opener of All tools (useAllTools)', () => {
+  const onPalette = () => {};
+  const tree = treeOf({ page: record, lastGood: record, lastSeen: record, section: 'ticket', visited: new Set(['ticket']), onPalette });
+  assert.equal(tree.type, AllToolsContext.Provider, 'around everything, the screens included');
+  assert.equal(tree.props.value, onPalette);
 });

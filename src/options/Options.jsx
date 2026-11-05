@@ -7,7 +7,8 @@
 //   data/         what Agent Buddy keeps: the activity log, stored data and "Clear everything", diagnostics for support
 //   provider/     AI Assist: the provider, its key and model, the connection check, the usage and limits
 //   FormatsSection.jsx, ProfilePicker.jsx, policyNotes.js (pure notes about the policy), diagnostics.js (pure diagnostics text),
-//   railOptions.js (pure: what each kind of record offers the side rail, and the changes Side rail saves)
+//   railOptions.js (pure: the AI actions the small bar on the ServiceNow page can hold per kind of record, and the changes Side rail
+//   saves for it)
 // The sections are exported from here too, under the names the tests have always imported. The page's styles are in
 // src/ui/areas/options.css.
 import { useCallback, useEffect, useRef, useState } from 'react';

@@ -1,25 +1,34 @@
-/* The command palette (src/sidepanel/palette/CommandPalette.jsx): a box over the panel with a search line, the commands, and the keys.
-   Only --ab-* tokens. Calm: one soft panel, rows without boxes, the AI commands marked by the grey spark at their end. */
+/* All tools (src/sidepanel/palette/CommandPalette.jsx): the command palette as a sheet over the panel under the header (the header
+   stays in sight, inert), with the search line at the top, the tools under their group headings, and the keys at the foot. Full width
+   and height of what is under the header, so nothing scrolls sideways at 320 px; the list scrolls on its own.
+   Only --ab-* tokens. Calm: rows without boxes, the AI tools marked by the grey spark at their end. */
 
-.ab-palette-backdrop { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 56px 12px 12px; background: var(--ab-backdrop); }
-.ab-palette { width: 100%; max-width: 480px; max-height: min(540px, calc(100vh - 72px)); display: flex; flex-direction: column; overflow: hidden; background: var(--ab-bg-raised); border: 1px solid var(--ab-border); border-radius: var(--ab-radius-lg); box-shadow: var(--ab-shadow); }
-.ab-palette-box { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--ab-divider); color: var(--ab-fg-muted); }
+/* --ab-head-h is measured by the shell (App.jsx useHeightVar); before it is, the theme's height of a one-line header. */
+.ab-palette-backdrop { position: fixed; inset-block: var(--ab-head-h) 0; inset-inline: 0; z-index: 20; display: flex; background: var(--ab-bg); }
+.ab-palette { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--ab-bg); border-top: 1px solid var(--ab-divider); }
+.ab-palette-box { flex: none; display: flex; align-items: center; gap: 10px; padding-block: 8px; padding-inline: 16px 10px; border-bottom: 1px solid var(--ab-divider); color: var(--ab-fg-muted); }
 .ab-palette-glass { flex: none; }
-.ab-palette-input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: var(--ab-text-base); color: var(--ab-fg); padding: 4px 0; }
+.ab-palette-input { flex: 1; min-width: 0; min-height: 36px; border: 0; background: transparent; font-size: var(--ab-text-base); color: var(--ab-fg); padding: 4px 0; }
 .ab-palette-input::placeholder { color: var(--ab-fg-muted); }
 .ab-palette-input:focus-visible { box-shadow: none; outline: 2px solid var(--ab-accent); outline-offset: 4px; border-radius: var(--ab-radius-xs); }
-.ab-palette-list { overflow: auto; padding: 4px 6px 8px; }
-.ab-palette-group { padding: 10px 8px 4px; font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-muted); }
-.ab-palette-item { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 6px 8px; border-radius: var(--ab-radius); cursor: pointer; }
+.ab-palette-close { flex: none; }
+.ab-palette-list { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-block: 4px 12px; padding-inline: 8px; }
+.ab-palette-section + .ab-palette-section { margin-top: 6px; }
+/* a group brought to the top (All tools opened at it) keeps a little air above its heading */
+.ab-palette-section { scroll-margin-top: 4px; }
+.ab-palette-group { padding-block: 10px 4px; padding-inline: 8px; font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-palette-item { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 44px; padding: 6px 8px; border-radius: var(--ab-radius); cursor: pointer; }
+.ab-palette-item:hover { background: var(--ab-bg-subtle); }
 .ab-palette-item.is-active { background: var(--ab-accent-soft); }
 .ab-palette-icon { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); color: var(--ab-fg-soft); }
-/* an AI command's icon looks like any other: the spark at the end of the row is its mark */
+/* an AI tool's icon looks like any other: the spark at the end of the row is its mark */
 .ab-palette-icon.is-ai { background: var(--ab-bg-sunken); color: var(--ab-fg-soft); }
 .ab-palette-item.is-active .ab-palette-icon { background: var(--ab-bg-raised); }
 .ab-palette-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ab-palette-label { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ab-palette-hint { font-size: var(--ab-text-sm); color: var(--ab-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the line under a tool: what it shows or does; two lines at most on a narrow panel rather than cut after a few words */
+.ab-palette-hint { font-size: var(--ab-text-sm); color: var(--ab-fg-muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .ab-palette-item .ab-ai-badge { color: var(--ab-ai); }
 .ab-palette-empty { margin: 0; padding: 20px 12px; text-align: center; color: var(--ab-fg-muted); overflow-wrap: anywhere; }
-.ab-palette-foot { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 14px; border-top: 1px solid var(--ab-divider); background: var(--ab-bg-subtle); font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+.ab-palette-foot { flex: none; display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 16px; border-top: 1px solid var(--ab-divider); background: var(--ab-bg-subtle); font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
 .ab-palette-foot kbd { display: inline-flex; align-items: center; font-family: var(--ab-mono); font-size: var(--ab-text-xs); padding: 0 4px; border: 1px solid var(--ab-border-strong); border-radius: var(--ab-radius-xs); background: var(--ab-bg); color: var(--ab-fg-soft); }

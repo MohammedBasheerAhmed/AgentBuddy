@@ -3,9 +3,10 @@
 // INSIGHT_CARDS: [{ id, title, kinds, profiles, order(record, header), defaultOpen, openWhen(record, header), Card }]
 //   Card props: { page, eff, record, header, active, open, setSummary(text), setAttention(status), onShowCard? }
 //     setSummary: the card's one-line answer, shown on its row without opening it
-//     setAttention: the card's status: 'danger' | 'warn' (it needs a look: its row comes first, its item in the side rail has a dot and
-//       the Insights tab counts it), 'ok' (good news: a fix was found), 'clear' (nothing to report: it waits under "All clear in ..."),
-//       '' (plain)
+//     setAttention: the card's status: 'danger' | 'warn' (it needs a look: its row comes first, and the row of the five it is in has
+//       a dot, in the list and in the side rail, and counts on the Insights tab), 'ok' (good news: a fix was found), 'clear' (nothing
+//       to report), '' (plain)
+//   Which of the five rows a card is drawn in, if any, is src/features/focus.js PAIN_POINTS; the others are under All tools.
 //   order: a function of the ticket's state (src/insights/order.js): New tickets put missing details and routing first, resolved ones
 //          "Ready to resolve?", tickets on hold the right email.
 //   defaultOpen: a card that is the record's own main view (request status, the checklist, article checks, chat facts) opens on first
@@ -17,6 +18,7 @@ import { openFor, rankFor } from '../../../insights/order.js';
 import { recordKey } from './useInsight.js';
 import Glance from './Glance.jsx';
 import RelatedCard from './RelatedCard.jsx';
+import CallerCard from './CallerCard.jsx';
 import KnowledgeCard from './KnowledgeCard.jsx';
 import ResolveCard from './ResolveCard.jsx';
 import RequestCard from './RequestCard.jsx';
@@ -72,6 +74,7 @@ export const INSIGHT_CARDS = Object.freeze([
   card('missing', () => t('Missing details'), FAULTS, ['it', 'csm'], MissingCard), // N11
   card('routing', () => t('Where similar tickets went'), ['incident', 'case'], ['it', 'csm'], RoutingCard), // N10
   card('steps', () => t('Steps that worked before'), ['incident', 'problem', 'case', 'requested_item', 'catalog_task', 'task'], ['it', 'csm', 'req'], StepsCard), // N12
+  card('caller', () => t("Caller's other tickets"), TICKETS, ['all'], CallerCard), // N2, the caller's half (the "Same caller" row)
   card('related', () => t('Related tickets'), TICKETS, ['all'], RelatedCard), // N2
   card('knowledge', () => t('Knowledge for this ticket'), TICKETS.filter((k) => k !== 'change'), ['all'], KnowledgeCard), // N3
   card('changes', () => t('Recent changes on this CI or service'), WITH_CI, ['it', 'mpc'], ChangesCard), // N25

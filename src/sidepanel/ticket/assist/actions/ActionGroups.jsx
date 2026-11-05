@@ -10,25 +10,23 @@ import { actionPlan, offeredFeatures } from './plan.js';
 import { useChecklistNeed } from './useChecklistNeed.js';
 import { t, t as tr } from '../../../../i18n/index.js';
 
-// The AI actions of the Ticket screen (TRACKER.md 3.5 and 2.4), in two parts the AI Assist half places around its answers:
-//   SuggestedActions  "Suggested while you work on it": the three that fit the ticket's state, as rows (an icon, the name, one line).
-//                     A row starts its action on a click; the first carries the screen's one filled mark ("Start" on its row).
-//   MoreActions       "More actions (n)": everything else, folded, as small buttons by what the agent is doing (Understand, Reply,
-//                     Work it, Resolve).
+// The AI actions of the Ticket screen (docs/focus-layout.md, A): FIVE rows, one per pain point the record has an action for
+// (understand the ticket, find the fix, the same caller, reply, close well; src/features/focus.js). Each row names its pain point in a
+// small label above it, then the action as a row (an icon, the name, one line); a click starts it. The first of the ticket's stage that
+// can run carries the screen's one filled mark ("Start" on its row). Every other action the record offers is in All tools.
 // An action that cannot run says why instead of failing after the click; a reason that stops every action (a blocked table, HR content
-// not allowed) is said once, above them. useActionPlan works the plan out once for both parts.
+// not allowed) is said once, above them. useActionPlan works the plan out once, for these rows and for the side rail.
 //
-// props of both: { plan (useActionPlan), eff, busy, aiReady, onRun(feature, options) }; SuggestedActions also `quiet`
+// FocusActions props: { plan (useActionPlan), eff, busy, aiReady, quiet, onRun(feature, options) }
 //   busy: an answer is being read, previewed or sent (the buttons wait); aiReady: AI can be used now (the shell says how to set it
-//   up when it cannot, so this view only disables); quiet: an answer with its own filled main button is on screen, so the first
-//   suggestion is not filled (one filled button per screen). Every action goes through onRun, which is useRun: preview, masking and
-//   policy.
+//   up when it cannot, so this view only disables); quiet: an answer with its own filled main button is on screen, so no row is filled
+//   (one filled button per screen). Every action goes through onRun, which is useRun: preview, masking and policy.
 
 const CHECKLIST = 'fulfilment-checklist';
 const CHECKLIST_KINDS = ['catalog_task', 'requested_item'];
 
 /**
- * What AI Assist offers on this record (actionPlan), worked out once for the suggestions and "More actions".
+ * What AI Assist offers on this record (actionPlan), worked out once for its five rows and the side rail.
  * The checklist action is offered only when the written instructions have no steps: that needs one read, made only where it can
  * matter (a request item or task, the action allowed and in the person's profiles, AI usable now).
  */
@@ -84,12 +82,16 @@ function FormatToggle({ feature, eff }) {
 
 const hoverOf = (reason, where) => reason || (where ? t('Sends masked text to {where}. You see it first.', { where }) : t('Sends masked text to your AI. You see it first.'));
 
-/** One suggested action: a row that starts it on a click. The first one carries the screen's one filled mark, "Start". */
-function ActionRow({ item, primary, off, where, eff, onRun }) {
+/**
+ * One of the five: the pain point it answers as a small label above it (outside the button, so the button's text starts with the
+ * action's title), then a row that starts the action on a click. The primary one carries the screen's one filled mark, "Start".
+ */
+function ActionRow({ pain = '', painTitle = '', item, primary, off, where, eff, onRun }) {
   const { feature, reason, caution } = item;
   const hover = hoverOf(reason, where);
   return (
-    <li className="ab-act-item">
+    <li className="ab-act-item" data-pain={pain || undefined}>
+      {painTitle && <p className="ab-act-pain">{painTitle}</p>}
       <button
         type="button"
         className={`ab-row ab-act ab-act-row${primary ? ' ab-act-primary' : ''}`}
@@ -119,113 +121,47 @@ function ActionRow({ item, primary, off, where, eff, onRun }) {
   );
 }
 
-/** One action under "More actions": a small button with the AI mark; why it cannot run (or a caution) is said under its group. */
-function ActionPill({ item, off, where, onRun, noteId }) {
-  const { feature, reason } = item;
-  const hover = reason || `${tr(feature.description)} ${hoverOf('', where)}`;
-  return (
-    <li className="ab-act-pill-item">
-      <button
-        type="button"
-        className="ab-act ab-act-pill"
-        data-feature={feature.id}
-        disabled={off || Boolean(reason)}
-        title={hover}
-        aria-describedby={noteId}
-        onClick={() => onRun(feature)}
-      >
-        <AiBadge label="" title={hover} />
-        <span className="ab-act-title">{tr(feature.title)}</span>
-      </button>
-    </li>
-  );
-}
-
-/** "Suggested while you work on it": the actions that fit the ticket's state. A reason that stops them all is said once, above. */
-export function SuggestedActions({ plan, eff, busy = false, aiReady = true, quiet = false, onRun }) {
-  const headId = `ab-acts${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+/** The five rows of AI Assist (plan.five). A reason that stops them all is said once, above. */
+export function FocusActions({ plan, eff, busy = false, aiReady = true, quiet = false, onRun }) {
   const where = destinationOf(eff);
   const off = !aiReady || busy || Boolean(plan.block);
   if (!plan.total) {
     return (
-      <section className="ab-acts ab-acts-suggested" aria-label={t('AI actions')}>
+      <section className="ab-acts ab-acts-five" aria-label={t('AI actions')}>
         <p className="ab-act-empty">{t('No AI actions fit this record. Insights still has what can be read here.')}</p>
       </section>
     );
   }
   return (
-    <section className="ab-acts ab-acts-suggested" aria-labelledby={plan.suggested.length ? headId : undefined} aria-label={plan.suggested.length ? undefined : t('AI actions')} data-stage={plan.stage || 'unknown'}>
+    <section className="ab-acts ab-acts-five" aria-label={t('AI actions')} data-stage={plan.stage || 'unknown'}>
       {plan.block && (
         <p className="ab-note ab-note-warn" role="note">
           {plan.block}
         </p>
       )}
-      {plan.suggested.length > 0 && (
-        <>
-          <h3 className="ab-section-title ab-act-head" id={headId}>
-            {plan.words}
-          </h3>
-          <ul className="ab-rows ab-act-list">
-            {plan.suggested.map((it, i) => (
-              <ActionRow key={it.feature.id} item={it} primary={i === 0 && !off && !quiet} off={off} where={where} eff={eff} onRun={onRun} />
-            ))}
-          </ul>
-        </>
+      {plan.five.length > 0 && (
+        <ul className="ab-rows ab-act-list">
+          {plan.five.map(({ pain, painTitle, item }) => (
+            <ActionRow
+              key={item.feature.id}
+              pain={pain}
+              painTitle={painTitle}
+              item={item}
+              primary={item.feature.id === plan.primary && !off && !quiet}
+              off={off}
+              where={where}
+              eff={eff}
+              onRun={onRun}
+            />
+          ))}
+        </ul>
       )}
     </section>
   );
 }
 
-/** "More actions (n)": the rest, folded, as small buttons in their groups. */
-export function MoreActions({ plan, eff, busy = false, aiReady = true, onRun }) {
-  const moreId = `ab-more${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const [open, setOpen] = useState(false);
-  if (!plan.total || !plan.more) return null;
-  const where = destinationOf(eff);
-  const off = !aiReady || busy || Boolean(plan.block);
-  return (
-    <section className="ab-acts ab-acts-more" aria-label={t('More actions')}>
-      <button type="button" className="ab-act-moretoggle" aria-expanded={open} aria-controls={moreId} onClick={() => setOpen(!open)}>
-        <span className="ab-act-moretext">
-          {t('More actions ({count})', { count: plan.more })}
-        </span>
-        <Icon name="chevronDown" size={16} className="ab-chevron" />
-      </button>
-      <div id={moreId} className="ab-act-groups" hidden={!open}>
-        {plan.groups.map((g) => {
-          // What a button cannot say on itself: why it is off, or where its text would land (a catalog task's reply).
-          const notes = g.items.filter((it) => it.reason || it.caution);
-          const noteId = (it) => `${moreId}-${it.feature.id}-note`;
-          return (
-            <div key={g.id} className="ab-act-group" role="group" aria-labelledby={`${moreId}-${g.id}`}>
-              <h4 className="ab-act-grouphead" id={`${moreId}-${g.id}`}>
-                {g.label}
-              </h4>
-              <ul className="ab-act-pills">
-                {g.items.map((it) => (
-                  <ActionPill key={it.feature.id} item={it} off={off} where={where} onRun={onRun} noteId={it.reason || it.caution ? noteId(it) : undefined} />
-                ))}
-              </ul>
-              {notes.map((it) => (
-                <p key={it.feature.id} id={noteId(it)} className={it.reason ? 'ab-act-reason ab-act-note' : 'ab-act-caution ab-act-note'}>
-                  {t('{action}: {why}', { action: tr(it.feature.title), why: it.reason || it.caution })}
-                </p>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-/** Both parts together (where nothing goes between them). props: { page, eff, record, header, busy, aiReady, quiet, onRun } */
+/** The five rows with their own plan (where nothing else needs the plan). props: { page, eff, record, header, busy, aiReady, quiet, onRun } */
 export default function ActionGroups({ page, eff, record, header = null, busy = false, aiReady = true, quiet = false, onRun }) {
   const plan = useActionPlan({ page, eff, record, header, aiReady });
-  return (
-    <>
-      <SuggestedActions plan={plan} eff={eff} busy={busy} aiReady={aiReady} quiet={quiet} onRun={onRun} />
-      <MoreActions plan={plan} eff={eff} busy={busy} aiReady={aiReady} onRun={onRun} />
-    </>
-  );
+  return <FocusActions plan={plan} eff={eff} busy={busy} aiReady={aiReady} quiet={quiet} onRun={onRun} />;
 }

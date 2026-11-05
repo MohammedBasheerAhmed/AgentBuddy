@@ -263,12 +263,12 @@ test('a switch saves its choice like the tick box it is', async () => {
   const ui = await mount(<Options />);
   await settle(6);
   const saved = async () => (await fake.chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY];
-  const byState = ui.field("When I have not arranged a kind, put what fits the ticket's state first.");
-  assert.equal(byState.getAttribute('role'), 'switch');
-  assert.equal(byState.checked, true);
-  await click(byState);
+  const rail = ui.field('Show the side rail');
+  assert.equal(rail.getAttribute('role'), 'switch');
+  assert.equal(rail.checked, false);
+  await click(rail);
   await settle(3);
-  assert.equal((await saved()).railByState, false);
+  assert.equal((await saved()).railShow, true);
   await click(ui.field('Show everything: every card and action, whatever you work on.'));
   await settle(3);
   assert.equal((await saved()).showEverything, true);

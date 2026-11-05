@@ -214,7 +214,7 @@ The HR case brief also needs Strict (or Local-only) privacy mode.
 
 | Where | Ids |
 |---|---|
-| Actions on a record | `record-summary`, `reply-draft`, `resolution-notes`, `handoff-brief`, `missing-info`, `sentiment-risk`, `next-best-action`, `thread-summary`, `routing-hint`, `kb-article-draft`, `major-incident-comms`, `hr-case-brief`, `account-briefing`, `case-eng-escalation`, `problem-rca`, `change-cab-brief`, `article-optimise`, `chat-summary`, `chat-reply` |
+| Actions on a record | `record-summary`, `reply-draft`, `resolution-notes`, `handoff-brief`, `missing-info`, `sentiment-risk`, `next-best-action`, `thread-summary`, `routing-hint`, `kb-article-draft`, `major-incident-comms`, `hr-case-brief`, `account-briefing`, `caller-briefing`, `case-eng-escalation`, `problem-rca`, `change-cab-brief`, `article-optimise`, `chat-summary`, `chat-reply` |
 | Knowledge tools | `kb-merge-draft`, `kb-gap-outline` |
 | Write: email drafts | `email-ask-info`, `email-status-update`, `email-resolution`, `email-approval-nudge`, `email-apology`, `email-closure` |
 | Write: rewrite and notes | `rewrite-short`, `rewrite-friendly`, `rewrite-plain`, `rewrite-formal`, `rewrite-fix`, `rewrite-translate`, `rewrite-bilingual`, `notes-to-ticket` |

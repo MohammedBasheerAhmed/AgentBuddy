@@ -12,7 +12,7 @@
 //    the fake instance has no major incident state); every action carries the AI mark.
 const { findLeaks } = require('../leaks.js');
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, textOf, checkAiRun, loadingElements } = require('../common.js');
-const { runFeature, openHalf } = require('../ui.js');
+const { runFeature, openHalf, offeredActionTitles } = require('../ui.js');
 
 const T = {
   sentiment: 'Check mood and escalation risk',
@@ -44,11 +44,8 @@ async function openMoreActions(page) {
     if (more) more.click();
   });
 }
-/** Every action AI Assist offers for the record on show, with "More actions" unfolded. */
-async function actionTitles(page) {
-  await openMoreActions(page);
-  return page.evaluate(() => window.__vis(document.querySelectorAll('.ab-acts .ab-act-title')).map((e) => e.innerText.trim()));
-}
+/** Every action the record on show offers: AI Assist's five and the rest in All tools (docs/focus-layout.md). */
+const actionTitles = (page) => offeredActionTitles(page);
 /** Put every answer on screen away (round 3 keeps several answers per ticket). */
 const closeAnswers = (p) => p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
 /** The buttons in the row of the newest answer (Copy, its first box, Refine, More). */
@@ -188,8 +185,11 @@ module.exports = {
     await waitForText(p, 'INC0010101', { timeout: 20000 });
     await p.waitForSelector('.ab-acts', { timeout: 15000 });
     await ctx.sleep(500);
-    const firstThree = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-acts > .ab-act-list .ab-act-title')).map((e) => e.innerText.trim()));
-    t.check('major-incident-comms: offered on a priority 1 incident, among the first suggestions while it is worked', firstThree.includes(T.major), firstThree.join(' | '));
+    // Since the focus layout AI Assist shows five (one per pain point); the major incident updates are in All tools, which knows the
+    // ticket's priority from the header the Ticket screen read.
+    await ctx.waitUntil('the priority 1 header', async () => /Critical|\b1\b/.test((await p.evaluate(() => document.querySelector('.ab-glance')?.innerText || '')) || ''), { timeout: 15000 }).catch(() => {});
+    const offeredP1 = await actionTitles(p);
+    t.check('major-incident-comms: offered on a priority 1 incident (in All tools, with the other actions beyond the five)', offeredP1.includes(T.major), offeredP1.join(' | '));
     before = ai.requests.length;
     ran = await runFeature(p, new RegExp(`^${T.major}`));
     await checkAiRun(t, ctx, p, 'major-incident-comms', ran, { before, system: /write stakeholder updates during a major incident/, userHas: [/Email outage for Sales/] });

@@ -1,4 +1,4 @@
-// The search of the command palette. Pure: no React, no chrome.* (tests/palette.test.js).
+// The search of the command palette (All tools). Pure: no React, no chrome.* (tests/palette.test.js).
 //
 // A command is { id, label, hint?, keywords?, group, ... }. A query is split into words and EVERY word must match somewhere in the
 // command: its label (best), its hint or its keywords. A word matches at the start of a word of the label (best), inside the label,
@@ -65,4 +65,17 @@ export function rankCommands(commands, query, limit = 60) {
   });
   scored.sort((a, b) => b.total - a.total || a.order - b.order);
   return scored.slice(0, limit).map((s) => s.command);
+}
+
+/**
+ * The commands that match the query under their group headings (All tools): the groups in the order the commands came in, each with
+ * its matches ranked as rankCommands ranks them, and a group with no match left out. The headings stay while the person types, so
+ * "reply" found under "More for this ticket: AI Assist" still says where it lives. No limit: a group is never cut off at the end.
+ * @returns {{ group: string, items: object[] }[]}
+ */
+export function groupCommands(commands, query) {
+  const order = [];
+  for (const command of commands) if (!order.includes(command.group)) order.push(command.group);
+  const found = rankCommands(commands, query, Infinity);
+  return order.map((group) => ({ group, items: found.filter((c) => c.group === group) })).filter((g) => g.items.length > 0);
 }

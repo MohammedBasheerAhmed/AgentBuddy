@@ -33,7 +33,6 @@ const AR_TICKET_PANEL = {
   'Uses AI. Masked text goes to the AI you chose, after a preview.': 'يستخدم الذكاء الاصطناعي. يرسل النص بعد إخفاء البيانات الشخصية إلى الذكاء الاصطناعي الذي اخترته، بعد المعاينة.',
   Done: 'تم',
   '{label} (AI)': '{label} (AI)',
-  'Opens the card in Insights. Stays in ServiceNow.': 'يفتح البطاقة في الرؤى. تبقى في ServiceNow.',
 
   'Details are not available to you.': 'التفاصيل غير متاحة لك.',
   '(no short description)': '(بلا وصف مختصر)',
@@ -46,7 +45,6 @@ const AR_TICKET_PANEL = {
   'That action is not available for this record.': 'هذا الإجراء غير متاح لهذا السجل.',
 
   'Earlier tickets from this person': 'تذاكر سابقة من هذا الشخص',
-  'This ticket': 'هذه التذكرة',
   Refresh: 'تحديث',
   'Earlier tickets from {name}': 'تذاكر سابقة من {name}',
   today: 'اليوم',
@@ -108,10 +106,7 @@ const AR_TICKET_PANEL = {
   'Sends masked text to your AI. You see it first.': 'يرسل النص بعد إخفاء البيانات الشخصية إلى الذكاء الاصطناعي لديك. تراه أولا.',
   'AI actions': 'إجراءات الذكاء الاصطناعي',
   'No AI actions fit this record. Insights still has what can be read here.': 'لا توجد إجراءات للذكاء الاصطناعي مناسبة لهذا السجل. تبقى الرؤى تعرض ما يمكن قراءته هنا.',
-  'More actions': 'المزيد من الإجراءات',
-  'More actions ({count})': 'المزيد من الإجراءات ({count})',
   Start: 'ابدأ',
-  '{action}: {why}': '{action}: {why}',
 
   // ---- the Ticket screen (the 2026-11-05 layout): the ticket at the top, the side rail, the Insights rows (what needs you now first) ----
   'Ticket details': 'تفاصيل التذكرة',
@@ -120,7 +115,6 @@ const AR_TICKET_PANEL = {
   Contact: 'جهة الاتصال',
   Updated: 'آخر تحديث',
   Service: 'الخدمة',
-  'All insights': 'كل الرؤى',
   'Insights: {n} needs a look|Insights: {n} need a look': pl('الرؤى: {n} عناصر تحتاج إلى مراجعة', 'الرؤى: {n} عنصر يحتاج إلى مراجعة', 'الرؤى: {n} عنصران يحتاجان إلى مراجعة', 'الرؤى: {n} عناصر تحتاج إلى مراجعة', 'الرؤى: {n} عنصرا يحتاج إلى مراجعة', 'الرؤى: {n} عنصر يحتاج إلى مراجعة'),
   'The SLA is breached': 'تم تجاوز اتفاقية مستوى الخدمة (SLA)',
   'The SLA was due {span} ago': 'كان موعد اتفاقية مستوى الخدمة (SLA) قبل {span}',
@@ -131,7 +125,6 @@ const AR_TICKET_PANEL = {
   '{n} message without a reply|{n} messages without a reply': pl('{n} رسائل بلا رد', '{n} رسالة بلا رد', '{n} رسالتان بلا رد', '{n} رسائل بلا رد', '{n} رسالة بلا رد', '{n} رسالة بلا رد'),
   'Possible outage: {line}': 'انقطاع محتمل: {line}',
   'Needs a look.': 'يحتاج إلى مراجعة.',
-  'All clear in {list}': 'لا شيء يستدعي الانتباه في: {list}',
   Strict: 'صارم',
   'Local-only': 'محلي فقط',
   Understand: 'الفهم',

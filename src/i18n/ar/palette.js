@@ -1,17 +1,12 @@
-// Arabic texts: the command palette, the colours (light and dark) and the header buttons. See src/i18n/ar/index.js.
-// Style and words: docs/i18n-arabic.md.
+// Arabic texts: the command palette (All tools; its own new texts are in focus.js) and the colours (light and dark). See
+// src/i18n/ar/index.js. Style and words: docs/i18n-arabic.md.
 export const AR_PALETTE = {
   'Appearance': 'المظهر',
   'Colours': 'الألوان',
   'Light': 'فاتح',
   'Dark': 'داكن',
   'Same as the computer': 'مثل الكمبيوتر',
-  'The panel, this page, the team page and the bar on the ServiceNow page. The sun and moon button in the panel switches it too.': 'اللوحة وهذه الصفحة وصفحة الفريق والشريط في صفحة ServiceNow. يغيّره أيضا زر الشمس والقمر في اللوحة.',
-  'Switch to light colours': 'التبديل إلى الألوان الفاتحة',
-  'Switch to dark colours': 'التبديل إلى الألوان الداكنة',
-  'Search commands': 'البحث في الأوامر',
-  'Commands': 'الأوامر',
-  'Type a command or a screen…': 'اكتب أمرا أو اسم شاشة…',
+  'The panel, this page, the team page and the bar on the ServiceNow page. All tools in the panel switches it too.': 'اللوحة وهذه الصفحة وصفحة الفريق والشريط في صفحة ServiceNow. يغيّره أيضا "كل الأدوات" في اللوحة.',
   'Nothing matches "{query}".': 'لا شيء يطابق "{query}".',
   'move': 'تنقل',
   'run': 'تنفيذ',

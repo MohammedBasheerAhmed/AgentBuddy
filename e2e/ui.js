@@ -34,23 +34,97 @@ const buttonShown = (page, re) =>
     return [...document.querySelectorAll('button')].some((b) => !b.disabled && b.getClientRects().length > 0 && rx.test(b.innerText.trim()));
   }, re.source, re.flags);
 
-/** Bring an AI action on screen: the AI Assist half, then "More actions" when it is folded there. Returns whether it is now shown. */
+const allToolsShown = (page) => page.evaluate(() => [...document.querySelectorAll('.ab-palette')].some((e) => e.getClientRects().length > 0));
+
+/**
+ * Open All tools (docs/focus-layout.md: the command palette grown into the place where everything beyond the five lives) with its
+ * button in the header, or with Ctrl+K when there is no button to press.
+ */
+async function openAllTools(page, { timeout = 5000 } = {}) {
+  if (await allToolsShown(page)) return;
+  const pressed = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('.ab-header button')].find((x) => x.getClientRects().length > 0 && /^All tools/.test(x.getAttribute('aria-label') || ''));
+    b?.click();
+    return Boolean(b);
+  });
+  if (!pressed) {
+    await page.keyboard.down('Control');
+    await page.keyboard.press('KeyK');
+    await page.keyboard.up('Control');
+  }
+  await page.waitForFunction(() => [...document.querySelectorAll('.ab-palette')].some((e) => e.getClientRects().length > 0), { timeout });
+}
+
+/**
+ * Choose an entry of All tools whose label matches (a string: its start; a RegExp). Opens All tools first. Returns whether one was
+ * there to choose (All tools is closed again when there was none).
+ */
+async function chooseTool(page, pattern) {
+  const re = pattern instanceof RegExp ? pattern : new RegExp(`^${String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+  await openAllTools(page);
+  const chosen = await page.evaluate(
+    (src, flags) => {
+      const rx = new RegExp(src, flags);
+      const option = [...document.querySelectorAll('.ab-palette [role=option]')].find((o) => rx.test((o.querySelector('.ab-palette-label')?.innerText || o.innerText).trim()));
+      option?.click();
+      return Boolean(option);
+    },
+    re.source,
+    re.flags
+  );
+  if (!chosen) await page.keyboard.press('Escape');
+  return chosen;
+}
+
+/**
+ * The titles of every AI action the record on show offers: the five rows of AI Assist, then the rest from All tools' "More for this
+ * ticket: AI Assist" group ("Ask about this ticket" left out). All tools is closed again.
+ */
+async function offeredActionTitles(page) {
+  await openHalf(page, 'assist');
+  const five = await page.evaluate(() => [...document.querySelectorAll('.ab-acts .ab-act-title')].filter((e) => e.getClientRects().length > 0).map((e) => e.innerText.trim()));
+  await openAllTools(page);
+  const rest = await page.evaluate(() =>
+    [...document.querySelectorAll('.ab-palette-section[data-group="ticket-assist"] [role=option]')]
+      .filter((o) => o.getAttribute('data-command') !== 'run:ask:ticket')
+      .map((o) => (o.querySelector('.ab-palette-label')?.innerText || '').trim())
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => ![...document.querySelectorAll('.ab-palette')].some((e) => e.getClientRects().length > 0), { timeout: 5000 });
+  return [...five, ...rest];
+}
+
+/** Is this AI action offered for the record on show: one of AI Assist's five, or in All tools? Starts nothing. */
+async function actionOffered(page, re) {
+  await openHalf(page, 'assist');
+  if (await buttonShown(page, re)) return true;
+  await openAllTools(page);
+  const there = await page.evaluate(
+    (src, flags) => [...document.querySelectorAll('.ab-palette [role=option]')].some((o) => new RegExp(src, flags).test((o.querySelector('.ab-palette-label')?.innerText || '').trim())),
+    re.source,
+    re.flags
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => ![...document.querySelectorAll('.ab-palette')].some((e) => e.getClientRects().length > 0), { timeout: 5000 });
+  return there;
+}
+
+/** Start an AI action: its button among AI Assist's five, or its entry in All tools (the check before sending opens either way). */
+async function startAction(page, re) {
+  if (await buttonShown(page, re)) return clickButton(page, re);
+  if (!(await chooseTool(page, re))) throw new Error(`No AI action matches ${re}`);
+  return null;
+}
+
+/**
+ * Bring an AI action on screen: the AI Assist half shows five (one per pain point); any other action is in All tools, where choosing
+ * it STARTS it (the check before sending opens), exactly as the bar on the ServiceNow page does. Returns true when the action's
+ * button is now on screen, 'started' when All tools started it, false when it is nowhere.
+ */
 async function showAction(page, re) {
   await openHalf(page, 'assist');
   if (await buttonShown(page, re)) return true;
-  const opened = await page.evaluate(() => {
-    const more = [...document.querySelectorAll('button')].find((b) => b.getClientRects().length > 0 && /^More actions/.test(b.innerText.trim()));
-    if (!more) return false;
-    more.click();
-    return true;
-  });
-  if (!opened) return false;
-  try {
-    await page.waitForFunction((src, flags) => [...document.querySelectorAll('button')].some((b) => !b.disabled && b.getClientRects().length > 0 && new RegExp(src, flags).test(b.innerText.trim())), { timeout: 3000 }, re.source, re.flags);
-    return true;
-  } catch {
-    return false;
-  }
+  return (await chooseTool(page, re)) ? 'started' : false;
 }
 
 /** Empty a text box the way a person does (select all, delete), so the page's own state (React) sees it. */
@@ -111,10 +185,10 @@ const waitForVisible = (page, selector, timeout = 15000) =>
  * With the preview switched off the answer (or the error) simply appears: preview is then null.
  */
 async function runFeature(page, feature, { approve = true } = {}) {
-  // AI actions live in the AI Assist half: bring it forward when the action is not on screen (a quick-bar button may be).
+  // AI actions live in the AI Assist half (five of them) and in All tools (the rest; choosing one there starts it).
   const re = feature instanceof RegExp ? feature : new RegExp(`^${String(feature).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
-  if (!(await buttonShown(page, re))) await showAction(page, re);
-  await clickButton(page, feature);
+  const shown = (await buttonShown(page, re)) || (await showAction(page, re));
+  if (shown !== 'started') await clickButton(page, feature);
   await waitForVisible(page, '.ab-dialog, .ab-note-danger, .ab-output, .ab-confirm-short');
   // The full check shows the ticket data first with the fixed rules folded (AI0.2); "Show the exact text" turns it into the request
   // character for character, which is what a scenario compares with what the AI server received.
@@ -149,4 +223,4 @@ function deepTextareaValue(label) {
   return walk(document);
 }
 
-module.exports = { clickButton, waitForText, textOf, waitForVisible, runFeature, waitForRecord, deepTextareaValue, openScreen, openHalf, buttonShown, showAction, clearBox };
+module.exports = { clickButton, waitForText, textOf, waitForVisible, runFeature, waitForRecord, deepTextareaValue, openScreen, openHalf, buttonShown, showAction, clearBox, openAllTools, chooseTool, offeredActionTitles, actionOffered, startAction };

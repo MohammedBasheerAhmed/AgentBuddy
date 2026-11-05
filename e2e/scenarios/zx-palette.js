@@ -1,5 +1,6 @@
-// zx. The look of the panel and the command palette (TRACKER R9): the header, the light / dark / computer's colours (panel, Settings and the bar
-//     on the ServiceNow page), and the palette: it opens with Ctrl+K and from the header, searches, runs a command with Enter, closes with Esc,
+// zx. The look of the panel and All tools (TRACKER R9; since 2026-11-05 the palette is "All tools", docs/focus-layout.md): the header, the
+//     light / dark / computer's colours (panel, Settings and the bar on the ServiceNow page), and All tools: it opens with Ctrl+K and from the
+//     header, lists what the Ticket screen does not show (the five stay out of it), searches, runs a command with Enter, closes with Esc,
 //     sends nothing by itself (an AI action opens the preview first), works in Arabic, and passes the accessibility audit open in every mode.
 const { auditPage } = require('../a11y.js');
 const { prepare } = require('../common.js');
@@ -10,7 +11,7 @@ const LIGHT_BG = 'rgb(255, 255, 255)';
 
 module.exports = {
   id: 'zx',
-  title: 'Look and feel: the header, light/dark/computer colours everywhere, and the command palette (Ctrl+K)',
+  title: 'Look and feel: the header, light/dark/computer colours everywhere, and All tools (Ctrl+K)',
   timeoutMs: 240000,
   async run(t, ctx) {
     const { data, ai } = ctx;
@@ -53,8 +54,8 @@ module.exports = {
       promise: [document.querySelector('.ab-header .ab-brandtext')?.title || '', document.querySelector('.ab-header .ab-promise')?.textContent || ''],
     }));
     t.check('header: the mark, the name and the instance it reads', header.mark && header.name === 'Agent Buddy' && Boolean(header.instance), JSON.stringify(header));
-    t.check('header: buttons for the palette, the colours and Settings, each with a name', ['Search commands', 'Switch to dark colours', 'Settings'].every((n) => header.buttons.includes(n)), JSON.stringify(header.buttons));
-    t.check('header: no more than those three buttons, and the privacy promise is still said there (on hover and to a screen reader)', header.buttons.length === 3 && header.promise.every((x) => /Personal data is masked before any AI call/.test(x)), JSON.stringify(header));
+    t.check('header: two buttons, All tools and Settings, each with a name (the colours moved to Settings and All tools)', JSON.stringify(header.buttons) === JSON.stringify(['All tools', 'Settings']), JSON.stringify(header.buttons));
+    t.check('header: the privacy promise is still said there (on hover and to a screen reader)', header.promise.every((x) => /Personal data is masked before any AI call/.test(x)), JSON.stringify(header));
 
     // ---- opening, searching, running --------------------------------------------------------------------------------------------------
     await openPalette();
@@ -62,20 +63,22 @@ module.exports = {
     const dialog = await p.evaluate(() => {
       const d = document.querySelector('.ab-palette');
       const input = d.querySelector('input');
-      return { modal: d.getAttribute('aria-modal'), role: d.getAttribute('role'), focused: document.activeElement === input, combobox: input.getAttribute('role'), active: input.getAttribute('aria-activedescendant'), behindInert: document.querySelector('.ab-header')?.hasAttribute('inert') && Boolean(document.querySelector('.ab-main')?.closest('[inert]')) && Boolean(document.querySelector('.ab-screens')?.closest('[inert]')) };
+      return { name: d.getAttribute('aria-label'), groups: [...d.querySelectorAll('.ab-palette-section[data-group]')].map((g) => g.getAttribute('data-group')), modal: d.getAttribute('aria-modal'), role: d.getAttribute('role'), focused: document.activeElement === input, combobox: input.getAttribute('role'), active: input.getAttribute('aria-activedescendant'), behindInert: document.querySelector('.ab-header')?.hasAttribute('inert') && Boolean(document.querySelector('.ab-main')?.closest('[inert]')) && Boolean(document.querySelector('.ab-screens')?.closest('[inert]')) };
     });
     t.check('Ctrl+K opens a modal dialog with the focus in its search box (a combobox)', dialog.modal === 'true' && dialog.role === 'dialog' && dialog.focused && dialog.combobox === 'combobox', JSON.stringify(dialog));
     t.check('the rest of the panel is shut off while it is open', dialog.behindInert === true, JSON.stringify(dialog));
-    t.check('it lists the screens, the AI actions of this ticket, Settings, the colours and the languages', ['go:ticket', 'go:team', 'run:record-summary', 'run:reply-draft', 'run:card:related', 'settings', 'theme:dark', 'language:ar'].every((id) => first.some((o) => o.id === id)), first.map((o) => o.id).join(' '));
+    t.check('it is called All tools, in four groups: more for this ticket (Insights, AI Assist), Go to, Panel', dialog.name === 'All tools' && JSON.stringify(dialog.groups) === JSON.stringify(['ticket-insights', 'ticket-assist', 'go', 'panel']), JSON.stringify(dialog));
+    t.check('it lists the cards and AI actions beyond the five, Ask about this ticket, the screens, Settings, the colours and the languages', ['run:show:related', 'run:show:missing', 'run:ask:ticket', 'run:handoff-brief', 'go:ticket', 'go:team', 'settings', 'theme:dark', 'language:ar'].every((id) => first.some((o) => o.id === id)), first.map((o) => o.id).join(' '));
+    t.check('...and not the five the Ticket screen already shows', !['run:record-summary', 'run:reply-draft', 'run:resolution-notes', 'run:show:resolve', 'run:show:knowledge'].some((id) => first.some((o) => o.id === id)), first.map((o) => o.id).join(' '));
     t.check('one command is highlighted and the box names it (aria-activedescendant)', first.filter((o) => o.selected).length === 1 && Boolean(dialog.active), JSON.stringify(first.slice(0, 2)));
-    t.check('the AI actions carry the AI mark and the others do not', first.filter((o) => /^run:(?!card)/.test(o.id)).every((o) => /\bAI\b/.test(o.text)) && first.filter((o) => /^(go|theme|language):|^settings$/.test(o.id)).every((o) => !/\bAI\b/.test(o.text)), first.slice(0, 6).map((o) => o.text).join(' | '));
+    t.check('the AI actions carry the AI mark and the others do not', first.filter((o) => /^run:(?!show:)/.test(o.id)).every((o) => /\bAI\b/.test(o.text)) && first.filter((o) => /^(go|theme|language):|^settings$|^run:show:/.test(o.id)).every((o) => !/\bAI\b/.test(o.text)), first.slice(0, 6).map((o) => o.text).join(' | '));
 
     await typeIn('team');
     const team = await options();
-    t.check('typing "team" puts "Go to Team" first', team[0]?.id === 'go:team', team.map((o) => o.id).join(' '));
+    t.check('typing "team" highlights "Go to Team" (the best match; the groups keep their order)', team.find((o) => o.selected)?.id === 'go:team', team.map((o) => `${o.id}${o.selected ? '*' : ''}`).join(' '));
     await p.keyboard.press('ArrowDown');
     await p.keyboard.press('ArrowUp');
-    t.check('the arrow keys move the highlight (and come back)', (await options())[0].selected === true);
+    t.check('the arrow keys move the highlight (and come back)', (await options()).find((o) => o.selected)?.id === 'go:team');
     await p.keyboard.press('Enter');
     await ctx.waitUntil('the Team screen', () => p.evaluate(() => document.querySelector('#ab-sec-tab-team')?.getAttribute('aria-selected') === 'true'), { timeout: 8000 });
     t.check('Enter runs it: the Team screen is on show and the palette is closed', !(await paletteShown()));
@@ -89,7 +92,7 @@ module.exports = {
     await closePalette();
     t.check('Esc closes it', !(await paletteShown()));
 
-    await p.click('.ab-header button[aria-label="Search commands"]');
+    await p.click('.ab-header button.ab-alltools-btn');
     await ctx.waitUntil('the palette to open from the header', paletteShown, { timeout: 5000 });
     t.check('the button in the header opens it too', true);
     await closePalette();
@@ -106,19 +109,26 @@ module.exports = {
     await typeIn('related');
     await p.keyboard.press('Enter');
     await ctx.waitUntil('the Related tickets card', () => p.evaluate(() => document.querySelector('#ab-ticket-half-tab-insights')?.getAttribute('aria-selected') === 'true' && [...document.querySelectorAll('[data-card="related"]')].some((c) => c.getClientRects().length > 0)), { timeout: 10000 });
-    t.check('"Related tickets" brings that card forward in Insights (nothing is sent)', ai.requests.length === 0, `${ai.requests.length} requests`);
+    t.check('"Related tickets" (not one of the five) shows that card alone in Insights, with Back (nothing is sent)', ai.requests.length === 0 && (await p.evaluate(() => [...document.querySelectorAll('.ab-ins-back')].some((b) => b.getClientRects().length > 0))), `${ai.requests.length} requests`);
+    await p.evaluate(() => [...document.querySelectorAll('.ab-ins-back')].find((b) => b.getClientRects().length > 0)?.click());
 
-    // An AI action starts from any screen: it brings the Ticket screen forward. (Showing a card scrolls the panel down for a while, and the tabs
-    // can sit under the sticky header: a real click on the tab may land on the header, so the tab is pressed by the page's own click here.)
+    // On another screen All tools has no "more for this ticket" groups. (Showing a card scrolls the panel down for a while, and the tabs can sit
+    // under the sticky header: a real click on the tab may land on the header, so the tab is pressed by the page's own click here.)
     await p.evaluate(() => document.querySelector('#ab-sec-tab-team').click());
     await ctx.waitUntil('the Team screen', () => p.evaluate(() => document.querySelector('#ab-sec-tab-team')?.getAttribute('aria-selected') === 'true'), { timeout: 8000 });
     await openPalette();
-    await typeIn('summarise');
-    t.check('"summarise" finds the AI action of this ticket', (await options())[0]?.id === 'run:record-summary', (await options()).map((o) => o.id).join(' '));
+    const onTeam = await p.evaluate(() => [...document.querySelectorAll('.ab-palette-section[data-group]')].map((g) => g.getAttribute('data-group')));
+    t.check('on the Team screen All tools has Go to and Panel only', JSON.stringify(onTeam) === JSON.stringify(['go', 'panel']), JSON.stringify(onTeam));
+    await closePalette();
+    await p.evaluate(() => document.querySelector('#ab-sec-tab-ticket').click());
+    await ctx.waitUntil('the Ticket screen', () => p.evaluate(() => document.querySelector('#ab-sec-tab-ticket')?.getAttribute('aria-selected') === 'true'), { timeout: 8000 });
+    await openPalette();
+    await typeIn('hand-off');
+    t.check('"hand-off" finds the AI action of this ticket that is not among the five', (await options()).find((o) => o.selected)?.id === 'run:handoff-brief', (await options()).map((o) => o.id).join(' '));
     await p.keyboard.press('Enter');
     await p.waitForSelector('.ab-dialog', { timeout: 15000 });
-    t.check('an AI action from the palette opens the check first: nothing has been sent', ai.requests.length === 0, `${ai.requests.length} requests`);
-    t.check('and the Ticket screen came forward', await p.evaluate(() => document.querySelector('#ab-sec-tab-ticket')?.getAttribute('aria-selected') === 'true'));
+    t.check('an AI action from All tools opens the check first: nothing has been sent', ai.requests.length === 0, `${ai.requests.length} requests`);
+    t.check('and AI Assist came forward', await p.evaluate(() => document.querySelector('#ab-ticket-half-tab-assist')?.getAttribute('aria-selected') === 'true'));
     await p.evaluate(() => [...document.querySelectorAll('.ab-dialog button')].find((b) => /^Cancel/.test(b.innerText.trim()))?.click());
     await ctx.waitUntil('the check to close', async () => !(await p.$('.ab-dialog')), { timeout: 8000 });
     t.check('Cancel sends nothing', ai.requests.length === 0);
@@ -138,10 +148,12 @@ module.exports = {
     await ctx.waitUntil('the panel to follow the computer', async () => (await themeAttr()) === '', { timeout: 8000 });
     t.check('back to "same as the computer": the panel is light again', (await bg()) === LIGHT_BG, await bg());
 
-    // the sun / moon button in the header, and the palette's colour commands
-    await p.click('.ab-header button[aria-label="Switch to dark colours"]');
-    await ctx.waitUntil('the button to turn the panel dark', async () => (await themeAttr()) === 'dark', { timeout: 8000 });
-    t.check('the moon button turns the panel dark and now says how to go back', await p.evaluate(() => Boolean(document.querySelector('.ab-header button[aria-label="Switch to light colours"]'))));
+    // the colour commands of All tools (the header has no colour button any more)
+    await openPalette();
+    await typeIn('dark');
+    await p.keyboard.press('Enter');
+    await ctx.waitUntil('All tools to turn the panel dark', async () => (await themeAttr()) === 'dark', { timeout: 8000 });
+    t.check('"Use dark colours" in All tools turns the panel dark', true);
     await openPalette();
     await typeIn('light');
     const light = await options();
@@ -230,7 +242,7 @@ module.exports = {
     t.check('and no English is left in the box (the keys, product names and the name of the language aside)', english.length === 0, english.slice(0, 6).join(' '));
     await typeIn('settings');
     const found = await options();
-    t.check('English still finds the command in Arabic ("settings" finds the Settings command)', found[0]?.id === 'settings', found.map((o) => o.id).join(' '));
+    t.check('English still finds the command in Arabic ("settings" finds the Settings command)', found.find((o) => o.selected)?.id === 'settings', found.map((o) => o.id).join(' '));
     await audit('the palette, Arabic');
     await closePalette();
     await ctx.configure({ language: 'en' });

@@ -43,7 +43,7 @@ module.exports = {
 
     // ---- 2. The Ticket screen: the halves ----------------------------------------------------------------------------------
     await openHalf(p, 'insights');
-    await waitForText(p, 'Related tickets', { timeout: 15000 });
+    await waitForText(p, 'Understand the ticket', { timeout: 15000 });
     t.check('Ticket > Insights shows its cards and says nothing leaves ServiceNow', /Stays in ServiceNow\. Nothing is sent anywhere\./.test(await panel.text()));
     t.check('Ticket > Insights: no AI mark anywhere in the half', (await aiMarksInInsights(p)) === 0, String(await aiMarksInInsights(p)));
     await openHalf(p, 'assist');

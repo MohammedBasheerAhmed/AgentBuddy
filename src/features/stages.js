@@ -71,6 +71,7 @@ const DEFAULT_GROUP = {
   'sentiment-risk': 'understand',
   'hr-case-brief': 'understand',
   'account-briefing': 'understand',
+  'caller-briefing': 'understand',
   'reply-draft': 'reply',
   'missing-info': 'reply',
   'request-explain': 'reply',

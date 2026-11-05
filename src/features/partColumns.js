@@ -32,11 +32,18 @@ export const DERIVED_PART_COLUMNS = Object.freeze({
   requested_items: ['number', 'short_description', 'state', 'stage', 'cat_item', 'approval', 'assigned_to', 'assignment_group', 'due_date'],
   // The answers to the request form: values the requester typed, each with its question.
   variables: ['variables', 'value', 'question_text', 'sc_item_option', 'sc_item_option_mtom'],
-  // Other incidents linked to a problem (their wording and fixes), other changes, the account's other cases.
+  // Other incidents linked to a problem (their wording and fixes), other changes, the account's other cases, the caller's other tickets.
   linked_incidents: ['number', 'short_description', 'state', 'opened_at', 'resolved_at', 'cmdb_ci', 'close_notes', 'problem_id'],
   schedule_conflicts: CHANGE_ROW,
   recent_changes: CHANGE_ROW,
   account_cases: ['number', 'short_description', 'state', 'priority', 'opened_at', 'resolved_at', 'account'],
+  // The caller's other tickets (src/domain/callerTickets.js): what they raised, its state, when, and the fix written down (resolved_at
+  // or closed_at, close_code or resolution_code). The list is chosen by the caller's column on each table, named like `account` above
+  // (no value of it is in the text: the caller is said by role).
+  caller_tickets: [
+    'number', 'short_description', 'state', 'opened_at', 'resolved_at', 'closed_at', 'close_code', 'resolution_code', 'close_notes',
+    'caller_id', 'requested_for', 'contact', 'consumer', 'opened_for',
+  ],
   // The Request tab's status message (checks): the item, its approvals and tasks.
   items: ['number', 'short_description', 'cat_item', 'state', 'assigned_to', 'due_date'],
   tasks: ['number', 'short_description', 'state', 'assigned_to', 'due_date'],

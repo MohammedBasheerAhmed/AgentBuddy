@@ -1,7 +1,8 @@
 // zw. The panel's frame since the 2026-11-05 layout (docs/rail-layout.md): the screens in a bar along the bottom (an icon over each name,
 //     the screen on show in the accent), and beside the screens a side rail that lists what the screen on show offers (names on hover
 //     and on the keyboard, "Show names" widens it). Both stay put while the screen scrolls, go inert behind the palette, fit a 320 px
-//     panel and are mirrored in Arabic.
+//     panel and are mirrored in Arabic. Since the focus layout (docs/focus-layout.md) the rail is off unless Settings > Side rail turns
+//     it on, lists the five of the Ticket screen (or a screen's sections) and ends with "All tools".
 const { prepare } = require('../common.js');
 const { openScreen, waitForText } = require('../ui.js');
 
@@ -15,13 +16,18 @@ module.exports = {
   async run(t, ctx) {
     const { data } = ctx;
     await prepare(ctx);
-    await ctx.configure({ language: 'en', theme: 'light', profiles: ['it', 'lead', 'km'], profilesConfirmed: true, halves: {}, railNames: false });
+    await ctx.configure({ language: 'en', theme: 'light', profiles: ['it', 'lead', 'km'], profilesConfirmed: true, halves: {}, railNames: false, railShow: false });
     const ticket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-screendock');
     const panel = await ctx.openPanel();
     const p = panel.page;
     await waitForText(p, data.INCIDENT_NUMBER, { timeout: 25000 });
     await ctx.waitUntil('the five screens', async () => (await p.$$('.ab-screens [role=tab]')).length === 5, { timeout: 10000 });
+    await ctx.sleep(500);
+    t.check('the side rail is off unless Settings turns it on (the default)', !(await p.$('.ab-rail')));
+    await ctx.configure({ railShow: true });
     await ctx.waitUntil('the side rail of the Ticket screen', async () => (await p.$$('.ab-rail .ab-rail-item')).length >= 3, { timeout: 15000 });
+    const ticketRail = await p.evaluate(() => [...document.querySelectorAll('.ab-rail .ab-rail-item')].map((b) => b.getAttribute('data-rail-id') || b.getAttribute('aria-label')));
+    t.check('turned on, the Ticket rail lists the five (Insights: one per pain point), then All tools, then Show names', JSON.stringify(ticketRail) === JSON.stringify(['understand', 'fix', 'caller', 'reply', 'close', 'all-tools', 'ab-rail-names']), JSON.stringify(ticketRail));
 
     // What a person sees of the bar and the rail.
     const look = () =>

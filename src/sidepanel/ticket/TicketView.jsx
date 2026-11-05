@@ -4,18 +4,18 @@ import ErrorBoundary from '../ErrorBoundary.jsx';
 import { headerPhase } from '../recordHeader.js';
 import { aiNeedsText, isAiReady } from '../aiReady.js';
 import { launchIsForPage } from '../../lib/launch.js';
-import { QUICK_CARDS, isQuickCard } from '../../features/quick.js';
 import { aiAvailable, aiOffByPolicy } from '../../profiles/profiles.js';
 import { HalfPanel, HalfRule, HalfSwitch } from '../ui/primitives.jsx';
 import { ModelSwitch, ProfileHint, useHalf } from '../shell/shellParts.jsx';
 import { useRailPublish } from '../shell/SideRail.jsx';
+import { shareTicketHeader, useAllTools } from '../palette/allToolsContext.js';
 import { Glance, INSIGHT_CARDS } from './cards/index.js';
 import { offeredFeatures, useActionPlan } from './assist/actions/index.js';
 import { useAnswers } from './assist/answers/index.js';
 import { useCardReports } from './cardReports.js';
-import { needsCount } from './needsNow.js';
+import { groupOfCard, insightGroups, lookCount, readLaunch } from './focusView.js';
 import { useNeeds } from './useNeeds.js';
-import { ALL_INSIGHTS, SUGGESTED, answerAction, assistRail, insightsRail, reveal } from './ticketRail.js';
+import { ALL_TOOLS, answerAction, assistRail, insightsRail } from './ticketRail.js';
 import TicketInsights, { cardsFor } from './TicketInsights.jsx';
 import TicketAssist from './TicketAssist.jsx';
 import { t } from '../../i18n/index.js';
@@ -23,19 +23,19 @@ import { t } from '../../i18n/index.js';
 export const SAVE_SETTLE_MS = 1500;
 
 /**
- * The Ticket screen for an open record (TRACKER.md 2.1; the 2026-11-05 layout, docs/rail-layout.md A). From the top: the ticket, compact
+ * The Ticket screen for an open record (TRACKER.md 2.1; the focus layout, docs/focus-layout.md A). From the top: the ticket, compact
  * (its number, title and chips; "Ticket details" opens the rest), then straight away the Insights / AI Assist tabs and the two halves.
- * Insights starts with what needs the agent now (the SLA, a customer waiting, a possible outage) and then its cards. The side rail
- * lists everything the half on show offers: every Insights card (a click shows that card alone, with "All insights" to go back), or
- * every AI action this record offers (a click starts it exactly as in AI Assist: preview first). Owner: the lead; the cards, the
- * actions and the answers plug in (docs/round3.md).
+ * Each half shows five things, one per pain point (understand the ticket, find the fix, the same caller, reply, close well):
+ * Insights five rows ("Understand the ticket" starts with what needs the agent now: the SLA, a customer waiting, a possible outage),
+ * AI Assist five actions. Everything else the record has is one step away in All tools. The side rail (when Settings shows it) lists
+ * the five of the half on show and ends with All tools. Owner: the lead; the cards, the actions and the answers plug in.
  *
- * The answers belong to the screen, not to a half: an action started from the rail or the bar on the ServiceNow page shows its answer
- * in AI Assist, which comes forward. A half that was opened stays mounted while the other one shows. What the Insights cards report
- * (their one line, their status) is kept here, per record, so their rows and the rail say the same.
+ * The answers belong to the screen, not to a half: an action started from the rail, All tools or the bar on the ServiceNow page shows
+ * its answer in AI Assist, which comes forward. A half that was opened stays mounted while the other one shows. What the Insights
+ * cards report (their one line, their status) is kept here, per record, so the rows, the tab and the rail say the same.
  *
- * props: page (a record page), eff, active (the Ticket screen is on show), launch / onLaunchDone (an action the bar on the
- * ServiceNow page asked for; used once)
+ * props: page (a record page), eff, active (the Ticket screen is on show), launch / onLaunchDone (what All tools, a shortcut or the
+ * bar on the ServiceNow page asked for: an AI action, a card alone, "Ask about this ticket"; used once)
  */
 export default function TicketView({ page, eff, active = true, launch = null, onLaunchDone = () => {} }) {
   const { record } = page;
@@ -52,20 +52,32 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   const [half, setHalf] = useHalf('ticket', eff);
   const shown = aiOn ? half : 'insights';
   const [visited, setVisited] = useState(() => new Set([shown]));
-  // The card Insights shows alone ({ key, id, at, from }: `at` changes with every request; `from`: the card that was alone before the
-  // person went back to the list). It belongs to its record: another record starts on the list.
-  const [view, setView] = useState(() => ({ key, id: null, at: 0, from: null }));
+  // What Insights shows ({ key, id, at, from, group }): `id` the card shown alone, or null for the five; `at` changes with every
+  // request; `from`: the card that was alone before the person went back; `group`: a row of the five to open and bring into view (the
+  // side rail). It belongs to its record: another record starts on the five.
+  const [view, setView] = useState(() => ({ key, id: null, at: 0, from: null, group: null }));
+  // "Ask about this ticket" asked for ({ key, at }): drawn at the top of AI Assist from then on, for that record.
+  const [ask, setAsk] = useState(() => ({ key: null, at: 0 }));
   const [launchNote, setLaunchNote] = useState('');
   const ready = aiOn && aiAvailable(eff) && isAiReady(eff);
-  const root = useRef(null);
+  const openAllTools = useAllTools();
 
-  // The Insights cards of this record, what needs the agent now (the first rows of Insights, and the number on its tab), and what AI
-  // Assist offers (worked out once, for the half and for the rail). The checklist action needs one read to know whether it is offered:
-  // made only once AI Assist has been opened, as before the rail (its actions are in the rail only while AI Assist is on show).
+  // The Insights cards of this record and its five rows, what needs the agent now (the first rows of "Understand the ticket", and with
+  // the cards' reports the number on the Insights tab), and what AI Assist offers (worked out once, for the half and for the rail).
+  // The checklist action needs one read to know whether it is offered: made only once AI Assist has been opened.
   const cards = cardsFor(INSIGHT_CARDS, record, header, eff);
   const cardIds = cards.map((c) => c.id);
-  const needs = useNeeds({ page, record, eff, header, headPhase: phase, cards });
+  // (Only the cards of the five are drawn in the list: a possible outage is said among the facts unless one of them says it.)
+  const listed = insightGroups({ cards }).groups.flatMap((g) => g.cards);
+  const needs = useNeeds({ page, record, eff, header, headPhase: phase, cards: listed });
+  const { groups } = insightGroups({ cards, reports: reports.cards, needs });
   const plan = useActionPlan({ page, eff, record, header, aiReady: ready && (shown === 'assist' || visited.has('assist')) });
+  // All tools lists this record's cards and actions beyond the five: it takes the same header (a `when` rule may ask for the priority)
+  // and the same actions (one may need a read first: the checklist from the instructions).
+  const offeredIds = plan.items.map((it) => it.feature.id).join(',');
+  useEffect(() => {
+    shareTicketHeader(key, header, offeredIds ? offeredIds.split(',') : []);
+  }, [key, header, offeredIds]);
   const focus = view.key === key ? view : null;
   const focusId = focus?.id && cardIds.includes(focus.id) ? focus.id : null;
 
@@ -78,22 +90,17 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     if (aiOn) choose('assist');
     return assist.run(feature, options);
   };
-  // One card alone in Insights (the rail, the bar on the ServiceNow page, a link in another card). A card this record does not show
-  // (a profile without it) leaves Insights on its list.
+  // One card alone in Insights (All tools, the bar on the ServiceNow page, a link in another card). A card this record does not show
+  // (a profile without it) leaves Insights on its five.
   const showCard = (id) => {
     choose('insights');
-    if (cardIds.includes(id)) setView({ key, id, at: Date.now(), from: null });
+    if (cardIds.includes(id)) setView({ key, id, at: Date.now(), from: null, group: null });
   };
-  const showAll = () => setView((v) => ({ key, id: null, at: Date.now(), from: v.key === key ? v.id : null }));
-  // "Suggested": back to the top of AI Assist (the tabs in view), the focus on its suggestions.
-  const toSuggested = () => {
-    const box = root.current;
-    if (!box) return;
-    reveal([...box.children].find((el) => el.classList?.contains('ab-halfswitch')) || box.querySelector('#ab-ticket-half-panel-assist'));
-    const heading = box.querySelector('#ab-ticket-half-panel-assist .ab-act-head');
-    if (!heading) return;
-    if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
-    heading.focus({ preventScroll: true });
+  const showAll = () => setView((v) => ({ key, id: null, at: Date.now(), from: v.key === key ? v.id : null, group: null }));
+  // A row of the five (the side rail): open in place, in view, its button focused; a card that was alone goes back to its place.
+  const openGroup = (id) => {
+    choose('insights');
+    setView({ key, id: null, at: Date.now(), from: null, group: id });
   };
 
   // The header: read for every record, and again when the screen comes back after a while (the agent may have saved the form in the
@@ -143,23 +150,44 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, page.formStamp]);
 
-  // The bar on the ServiceNow page asked for an action on THIS record: start it exactly as a click in the panel would (same
-  // permission, masking, preview and policy). If the record on screen is not the one it named, it waits until it is, or expires.
+  // All tools, a shortcut or the bar on the ServiceNow page asked for something on THIS record: an AI action starts exactly as a
+  // click in the panel would (same permission, masking, preview and policy). If the record on screen is not the one it named, it
+  // waits until it is, or expires.
   const busyRef = useRef(assist.busy);
   busyRef.current = assist.busy;
   useEffect(() => {
     if (!launchIsForPage(launch, page)) return;
     onLaunchDone();
+    const asked = readLaunch(launch.featureId);
     // An Insights item ('card:ready'): no AI, just that card, alone in Insights.
-    if (isQuickCard(launch.featureId)) {
+    if (asked.kind === 'quick') {
       setLaunchNote('');
-      showCard(QUICK_CARDS[launch.featureId].card);
+      showCard(asked.card);
       return;
     }
-    // The same list the AI Assist half offers for this record (kind, policy, state, profiles); a refusal by the pipeline (HR,
-    // privacy mode) still happens in the run itself, with its audit entry. Right after the record changed its header is not known
-    // yet (null: a state rule hides nothing then), never the last record's.
-    const feature = offeredFeatures({ record, header, eff }).find((f) => f.id === launch.featureId);
+    // Any Insights card of the record ('show:knownErrors', All tools): that card alone. A card this record does not have is ignored.
+    if (asked.kind === 'show') {
+      if (!cardIds.includes(asked.card)) return;
+      setLaunchNote('');
+      showCard(asked.card);
+      return;
+    }
+    // "Ask about this ticket": AI Assist, the question box at its top with the focus in it (it stays for this record). Nothing is
+    // sent until the person asks; the same notes as for an action when AI cannot be used.
+    if (asked.kind === 'ask') {
+      if (!aiOn) setLaunchNote(t('Your organisation has switched AI Assist off.'));
+      else if (!ready) setLaunchNote(aiNeedsText(eff, 'this action') || t('Set up AI Assist in Settings to use this action.'));
+      else {
+        setLaunchNote('');
+        choose('assist');
+        setAsk({ key, at: Date.now() });
+      }
+      return;
+    }
+    // The same list the AI Assist half offers for this record (kind, policy, state, profiles), the five and the rest alike; a refusal
+    // by the pipeline (HR, privacy mode) still happens in the run itself, with its audit entry. Right after the record changed its
+    // header is not known yet (null: a state rule hides nothing then), never the last record's.
+    const feature = offeredFeatures({ record, header, eff }).find((f) => f.id === asked.id);
     if (!feature) setLaunchNote(t('That action is not available for this record.'));
     else if (!aiOn) setLaunchNote(t('Your organisation has switched AI Assist off.'));
     else if (!ready) setLaunchNote(aiNeedsText(eff, 'this action') || t('Set up AI Assist in Settings to use this action.'));
@@ -172,9 +200,8 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launch, page.tabId, key]);
 
-  // The side rail of the half on show (docs/rail-layout.md A4, A5), arranged as the person chose in Settings > Side rail. An AI action
-  // waits while AI cannot be used now or an answer is on its way (AI Assist says why); a click on one is a click in AI Assist.
-  const layout = eff.values?.railLayout;
+  // The side rail of the half on show: its five, then All tools (at that half's group). An AI action waits while AI cannot be used now
+  // or an answer is on its way (AI Assist says why); a click on one is a click in AI Assist. The shell draws it or not (Settings).
   const aiOff = !ready || assist.busy || Boolean(plan.block);
   const startFromRail = (id) => {
     const item = plan.items.find((it) => it.feature.id === id);
@@ -184,29 +211,29 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     shown === 'assist'
       ? {
           title: t('AI Assist'),
-          items: assistRail({ items: plan.items, kind, stage: plan.stage, byState: eff.values?.railByState !== false, layout, current: answerAction(assist.answers?.[0]), off: aiOff }).map((it) => ({
+          items: assistRail({ five: plan.five, current: answerAction(assist.answers?.[0]), off: aiOff }).map((it) => ({
             ...it,
-            onSelect: it.id === SUGGESTED ? toSuggested : () => startFromRail(it.id),
+            onSelect: it.id === ALL_TOOLS ? () => openAllTools('ticket-assist') : () => startFromRail(it.id),
           })),
         }
       : {
           title: t('Insights'),
-          items: insightsRail({ cards, reports: reports.cards, layout, kind, focus: focusId }).map((it) => ({
+          items: insightsRail({ groups, current: groupOfCard(groups, focusId)?.id || '' }).map((it) => ({
             ...it,
-            onSelect: it.id === ALL_INSIGHTS ? showAll : () => showCard(it.id),
+            onSelect: it.id === ALL_TOOLS ? () => openAllTools('ticket-insights') : () => openGroup(it.id),
           })),
         };
   useRailPublish('ticket', rail, active);
 
   return (
-    <div className="ab-pane ab-ticket" ref={root}>
+    <div className="ab-pane ab-ticket">
       <ErrorBoundary resetKey={key}>
         <Glance page={page} eff={eff} record={record} header={header} headPhase={phase} active={active} />
       </ErrorBoundary>
       <ProfileHint kind={kind} eff={eff} />
       {launchNote && <p className="ab-note ab-note-warn" role="status">{launchNote}</p>}
 
-      {aiOn && <HalfSwitch idBase="ab-ticket-half" value={shown} onChange={choose} assistNote={eff.values?.aiSkipped ? t('off') : ''} count={needsCount({ needs, cards, reports: reports.cards })} />}
+      {aiOn && <HalfSwitch idBase="ab-ticket-half" value={shown} onChange={choose} assistNote={eff.values?.aiSkipped ? t('off') : ''} count={lookCount(groups)} />}
 
       <HalfPanel idBase="ab-ticket-half" half="insights" hidden={shown !== 'insights'} switched={Boolean(aiOn)}>
         {(visited.has('insights') || shown === 'insights') && (
@@ -216,7 +243,9 @@ export default function TicketView({ page, eff, active = true, launch = null, on
       </HalfPanel>
       {aiOn && (
         <HalfPanel idBase="ab-ticket-half" half="assist" hidden={shown !== 'assist'}>
-          {(visited.has('assist') || shown === 'assist') && <TicketAssist page={page} eff={eff} record={record} assist={assist} plan={plan} ready={ready} active={active && shown === 'assist'} onRun={runAi} />}
+          {(visited.has('assist') || shown === 'assist') && (
+            <TicketAssist page={page} eff={eff} record={record} assist={assist} plan={plan} ready={ready} active={active && shown === 'assist'} onRun={runAi} ask={ask.key === key ? ask : null} />
+          )}
           {/* At the end, out of the way: where text goes, in one sentence without the address (the check before sending names the
               destination), and the model in use, to switch without opening Settings. */}
           {!eff.values?.aiSkipped && (

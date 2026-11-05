@@ -14,7 +14,7 @@ import { openFor, rankFor, stateBucket } from '../src/insights/order.js';
 import { chaseLine, fixFor } from '../src/insights/fixes.js';
 import { arrangeChanges, arrangeProblems, changeTiming } from '../src/insights/changes.js';
 import { articleShareUrl } from '../src/insights/links.js';
-import { historyLine, relatedSummary } from '../src/insights/related.js';
+import { callerSummary, historyLine, relatedSummary, repeatLine } from '../src/insights/related.js';
 import { createInsightStore } from '../src/insights/cache.js';
 import { chatOverviewOf } from '../src/insights/chat.js';
 import insightOps from '../src/content/ops/insights.js';
@@ -380,12 +380,32 @@ test('article link: the article reader on the same instance, built from a checke
 
 // ---- N2 summary ------------------------------------------------------------------------------------------------------------------
 
-test('related summary: counts of what could be read, a repeat flag; a part not read is left out, never 0', () => {
-  const s = relatedSummary({ history: { items: [{}, {}, {}], signals: { openCount: 1, reopenedHint: { later: 'INC2', earlier: 'INC1', days: 3 } } }, lookalikes: [{}, {}], open: [{}] });
-  assert.equal(s.line, '3 earlier · 1 still open · 2 solved · 1 open on the same item');
-  assert.match(s.repeat, /INC2 came 3 days after INC1/);
-  assert.equal(relatedSummary({ history: null, lookalikes: [] }).line, '0 solved');
+test('related summary: the look-alikes and what is open on the same item; a part not read is left out, never 0; nothing of the caller', () => {
+  const s = relatedSummary({ lookalikes: [{}, {}], open: [{}] });
+  assert.equal(s.line, '2 solved · 1 open on the same item');
+  assert.deepEqual([s.solved, s.open], [2, 1]);
+  assert.equal(relatedSummary({ lookalikes: [] }).line, '0 solved');
+  assert.equal(relatedSummary({ lookalikes: null, open: [] }).line, '', 'nothing read yet, and nothing open: no line');
+  assert.equal(relatedSummary().line, '');
+  assert.ok(!('repeat' in s) && !('earlier' in s), 'the caller\'s tickets are a card of their own');
   assert.equal(historyLine({ state: 'Closed', opened_at: '2026-10-12 08:00:00' }), 'Closed · opened 2026-10-12');
+});
+
+test('caller summary: the repeat first, then the counts; nothing earlier, or nobody named, said so; not read yet, no line', () => {
+  const s = callerSummary({ history: { items: [{}, {}, {}], signals: { openCount: 1, reopenedHint: { later: 'INC2', earlier: 'INC1', days: 3 } } } });
+  assert.equal(s.line, 'Looks like a repeat · 3 earlier tickets · 1 still open');
+  assert.equal(s.repeat, 'Looks like a repeat: INC2 came 3 days after INC1 was resolved.');
+  assert.deepEqual([s.earlier, s.stillOpen, s.noCaller], [3, 1, false]);
+  assert.equal(callerSummary({ history: { items: [{}], signals: { openCount: 0 } } }).line, '1 earlier ticket', 'one, and none still open');
+  assert.equal(callerSummary({ history: { items: [], signals: null } }).line, 'No earlier tickets from this caller');
+  assert.equal(callerSummary({ history: { items: [], signals: null, noCaller: true } }).line, 'Nobody is named as the caller');
+  assert.equal(callerSummary({ history: { items: [], signals: { reopenedHint: { later: 'INC2' } } } }).line, 'Looks like a repeat', 'reopened, with nothing else listed');
+  assert.deepEqual(callerSummary({ history: null }), { line: '', earlier: null, stillOpen: null, repeat: '', noCaller: false });
+  assert.equal(callerSummary().line, '');
+  assert.equal(repeatLine({ later: 'INC2' }), 'Looks like a repeat: INC2 was reopened.');
+  assert.equal(repeatLine({ later: 'INC2', earlier: 'INC1', days: 1 }), 'Looks like a repeat: INC2 came 1 day after INC1 was resolved.');
+  assert.equal(repeatLine(null), '');
+  assert.equal(repeatLine({ earlier: 'INC1' }), '');
 });
 
 // ---- the shared store ------------------------------------------------------------------------------------------------------------

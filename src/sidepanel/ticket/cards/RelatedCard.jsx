@@ -1,59 +1,39 @@
 import { ShowMore } from '../../ui/primitives.jsx';
 import { outageSignal } from '../../../insights/outage.js';
-import { historyLine, relatedSummary } from '../../../insights/related.js';
+import { relatedSummary } from '../../../insights/related.js';
 import { firstSentences } from '../../../insights/steps.js';
-import { useHistory, useLookalikes, useTicketFacts } from './data.js';
+import { useLookalikes, useTicketFacts } from './data.js';
 import { readFully, useReport } from './useInsight.js';
 import { Group, ItemLink, Notes, QuietButton, ReadState } from './bits.jsx';
 import { t, isolate } from '../../../i18n/index.js';
 
-// N2, related tickets: the caller's earlier tickets (with the repeat flag and the last fix that worked), solved look-alikes, and other
-// open tickets on the same item. Folded groups with counts, three items each, then "Show all". Every ticket opens in a new tab next to
-// this one, so the ticket being worked on stays where it is.
+// N2, related tickets: solved look-alikes and other open tickets on the same item. Folded groups with counts, three items each, then
+// "Show all". Every ticket opens in a new tab next to this one, so the ticket being worked on stays where it is. The caller's earlier
+// tickets have their own card since the focus layout ("Caller's other tickets", CallerCard.jsx): nothing is shown twice.
 
 const list = (v) => (Array.isArray(v) ? v : []);
 
 export default function RelatedCard({ page, eff, record, active, setSummary, setAttention }) {
   const ticket = useTicketFacts({ page, record, eff, active });
-  const history = useHistory({ page, record, eff, active });
   const look = useLookalikes({ page, record, eff, active });
 
   const pack = ticket.data?.pack || null;
   const outage = pack && ticket.data?.outage ? outageSignal(ticket.data.outage, pack) : null;
-  const earlier = list(history.data?.items);
   const hits = list(look.data?.hits);
-  const sum = relatedSummary({ history: history.data && !history.error ? history.data : null, lookalikes: look.data && !look.error ? hits : null, open: outage?.readable ? outage.hits : null });
+  const sum = relatedSummary({ lookalikes: look.data && !look.error ? hits : null, open: outage?.readable ? outage.hits : null });
   useReport(setSummary, sum.line);
-  // Nothing earlier from this person, no solved look-alike and nothing else open on the item: nothing to report. Only when both reads
-  // came back whole: a person's history that could not be read is not "no earlier tickets".
-  const bothRead = Boolean(history.data && !history.error && look.data && !look.error) && readFully(history.data?.access, look.data?.access);
-  const none = bothRead && sum.earlier === 0 && sum.solved === 0 && (!outage?.readable || !outage.hits.length);
-  useReport(setAttention, sum.repeat ? 'warn' : none ? 'clear' : '');
+  // No solved look-alike and nothing else open on the item: nothing to report. Only when the look-alikes came back whole: a search
+  // that could not see everything is not "none".
+  const none = Boolean(look.data && !look.error) && readFully(look.data?.access) && sum.solved === 0 && (!outage?.readable || !outage.hits.length);
+  useReport(setAttention, none ? 'clear' : '');
 
-  const sig = history.data?.signals;
-  const name = history.data?.callerName;
   const refresh = () => {
     ticket.reload();
-    history.reload();
     look.reload();
   };
 
   return (
     <>
-      {sum.repeat && <p className="ab-note ab-note-warn">{sum.repeat}</p>}
-
-      <Group title={name ? t('Earlier tickets from {name}', { name: isolate(name) }) : t('Earlier tickets from this person')} count={history.data ? earlier.length : undefined}>
-        <ReadState state={history} what={t('earlier tickets')} onRetry={history.reload} />
-        {sig?.lastResolved && (
-          <p className="ab-ins-fix">
-            <strong>{t('Last fix that worked ({number}):', { number: sig.lastResolved.number })}</strong> {firstSentences(sig.lastResolved.close_notes, 220)}
-          </p>
-        )}
-        {earlier.length > 0 && <ShowMore items={[...earlier].reverse()} render={(item) => <ItemLink key={item.sysId} page={page} item={item} line={historyLine(item)} />} />}
-        {history.data && !earlier.length && <p className="ab-hint">{history.data.noCaller ? t('Nobody is named as the caller on this ticket.') : t('No earlier tickets from this person.')}</p>}
-        <Notes access={history.data?.access} />
-      </Group>
-
       <Group title={t('Solved look-alikes')} count={look.data ? hits.length : undefined}>
         <ReadState state={look} what={t('solved tickets like this one')} onRetry={look.reload} />
         {hits.length > 0 && (
@@ -76,7 +56,7 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
       )}
 
       <div className="ab-ins-foot">
-        <QuietButton onClick={refresh} disabled={history.phase === 'loading' || look.phase === 'loading'}>
+        <QuietButton onClick={refresh} disabled={look.phase === 'loading'}>
           {t('Refresh')}
         </QuietButton>
       </div>

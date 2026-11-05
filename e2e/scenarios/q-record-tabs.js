@@ -10,8 +10,8 @@
 //                          session storage, never a step's text or the record id
 //    The AI parts run when AI Assist offers the action (Actions agent); otherwise they are reported as a warning.
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun, runAfter, waitPanel, settleOnRecord } = require('../common.js');
-const { showAction, deepTextareaValue } = require('../ui.js');
-const { openCard, cardText, showAllIn } = require('../insightsUi.js');
+const { actionOffered, startAction, deepTextareaValue } = require('../ui.js');
+const { openCard, cardText, showAllIn, cardLine } = require('../insightsUi.js');
 
 const first = (text, kind) => (new RegExp(`\\[${kind}_\\d+\\]`).exec(text) || [''])[0];
 
@@ -33,9 +33,9 @@ const checkRows = async (p) => {
   await showAllIn(p, 'resolve');
   return p.evaluate(() => window.__vis(document.querySelectorAll('[data-card="resolve"] .ab-chk-item')).map((li) => ({ status: li.getAttribute('data-status'), text: li.innerText.replace(/\s+/g, ' ').trim() })));
 };
-const summaryIn = (p, id) => p.evaluate((cid) => document.querySelector(`[data-card="${cid}"] .ab-ins-card-summary`)?.textContent || '', id);
+const summaryIn = (p, id) => cardLine(p, id); // its own row, or the row of its pain point when it is alone there (e2e/insightsUi.js)
 // The AI half holds the AI actions. A part that needs one runs only when AI Assist offers it.
-const assistOffers = (p, re) => showAction(p, re);
+const assistOffers = (p, re) => actionOffered(p, re); // one of AI Assist's five, or in All tools
 const findCheck = (rows, re) => rows.find((r) => re.test(r.text));
 const sessionStore = (ctx) => ctx.ext(async () => JSON.stringify(await chrome.storage.session.get(null)));
 const localStore = (ctx) => ctx.ext(async () => JSON.stringify(await chrome.storage.local.get(null)));
@@ -76,7 +76,7 @@ module.exports = {
     // The AI button: a message for the requester from the STATUS, not the answers
     if (await assistOffers(p, /^Tell the requester where it stands/)) {
       const before = ai.requests.length;
-      const ran = await runAfter(p, () => clickButton(p, /^Tell the requester where it stands/));
+      const ran = await runAfter(p, () => startAction(p, /^Tell the requester where it stands/));
       const req = await checkAiRun(t, ctx, p, 'request-explain', ran, { before, system: /tell a requester where their service request stands/, userHas: [/Status worked out from the records/i] });
       t.check('request-explain: the answers to the request questions (Windows 11, the justification, the secrets) did NOT go to the AI', req ? !/Windows 11|Business justification|hunter2|charlie\.w@example/i.test(req.raw) : false);
       t.check('request-explain: the requester (Charlie) and the approver (Dave) are masked in what was sent', req ? !/Charlie|Whitherspoon|Dave|Loftus/i.test(req.raw) : false);
@@ -133,7 +133,7 @@ module.exports = {
     // The AI proposes a cleaner list; the person chooses to use it
     if (await assistOffers(p, /^Draft a checklist from the instructions/)) {
       const before2 = ai.requests.length;
-      const proposal = await runAfter(p, () => clickButton(p, /^Draft a checklist from the instructions/));
+      const proposal = await runAfter(p, () => startAction(p, /^Draft a checklist from the instructions/));
       await checkAiRun(t, ctx, p, 'fulfilment-checklist', proposal, { before: before2, system: /carry out a catalog task or a requested item/, userHas: [/Image the laptop/i] });
       // (The offer to use the list is shown while the answer is on screen; closing the answer takes it away.)
       await waitForText(p, /The AI proposed 4 steps/, { timeout: 8000 });
@@ -203,7 +203,7 @@ module.exports = {
     // "Improve my resolution notes" starts from what is typed now, masked
     if (await assistOffers(p, /^Improve my resolution notes/)) {
       const before3 = ai.requests.length;
-      const improved = await runAfter(p, () => clickButton(p, /^Improve my resolution notes/));
+      const improved = await runAfter(p, () => startAction(p, /^Improve my resolution notes/));
       const imp = await checkAiRun(t, ctx, p, 'resolution-improve', improved, { before: before3, system: /improve the resolution notes they are writing/, userHas: [/Replaced the expired gateway certificate on EU-2/, /\[EMAIL_\d+\]/] });
       t.check('resolution-improve: the AI got the notes as typed RIGHT NOW (unsaved), and the typed email address did not travel', imp ? !imp.raw.includes("priya.raman@example.com") : false);
       await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close'))[0]?.click()); // (Close on an answer is an icon button: its name is its aria-label)

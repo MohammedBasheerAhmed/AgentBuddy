@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useEffective } from './useEffective.js';
 import { useForgetOnClear } from './forgetOnClear.js';
 import { usePage } from './usePage.js';
@@ -15,9 +15,9 @@ import { BrandMark, Icon, screenIcon } from './ui/icons.jsx';
 import { SettingsButton } from './shell/shellParts.jsx';
 import CommandPalette, { isPaletteKey, modalOnScreen, paletteShortcut } from './palette/CommandPalette.jsx';
 import { buildCommands } from './palette/commands.js';
+import { AllToolsContext, sharedOfferedIds, sharedTicketHeader } from './palette/allToolsContext.js';
 import { LAUNCH_TTL_MS, makeLaunch } from '../lib/launch.js';
 import { saveSettings } from '../lib/storage.js';
-import { nextTheme, systemIsDark, themeAttribute } from '../ui/useTheme.js';
 import ScreenView from './shell/ScreenView.jsx';
 import { RailContext, SideRail } from './shell/SideRail.jsx';
 import { createRailStore } from './shell/railStore.js';
@@ -55,26 +55,15 @@ function instanceOf(page) {
   }
 }
 
-/** The sun or moon in the header: one click to the other colours (the Settings page has the full choice, including "same as the computer"). */
-function ThemeButton({ eff }) {
-  const setting = eff.values?.theme || 'system';
-  const dark = (themeAttribute(setting) || (systemIsDark() ? 'dark' : 'light')) === 'dark';
-  const label = dark ? t('Switch to light colours') : t('Switch to dark colours');
-  return (
-    <button type="button" className="ab-iconbtn" aria-label={label} title={label} onClick={() => saveSettings({ theme: nextTheme(setting, systemIsDark()) }).catch(() => {})}>
-      <Icon name={dark ? 'sun' : 'moon'} size={18} />
-    </button>
-  );
-}
-
 /**
- * The header: the mark, the name and the instance the panel reads, then three quiet icon buttons (the palette, the colours, Settings).
- * The privacy promise that a shield used to carry here is said by the name block: on hover (its title) and to a screen reader (the
- * same words, not drawn); the Insights and AI Assist halves say it again under their switch (HalfRule).
+ * The header: the mark, the name and the instance the panel reads, then two quiet icon buttons: All tools and Settings (2026-11-05,
+ * docs/focus-layout.md: the colours moved to All tools and Settings > Appearance). The privacy promise that a shield used to carry here
+ * is said by the name block: on hover (its title) and to a screen reader (the same words, not drawn); the Insights and AI Assist halves
+ * say it again under their switch (HalfRule).
  */
-function Header({ base, eff, onPalette }) {
+function Header({ base, onAllTools }) {
   const instance = base ? instanceOf(base) : null;
-  const search = t('Search commands');
+  const allTools = t('All tools');
   const promise = t('Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
   const ref = useHeightVar('--ab-head-h');
   return (
@@ -91,10 +80,9 @@ function Header({ base, eff, onPalette }) {
       </div>
       <span className="ab-spacer" />
       <div className="ab-headtools">
-        <button type="button" className="ab-iconbtn" aria-label={search} title={`${search} (${paletteShortcut()})`} aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog" onClick={onPalette}>
-          <Icon name="search" size={18} />
+        <button type="button" className="ab-iconbtn ab-alltools-btn" aria-label={allTools} title={`${allTools} (${paletteShortcut()})`} aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog" onClick={() => onAllTools()}>
+          <Icon name="grid" size={18} />
         </button>
-        <ThemeButton eff={eff} />
         <SettingsButton />
       </div>
     </header>
@@ -179,27 +167,33 @@ function rememberedScreen(ids) {
  * page: the current page (a held answer counts); lastGood / lastSeen: see usePage.js; section: the chosen screen; visited: Set of ids.
  * Pending: the card for a draft carried to a blank form (a prop so a test can leave it out).
  * launch / onLaunchDone: an action the bar on the ServiceNow page asked for; it goes to the record on screen (see TicketView).
- * paletteOpen / onPalette / onPaletteClose / onOwnLaunch: the command palette (Panel holds its state; onOwnLaunch gets an action the
- * palette chose for the record on screen, as a launch).
+ * paletteOpen / paletteSection / onPalette(section?) / onPaletteClose / onOwnLaunch: All tools, the command palette (Panel holds its
+ * state; onPalette opens it, at a group when given one; onOwnLaunch gets an action it chose for the record on screen, as a launch).
  */
-export function AppView({ eff, page, lastGood = null, lastSeen = null, section, visited, onChoose = () => {}, onChanged = () => {}, Pending = PendingDraft, launch = null, onLaunchDone = () => {}, paletteOpen = false, onPalette = () => {}, onPaletteClose = () => {}, onOwnLaunch = () => {} }) {
+export function AppView({ eff, page, lastGood = null, lastSeen = null, section, visited, onChoose = () => {}, onChanged = () => {}, Pending = PendingDraft, launch = null, onLaunchDone = () => {}, paletteOpen = false, paletteSection = '', onPalette = () => {}, onPaletteClose = () => {}, onOwnLaunch = () => {} }) {
   const screens = screensFor(eff);
   const ids = screens.map((s) => s.id);
   const chosen = ids.includes(section) ? section : 'ticket';
   const plan = planPanel({ ids, active: chosen, visited, page, lastGood, lastSeen });
   // The side rail: each screen publishes what it lists while it is on show (SideRail.jsx useRailPublish); the rail of the screen on
-  // show is drawn beside the screens. Its names (the wide rail) are remembered in settings.railNames.
+  // show is drawn beside the screens, only for a person who turned it on (Settings > Side rail, settings.railShow: off by default since
+  // the five of each screen and All tools hold everything, docs/focus-layout.md). Its names (the wide rail) are remembered in
+  // settings.railNames.
   const [rails] = useState(createRailStore);
   const published = useSyncExternalStore(rails.subscribe, rails.getSnapshot, rails.getSnapshot);
-  const rail = plan.showNav ? published[plan.visible] || null : null;
+  const railShow = eff.values?.railShow === true;
+  const rail = plan.showNav && railShow ? published[plan.visible] || null : null;
   const railNames = eff.values?.railNames === true;
 
-  // The command palette (open and closed by Panel: Ctrl+K, or Cmd+K on a Mac, or the button in the header). A command that runs an action
-  // on the record is handed to the Ticket screen as a launch, exactly like the keyboard shortcuts and the bar on the ServiceNow page do.
+  // All tools, the command palette (open and closed by Panel: Ctrl+K, or Cmd+K on a Mac, the button in the header, or a screen through
+  // useAllTools). A command that runs an action on the record is handed to the Ticket screen as a launch, exactly like the keyboard
+  // shortcuts and the bar on the ServiceNow page do: an AI action, a card alone ('show:<card>') or the question box ('ask:ticket').
   // Only while the Ticket screen can show that record: with the setup help in its place (this tab is not an enabled ServiceNow page) the
   // record view is hidden, and an action launched there would run, preview and all, where nobody can see it.
   const paletteRecord = plan.showSetup ? null : plan.recordPage;
-  const commands = paletteOpen ? buildCommands({ eff, screens, active: plan.visible, recordPage: paletteRecord }) : [];
+  // What the Ticket screen knows of that record (its header: state, priority; the actions it offers): All tools offers exactly the same.
+  const paletteKey = paletteRecord?.record ? `${paletteRecord.record.table}:${paletteRecord.record.sysId}` : '';
+  const commands = paletteOpen ? buildCommands({ eff, screens, active: plan.visible, recordPage: paletteRecord, header: sharedTicketHeader(paletteKey), offered: sharedOfferedIds(paletteKey) }) : [];
   const runCommand = ({ action }) => {
     if (action.type === 'screen') onChoose(action.id);
     else if (action.type === 'half') saveSettings({ halves: { ...(eff.values?.halves || {}), [action.screen]: action.half } }).catch(() => {});
@@ -262,9 +256,10 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
   };
 
   return (
+    <AllToolsContext.Provider value={onPalette}>
     <RailContext.Provider value={rails}>
     <div className="ab-app">
-      <Header base={plan.base || lastSeen} eff={eff} onPalette={onPalette} />
+      <Header base={plan.base || lastSeen} onAllTools={onPalette} />
       <div className={`ab-body${rail ? ' has-rail' : ''}`}>
       <main className="ab-main">
         {plan.enabled && (
@@ -303,28 +298,34 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
       )}
       </div>
       {plan.showNav && <ScreenTabs screens={screens} value={plan.visible} onChange={onChoose} />}
-      <CommandPalette open={paletteOpen} onClose={onPaletteClose} commands={commands} onRun={runCommand} />
+      <CommandPalette open={paletteOpen} section={paletteSection} onClose={onPaletteClose} commands={commands} onRun={runCommand} />
     </div>
     </RailContext.Provider>
+    </AllToolsContext.Provider>
   );
 }
 
+const CLOSED = Object.freeze({ open: false, section: '' });
+
 /**
- * Whether the command palette is open, and Ctrl+K (Cmd+K on a Mac) anywhere in the panel to open or close it. While a preview is on
- * screen the key does nothing: the preview holds the keyboard and the rest of the panel, and the palette must not open over it.
+ * Whether All tools (the command palette) is open and at which group, and Ctrl+K (Cmd+K on a Mac) anywhere in the panel to open or
+ * close it (from the top). While a preview is on screen the key does nothing: the preview holds the keyboard and the rest of the panel,
+ * and All tools must not open over it.
+ *   -> [open, set(open, section?), section]   set(true, 'ticket-assist') opens it at that group; anything but a string is no group
  */
 export function usePaletteToggle() {
-  const [open, setOpen] = useState(false);
+  const [state, setState] = useState(CLOSED);
   useEffect(() => {
     const onKey = (e) => {
       if (!isPaletteKey(e) || modalOnScreen(document)) return;
       e.preventDefault();
-      setOpen((was) => !was);
+      setState((was) => (was.open ? CLOSED : { open: true, section: '' }));
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
-  return [open, setOpen];
+  const set = useCallback((open, section = '') => setState(open ? { open: true, section: typeof section === 'string' ? section : '' } : CLOSED), []);
+  return [state.open, set, state.section];
 }
 
 /**
@@ -351,7 +352,9 @@ function Panel() {
   useTheme(eff.values?.theme);
   const { page, lastGood, lastSeen, refresh } = usePage(eff.policy);
   const { launch, clear: clearLaunch } = useLaunch();
-  const [paletteOpen, setPaletteOpen] = usePaletteToggle();
+  const [paletteOpen, setPaletteOpen, paletteSection] = usePaletteToggle();
+  // The opener every part of the panel gets (AllToolsContext): stable, so a screen that keeps it does not draw again for it.
+  const openAllTools = useCallback((at) => setPaletteOpen(true, at), [setPaletteOpen]);
   const [ownLaunch, setOwnLaunch] = useOwnLaunch(); // an action the palette chose: handled like `launch`
   const [nav, setNav] = useState(() => {
     const section = rememberedScreen(['ticket', 'mywork', 'team', 'write', 'knowledge']);
@@ -398,7 +401,8 @@ function Panel() {
         clearLaunch();
       }}
       paletteOpen={paletteOpen}
-      onPalette={() => setPaletteOpen(true)}
+      paletteSection={paletteSection}
+      onPalette={openAllTools}
       onPaletteClose={() => setPaletteOpen(false)}
       onOwnLaunch={setOwnLaunch}
     />

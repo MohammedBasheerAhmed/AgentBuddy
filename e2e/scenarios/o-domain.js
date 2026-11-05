@@ -7,7 +7,7 @@
 //    - the HR case brief: "Needs Strict privacy mode" in Standard mode and a click ends with the Strict-mode message; in Strict mode
 //      with no organisation policy it ends with HR_BLOCKED; in both cases nothing reaches the AI and no HR free text was read
 const { prepare, errorMark, errorsSince, describeErrors, clickButton, waitForText, checkAiRun } = require('../common.js');
-const { runFeature, openHalf } = require('../ui.js');
+const { runFeature, openHalf, offeredActionTitles } = require('../ui.js');
 
 // Round 3: the actions are in the AI Assist half, the ones that do not fit the ticket's state folded under "More actions"; answers
 // are kept per ticket (Close puts one away); a reason known before the click (HR content not allowed) disables the action and is said
@@ -19,10 +19,8 @@ async function openMoreActions(page) {
     if (more) more.click();
   });
 }
-const offeredTitles = async (page) => {
-  await openMoreActions(page);
-  return page.evaluate(() => window.__vis(document.querySelectorAll('.ab-acts .ab-act-title')).map((e) => e.innerText.trim()));
-};
+// Every action the record offers: AI Assist's five and the rest in All tools (docs/focus-layout.md).
+const offeredTitles = (page) => offeredActionTitles(page);
 const closeAnswers = (page) => page.evaluate(() => window.__vis(document.querySelectorAll('.ab-answer-close')).forEach((b) => b.click()));
 /** Open the newest answer's "More" menu (the other boxes it can go into, Try again...). */
 const answerMenu = async (page) => {

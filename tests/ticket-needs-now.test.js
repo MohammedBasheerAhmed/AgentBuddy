@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { needsCount, needsNow } from '../src/sidepanel/ticket/needsNow.js';
-import { arrangeRows } from '../src/sidepanel/ticket/TicketInsights.jsx';
+import { needsNow } from '../src/sidepanel/ticket/needsNow.js';
 import { levelOf } from '../src/sidepanel/ticket/cardReports.js';
 import { readFully } from '../src/sidepanel/ticket/cards/useInsight.js';
 import { glanceChips, glanceDetails } from '../src/sidepanel/ticket/cards/Glance.jsx';
 
-// The Ticket screen worked out without React (the 2026-11-05 layout): what needs the agent now, as the first rows of Insights (built
-// only from what the screen already has, the most urgent first, nothing when nothing needs a look, the cards not repeated), the number
-// on the Insights tab, the order of the Insights rows, and the compact ticket at the top (its chips and "Ticket details").
+// The Ticket screen worked out without React: what needs the agent now, as the first rows of "Understand the ticket" (built only from
+// what the screen already has, the most urgent first, nothing when nothing needs a look, the cards not repeated), and the compact
+// ticket at the top (its chips and "Ticket details"). The five rows, their lines and the number on the Insights tab:
+// tests/ticket-focus.test.js.
 
 const H = 3600000;
 const D = 24 * H;
@@ -57,30 +57,6 @@ test('a customer waiting whose time is not known, or known only roughly, is said
   assert.equal(needsNow({ glance: { waiting: { waiting: true, sinceMs: null, messages: 1 } } })[0].text, 'The customer is waiting for a reply');
   assert.match(needsNow({ glance: { waiting: { waiting: true, sinceMs: 3 * D, approx: true, messages: 1 } } })[0].text, /^The customer has waited about 3 d for a reply$/);
   assert.equal(needsNow({ glance: { sla: { kind: 'breached', leftMs: null, name: '' } } })[0].text, 'The SLA is breached');
-});
-
-test('the number on the Insights tab: the rows that need a look (these facts and the cards that said danger or warn)', () => {
-  const needs = needsNow({ glance: { waiting: { waiting: true, sinceMs: D, messages: 1 } } });
-  const reports = { related: { attention: 'warn' }, risk: { attention: 'danger' }, steps: { attention: 'ok' }, knowledge: { attention: 'clear' }, gone: { attention: 'danger' } };
-  assert.equal(needsCount({ needs, cards: CARDS, reports }), 3, 'a report of a card the record does not show is not counted');
-  assert.equal(needsCount({ needs: [], cards: CARDS, reports: {} }), 0);
-  assert.equal(needsCount(), 0);
-});
-
-test('rows: the cards that need a look first (danger, then warn), the rest in their order, nothing-to-report ones apart', () => {
-  const cards = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }];
-  const { rows, clear } = arrangeRows(cards, { b: { attention: 'warn' }, c: { attention: 'clear' }, d: { attention: 'danger' }, e: { attention: 'ok' } });
-  assert.deepEqual(rows.map((c) => c.id), ['d', 'b', 'a', 'e']);
-  assert.deepEqual(clear.map((c) => c.id), ['c']);
-  assert.deepEqual(arrangeRows(cards).rows.map((c) => c.id), ['a', 'b', 'c', 'd', 'e'], 'before any report: the card order');
-});
-
-test('rows: a card the person opened in the list keeps its place when it then reports nothing (it does not vanish into "All clear")', () => {
-  const cards = [{ id: 'a' }, { id: 'kb' }, { id: 'c' }];
-  const reports = { kb: { attention: 'clear' }, c: { attention: 'clear' } };
-  const kept = arrangeRows(cards, reports, new Set(['kb']));
-  assert.deepEqual(kept.rows.map((c) => c.id), ['a', 'kb']);
-  assert.deepEqual(kept.clear.map((c) => c.id), ['c']);
 });
 
 test('readFully: a card says "nothing to report" only after reads that saw everything', () => {
