@@ -17,7 +17,6 @@
    never turned here. The older chevrons, a corner drawn by rotating a square, point the way the text goes when folded (right in English,
    left in Arabic) and down when open: only their folded state turns, and not once they have become an .ab-chevron icon. */
 :root[dir='rtl'] .ab-act-chevron:not(.is-open):not(.ab-chevron),
-:root[dir='rtl'] .ab-quick-chevron:not(.ab-quick-chevron-open):not(.ab-chevron),
 :root[dir='rtl'] [aria-expanded='false'] .ab-mw-fold-chevron:not(.ab-chevron),
 :root[dir='rtl'] .ab-mw-fold-toggle:not([aria-expanded='true']) .ab-mw-fold-chevron:not(.ab-chevron) { transform: rotate(135deg); }
 
@@ -33,3 +32,10 @@
    numbers read left to right); the labels around them are text and follow the language. */
 :root[dir='rtl'] .ab-donut-svg, :root[dir='rtl'] .ab-hbar-svg,
 :root[dir='rtl'] .ab-stack-svg, :root[dir='rtl'] .ab-trend-svg { direction: ltr; }
+
+/* The side rail's "Show names" arrow points the way the rail grows: left in English, right in Arabic (and back when the names show). */
+:root[dir='rtl'] .ab-rail-names .ab-icon { transform: scaleX(-1); }
+
+/* The ticket's title keeps its own direction (dir="auto", Glance.jsx), so an English title is cut at its end, not its start; in an Arabic
+   panel it still lines up on the right with everything else. */
+:root[dir='rtl'] .ab-glance h2[dir='auto'] { text-align: right; }

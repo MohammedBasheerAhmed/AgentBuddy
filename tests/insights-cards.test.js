@@ -1,4 +1,4 @@
-import { mount, click, makeChrome, fakeClipboard, settle } from './fixtures/panel-dom.js';
+import { mount, click, makeChrome, fakeClipboard, settle, document } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizePolicy } from '../src/policy/policy.js';
@@ -49,52 +49,80 @@ async function setup({ glance } = {}) {
 const cardProps = (page, extra = {}) => ({ page, eff: eff(), record, header, active: true, setSummary: () => {}, setAttention: () => {}, ...extra });
 const card = (id) => INSIGHT_CARDS.find((c) => c.id === id);
 
-test('Glance: the ticket from the header and one glance read: number and kind, title, chips, who has it and when it changed', async () => {
+test('Glance: compact, from the header and one glance read: the number and priority, the title on one line, chips; the rest in "Ticket details"', async () => {
   const { fake } = await setup();
   const page = pageFor();
   const ui = await mount(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" />);
   try {
     const text = ui.text();
-    assert.match(text, /INC0010001 · Incident VPN keeps disconnecting for Abel Tuter/);
-    assert.match(text, /In Progress 2 - High/);
-    assert.match(text, /Beth Anglin/);
-    assert.equal(ui.$('h2.ab-glance-title')?.textContent, 'VPN keeps disconnecting for Abel Tuter', 'the title is the heading');
-    assert.ok(ui.$$('.ab-glance-chips .ab-chip').length >= 2, 'state and priority are chips');
+    assert.match(text, /^INC0010001 Priority 2 - High VPN keeps disconnecting for Abel Tuter In Progress/);
+    const title = ui.$('h2.ab-glance-title');
+    assert.equal(title?.textContent, 'VPN keeps disconnecting for Abel Tuter', 'the title is the heading');
+    assert.equal(title.getAttribute('title'), 'VPN keeps disconnecting for Abel Tuter', 'the whole title on hover (it is cut to one line)');
+    assert.equal(ui.$('[data-chip="state"]')?.textContent, 'In Progress');
+    assert.ok(!ui.$('[data-chip="unassigned"]'), 'Beth Anglin has it');
     assert.ok(!/VIP/.test(text), 'the fixture caller is not marked VIP');
+    assert.ok(!/Beth Anglin/.test(text), 'who has it waits in "Ticket details"');
     assert.ok(!ui.$('.ab-card'), 'no box around the ticket');
+    // "Ticket details": a chevron that says so, and what it opens.
+    const more = ui.$('button.ab-glance-more');
+    assert.equal(more.getAttribute('aria-label'), 'Ticket details');
+    assert.equal(more.getAttribute('aria-expanded'), 'false');
+    await click(more);
+    assert.equal(more.getAttribute('aria-expanded'), 'true');
+    const details = ui.$(`#${more.getAttribute('aria-controls')}`);
+    assert.ok(details, 'the chevron names what it opens');
+    assert.match(details.textContent, /Assigned to\s*Beth Anglin/);
+    assert.match(details.textContent, /Updated/);
     assert.equal(fake.readsOf('glance').length, 1);
     assert.deepEqual(fake.readsOf('glance')[0], { table: 'incident', sysId: INCIDENT_ID, allowSensitive: false });
-    // AI Assist on show: one line, the chips, nothing else.
-    await ui.rerender(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" compact />);
-    assert.ok(ui.$('.ab-glance-oneline'));
-    assert.ok(!/Beth Anglin/.test(ui.text()));
+  } finally {
+    await ui.unmount();
+  }
+  // Remembered while the panel is open: the next ticket shows the details the same way (and they are folded again for the next test).
+  const again = await mount(<Glance page={pageFor()} eff={eff()} record={record} header={header} headPhase="ready" />);
+  try {
+    assert.equal(again.$('button.ab-glance-more').getAttribute('aria-expanded'), 'true');
+    await click(again.$('button.ab-glance-more'));
+  } finally {
+    await again.unmount();
+  }
+});
+
+test('Glance: the VIP mark; nobody assigned is a chip; nothing else of the ticket is read', async () => {
+  const answer = await glanceAnswer();
+  answer.vip = { status: 'yes', access: [] };
+  answer.pack = { ...answer.pack, fields: { ...answer.pack.fields, assigned_to: '' } };
+  const { fake } = await setup({ glance: answer });
+  const ui = await mount(<Glance page={pageFor()} eff={eff()} record={record} header={header} headPhase="ready" />);
+  try {
+    assert.equal(ui.$('.ab-glance-vip')?.textContent, 'VIP');
+    assert.equal(ui.$('[data-chip="unassigned"]')?.textContent, 'Unassigned');
     assert.equal(fake.readsOf('glance').length, 1, 'no read of its own');
   } finally {
     await ui.unmount();
   }
 });
 
-test('Glance: VIP mark, and "Needs you now" says the possible outage with a way to its card', async () => {
-  const answer = await glanceAnswer();
-  answer.vip = { status: 'yes', access: [] };
-  answer.outage = { hits: [0.3, 0.8, 1.5].map((h, i) => ({ table: 'incident', sysId: String(i + 1).repeat(32), number: `INC00200${i}`, hoursAgo: h, same: ['cmdb_ci'], state: 'New' })), windowHours: 24, access: [{ source: 'incident', status: 'ok' }] };
-  const { fake } = await setup({ glance: answer });
-  const page = pageFor();
-  const shown = [];
-  const needs = { cards: [{ id: 'outage', title: 'Outage spotter' }], reports: {} };
-  const ui = await mount(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" onShowCard={(id) => shown.push(id)} needs={needs} />);
+test('Insights: what needs the agent now leads the list, as plain rows (a dot, a sentence, a quiet line), before the cards', async () => {
+  await setup();
+  const needs = [
+    { id: 'sla', level: 'danger', text: 'The SLA was due 2 h ago', sub: 'P2 resolution' },
+    { id: 'waiting', level: 'warn', text: 'The customer has waited 2 d for a reply', sub: '' },
+  ];
+  const ui = await mount(<TicketInsights page={pageFor()} eff={eff(['it'])} record={record} header={header} active needs={needs} />);
   try {
-    assert.match(ui.text(), /VIP/);
-    const block = ui.$('.ab-needs');
-    assert.ok(block, ui.text().slice(0, 300));
-    assert.match(block.textContent, /Needs you now/);
-    assert.match(block.textContent, /Possible outage: 3 other open tickets on VPN Gateway EU in the last 2 h/);
-    await click(ui.button('Show the tickets'));
-    assert.deepEqual(shown, ['outage']);
-    assert.equal(fake.readsOf('glance').length, 1, 'built from the same read: no read of its own');
-    // Without `needs` (AI Assist on show) the block is not drawn.
-    await ui.rerender(<Glance page={page} eff={eff()} record={record} header={header} headPhase="ready" onShowCard={(id) => shown.push(id)} />);
-    assert.equal(ui.$('.ab-needs'), null);
+    await settle(6);
+    const items = ui.$$('ul.ab-ins-cards > li');
+    assert.deepEqual(items.slice(0, 2).map((li) => li.getAttribute('data-need')), ['sla', 'waiting']);
+    assert.ok(items[2].hasAttribute('data-card'), 'then the cards');
+    const sla = items[0];
+    assert.ok(sla.querySelector('.ab-dot-danger'));
+    assert.match(sla.textContent, /The SLA was due 2 h ago/);
+    assert.equal(sla.querySelector('.ab-ins-need-sub')?.textContent, 'P2 resolution');
+    assert.equal(sla.querySelector('button, a'), null, 'nothing to click');
+    assert.equal(items[1].querySelector('.ab-ins-need-sub'), null, 'no empty line');
+    assert.equal(ui.$('.ab-ai-badge', { all: true }), null);
   } finally {
     await ui.unmount();
   }
@@ -248,17 +276,42 @@ test('through the shell: the cards an IT agent sees on an incident, in order, no
   }
 });
 
-test('"open card X" (the palette, the quick bar, a Needs-you-now link) opens a card even when it waits under "All clear"', async () => {
+test('one card alone (the side rail, the bar on the page, another card): open, under "All insights"; back to the list, the focus on its row', async () => {
   await setup();
   const page = pageFor();
-  const ui = await mount(<TicketInsights page={page} eff={eff(['it'])} record={record} header={header} active />);
+  const needs = [{ id: 'waiting', level: 'warn', text: 'The customer is waiting for a reply', sub: '' }];
+  let back = 0;
+  const draw = (focus) => <TicketInsights page={page} eff={eff(['it'])} record={record} header={header} active needs={needs} focus={focus} onBack={() => (back += 1)} />;
+  const ui = await mount(draw(null));
   try {
     await settle(6);
-    assert.equal(ui.$('[data-card="knownErrors"]'), null);
-    await ui.rerender(<TicketInsights page={page} eff={eff(['it'])} record={record} header={header} active openCard={{ id: 'knownErrors', at: 1 }} />);
-    const row = ui.$('[data-card="knownErrors"]');
+    assert.equal(ui.$('[data-card="knownErrors"]'), null, 'nothing to report: under "All clear"');
+    assert.equal(ui.$('.ab-ins-back'), null);
+    // A card that waits under "All clear" is shown alone all the same.
+    await ui.rerender(draw({ id: 'knownErrors', at: 1, from: null }));
+    await settle();
+    const shown = ui.$$('ul.ab-ins-cards > li');
+    assert.deepEqual(shown.map((li) => li.getAttribute('data-card')), ['knownErrors'], 'that card alone: no other card, no fact row, no "All clear" row');
+    const card = shown[0];
+    const heading = card.querySelector('h3.ab-ins-focus-title');
+    assert.equal(heading?.textContent, 'Known errors and open problems');
+    assert.equal(card.querySelector('.ab-ins-card-toggle'), null, 'a heading, not a row that folds');
+    assert.ok(ui.$(`#${card.id}-body`), 'its content open');
+    assert.equal(document.activeElement, heading, 'the focus on its name');
+    assert.equal(ui.$$('[data-card]', { all: true }).length, cardsFor(INSIGHT_CARDS, record, header, eff(['it'])).length, 'every other card still mounted (hidden): it keeps reporting');
+    await click(ui.button('All insights'));
+    assert.equal(back, 1, 'the way back is the screen\'s');
+    // Back to the list: the card's row takes the focus (its "All clear" row opened for it).
+    await ui.rerender(draw({ id: null, at: 2, from: 'knownErrors' }));
+    await settle();
+    assert.equal(ui.$('.ab-ins-back'), null);
+    assert.ok(ui.$('[data-need="waiting"]'), 'the list again, its first rows too');
+    const row = ui.$('[data-card="knownErrors"] > .ab-ins-card-toggle');
     assert.ok(row, 'the All clear row opened');
-    assert.equal(row.querySelector('.ab-ins-card-toggle').getAttribute('aria-expanded'), 'true');
+    assert.equal(document.activeElement, row);
+    // A card this record does not show is no focus at all: the list stays.
+    await ui.rerender(draw({ id: 'article', at: 3, from: null }));
+    assert.equal(ui.$('.ab-ins-back'), null);
   } finally {
     await ui.unmount();
   }

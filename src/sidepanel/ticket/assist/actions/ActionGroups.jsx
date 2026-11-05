@@ -12,7 +12,7 @@ import { t, t as tr } from '../../../../i18n/index.js';
 
 // The AI actions of the Ticket screen (TRACKER.md 3.5 and 2.4), in two parts the AI Assist half places around its answers:
 //   SuggestedActions  "Suggested while you work on it": the three that fit the ticket's state, as rows (an icon, the name, one line).
-//                     A row starts its action on a click; the first is the screen's one main step (a filled "Start" on its row).
+//                     A row starts its action on a click; the first carries the screen's one filled mark ("Start" on its row).
 //   MoreActions       "More actions (n)": everything else, folded, as small buttons by what the agent is doing (Understand, Reply,
 //                     Work it, Resolve).
 // An action that cannot run says why instead of failing after the click; a reason that stops every action (a blocked table, HR content

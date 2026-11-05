@@ -2,10 +2,10 @@ import { mount, click, makeChrome, settle } from './fixtures/panel-dom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ActionGroups, MoreActions, QuickBar } from '../src/sidepanel/ticket/assist/actions/index.js';
+import { ActionGroups, MoreActions, actionPlan } from '../src/sidepanel/ticket/assist/actions/index.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 
-// The AI Assist actions and the quick bar of the Ticket screen as a person sees them: one primary button, three suggestions, the rest
+// The AI Assist actions of the Ticket screen as a person sees them: one primary button, three suggestions, the rest
 // folded under "More actions", the AI mark on every action, a reason on a disabled one, and the clutter budget of TRACKER.md 2.4.
 
 const A = 'a'.repeat(32);
@@ -14,7 +14,7 @@ const head = (state, extra = {}) => ({ number: 'INC0010001', short_description: 
 const eff = ({ values = {}, policy = {} } = {}) => ({
   ready: true,
   apiKey: 'k',
-  values: { piiMode: 'standard', profiles: ['it', 'req', 'csm'], provider: 'openai', model: 'm', quickBarOpen: true, quickPins: {}, ...values },
+  values: { piiMode: 'standard', profiles: ['it', 'req', 'csm'], provider: 'openai', model: 'm', ...values },
   locked: {},
   policy: normalizePolicy(policy),
 });
@@ -172,42 +172,12 @@ test('no read for the checklist where it cannot matter (an incident, or AI not u
   await ui2.unmount();
 });
 
-// ---- the quick bar of the Ticket screen -------------------------------------------------------------------------------------
-
-test('the quick bar: state-aware, AI items marked, an Insights item opens its card, no AI items when AI cannot be used', async () => {
-  const fake = makeChrome();
-  globalThis.chrome = fake.chrome;
-  const ran = [];
-  const cards = [];
-  const bar = (props) => <QuickBar page={page} eff={eff()} record={rec('incident')} header={head('Resolved')} busy={false} aiReady onRun={(f) => ran.push(f.id)} onShowCard={(id) => cards.push(id)} {...props} />;
-  const ui = await mount(bar({}));
-  const labels = () => ui.$$('.ab-quick-actions button').map((b) => b.textContent);
-  // Resolved: wrap up first, the "Ready to resolve?" card leading (it opens the card 'resolve'; audit P2.4: it was never shown).
-  assert.deepEqual(labels(), ['Ready to resolve?', 'Resolution notes', 'Knowledge article', 'Draft a reply']);
-  await click(ui.button('Ready to resolve?'));
-  assert.deepEqual(cards, ['resolve']);
-  await click(ui.button('Resolution notes'));
-  assert.deepEqual(ran, ['resolution-notes']);
-  // In progress: reply first, and the Related tickets card one click away
-  await ui.rerender(bar({ header: head('In Progress') }));
-  assert.deepEqual(labels(), ['Draft a reply', 'Summarise', 'Next best action', 'Related tickets']);
-  await click(ui.button('Related tickets'));
-  assert.deepEqual(cards, ['resolve', 'related']);
-  await ui.rerender(bar({ aiReady: false }));
-  assert.deepEqual(labels(), ['Ready to resolve?', 'Related tickets']);
-  await ui.rerender(bar({ eff: eff({ values: { aiSkipped: true } }) }));
-  assert.deepEqual(labels(), ['Ready to resolve?', 'Related tickets'], '"Skip AI for now": no AI items');
-  await ui.unmount();
-});
-
-test('the quick bar holds no action that cannot run on this record (closed ticket: no reply; blocked table: no AI)', async () => {
-  const fake = makeChrome();
-  globalThis.chrome = fake.chrome;
-  const ui = await mount(<QuickBar page={page} eff={eff({ values: { quickPins: { incident: ['reply-draft', 'record-summary'] } } })} record={rec('incident')} header={head('Closed')} aiReady onRun={() => {}} onShowCard={() => {}} />);
-  assert.deepEqual(ui.$$('.ab-quick-actions button').map((b) => b.textContent), ['Summarise']);
-  await ui.unmount();
-  const ui2 = await mount(<QuickBar page={page} eff={eff({ policy: { blockedTables: ['incident'] } })} record={rec('incident')} header={head('In Progress')} aiReady onRun={() => {}} onShowCard={() => {}} />);
-  // (with no AI the cards are all there is: both of them, the one for the stage first)
-  assert.deepEqual(ui2.$$('.ab-quick-actions button').map((b) => b.textContent), ['Related tickets', 'Ready to resolve?']);
-  await ui2.unmount();
+test('the plan also holds every action the record offers, in the registry\'s order: the suggestions and "More actions" together (the side rail lists them all)', () => {
+  const plan = actionPlan({ record: rec('incident'), header: head('In Progress'), eff: eff() });
+  const ids = plan.items.map((it) => it.feature.id);
+  assert.equal(ids.length, plan.total);
+  assert.deepEqual([...ids].sort(), [...plan.suggested, ...plan.groups.flatMap((g) => g.items)].map((it) => it.feature.id).sort());
+  assert.ok(plan.items.every((it) => 'reason' in it && 'caution' in it));
+  const off = actionPlan({ record: rec('incident'), header: head('In Progress'), eff: eff({ policy: { blockedTables: ['incident'] } }) });
+  assert.ok(off.block && off.items.length > 0, 'a record block still lists the actions; AI Assist says why once');
 });

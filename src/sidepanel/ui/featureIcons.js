@@ -36,6 +36,31 @@ const FEATURE_ICONS = {
 /** The icon name for a feature or card id; the AI spark for one this table does not know. */
 export const featureIcon = (id) => FEATURE_ICONS[id] || 'spark';
 
+// The icon of each Insights card of the Ticket screen (src/sidepanel/ticket/cards INSIGHT_CARDS, by card id): the side rail lists the
+// cards by these, and Settings > Side rail shows them beside the names. tests/shell-rail.test.js checks every card has one.
+const CARD_ICONS = {
+  request: 'clipboard',
+  checklist: 'check',
+  article: 'file',
+  chat: 'message',
+  account: 'users',
+  missing: 'help',
+  routing: 'navigation',
+  steps: 'enter',
+  related: 'link',
+  knowledge: 'book',
+  changes: 'refresh',
+  knownErrors: 'alert',
+  risk: 'flag',
+  email: 'mail',
+  journey: 'clock',
+  resolve: 'checkCircle',
+  outage: 'monitor',
+};
+
+/** The icon name for an Insights card id; a plain chevron for one this table does not know (never the AI spark: a card sends nothing). */
+export const cardIcon = (id) => CARD_ICONS[id] || 'chevronRight';
+
 // The icon of each screen of the panel (src/profiles/profiles.js SCREENS): the icon bar at the bottom of the panel shows these.
 const SCREEN_ICONS = { ticket: 'ticket', mywork: 'inbox', team: 'users', write: 'pen', knowledge: 'book' };
 

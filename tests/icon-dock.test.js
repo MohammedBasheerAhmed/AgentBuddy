@@ -39,14 +39,14 @@ test('the icon data is plain strings (the page script draws them with DOM calls:
   for (const d of Object.values(MARK)) assert.match(d, /^[MmLlHhVvCcSsQqTtAaZz0-9\s.,-]+$/);
 });
 
-test('the panel draws its dock from the same table, after the screens, with names that show on hover and keyboard focus', () => {
+test('the panel draws its bar of screens from the same table, after the screens, each icon with its name under it', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
   const app = read('src', 'sidepanel', 'App.jsx');
   assert.ok(app.indexOf('<main className="ab-main">') < app.indexOf('<ScreenTabs '), 'in the page as on the screen: after the screens');
-  assert.match(app, /data-name=\{s\.label\}/, 'the name the CSS shows');
-  assert.match(app, /<span className="ab-sr">\{s\.label\}<\/span>/, 'and the same name as text for a screen reader');
+  assert.ok(app.indexOf('<SideRail') < app.indexOf('<ScreenTabs '), 'the side rail comes before the bar, beside the screens');
+  assert.match(app, /<span className="ab-screen-name">\{s\.label\}<\/span>/, 'the name is drawn, so it is also the button\'s name');
   assert.match(app, /aria-selected=\{s\.id === value\}/);
   const icons = read('src', 'sidepanel', 'ui', 'icons.jsx');
   assert.match(icons, /from '\.\/iconPaths\.js'/, 'the panel and the page dock share one table');
@@ -54,8 +54,8 @@ test('the panel draws its dock from the same table, after the screens, with name
   assert.match(bar, /from '\.\.\/sidepanel\/ui\/iconPaths\.js'/);
   assert.ok(!/from 'react'|\.jsx'/.test(bar), 'the page script does not pull in React or the panel\'s components');
   const css = read('src', 'ui', 'areas', 'shell.css');
-  assert.match(css, /\.ab-screens \{[^}]*position: sticky;[^}]*bottom: /, 'it floats at the bottom edge');
-  assert.match(css, /\.ab-screen-tab::after \{[^}]*content: attr\(data-name\)/, 'the name is the icon\'s own text');
-  assert.match(css, /\.ab-screen-tab:focus-visible::after/, 'the keyboard shows it too');
+  assert.match(css, /\.ab-screens \{[^}]*position: sticky;[^}]*bottom: 0/, 'it sticks to the bottom edge');
+  assert.ok(!/ab-screen-tab::after/.test(css), 'no floating name: the name is drawn under the icon');
+  assert.match(css, /\.ab-rail \{[^}]*position: sticky;[^}]*top: var\(--ab-head-h/, 'the rail sticks under the header');
   assert.ok(/\.ab-sr \{/.test(css));
 });

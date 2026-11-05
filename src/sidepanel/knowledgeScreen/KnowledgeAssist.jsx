@@ -11,6 +11,7 @@ import { gapPack, mergePack } from '../../knowledge/parts.js';
 import { shownFor } from '../../profiles/profiles.js';
 import { shown as shownText } from '../../reports/shown.js';
 import { useShared } from './shared.js';
+import { KNOWLEDGE_SECTIONS as S } from './railSections.js';
 import { isolate, t, tm, tn } from '../../i18n/index.js';
 
 // The Knowledge screen, AI Assist half (knowledge managers): draft ONE article out of the duplicate group compared in Insights (AI26)
@@ -138,12 +139,12 @@ export default function KnowledgeAssist({ page, eff }) {
   return (
     <div className="ab-kbx" data-half="assist">
       <AiKeyNote eff={eff} what={tm('the merged drafts and outlines')} />
-      <Section id="kb-merge" title={t('Merge duplicate articles')} summary={mergeReady ? t('A compared group is ready') : ''} ai>
+      <Section rail={S.merge} summary={mergeReady ? t('A compared group is ready') : ''} ai>
         <ErrorBoundary resetKey="merge">
           <MergeDraft page={page} eff={eff} primary />
         </ErrorBoundary>
       </Section>
-      <Section id="kb-outline" title={t('Outline a missing article')} ai>
+      <Section rail={S.outline} ai>
         <ErrorBoundary resetKey="outline">
           <GapOutline page={page} eff={eff} primary={!mergeReady} />
         </ErrorBoundary>

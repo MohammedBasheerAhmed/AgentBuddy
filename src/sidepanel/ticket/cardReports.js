@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 
 // What the Insights cards report about the record on screen: each card's one-line summary and its status. The Insights half draws
-// them on its rows (the summary without opening a card, the status as the row's dot); the top of the Ticket screen reads the ones
-// that need a look for "Needs you now". Kept in the Ticket screen, so both see the same reports.
+// them on its rows (the summary without opening a card, the status as the row's dot); the side rail marks the ones that need a look
+// and the Insights tab counts them. Kept in the Ticket screen, so all of them see the same reports.
 //
 // The reports carry the record they were made for: { key, cards: card id -> { summary, attention } }. A set left from the last record
 // is not shown, and the first report for a new record starts a fresh one. (Not an effect that empties them when the record changes:

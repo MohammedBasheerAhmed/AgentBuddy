@@ -5,6 +5,27 @@ brackets are the `TRACKER.md` items.
 
 ## Unreleased: round 3 (one release with both halves)
 
+### Screens at the bottom, every option in a side rail (the layout you approved as a mockup, 2026-11-05)
+- You said the Ticket screen spent its first screen on the ticket, "Needs you now", one Summarise step and a big quick-actions block,
+  with Insights and AI Assist only near the bottom. From a mockup (https://claude.ai/artifact/WMmZMaVbxigc1WP3UrUgj3) you chose: the
+  screens stay at the bottom, and "the right side has all the options". Right-side panel only (no bottom docking). Built by three agents
+  in parallel from one spec (`docs/rail-layout.md`).
+- **The frame:** the screens (My work, Team, Ticket, Write, Knowledge) are a bar along the bottom, each icon with its name, no longer a
+  floating pill over the list. Beside the screens, a slim **side rail** lists everything the screen on show offers for the half on show;
+  names on hover and on the keyboard, "Show names" widens it; it stays put while the screen scrolls; mirrored (on the left) in Arabic.
+- **Ticket:** the top is the compact ticket (number, priority, title, chips for the state, the SLA and "Unassigned"; the other facts
+  behind "Ticket details"), then Insights | AI Assist straight away (the Insights tab says how many things need a look). The SLA, a
+  customer waiting and a possible outage are the first rows of Insights. The one next step and the quick-actions bar are gone. The rail:
+  with Insights on, "All insights" and every card (a dot where one needs a look; a click shows that card alone, with the way back); with
+  AI Assist on, "Suggested" and every AI action for the ticket, what fits its state first (a click starts it, the check before sending
+  first, exactly as in AI Assist).
+- **My work, Team, Write, Knowledge:** their rail lists their sections (a click opens a folded one and brings it into view).
+- **Settings > Side rail** (was Quick actions): per kind of record and per half, hide what you never use and put what you use most at
+  the top; whether what fits the ticket's state comes first; and the AI actions (up to 4) of the small tab on the ServiceNow page,
+  which used to be chosen in the panel.
+- Unit 3,050; end-to-end 1,169 of 1,169 (scenario x now covers the Ticket rail, zw the bar and the rail), with the accessibility audit
+  in light, dark, Arabic and at 320 px.
+
 ### A calmer, clearer panel (the redesign you approved as a mockup)
 - You said the UI/UX and layout were not great. Claude photographed every screen at the panel's real width, wrote down what made it
   unattractive (a wall of boxes, the important facts hidden, two accent colours, technical text, thin screens), made a mockup, and you

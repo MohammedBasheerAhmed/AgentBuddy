@@ -22,7 +22,7 @@ module.exports = {
     inst.setBehaviour();
     await ctx.ensureEnabled();
     await ctx.configure(
-      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin], quickBarOpen: true, quickPins: {}, pageBar: true, profilesConfirmed: true },
+      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', piiMode: 'standard', previewMode: 'always', previewSeen: [], instances: [inst.origin], quickPins: {}, pageBar: true, profilesConfirmed: true },
       { key: { provider: 'custom', value: ai.key } }
     );
     await ctx.ext((k) => chrome.storage.session.remove(k), LAUNCH);

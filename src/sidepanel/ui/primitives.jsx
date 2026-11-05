@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { Icon } from './icons.jsx';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 
 // Small building blocks every screen uses, so the panel looks and behaves the same everywhere (TRACKER.md 2.3 and 2.4):
 //   AiBadge       the one mark every AI element carries (never an Insights element)
@@ -117,8 +117,9 @@ export function HalfRule({ half, destination = '' }) {
  * The Insights / AI Assist switch under a screen's title. A screen with one half draws no switch (pass `assist={false}`).
  *   value: 'insights' | 'assist'; onChange(next); idBase: unique per screen (for the tab and panel ids)
  *   assistNote: a few words after "AI Assist" when it cannot be used as is ("off", "set up")
+ *   count: how many rows of Insights need a look (the Ticket screen); a number after the name, said in words to a screen reader
  */
-export function HalfSwitch({ value, onChange, idBase, assist = true, assistNote = '' }) {
+export function HalfSwitch({ value, onChange, idBase, assist = true, assistNote = '', count = 0 }) {
   if (!assist) return null;
   const tabs = [
     { id: 'insights', label: t('Insights') },
@@ -143,10 +144,16 @@ export function HalfSwitch({ value, onChange, idBase, assist = true, assistNote 
           aria-controls={`${idBase}-panel-${tab.id}`}
           tabIndex={value === tab.id ? 0 : -1}
           className={`ab-halfswitch-tab ab-halfswitch-${tab.id}${value === tab.id ? ' is-on' : ''}`}
+          aria-label={tab.id === 'insights' && count > 0 ? tn(count, 'Insights: {n} needs a look', 'Insights: {n} need a look') : undefined}
           onClick={() => onChange(tab.id)}
         >
           {tab.id === 'assist' && <AiBadge label="" title="" />}
           {tab.label}
+          {tab.id === 'insights' && count > 0 && (
+            <span className="ab-halfswitch-count" aria-hidden="true">
+              {count}
+            </span>
+          )}
           {tab.id === 'assist' && assistNote && <span className="ab-halfswitch-note">{assistNote}</span>}
         </button>
       ))}

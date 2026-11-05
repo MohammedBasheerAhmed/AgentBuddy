@@ -5,11 +5,12 @@ import { Icon } from '../ui/icons.jsx';
 import { shownFor } from '../../profiles/profiles.js';
 import { INSIGHT_CARDS } from './cards/index.js';
 import { useCardReports } from './cardReports.js';
+import { reveal } from './ticketRail.js';
 import { t } from '../../i18n/index.js';
 
 /**
  * The cards for this record: its kind, the person's profiles, in order (`order` may be a number or a function of the record). The
- * quick-actions bar offers the same cards, by id (TicketQuickBar cardIdsFor).
+ * side rail lists the same cards, in this order (ticketRail.js insightsRail).
  */
 export function cardsFor(cards, record, header, eff) {
   const kind = record.kind || 'other';
@@ -33,9 +34,15 @@ export function cardsFor(cards, record, header, eff) {
     .map((x) => x.card);
 }
 
+/** The ids of the Insights cards this record shows (the very cards the Insights half draws). */
+export function cardIdsFor(record, header, eff) {
+  return cardsFor(INSIGHT_CARDS, record || {}, header, eff).map((c) => c.id);
+}
+
 const FIRST = { danger: 0, warn: 1 };
 const DOT = { danger: 'danger', warn: 'warn', ok: 'ok' };
 const NO_IDS = new Set();
+const NO_NEEDS = [];
 
 /**
  * The rows as they are drawn: the cards that need a look first (danger, then warn), then the others in their order; the cards with
@@ -56,39 +63,78 @@ export function arrangeRows(cards, reports = {}, keep = NO_IDS) {
   return { rows, clear };
 }
 
-/** One card as a row: its status dot, its title and its one-line answer, a chevron; the card's content opens under it. */
-function CardRow({ card, rowId, level, summary, open, onToggle, hidden, children }) {
+/**
+ * One card as a row: its status dot, its title and its one-line answer, a chevron; the card's content opens under it. Shown alone (the
+ * side rail chose it: `focused`) the row is a heading over the open content instead. The content keeps its place in the tree either
+ * way, so what was typed or ticked in it stays.
+ */
+function CardRow({ card, rowId, level, summary, open, focused, onToggle, hidden, children }) {
   const bodyId = `${rowId}-body`;
   const attention = level === 'danger' || level === 'warn';
+  const dot = <span className={`ab-dot ab-dot-${DOT[level] || 'neutral'}`} aria-hidden="true" />;
   return (
-    <li id={rowId} className={`ab-ins-card${level ? ` is-${level}` : ''}`} data-card={card.id} hidden={hidden || undefined}>
-      <button type="button" className="ab-row ab-ins-card-toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => onToggle(!open)}>
-        <span className={`ab-dot ab-dot-${DOT[level] || 'neutral'}`} aria-hidden="true" />
-        <span className="ab-row-main">
-          <span className="ab-row-title ab-ins-card-title">{card.title}</span>
-          {attention && <span className="ab-sr">{t('Needs a look.')}</span>}
-          {summary && <span className="ab-row-sub ab-ins-card-summary">{summary}</span>}
-        </span>
-        <Icon name="chevronDown" size={16} className="ab-chevron ab-ins-card-chevron" />
-      </button>
-      <div id={bodyId} className="ab-ins-card-body" hidden={!open}>
+    <li id={rowId} className={`ab-ins-card${level ? ` is-${level}` : ''}${focused ? ' is-focus' : ''}`} data-card={card.id} hidden={hidden || undefined}>
+      {focused ? (
+        <div className="ab-row ab-ins-focus-head">
+          {dot}
+          <span className="ab-row-main">
+            <h3 className="ab-row-title ab-ins-card-title ab-ins-focus-title" tabIndex={-1}>
+              {card.title}
+            </h3>
+            {attention && <span className="ab-sr">{t('Needs a look.')}</span>}
+            {summary && <span className="ab-row-sub ab-ins-card-summary ab-ins-focus-summary">{summary}</span>}
+          </span>
+        </div>
+      ) : (
+        <button type="button" className="ab-row ab-ins-card-toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => onToggle(!open)}>
+          {dot}
+          <span className="ab-row-main">
+            <span className="ab-row-title ab-ins-card-title">{card.title}</span>
+            {attention && <span className="ab-sr">{t('Needs a look.')}</span>}
+            {summary && <span className="ab-row-sub ab-ins-card-summary">{summary}</span>}
+          </span>
+          <Icon name="chevronDown" size={16} className="ab-chevron ab-ins-card-chevron" />
+        </button>
+      )}
+      <div id={bodyId} className="ab-ins-card-body" hidden={!(open || focused)}>
         {children}
       </div>
     </li>
   );
 }
 
+/** One fact that needs the agent now (needsNow.js): a plain row, its dot, one sentence and a quiet line under it. Nothing to click. */
+function NeedRow({ item, hidden }) {
+  return (
+    <li className={`ab-ins-need is-${item.level}`} data-need={item.id} hidden={hidden || undefined}>
+      <div className="ab-row ab-ins-need-row">
+        <span className={`ab-dot ab-dot-${DOT[item.level] || 'neutral'}`} aria-hidden="true" />
+        <span className="ab-row-main">
+          <span className="ab-row-title ab-ins-need-text">{item.text}</span>
+          <span className="ab-sr">{t('Needs a look.')}</span>
+          {item.sub && <span className="ab-row-sub ab-ins-need-sub">{item.sub}</span>}
+        </span>
+      </div>
+    </li>
+  );
+}
+
 /**
- * The Ticket screen's Insights half: every card that applies, as ONE list of rows (TRACKER.md 2.4: one-line answers, the details one
- * click away). A row shows the card's status dot, its title and its one-line answer without being opened; a click opens the card's
- * content in place. The cards that need a look come first; the ones with nothing to report wait in the last row, "All clear in ...".
- * A card reads while the half is on screen (`active`), open or not, so its one line is there; `open` tells it whether its content
- * shows. Every card stays mounted, so it keeps reporting (its line, its status) and keeps what was typed or ticked in it.
+ * The Ticket screen's Insights half: what needs the agent now (the SLA, a customer waiting, a possible outage: plain rows), then every
+ * card that applies, as ONE list of rows (TRACKER.md 2.4: one-line answers, the details one click away). A row shows the card's status
+ * dot, its title and its one-line answer without being opened; a click opens the card's content in place. The cards that need a look
+ * come first; the ones with nothing to report wait in the last row, "All clear in ...".
  *
- * props: page, eff, record, header, active, openCard ({ id, at }: open and bring that card into view), onShowCard,
- *        reports (useCardReports of the Ticket screen, which "Needs you now" reads too; without it the half keeps its own)
+ * The side rail can show one card alone (`focus`): that card, open, under an "All insights" button that goes back to the list. The
+ * other cards stay mounted, hidden: a card reads while the half is on screen (`active`), open, folded or hidden, so its one line and
+ * its dot (on its row and in the rail) are there, and it keeps what was typed or ticked in it.
+ *
+ * props: page, eff, record, header, active, needs (needsNow items), focus ({ id, at, from }: the card shown alone, or id null for the
+ *        list; `at` changes with every request, `from` is the card that was alone before going back), onBack() (back to the list),
+ *        onShowCard (a card's way to another card), reports (useCardReports of the Ticket screen, which the rail reads too; without
+ *        it the half keeps its own)
  */
-export default function TicketInsights({ page, eff, record, header, active, openCard = null, onShowCard = () => {}, reports = null }) {
+export default function TicketInsights({ page, eff, record, header, active, needs = NO_NEEDS, focus = null, onBack = () => {}, onShowCard = () => {}, reports = null }) {
   const key = `${record.table}:${record.sysId}`;
   const cards = cardsFor(INSIGHT_CARDS, record, header, eff);
   const own = useCardReports(key);
@@ -103,17 +149,31 @@ export default function TicketInsights({ page, eff, record, header, active, open
   const { rows, clear } = arrangeRows(cards, shownReports, keptInList.current);
   const clearIds = useRef(new Set());
   clearIds.current = new Set(clear.map((c) => c.id));
+  const focusId = focus?.id && cards.some((c) => c.id === focus.id) ? focus.id : null;
 
+  // A card was chosen (the rail, the bar on the ServiceNow page, another card) or the person went back to the list: once that has
+  // drawn, the top of the half is brought into view and the focus goes to the card's heading, or back to its row in the list.
+  const asked = useRef(focus);
+  asked.current = focus;
+  const focusAt = focus?.at || 0;
   useEffect(() => {
-    if (!openCard?.id) return undefined;
-    setOpen((o) => ({ ...o, [openCard.id]: true }));
-    if (clearIds.current.has(openCard.id)) setClearOpen(true);
-    // After the card has opened and the half is shown.
-    const timer = setTimeout(() => root.current?.querySelector(`[data-card="${openCard.id}"]`)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }), 0);
+    if (!focusAt) return undefined;
+    const { id, from } = asked.current || {};
+    if (!id && from && clearIds.current.has(from)) setClearOpen(true);
+    const timer = setTimeout(() => {
+      const box = root.current;
+      if (!box) return;
+      if (id) {
+        reveal(box);
+        box.querySelector(`[data-card="${id}"] .ab-ins-focus-title`)?.focus?.({ preventScroll: true });
+        return;
+      }
+      const row = from ? box.querySelector(`[data-card="${from}"]:not([hidden]) > .ab-ins-card-toggle`) : null;
+      if (row) row.focus();
+      else reveal(box);
+    }, 0);
     return () => clearTimeout(timer);
-  }, [openCard]);
-
-  if (!cards.length) return <EmptyNote>{t('Nothing to show for this kind of record yet.')}</EmptyNote>;
+  }, [focusAt]);
 
   const row = (c, hidden) => {
     // Open as the person left it. On first view the rows are folded (their one line answers at a look), except a card that is the
@@ -128,6 +188,7 @@ export default function TicketInsights({ page, eff, record, header, active, open
       }
     }
     const isOpen = open[c.id] ?? opensBy;
+    const focused = focusId === c.id;
     const { Card } = c;
     const { setSummary, setAttention } = settersFor(c.id);
     const report = shownReports[c.id] || {};
@@ -139,7 +200,8 @@ export default function TicketInsights({ page, eff, record, header, active, open
         level={report.attention || ''}
         summary={report.summary || ''}
         open={isOpen}
-        hidden={hidden}
+        focused={focused}
+        hidden={focusId ? !focused : hidden}
         onToggle={(v) => {
           if (v && !clearIds.current.has(c.id)) keptInList.current.add(c.id);
           if (!v) keptInList.current.delete(c.id);
@@ -149,14 +211,14 @@ export default function TicketInsights({ page, eff, record, header, active, open
         <ErrorBoundary resetKey={key}>
           {/* `active`: the half is on screen, so a folded card can still fill its one-line answer (the point of folding);
               `open`: whether its content shows, for a card that keeps a heavy read until it is opened. */}
-          <Card page={page} eff={eff} record={record} header={header} active={Boolean(active)} open={isOpen} setSummary={setSummary} setAttention={setAttention} onShowCard={onShowCard} />
+          <Card page={page} eff={eff} record={record} header={header} active={Boolean(active)} open={isOpen || focused} setSummary={setSummary} setAttention={setAttention} onShowCard={onShowCard} />
         </ErrorBoundary>
       </CardRow>
     );
   };
 
   const clearRow = clear.length > 0 && (
-    <li key="ab-all-clear" className="ab-ins-clear">
+    <li key="ab-all-clear" className="ab-ins-clear" hidden={focusId ? true : undefined}>
       <button
         type="button"
         className="ab-row ab-ins-clear-toggle"
@@ -175,13 +237,26 @@ export default function TicketInsights({ page, eff, record, header, active, open
     </li>
   );
   // ONE array of keyed rows, so a card that moves into or out of "All clear" keeps its place in the tree: it is not drawn anew (what was
-  // ticked or chosen in it stays).
-  const items = [...rows.map((c) => row(c, false)), clearRow, ...clear.map((c) => row(c, !clearOpen))].filter(Boolean);
+  // ticked or chosen in it stays). The facts that need a look lead it.
+  const items = [
+    ...needs.map((item) => <NeedRow key={`need:${item.id}`} item={item} hidden={Boolean(focusId)} />),
+    ...rows.map((c) => row(c, false)),
+    clearRow,
+    ...clear.map((c) => row(c, !clearOpen)),
+  ].filter(Boolean);
+  if (!items.length) return <EmptyNote>{t('Nothing to show for this kind of record yet.')}</EmptyNote>;
   return (
-    <div className="ab-ins" ref={root}>
+    <div className={`ab-ins${focusId ? ' is-focus' : ''}`} ref={root}>
+      {focusId && (
+        <button type="button" className="ab-ins-back" onClick={onBack}>
+          <Icon name="chevronLeft" size={16} className="ab-flip" />
+          {t('All insights')}
+        </button>
+      )}
       <ul className="ab-rows ab-ins-cards" aria-label={t('Insights')}>
         {items}
       </ul>
+      {!cards.length && <EmptyNote>{t('Nothing to show for this kind of record yet.')}</EmptyNote>}
     </div>
   );
 }

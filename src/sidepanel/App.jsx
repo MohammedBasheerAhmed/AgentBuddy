@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useEffective } from './useEffective.js';
 import { useForgetOnClear } from './forgetOnClear.js';
 import { usePage } from './usePage.js';
@@ -19,6 +19,8 @@ import { LAUNCH_TTL_MS, makeLaunch } from '../lib/launch.js';
 import { saveSettings } from '../lib/storage.js';
 import { nextTheme, systemIsDark, themeAttribute } from '../ui/useTheme.js';
 import ScreenView from './shell/ScreenView.jsx';
+import { RailContext, SideRail } from './shell/SideRail.jsx';
+import { createRailStore } from './shell/railStore.js';
 import TicketView from './ticket/TicketView.jsx';
 import MyWorkView from './mywork/index.js';
 import { TeamInsights, TeamAssist } from './team/index.js';
@@ -74,8 +76,9 @@ function Header({ base, eff, onPalette }) {
   const instance = base ? instanceOf(base) : null;
   const search = t('Search commands');
   const promise = t('Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
+  const ref = useHeightVar('--ab-head-h');
   return (
-    <header className="ab-header">
+    <header className="ab-header" ref={ref}>
       <BrandMark size={28} />
       <div className="ab-brandtext" title={promise}>
         <span className="ab-brand">{t('Agent Buddy')}</span>
@@ -99,11 +102,33 @@ function Header({ base, eff, onPalette }) {
 }
 
 /**
- * The screens, as a floating icon dock at the bottom centre of the panel: one round icon per screen, the one on show filled. The name of
- * an icon shows above it on hover and on the keyboard (CSS, shell.css); the name is also the button's text for a screen reader (one
- * tab stop, arrow keys move). It comes after the screens in the page, as it does on the screen.
+ * The height of an element (the header, the bar of screens) as a CSS variable on the page, kept up to date: the side rail sticks
+ * between the two (shell.css .ab-rail). The header wraps on a narrow panel, so its height is measured, not assumed.
+ */
+function useHeightVar(name) {
+  const [el, setEl] = useState(null);
+  useEffect(() => {
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty(name, `${Math.round(el.getBoundingClientRect().height)}px`);
+    set();
+    const watch = new ResizeObserver(set);
+    watch.observe(el);
+    return () => {
+      watch.disconnect();
+      root.style.removeProperty(name);
+    };
+  }, [el, name]);
+  return setEl;
+}
+
+/**
+ * The screens, as a bar along the bottom of the panel (2026-11-05: the screens at the bottom, everything a screen offers in the side
+ * rail): one button per screen, its icon and its name, the one on show in the accent with a line above it. One tab stop, arrow keys
+ * move. It comes after the screens in the page, as it does on the screen.
  */
 function ScreenTabs({ screens, value, onChange }) {
+  const ref = useHeightVar('--ab-bar-h');
   const buttons = useRef({});
   const at = screens.findIndex((s) => s.id === value);
   const onKeyDown = (e) => {
@@ -115,7 +140,7 @@ function ScreenTabs({ screens, value, onChange }) {
     buttons.current[screens[next].id]?.focus();
   };
   return (
-    <nav className="ab-screens" role="tablist" aria-label={t('Agent Buddy screens')} onKeyDown={onKeyDown}>
+    <nav className="ab-screens" role="tablist" aria-label={t('Agent Buddy screens')} onKeyDown={onKeyDown} ref={ref}>
       {screens.map((s) => (
         <button
           key={s.id}
@@ -129,11 +154,10 @@ function ScreenTabs({ screens, value, onChange }) {
           aria-controls={panelId(NAV, s.id)}
           tabIndex={s.id === value ? 0 : -1}
           className="ab-screen-tab"
-          data-name={s.label}
           onClick={() => onChange(s.id)}
         >
-          <Icon name={screenIcon(s.id)} size={18} />
-          <span className="ab-sr">{s.label}</span>
+          <Icon name={screenIcon(s.id)} size={20} />
+          <span className="ab-screen-name">{s.label}</span>
         </button>
       ))}
     </nav>
@@ -163,6 +187,12 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
   const ids = screens.map((s) => s.id);
   const chosen = ids.includes(section) ? section : 'ticket';
   const plan = planPanel({ ids, active: chosen, visited, page, lastGood, lastSeen });
+  // The side rail: each screen publishes what it lists while it is on show (SideRail.jsx useRailPublish); the rail of the screen on
+  // show is drawn beside the screens. Its names (the wide rail) are remembered in settings.railNames.
+  const [rails] = useState(createRailStore);
+  const published = useSyncExternalStore(rails.subscribe, rails.getSnapshot, rails.getSnapshot);
+  const rail = plan.showNav ? published[plan.visible] || null : null;
+  const railNames = eff.values?.railNames === true;
 
   // The command palette (open and closed by Panel: Ctrl+K, or Cmd+K on a Mac, or the button in the header). A command that runs an action
   // on the record is handed to the Ticket screen as a launch, exactly like the keyboard shortcuts and the bar on the ServiceNow page do.
@@ -226,14 +256,16 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
     const extra = s.id === 'mywork' ? { onOpenTicket: () => onChoose('ticket') } : {};
     return (
       <ErrorBoundary resetKey={pane.selected}>
-        <ScreenView screen={s.id} Insights={Insights} Assist={Assist} page={pageFor(s.id, plan.mountPage, pane.selected)} eff={eff} active={pane.selected} extra={extra} />
+        <ScreenView screen={s.id} label={s.label} Insights={Insights} Assist={Assist} page={pageFor(s.id, plan.mountPage, pane.selected)} eff={eff} active={pane.selected} extra={extra} />
       </ErrorBoundary>
     );
   };
 
   return (
+    <RailContext.Provider value={rails}>
     <div className="ab-app">
       <Header base={plan.base || lastSeen} eff={eff} onPalette={onPalette} />
+      <div className={`ab-body${rail ? ' has-rail' : ''}`}>
       <main className="ab-main">
         {plan.enabled && (
           <ErrorBoundary resetKey={page.href}>
@@ -261,9 +293,19 @@ export function AppView({ eff, page, lastGood = null, lastSeen = null, section, 
           );
         })}
       </main>
+      {rail && (
+        <SideRail
+          rail={rail}
+          names={railNames}
+          onNames={(next) => saveSettings({ railNames: next }).catch(() => {})}
+          onSelect={(id) => rails.select(plan.visible, id)}
+        />
+      )}
+      </div>
       {plan.showNav && <ScreenTabs screens={screens} value={plan.visible} onChange={onChoose} />}
       <CommandPalette open={paletteOpen} onClose={onPaletteClose} commands={commands} onRun={runCommand} />
     </div>
+    </RailContext.Provider>
   );
 }
 

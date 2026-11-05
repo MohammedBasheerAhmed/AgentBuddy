@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { headerPhase } from '../recordHeader.js';
@@ -8,12 +8,14 @@ import { QUICK_CARDS, isQuickCard } from '../../features/quick.js';
 import { aiAvailable, aiOffByPolicy } from '../../profiles/profiles.js';
 import { HalfPanel, HalfRule, HalfSwitch } from '../ui/primitives.jsx';
 import { ModelSwitch, ProfileHint, useHalf } from '../shell/shellParts.jsx';
+import { useRailPublish } from '../shell/SideRail.jsx';
 import { Glance, INSIGHT_CARDS } from './cards/index.js';
-import { QuickBar } from './assist/actions/index.js';
-import { nextStep, offeredFeatures } from './assist/actions/plan.js';
+import { offeredFeatures, useActionPlan } from './assist/actions/index.js';
 import { useAnswers } from './assist/answers/index.js';
 import { useCardReports } from './cardReports.js';
-import NextStep from './NextStep.jsx';
+import { needsCount } from './needsNow.js';
+import { useNeeds } from './useNeeds.js';
+import { ALL_INSIGHTS, SUGGESTED, answerAction, assistRail, insightsRail, reveal } from './ticketRail.js';
 import TicketInsights, { cardsFor } from './TicketInsights.jsx';
 import TicketAssist from './TicketAssist.jsx';
 import { t } from '../../i18n/index.js';
@@ -21,14 +23,16 @@ import { t } from '../../i18n/index.js';
 export const SAVE_SETTLE_MS = 1500;
 
 /**
- * The Ticket screen for an open record (TRACKER.md 2.1). From the top: the ticket (no box), "Needs you now" when something does, the
- * one main step (the action the ticket's state suggests first) and the quick actions; then the Insights / AI Assist tabs and the two
- * halves. While AI Assist is on show the top shrinks to the number, the title and the chips (AI Assist has its own first step).
- * Owner: the lead; the cards, the actions and the answers plug in (docs/round3.md).
+ * The Ticket screen for an open record (TRACKER.md 2.1; the 2026-11-05 layout, docs/rail-layout.md A). From the top: the ticket, compact
+ * (its number, title and chips; "Ticket details" opens the rest), then straight away the Insights / AI Assist tabs and the two halves.
+ * Insights starts with what needs the agent now (the SLA, a customer waiting, a possible outage) and then its cards. The side rail
+ * lists everything the half on show offers: every Insights card (a click shows that card alone, with "All insights" to go back), or
+ * every AI action this record offers (a click starts it exactly as in AI Assist: preview first). Owner: the lead; the cards, the
+ * actions and the answers plug in (docs/round3.md).
  *
- * The answers belong to the screen, not to a half: an action started from the main step, the quick bar or the bar on the ServiceNow
- * page shows its answer in AI Assist, which comes forward. A half that was opened stays mounted while the other one shows. What the
- * Insights cards report (their one line, their status) is kept here, per record, so "Needs you now" and the Insights rows say the same.
+ * The answers belong to the screen, not to a half: an action started from the rail or the bar on the ServiceNow page shows its answer
+ * in AI Assist, which comes forward. A half that was opened stays mounted while the other one shows. What the Insights cards report
+ * (their one line, their status) is kept here, per record, so their rows and the rail say the same.
  *
  * props: page (a record page), eff, active (the Ticket screen is on show), launch / onLaunchDone (an action the bar on the
  * ServiceNow page asked for; used once)
@@ -48,9 +52,22 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   const [half, setHalf] = useHalf('ticket', eff);
   const shown = aiOn ? half : 'insights';
   const [visited, setVisited] = useState(() => new Set([shown]));
-  const [openCard, setOpenCard] = useState(null); // { id, at }: a request to open one card (from the quick bar)
+  // The card Insights shows alone ({ key, id, at, from }: `at` changes with every request; `from`: the card that was alone before the
+  // person went back to the list). It belongs to its record: another record starts on the list.
+  const [view, setView] = useState(() => ({ key, id: null, at: 0, from: null }));
   const [launchNote, setLaunchNote] = useState('');
   const ready = aiOn && aiAvailable(eff) && isAiReady(eff);
+  const root = useRef(null);
+
+  // The Insights cards of this record, what needs the agent now (the first rows of Insights, and the number on its tab), and what AI
+  // Assist offers (worked out once, for the half and for the rail). The checklist action needs one read to know whether it is offered:
+  // made only once AI Assist has been opened, as before the rail (its actions are in the rail only while AI Assist is on show).
+  const cards = cardsFor(INSIGHT_CARDS, record, header, eff);
+  const cardIds = cards.map((c) => c.id);
+  const needs = useNeeds({ page, record, eff, header, headPhase: phase, cards });
+  const plan = useActionPlan({ page, eff, record, header, aiReady: ready && (shown === 'assist' || visited.has('assist')) });
+  const focus = view.key === key ? view : null;
+  const focusId = focus?.id && cardIds.includes(focus.id) ? focus.id : null;
 
   const choose = (next) => {
     setHalf(next);
@@ -61,9 +78,22 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     if (aiOn) choose('assist');
     return assist.run(feature, options);
   };
+  // One card alone in Insights (the rail, the bar on the ServiceNow page, a link in another card). A card this record does not show
+  // (a profile without it) leaves Insights on its list.
   const showCard = (id) => {
     choose('insights');
-    setOpenCard({ id, at: Date.now() });
+    if (cardIds.includes(id)) setView({ key, id, at: Date.now(), from: null });
+  };
+  const showAll = () => setView((v) => ({ key, id: null, at: Date.now(), from: v.key === key ? v.id : null }));
+  // "Suggested": back to the top of AI Assist (the tabs in view), the focus on its suggestions.
+  const toSuggested = () => {
+    const box = root.current;
+    if (!box) return;
+    reveal([...box.children].find((el) => el.classList?.contains('ab-halfswitch')) || box.querySelector('#ab-ticket-half-panel-assist'));
+    const heading = box.querySelector('#ab-ticket-half-panel-assist .ab-act-head');
+    if (!heading) return;
+    if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+    heading.focus({ preventScroll: true });
   };
 
   // The header: read for every record, and again when the screen comes back after a while (the agent may have saved the form in the
@@ -120,7 +150,7 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   useEffect(() => {
     if (!launchIsForPage(launch, page)) return;
     onLaunchDone();
-    // An Insights item ('card:ready'): no AI, just bring that card forward.
+    // An Insights item ('card:ready'): no AI, just that card, alone in Insights.
     if (isQuickCard(launch.featureId)) {
       setLaunchNote('');
       showCard(QUICK_CARDS[launch.featureId].card);
@@ -142,41 +172,51 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launch, page.tabId, key]);
 
-  // The one main step: the action the ticket's state suggests first (the first row of AI Assist, the quick bar's first AI item).
-  // Nothing when AI cannot be used now: the note in AI Assist says how to set it up.
-  const step = useMemo(() => (ready ? nextStep({ record, header, eff }) : null), [ready, record, header, eff]);
-  // While AI Assist is on show the top shrinks: AI Assist starts with its own suggestions, the first of them this same step.
-  const compact = shown === 'assist';
-  // The Insights cards of this record (their titles and ids), for "Needs you now" to name the card an item came from.
-  const cards = cardsFor(INSIGHT_CARDS, record, header, eff).map((c) => ({ id: c.id, title: c.title }));
+  // The side rail of the half on show (docs/rail-layout.md A4, A5), arranged as the person chose in Settings > Side rail. An AI action
+  // waits while AI cannot be used now or an answer is on its way (AI Assist says why); a click on one is a click in AI Assist.
+  const layout = eff.values?.railLayout;
+  const aiOff = !ready || assist.busy || Boolean(plan.block);
+  const startFromRail = (id) => {
+    const item = plan.items.find((it) => it.feature.id === id);
+    if (item && !item.reason && ready && !assist.busy) runAi(item.feature);
+  };
+  const rail =
+    shown === 'assist'
+      ? {
+          title: t('AI Assist'),
+          items: assistRail({ items: plan.items, kind, stage: plan.stage, byState: eff.values?.railByState !== false, layout, current: answerAction(assist.answers?.[0]), off: aiOff }).map((it) => ({
+            ...it,
+            onSelect: it.id === SUGGESTED ? toSuggested : () => startFromRail(it.id),
+          })),
+        }
+      : {
+          title: t('Insights'),
+          items: insightsRail({ cards, reports: reports.cards, layout, kind, focus: focusId }).map((it) => ({
+            ...it,
+            onSelect: it.id === ALL_INSIGHTS ? showAll : () => showCard(it.id),
+          })),
+        };
+  useRailPublish('ticket', rail, active);
 
   return (
-    <div className="ab-pane ab-ticket">
+    <div className="ab-pane ab-ticket" ref={root}>
       <ErrorBoundary resetKey={key}>
-        <Glance page={page} eff={eff} record={record} header={header} headPhase={phase} active={active} compact={compact} onShowCard={showCard} needs={compact ? null : { cards, reports: reports.cards }} />
+        <Glance page={page} eff={eff} record={record} header={header} headPhase={phase} active={active} />
       </ErrorBoundary>
-      {!compact && step && <NextStep feature={step} eff={eff} busy={assist.busy} onRun={(f) => runAi(f)} />}
-      {!compact && (
-        <ErrorBoundary resetKey={`${key}:quick`}>
-          <QuickBar page={page} eff={eff} record={record} header={header} busy={assist.busy} aiReady={ready} exclude={step ? [step.id] : []} onRun={(f) => runAi(f)} onShowCard={showCard} />
-        </ErrorBoundary>
-      )}
       <ProfileHint kind={kind} eff={eff} />
       {launchNote && <p className="ab-note ab-note-warn" role="status">{launchNote}</p>}
 
-      {aiOn && <HalfSwitch idBase="ab-ticket-half" value={shown} onChange={choose} assistNote={eff.values?.aiSkipped ? t('off') : ''} />}
+      {aiOn && <HalfSwitch idBase="ab-ticket-half" value={shown} onChange={choose} assistNote={eff.values?.aiSkipped ? t('off') : ''} count={needsCount({ needs, cards, reports: reports.cards })} />}
 
       <HalfPanel idBase="ab-ticket-half" half="insights" hidden={shown !== 'insights'} switched={Boolean(aiOn)}>
         {(visited.has('insights') || shown === 'insights') && (
-          <TicketInsights page={page} eff={eff} record={record} header={header} active={active && shown === 'insights'} openCard={openCard} onShowCard={showCard} reports={reports} />
+          <TicketInsights page={page} eff={eff} record={record} header={header} active={active && shown === 'insights'} needs={needs} focus={focus} onBack={showAll} onShowCard={showCard} reports={reports} />
         )}
         {aiOn && <HalfRule half="insights" />}
       </HalfPanel>
       {aiOn && (
         <HalfPanel idBase="ab-ticket-half" half="assist" hidden={shown !== 'assist'}>
-          {(visited.has('assist') || shown === 'assist') && (
-            <TicketAssist page={page} eff={eff} record={record} header={header} assist={assist} ready={ready} active={active && shown === 'assist'} onRun={runAi} />
-          )}
+          {(visited.has('assist') || shown === 'assist') && <TicketAssist page={page} eff={eff} record={record} assist={assist} plan={plan} ready={ready} active={active && shown === 'assist'} onRun={runAi} />}
           {/* At the end, out of the way: where text goes, in one sentence without the address (the check before sending names the
               destination), and the model in use, to switch without opening Settings. */}
           {!eff.values?.aiSkipped && (

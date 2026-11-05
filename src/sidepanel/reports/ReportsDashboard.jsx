@@ -26,6 +26,8 @@ import BuilderEditor from './BuilderEditor.jsx';
 import MoreMenu from './MoreMenu.jsx';
 import ExportPanel from './ExportPanel.jsx';
 import { WidgetHead, dashboardNotes } from './SectionShell.jsx';
+import { widgetRail } from './railSections.js';
+import { useRailSection } from '../shell/SideRail.jsx';
 import { isolate, t, tm, tn } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 
@@ -64,6 +66,19 @@ function NameField({ value, onCommit, disabled }) {
     <div className="ab-field">
       <label className="ab-label" htmlFor="ab-dash-name">{t('Dashboard name')}</label>
       <input id="ab-dash-name" className="ab-input" maxLength={CAPS.name} value={text} disabled={disabled} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()} />
+    </div>
+  );
+}
+
+/**
+ * The place of one widget on the dashboard. On the Team screen it is also an item of the side rail (`rail`: widgetRail's entry, or null
+ * for a widget the rail does not list); on the full page, which has no rail, it registers nowhere.
+ */
+function WidgetSlot({ rail, children }) {
+  const railRef = useRailSection(rail || {});
+  return (
+    <div className="ab-widget-slot" ref={rail ? railRef : undefined}>
+      {children}
     </div>
   );
 }
@@ -469,24 +484,28 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
                 />
               );
             }
+            // The side rail names it by the heading it draws (a custom report's comes with what it loaded).
+            const found = widgetRail(w, loadedEntries.find((e) => e.id === w.id)?.result);
+            // Its place too: a widget moved in Customize moves in the rail (the page order alone would not tell the rail it changed).
+            const rail = found && { ...found, order: dash.widgets.indexOf(w) };
             if (section?.ai) {
               // Only in Customize (visibleWidgets leaves AI sections out otherwise): a place-holder that can be removed, never the AI itself.
               return (
-                <div key={w.id} className="ab-widget-slot">
+                <WidgetSlot key={w.id} rail={rail}>
                   <section className="ab-widget" aria-label={shown(section.label)}>
                     <WidgetHead title={shown(section.label)} tools={tools}>
                       {() => <p className="ab-hint">{t('This is under AI Assist now. Remove it from this dashboard.')}</p>}
                     </WidgetHead>
                   </section>
-                </div>
+                </WidgetSlot>
               );
             }
             return (
-              <div key={w.id} className="ab-widget-slot">
+              <WidgetSlot key={w.id} rail={rail}>
                 <WidgetBoundary title={label} tools={tools} resetKey={`${refreshKey}|${scopeJson}|${selectedJson}`}>
                   {w.type === 'builder' ? <BuilderView widget={w} env={env} tools={tools} /> : section ? <section.View widget={w} env={env} eff={eff} tools={tools} /> : null}
                 </WidgetBoundary>
-              </div>
+              </WidgetSlot>
             );
           })}
           {!dash.widgets.length && <p className="ab-sub">{t('This dashboard is empty. Choose Customize in the ⋯ menu to add sections.')}</p>}

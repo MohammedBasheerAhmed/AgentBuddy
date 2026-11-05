@@ -3,10 +3,11 @@
 // sections of the page on show (it stacks above the sections on a narrow window). Each section is a file of its own:
 //   fields.jsx    the shared pieces (section title, switch, status line, field error, text box that saves a moment later) and
 //                 useSaveSetting()
-//   basics/       the choices on Basics: appearance, language, instances, profiles, follow-ups, shortcuts, quick bar, privacy, policy
+//   basics/       the choices on Basics: appearance, language, instances, profiles, follow-ups, shortcuts, side rail, privacy, policy
 //   data/         what Agent Buddy keeps: the activity log, stored data and "Clear everything", diagnostics for support
 //   provider/     AI Assist: the provider, its key and model, the connection check, the usage and limits
-//   FormatsSection.jsx, ProfilePicker.jsx, policyNotes.js (pure notes about the policy), diagnostics.js (pure diagnostics text)
+//   FormatsSection.jsx, ProfilePicker.jsx, policyNotes.js (pure notes about the policy), diagnostics.js (pure diagnostics text),
+//   railOptions.js (pure: what each kind of record offers the side rail, and the changes Side rail saves)
 // The sections are exported from here too, under the names the tests have always imported. The page's styles are in
 // src/ui/areas/options.css.
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -21,7 +22,7 @@ import { InstancesSection } from './basics/InstancesSection.jsx';
 import { ProfilesSection } from './basics/ProfilesSection.jsx';
 import { FollowUpSection } from './basics/FollowUpSection.jsx';
 import { ShortcutsSection } from './basics/ShortcutsSection.jsx';
-import { QuickBarSection } from './basics/QuickBarSection.jsx';
+import { RailSection } from './basics/RailSection.jsx';
 import { PrivacySection } from './basics/PrivacySection.jsx';
 import { PolicySection, policySectionShown } from './basics/PolicySection.jsx';
 import { AuditSection } from './data/AuditSection.jsx';
@@ -34,7 +35,7 @@ import { t } from '../i18n/index.js';
 import { useLanguage } from '../i18n/useLanguage.js';
 import { useTheme } from '../ui/useTheme.js';
 
-export { ProviderSection, UsageSection, AppearanceSection, LanguageSection, InstancesSection, ProfilesSection, FollowUpSection, ShortcutsSection, PrivacySection, PolicySection, DiagnosticsSection };
+export { ProviderSection, UsageSection, AppearanceSection, LanguageSection, InstancesSection, ProfilesSection, FollowUpSection, ShortcutsSection, RailSection, PrivacySection, PolicySection, DiagnosticsSection };
 export { SITE_REFUSED_TEXT } from './basics/InstancesSection.jsx';
 export { FOLLOW_UP_DAY_CHOICES as FOLLOW_UP_CHOICES } from '../mywork/followups.js';
 
@@ -76,7 +77,7 @@ export function settingsMenu(page, eff) {
     { id: 'h-profiles', label: t('What you work on'), icon: 'ticket' },
     { id: 'h-followup', label: t('My work'), icon: 'inbox' },
     { id: 'h-shortcuts', label: t('Keyboard shortcuts'), icon: 'keyboard' },
-    { id: 'h-quick', label: t('Quick actions'), icon: 'command' },
+    { id: 'h-rail', label: t('Side rail'), icon: 'command' },
     { id: 'h-privacy', label: t('Privacy'), icon: 'shield' },
     policySectionShown(eff) && { id: 'h-policy', label: t("Your organisation's policy"), icon: 'flag' },
     { id: 'h-audit', label: t('Activity log'), icon: 'clipboard' },
@@ -369,7 +370,7 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
           <ProfilesSection eff={eff} reload={reload} />
           <FollowUpSection eff={eff} reload={reload} />
           <ShortcutsSection />
-          <QuickBarSection eff={eff} reload={reload} />
+          <RailSection eff={eff} reload={reload} />
           <PrivacySection eff={eff} reload={reload} />
           <PolicySection eff={eff} />
           <AuditSection key={`audit-${epoch}`} eff={eff} />

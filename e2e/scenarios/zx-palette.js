@@ -62,7 +62,7 @@ module.exports = {
     const dialog = await p.evaluate(() => {
       const d = document.querySelector('.ab-palette');
       const input = d.querySelector('input');
-      return { modal: d.getAttribute('aria-modal'), role: d.getAttribute('role'), focused: document.activeElement === input, combobox: input.getAttribute('role'), active: input.getAttribute('aria-activedescendant'), behindInert: document.querySelector('.ab-header')?.hasAttribute('inert') && document.querySelector('.ab-main')?.hasAttribute('inert') };
+      return { modal: d.getAttribute('aria-modal'), role: d.getAttribute('role'), focused: document.activeElement === input, combobox: input.getAttribute('role'), active: input.getAttribute('aria-activedescendant'), behindInert: document.querySelector('.ab-header')?.hasAttribute('inert') && Boolean(document.querySelector('.ab-main')?.closest('[inert]')) && Boolean(document.querySelector('.ab-screens')?.closest('[inert]')) };
     });
     t.check('Ctrl+K opens a modal dialog with the focus in its search box (a combobox)', dialog.modal === 'true' && dialog.role === 'dialog' && dialog.focused && dialog.combobox === 'combobox', JSON.stringify(dialog));
     t.check('the rest of the panel is shut off while it is open', dialog.behindInert === true, JSON.stringify(dialog));

@@ -6,7 +6,7 @@ import { normalizePolicy } from '../src/policy/policy.js';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
 import { MAX_QUICK, QUICK_CARDS, QUICK_DEFAULTS, QUICK_LABELS, cleanPins, isQuickId, quickActions, quickCardItem, quickItems } from '../src/features/quick.js';
 import { INSIGHT_CARDS } from '../src/sidepanel/ticket/cards/index.js';
-import { cardIdsFor } from '../src/sidepanel/ticket/assist/actions/TicketQuickBar.jsx';
+import { cardIdsFor } from '../src/sidepanel/ticket/TicketInsights.jsx';
 
 // ---- the table and the registry stay in step --------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ test('every labelled id is a real feature that the Actions list can offer (and n
 test('every Insights item opens a card the Insights half really has (audit P2.4: "card:ready" named a card "ready" that does not exist)', () => {
   const ids = INSIGHT_CARDS.map((c) => c.id);
   for (const [id, item] of Object.entries(QUICK_CARDS)) assert.ok(ids.includes(item.card), `${id}: no Insights card "${item.card}"`);
-  // ...so the bar of the Ticket screen offers it: a resolved incident puts "Ready to resolve?" first (it was never shown).
+  // ...so the small bar on the ServiceNow page offers it (with AI off): a resolved incident puts "Ready to resolve?" first.
   const eff = effectiveSettings({ ...DEFAULT_SETTINGS, profiles: ['it'] }, {});
   const items = quickItems({ kind: 'incident', stage: 'resolve', cards: cardIdsFor({ kind: 'incident' }, null, eff), ai: false });
   assert.deepEqual(items.map((i) => [i.id, i.card]), [['card:ready', 'resolve'], ['card:related', 'related']]);

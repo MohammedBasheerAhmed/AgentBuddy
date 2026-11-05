@@ -25,7 +25,7 @@ module.exports = {
     inst.setBehaviour();
     await ctx.ensureEnabled();
     await ctx.configure(
-      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', previewMode: 'always', instances: [inst.origin], quickBarOpen: true, quickPins: {}, pageBar: true },
+      { provider: 'custom', models: { custom: 'test-model' }, baseUrls: { custom: ai.baseUrl }, keyStorage: 'local', previewMode: 'always', instances: [inst.origin], quickPins: {}, pageBar: true },
       { key: { provider: 'custom', value: ai.key } }
     );
     await ctx.ext(() => chrome.storage.session.remove('ab:launch'));

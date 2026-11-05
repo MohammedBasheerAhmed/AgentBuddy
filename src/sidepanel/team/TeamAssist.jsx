@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { activeProfiles } from '../../profiles/profiles.js';
 import { isFeatureEnabled } from '../../policy/policy.js';
-import { CardFrame } from '../ui/primitives.jsx';
+import { RailCard } from '../reports/RailCard.jsx';
 import ErrorNote from '../ErrorNote.jsx';
 import { instanceKey } from '../../reports/dashboards.js';
 import { createLimiter } from '../../reports/engine/cache.js';
@@ -17,6 +17,7 @@ import { featureState } from '../reports/aiShared.jsx';
 import { hrReportsAllowed, scopeChipText } from '../reports/ReportsDashboard.jsx';
 import { readLabel } from '../reports/format.js';
 import { teamShare } from './teamShare.js';
+import { TEAM_ASSIST_SECTIONS as S } from './railSections.js';
 import { t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
 
@@ -48,7 +49,8 @@ function Headless({ section, widget, env }) {
  * goes through useRun (preview, masking, policy); every AI button and answer carries the AI mark (the small grey spark: no mark in the
  * corner of the sections, TRACKER.md 2.3). Calm: sections parted by dividers, each answer on a soft surface. It works from the numbers the Insights
  * half loaded (teamShare.js). When the Insights half has not been opened in this panel, this half reads the same dashboard itself,
- * through the same GET-only reads, so it never explains numbers nobody looked up.
+ * through the same GET-only reads, so it never explains numbers nobody looked up. Each section is an item of the side rail
+ * (railSections.js); a click there opens it if it is folded (coaching starts folded).
  * Props: { page, eff, active }.
  */
 export default function TeamAssist({ page, eff, active }) {
@@ -148,7 +150,7 @@ export default function TeamAssist({ page, eff, active }) {
         </div>
       )}
 
-      <CardFrame id="team-handover" title={t('Hand-over note')} summary={`${t('Last {hours} hours', { hours })} · ${scopeText}`}>
+      <RailCard rail={S.handover} summary={`${t('Last {hours} hours', { hours })} · ${scopeText}`}>
         <HoursPicker hours={hours} onChange={setHours} label={t('Period of the hand-over')} />
         {handover ? (
           handover.data?.available === false ? (
@@ -164,20 +166,20 @@ export default function TeamAssist({ page, eff, active }) {
           <p className="ab-note">{t('No ticket table is available, so there is nothing to hand over.')}</p>
         ) : null}
         <HandoverAi result={handover?.data?.available === false ? null : handover} page={page} eff={eff} hours={hours} primary={handoverOn} />
-      </CardFrame>
+      </RailCard>
 
-      <CardFrame id="team-explain" title={t('Explain this dashboard')} summary={`${shown(dash.name)} · ${scopeText}`}>
+      <RailCard rail={S.explain} summary={`${shown(dash.name)} · ${scopeText}`}>
         <ExplainBody entries={explainEntries(entries)} page={page} eff={eff} primary={!handoverOn} />
-      </CardFrame>
+      </RailCard>
 
       {gate ? (
         <p className="ab-hint ab-team-coach-off">
           {gate === 'off' ? t('Coaching snapshot: turned off by your organisation.') : t('Coaching snapshot: off until your organisation switches coaching on.')}
         </p>
       ) : (
-        <CardFrame id="team-coaching" title={t('Coaching snapshot')} summary={t('One group, a sample of resolved tickets')} defaultOpen={false}>
+        <RailCard rail={S.coaching} summary={t('One group, a sample of resolved tickets')} defaultOpen={false}>
           <CoachingTool env={{ page, tables, blocked, myGroups: context.data?.groups || [], groupsNote: context.data?.groupsNote || '' }} eff={eff} needs={coachingNeeds(eff)} bare />
-        </CardFrame>
+        </RailCard>
       )}
     </div>
   );

@@ -16,19 +16,51 @@
 .ab-iconbtn:focus-visible { border-radius: var(--ab-radius); }
 .ab-shield { display: inline-flex; color: var(--ab-ok); }
 
-/* ---- screens: a floating icon dock at the bottom centre of the panel (App.jsx ScreenTabs). One round icon per screen, the one on show
-   filled with the accent; the name of an icon shows above it on hover and on the keyboard. It sticks to the bottom edge while the screen
-   scrolls behind it, and sits after the last section when the screen is scrolled to the end. ---- */
-.ab-screens { position: sticky; bottom: 12px; z-index: 3; align-self: center; display: flex; gap: 4px; padding: 5px; margin: 4px 8px 12px; max-width: calc(100% - 16px); border: 1px solid var(--ab-border); border-radius: 999px; background: var(--ab-bg-raised); box-shadow: var(--ab-shadow); }
-.ab-screen-tab { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ab-fg-muted); cursor: pointer; }
-.ab-screen-tab:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
-.ab-screen-tab[aria-selected='true'], .ab-screen-tab[aria-selected='true']:hover { background: var(--ab-accent); border-color: var(--ab-accent); color: var(--ab-accent-fg); }
-.ab-screen-tab:focus-visible { border-radius: 50%; }
-/* the name of the icon: dark on a light panel and light on a dark one, above the icon, never in the way of a click */
-.ab-screen-tab::after { content: attr(data-name); position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translate(-50%, 3px); padding: 4px 9px; border-radius: var(--ab-radius); background: var(--ab-fg); color: var(--ab-bg); box-shadow: var(--ab-shadow); font-size: var(--ab-text-sm); font-weight: 600; line-height: 1.35; white-space: nowrap; pointer-events: none; visibility: hidden; opacity: 0; transition: opacity 120ms ease-out, transform 120ms ease-out, visibility 0s linear 120ms; }
-.ab-screen-tab:focus-visible::after { visibility: visible; opacity: 1; transform: translate(-50%, 0); transition-delay: 0s; }
-@media (hover: hover) { .ab-screen-tab:hover::after { visibility: visible; opacity: 1; transform: translate(-50%, 0); transition-delay: 0s; } }
-@media (prefers-reduced-motion: reduce) { .ab-screen-tab::after { transition: none; } }
+/* ---- screens: a bar along the bottom of the panel (App.jsx ScreenTabs; 2026-11-05: the screens at the bottom, everything a screen
+   offers in the side rail). One button per screen, its icon over its name; the one on show in the accent with a short line above it.
+   It sticks to the bottom edge while the screen scrolls behind it. Its height is measured (--ab-bar-h) for the rail. ---- */
+.ab-screens { position: sticky; bottom: 0; z-index: 3; display: flex; border-top: 1px solid var(--ab-border); background: var(--ab-bg); }
+.ab-screen-tab { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; padding: 4px 2px; border: 0; border-radius: 0; background: transparent; color: var(--ab-fg-muted); font: inherit; font-size: var(--ab-text-xs); font-weight: 500; line-height: 1.2; cursor: pointer; }
+.ab-screen-tab:hover { background: var(--ab-bg-subtle); color: var(--ab-fg); }
+.ab-screen-tab[aria-selected='true'], .ab-screen-tab[aria-selected='true']:hover { color: var(--ab-accent); }
+.ab-screen-tab[aria-selected='true']::before { content: ''; position: absolute; top: 0; inset-inline: 28%; height: 2px; border-radius: 0 0 2px 2px; background: var(--ab-accent); }
+.ab-screen-tab:focus-visible { border-radius: var(--ab-radius-sm); }
+.ab-screen-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- the side rail (SideRail.jsx): a slim column of icons on the inline end of the panel (right in English, left in Arabic) that lists
+   what the screen on show offers. It sticks between the header and the bar of screens (both measured: --ab-head-h, --ab-bar-h) while
+   the screen scrolls; its own list scrolls when it is taller than that. "Show names" widens it over the screen. ---- */
+.ab-body { flex: 1; display: flex; align-items: flex-start; min-width: 0; }
+.ab-body > .ab-main { flex: 1; min-width: 0; align-self: stretch; }
+.ab-rail { position: sticky; top: var(--ab-head-h); flex: none; width: 48px; height: calc(100vh - var(--ab-head-h) - var(--ab-bar-h)); z-index: 2; }
+.ab-rail-inner { position: absolute; inset-block: 0; inset-inline-end: 0; width: 48px; box-sizing: border-box; display: flex; flex-direction: column; align-items: stretch; padding: 8px 0; background: var(--ab-bg-subtle); border-inline-start: 1px solid var(--ab-divider); }
+.ab-rail.is-wide .ab-rail-inner { width: 232px; box-shadow: var(--ab-shadow); }
+/* the items: they scroll on their own (no scroll bar to squeeze a 48 px column; the wheel, a swipe and the keyboard all reach them),
+   so "Show names" always stays at the foot */
+.ab-rail-list { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 4px 4px; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+.ab-rail.is-wide .ab-rail-list { align-items: stretch; }
+.ab-rail-names { flex: none; align-self: center; margin-top: 4px; }
+.ab-rail.is-wide .ab-rail-item.ab-rail-names { align-self: stretch; width: auto; margin-inline: 4px; }
+.ab-rail-title { margin: 0; padding: 4px 10px 6px; font-size: var(--ab-text-xs); font-weight: 600; color: var(--ab-fg-muted); }
+.ab-rail-item { position: relative; flex: none; display: flex; align-items: center; justify-content: center; gap: 10px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--ab-radius); background: transparent; color: var(--ab-fg-muted); font: inherit; font-size: var(--ab-text-md); font-weight: 500; text-align: start; cursor: pointer; }
+.ab-rail.is-wide .ab-rail-item { width: 100%; height: auto; min-height: 40px; justify-content: flex-start; padding: 6px 10px; }
+.ab-rail-item:hover { background: var(--ab-bg-sunken); color: var(--ab-fg); }
+.ab-rail-item[aria-current='true'], .ab-rail-item[aria-current='true']:hover { background: var(--ab-accent-soft); color: var(--ab-accent); }
+.ab-rail-item[aria-disabled='true'], .ab-rail-item[aria-disabled='true']:hover { background: transparent; color: var(--ab-fg-faint); cursor: default; }
+.ab-rail-item .ab-ai-badge { color: inherit; }
+.ab-rail-name { flex: 1; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
+.ab-rail-dot { position: absolute; top: 7px; inset-inline-end: 7px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ab-bg-subtle); }
+.ab-rail-dot.is-warn { background: var(--ab-warn); }
+.ab-rail-dot.is-danger { background: var(--ab-danger); }
+.ab-rail.is-wide .ab-rail-dot { position: static; flex: none; box-shadow: none; }
+.ab-rail-rule { flex: none; width: 24px; height: 1px; margin: 4px 0; background: var(--ab-border-strong); }
+.ab-rail.is-wide .ab-rail-rule { width: auto; align-self: stretch; margin-inline: 10px; }
+/* the name of an icon, beside it on hover and on the keyboard: fixed to the window, so the rail's own scrolling cannot cut it off */
+.ab-rail-tip { position: fixed; z-index: 20; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border-radius: var(--ab-radius-sm); background: var(--ab-fg); color: var(--ab-bg); box-shadow: var(--ab-shadow); font-size: var(--ab-text-sm); font-weight: 500; line-height: 1.35; white-space: nowrap; pointer-events: none; }
+.ab-rail-tip .ab-ai-badge { color: inherit; }
+/* a section the rail brought into view lands under the sticky header, and its heading takes the focus without a ring around words */
+.ab-main [data-rail-section] { scroll-margin-top: calc(var(--ab-head-h) + 8px); }
+.ab-main [data-rail-section] :is(h2, h3, h4)[tabindex='-1']:focus, .ab-main :is(h2, h3, h4)[data-rail-section][tabindex='-1']:focus { outline: none; box-shadow: none; }
 /* the name of a control for a screen reader, not drawn */
 .ab-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 

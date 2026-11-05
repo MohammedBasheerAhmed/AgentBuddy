@@ -7,12 +7,13 @@ import { shownFor } from '../../profiles/profiles.js';
 import SearchCard, { TicketArticles } from './SearchCard.jsx';
 import { placeOf, useShared } from './shared.js';
 import { KM_PROFILES } from './KnowledgeAssist.jsx';
-import { t } from '../../i18n/index.js';
+import { KNOWLEDGE_SECTIONS as S } from './railSections.js';
 
 // The Knowledge screen, Insights half (no AI; nothing leaves ServiceNow), as calm sections. With a ticket open it starts with the
 // articles that match the ticket's title (the knowledge search run once on it); then Knowledge search (N23) for everyone; for
 // knowledge managers also the duplicate article finder (N18) and the knowledge-gap radar (N19), folded until opened (they read only
-// when opened). What those two find is handed to the AI Assist half in memory (shared.js). Props: { page, eff, active }.
+// when opened; a click on one in the side rail opens it the same way). What those two find is handed to the AI Assist half in memory
+// (shared.js). Each section is an item of the side rail (railSections.js). Props: { page, eff, active }.
 export default function KnowledgeInsights({ page, eff, active }) {
   const km = shownFor(KM_PROFILES, eff);
   const [open, setOpen] = useState({ duplicates: false, gaps: false });
@@ -30,20 +31,20 @@ export default function KnowledgeInsights({ page, eff, active }) {
       <ErrorBoundary resetKey="ticket">
         <TicketArticles page={page} eff={eff} active={active} />
       </ErrorBoundary>
-      <Section id="kb-search" title={t('Knowledge search')} summary={searchSummary}>
+      <Section rail={S.search} summary={searchSummary}>
         <ErrorBoundary resetKey="search">
           <SearchCard page={page} active={active} onSummary={setSearchSummary} />
         </ErrorBoundary>
       </Section>
       {km && (
-        <Section fold id="kb-duplicates" title={t('Duplicate articles')} open={open.duplicates} onToggle={toggle('duplicates')}>
+        <Section fold rail={S.duplicates} open={open.duplicates} onToggle={toggle('duplicates')}>
           <ErrorBoundary resetKey="duplicates">
             <DuplicatesPanel page={page} active={active && open.duplicates} onCompared={setMerge} />
           </ErrorBoundary>
         </Section>
       )}
       {km && (
-        <Section fold id="kb-gaps" title={t('Articles to write')} open={open.gaps} onToggle={toggle('gaps')}>
+        <Section fold rail={S.gaps} open={open.gaps} onToggle={toggle('gaps')}>
           <ErrorBoundary resetKey="gaps">
             <GapsPanel page={page} active={active && open.gaps} onFound={setGaps} />
           </ErrorBoundary>

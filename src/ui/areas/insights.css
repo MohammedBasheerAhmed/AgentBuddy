@@ -1,51 +1,44 @@
-/* insights: the Ticket screen (src/sidepanel/ticket): the ticket at the top, "Needs you now", the main step, the Insights / AI Assist
-   tabs and the Insights half's rows. Only --ab-* tokens. Calm: no box around the ticket, no boxes inside a card, one filled button
-   (the main step), long text wraps and nothing scrolls sideways at 320 px. No AI colours here: Insights uses the green accent. */
+/* insights: the Ticket screen (src/sidepanel/ticket): the ticket at the top, the Insights / AI Assist tabs and the Insights half's rows
+   (what needs the agent now, then the cards; one card alone when the side rail chose it). Only --ab-* tokens. Calm: no box around the
+   ticket, no boxes inside a card, long text wraps and nothing scrolls sideways at 320 px (the rail takes 48 px of it). No AI colours
+   here: Insights uses the green accent. */
 
-/* ---- N1, the ticket at the top: no box ---- */
-.ab-glance { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-top: 2px; }
-.ab-glance-head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ab-glance-id { margin: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); overflow-wrap: anywhere; }
-.ab-glance .ab-record-number { font-size: var(--ab-text-sm); font-weight: 500; color: var(--ab-fg); }
-.ab-glance-title { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow-wrap: anywhere; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-/* AI Assist on show: the number and the title on one line */
-.ab-glance-title.ab-glance-oneline { display: block; font-size: var(--ab-text-base); line-height: 1.45; letter-spacing: 0; white-space: nowrap; text-overflow: ellipsis; }
-.ab-glance-oneline .ab-record-number { font-size: var(--ab-text-md); }
-.ab-glance-dot { color: var(--ab-fg-muted); font-weight: 400; }
+/* ---- N1, the ticket at the top: compact, no box ---- */
+.ab-glance { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 2px; }
+.ab-glance-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ab-glance-id { flex: 1; min-width: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+.ab-glance .ab-record-number { font-size: var(--ab-text-base); font-weight: 600; color: var(--ab-fg); }
+.ab-glance-priority { min-width: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-glance-more { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-block: -4px; padding: 0; border: 0; border-radius: var(--ab-radius); background: transparent; color: var(--ab-fg-muted); cursor: pointer; }
+.ab-glance-more:hover { background: var(--ab-bg-subtle); color: var(--ab-fg); }
+.ab-glance-more .ab-chevron { color: currentColor; }
+/* the title on one line; the whole of it on hover (title) */
+.ab-glance-title { margin: 0; min-width: 0; font-size: var(--ab-text-base); font-weight: 500; line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ab-glance-line { margin: 0; min-width: 0; }
 .ab-glance-chips { gap: 6px; }
-.ab-glance-soft { display: flex; flex-wrap: wrap; column-gap: 6px; font-size: var(--ab-text-md); color: var(--ab-fg-muted); }
-.ab-glance-bit { min-width: 0; overflow-wrap: anywhere; }
-.ab-glance-bit + .ab-glance-bit::before { content: '·'; margin-inline-end: 6px; }
-
-/* ---- "Needs you now" ---- */
-.ab-needs { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border-radius: var(--ab-radius-lg); background: var(--ab-attn-bg); min-width: 0; }
-.ab-needs-title { margin: 0; font-size: var(--ab-text-md); font-weight: 600; line-height: 1.4; color: var(--ab-attn-fg); }
-.ab-needs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.ab-needs-item { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
-.ab-needs-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ab-attn-icon-bg); color: var(--ab-warn); }
-.ab-needs-danger .ab-needs-icon { background: var(--ab-danger-soft); color: var(--ab-danger); }
-.ab-needs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
-.ab-needs-text { font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
-.ab-needs-sub { font-size: var(--ab-text-sm); color: var(--ab-fg-muted); overflow-wrap: anywhere; }
-.ab-needs-link { min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--ab-accent); font-size: var(--ab-text-sm); font-weight: 500; text-align: start; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.ab-needs-link:hover { color: var(--ab-accent-hover); }
-
-/* ---- the one main step ---- */
-.ab-next { display: flex; flex-direction: column; gap: 6px; }
-.ab-next-btn { gap: 8px; }
-.ab-next-btn .ab-ai-badge { color: inherit; }
-.ab-next-label { min-width: 0; overflow-wrap: anywhere; }
-.ab-next-note { margin: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); text-align: center; }
+.ab-glance-chips .ab-icon { flex: none; }
+/* "Ticket details": a short list of facts, the names in a column */
+.ab-glance-details { margin: 2px 0 0; display: grid; grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr); gap: 4px 12px; font-size: var(--ab-text-md); }
+.ab-glance-details[hidden] { display: none; }
+.ab-glance-fact { display: contents; }
+.ab-glance-fact dt { color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-glance-fact dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
 /* ---- the Insights / AI Assist tabs (underlined, across the panel: shell.css) ---- */
 .ab-pane.ab-ticket > .ab-halfswitch { margin-top: 4px; }
+/* how many rows of Insights need a look, after its name */
+.ab-halfswitch-count { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--ab-warn-soft); color: var(--ab-warn); font-size: var(--ab-text-xs); font-weight: 600; line-height: 1; }
 /* the Insights rows start right at the tab line (a row has its own 12px); with no tabs (AI switched off) a divider stands in */
 .ab-pane.ab-ticket > .ab-halfswitch ~ .ab-pane > .ab-ins { margin-top: -12px; }
+.ab-pane.ab-ticket > .ab-halfswitch ~ .ab-pane > .ab-ins.is-focus { margin-top: 0; }
 .ab-pane.ab-ticket > .ab-pane:not([role]) > .ab-ins > .ab-ins-cards { border-top: 1px solid var(--ab-divider); }
+/* what the side rail brings back into view lands under the sticky header */
+.ab-pane.ab-ticket > .ab-halfswitch, .ab-ticket .ab-ins { scroll-margin-top: calc(var(--ab-head-h) + 8px); }
 /* the line that says where data goes, at the end of each half (in AI Assist with the model in use beside it) */
 .ab-ticket .ab-halfrule { margin: 0; }
 .ab-ticket .ab-ticket-foot { margin-top: 4px; }
+/* a heading the rail put the focus on: no ring around words (the rail item shows where the person is) */
+.ab-ticket :is(.ab-ins-focus-title, .ab-act-head)[tabindex='-1']:focus { outline: none; box-shadow: none; }
 
 /* ---- the Insights half: one list of rows ---- */
 .ab-ins { display: flex; flex-direction: column; min-width: 0; }
@@ -62,6 +55,18 @@
 .ab-ins-card.is-clear > .ab-ins-card-body { padding-inline-start: 56px; }
 .ab-ins-clear-mark { flex: none; display: inline-flex; margin-top: 1px; color: var(--ab-ok); }
 .ab-ins-clear-text { color: var(--ab-fg-muted); }
+
+/* ---- what needs the agent now: the first rows, plain (a dot, one sentence, a quiet line); nothing to click ---- */
+.ab-ins-need-row > .ab-dot { margin-top: 7px; }
+
+/* ---- one card alone (the side rail chose it): "All insights" to go back, the card's name as a heading, its content open ---- */
+.ab-ins-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: 0; padding-block: 0; padding-inline: 0 4px; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-accent); font-size: var(--ab-text-md); font-weight: 500; cursor: pointer; }
+.ab-ins-back:hover { color: var(--ab-accent-hover); text-decoration: underline; text-underline-offset: 2px; }
+.ab-ins.is-focus > .ab-ins-cards > .ab-ins-card.is-focus { border-top: 0; }
+.ab-ins-focus-head > .ab-dot { margin-top: 9px; }
+.ab-ins-focus-title { margin: 0; font-size: var(--ab-text-lg); font-weight: 600; line-height: 1.4; }
+.ab-ins-focus-summary { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.ab-ins-card.is-focus > .ab-ins-card-body { padding-inline-start: 36px; }
 
 /* ---- a record row in a card (a real link): no box, the title underlined on hover ---- */
 .ab-ins-item { display: flex; flex-direction: column; gap: 1px; padding: 4px 0; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-fg); text-decoration: none; min-width: 0; }

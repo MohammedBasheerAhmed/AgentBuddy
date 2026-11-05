@@ -185,13 +185,18 @@ test('a held page (a page that is reloading) draws exactly like the live one, wi
 // React keeps a component's state (the Rewrite text, a search, the answers) as long as the component is rendered at the same place in
 // the tree, with the same type and key, from one render to the next. Without a browser the closest thing to proving "the typed text
 // survives" is to prove exactly that: build the panel's element tree for the states the person goes through and check that every
-// screen and the ticket view always sit at the same path. (AppView only uses useRef, so it can be called with a stub for it.)
+// screen and the ticket view always sit at the same path. (AppView only uses useRef, useState for the rail's store and
+// useSyncExternalStore to read it, so it can be called with stubs for them: nothing has published a rail yet, as on a first render.)
 
 const internals = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
 const treeOf = (props) => {
   const slot = internals.ReactCurrentDispatcher;
   const before = slot.current;
-  slot.current = { useRef: (value) => ({ current: value }) };
+  slot.current = {
+    useRef: (value) => ({ current: value }),
+    useState: (init) => [typeof init === 'function' ? init() : init, () => {}],
+    useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot(),
+  };
   try {
     return AppView({ eff, onChoose() {}, onChanged() {}, Pending: () => null, ...props });
   } finally {

@@ -11,6 +11,8 @@ const visible = (e) => e.getClientRects().length > 0;
 async function openCard(p, title, { timeout = 15000 } = {}) {
   await openScreen(p, 'Ticket');
   await openHalf(p, 'insights');
+  // One card shown alone (the side rail or a launch from the page chose it): back to the list first ("All insights").
+  await p.evaluate(() => [...document.querySelectorAll('.ab-ins-back')].find((b) => b.getClientRects().length > 0)?.click());
   // The card's row: on screen, or waiting under "All clear in ..." (its row is hidden until that row is opened).
   await p.waitForFunction(
     (t) =>

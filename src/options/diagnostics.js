@@ -10,6 +10,7 @@
 //   - the sites Agent Buddy runs on, as host names
 //   - the last problems from the activity log: when, which action, which table, the outcome and its short code (the log holds no
 //     content, see src/audit/auditLog.js)
+import { cleanRailLayout } from '../features/railLayout.js';
 
 const host = (url) => {
   try {
@@ -69,6 +70,7 @@ export function diagnosticsText({ manifest = {}, userAgent = '', eff = {}, keyMo
   add(`  AI skipped for now: ${yesNo(v.aiSkipped)}`);
   add(`  Work profiles: ${list(v.profiles).map((id) => word(id)).filter(Boolean).join(', ') || 'none chosen'}${v.profilesConfirmed ? '' : ' (not confirmed)'}; show everything: ${yesNo(v.showEverything)}`);
   add(`  Bar on ServiceNow pages: ${yesNo(v.pageBar !== false)}; quick actions pinned for ${Object.keys(v.quickPins || {}).length} kind(s)`);
+  add(`  Side rail: arranged for ${Object.keys(cleanRailLayout(v.railLayout)).length} kind(s); what fits the ticket's state first: ${yesNo(v.railByState !== false)}`);
   add(`  Follow-ups due after: ${Number.isFinite(Number(v.followUpDays)) ? Math.floor(Number(v.followUpDays)) : 3} days`);
   add();
 

@@ -4,7 +4,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { browserName, diagnosticsText } from '../src/options/diagnostics.js';
 import { DiagnosticsSection, ProfilesSection, SettingsPages, SITE_REFUSED_TEXT, settingsMenu, settingsPageFromHash } from '../src/options/Options.jsx';
-import { QuickBarSection } from '../src/options/basics/QuickBarSection.jsx';
+import { RailSection } from '../src/options/basics/RailSection.jsx';
 import { effectiveSettings } from '../src/policy/policy.js';
 
 // F8 "Copy diagnostics": what support needs, and never a key (not the key, not its preview, not its length). F2: Settings in two pages,
@@ -66,6 +66,14 @@ test('no key ever: not the person\'s, not the organisation\'s, not a preview or 
   assert.match(diagnosticsText({ eff: personal }), /Model: \[hidden\]/, 'a key pasted as the model name is hidden');
 });
 
+test('the side rail: how many kinds have an arranged rail, and whether a kind left alone follows the ticket\'s state; never the ids', () => {
+  const layout = { incident: { insights: { order: ['related'], hidden: [] } }, change: { assist: { order: [], hidden: ['reply-draft'] } }, problem: { insights: {} }, '<b>': 'x' };
+  const text = diagnosticsText({ eff: effOf({ railLayout: layout, railByState: false }) });
+  assert.match(text, /Side rail: arranged for 2 kind\(s\); what fits the ticket's state first: no\n/);
+  assert.ok(!/related|reply-draft/.test(text), 'what was arranged stays on the computer');
+  assert.match(diagnosticsText({ eff: effOf() }), /Side rail: arranged for 0 kind\(s\); what fits the ticket's state first: yes\n/);
+});
+
 test('anything odd in settings or the log is left out rather than copied', () => {
   const eff = effOf({ provider: 'openai', models: { openai: 'gpt 5 <b>' } });
   const text = diagnosticsText({ eff, audit: [{ time: 'x', feature: 'Abel Tuter said hi', table: 'incident', outcome: 'error', reason: 'the caller is Abel' }] });
@@ -90,7 +98,7 @@ test('Settings has two pages, Basics and AI Assist; the address picks the page',
   assert.match(markup, />Basics</);
   assert.match(markup, />AI Assist</);
   assert.match(markup, /id="ab-settings-panel-ai"[^>]*hidden=""/, 'AI Assist is hidden while Basics shows');
-  for (const id of ['h-instances', 'h-profiles', 'h-quick', 'h-privacy', 'h-audit', 'h-stored', 'h-diagnostics']) assert.match(markup, new RegExp(`id="${id}"`), id);
+  for (const id of ['h-instances', 'h-profiles', 'h-rail', 'h-privacy', 'h-audit', 'h-stored', 'h-diagnostics']) assert.match(markup, new RegExp(`id="${id}"`), id);
   assert.match(markup, /id="provider"/, 'the AI page is in the page too, hidden');
   const ai = draw(SettingsPages, { eff: effOf(), reload: () => {}, initial: 'ai' });
   assert.match(ai, /id="ab-settings-panel-basics"[^>]*hidden=""/);
@@ -139,11 +147,11 @@ test('the two pages are tabs, not filled buttons; a section has at most one fill
 });
 
 test('on/off choices are switches: a real check box with role="switch", inside its label; a locked one is off and says why', () => {
-  const quick = draw(QuickBarSection, { eff: effOf(), reload: () => {} });
-  for (const id of ['page-bar', 'panel-bar']) {
+  const quick = draw(RailSection, { eff: effOf(), reload: () => {} });
+  for (const id of ['rail-by-state', 'page-bar']) {
     assert.match(quick, new RegExp(`<label class="ab-set-switch" for="${id}"><span class="ab-set-switch-text">[^<]+</span><input id="${id}" type="checkbox" role="switch"[^>]*checked=""`), id);
   }
-  const locked = draw(QuickBarSection, { eff: effOf({}, { disablePageBar: true }), reload: () => {} });
+  const locked = draw(RailSection, { eff: effOf({}, { disablePageBar: true }), reload: () => {} });
   assert.match(locked, /<input id="page-bar" type="checkbox" role="switch"[^>]*disabled=""/);
   assert.ok(!/<input id="page-bar"[^>]*checked=""/.test(locked));
   assert.match(locked, /Switched off by your organisation\./);

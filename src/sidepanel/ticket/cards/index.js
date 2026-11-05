@@ -3,13 +3,14 @@
 // INSIGHT_CARDS: [{ id, title, kinds, profiles, order(record, header), defaultOpen, openWhen(record, header), Card }]
 //   Card props: { page, eff, record, header, active, open, setSummary(text), setAttention(status), onShowCard? }
 //     setSummary: the card's one-line answer, shown on its row without opening it
-//     setAttention: the card's status: 'danger' | 'warn' (it needs a look: its row comes first, and "Needs you now" at the top of the
-//       screen names it), 'ok' (good news: a fix was found), 'clear' (nothing to report: it waits under "All clear in ..."), '' (plain)
+//     setAttention: the card's status: 'danger' | 'warn' (it needs a look: its row comes first, its item in the side rail has a dot and
+//       the Insights tab counts it), 'ok' (good news: a fix was found), 'clear' (nothing to report: it waits under "All clear in ..."),
+//       '' (plain)
 //   order: a function of the ticket's state (src/insights/order.js): New tickets put missing details and routing first, resolved ones
 //          "Ready to resolve?", tickets on hold the right email.
 //   defaultOpen: a card that is the record's own main view (request status, the checklist, article checks, chat facts) opens on first
 //     view where openWhen says it is worth it for the ticket's state; every other row starts folded, its one line showing.
-// Glance props: { page, eff, record, header, headPhase, onShowCard?, active?, compact?, needs? }
+// Glance props: { page, eff, record, header, headPhase, active? }
 //
 // No card carries an AI mark or sends anything anywhere: every read is a GET with the agent's own session, kept in panel memory.
 import { openFor, rankFor } from '../../../insights/order.js';

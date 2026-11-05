@@ -9,6 +9,7 @@ import { useTicketHeaderRead } from '../write/TicketLine.jsx';
 import { copyText } from '../reports/download.js';
 import { articleShareUrl, freshnessOf } from './articleInfo.js';
 import { placeOf } from './shared.js';
+import { KNOWLEDGE_SECTIONS } from './railSections.js';
 import { isolate, t } from '../../i18n/index.js';
 
 // N23 Knowledge search, for everyone: a search box over the published articles the person can read, ranked like the ticket's
@@ -222,7 +223,7 @@ function ForTicket({ page, eff, active }) {
     body = <p className="ab-sub" role="status">{t('Searching…')}</p>;
   }
   return (
-    <Section id="kb-ticket" title={number ? t('Articles for {number}', { number: isolate(number) }) : t('Articles for the open ticket')} className="ab-kbx-ticket">
+    <Section rail={KNOWLEDGE_SECTIONS.ticket} title={KNOWLEDGE_SECTIONS.ticket.label({ number })} className="ab-kbx-ticket">
       {body}
     </Section>
   );

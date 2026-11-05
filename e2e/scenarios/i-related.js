@@ -22,15 +22,21 @@ module.exports = {
     await waitForRecord(p);
     await openScreen(p, 'Ticket');
 
-    // ---- N1: the ticket at the top (no box); with AI Assist on show it shrinks to one line, so look at it with Insights on show ------
+    // ---- N1: the ticket at the top (no box), compact since the 2026-11-05 layout: the number, the title, chips; the other facts
+    //      (who has it, when it was updated ...) behind "Ticket details" ------------------------------------------------------------
     await openHalf(p, 'insights');
     await p.waitForSelector('.ab-glance', { timeout: 15000 });
-    await waitForText(p, /Beth Anglin/, { timeout: 15000 });
+    await waitForText(p, /VPN keeps disconnecting/, { timeout: 15000 });
+    await ctx.waitUntil('the state and priority chips', async () => /In Progress/.test((await textOf(p, '.ab-glance')) || '') && /High/.test((await textOf(p, '.ab-glance')) || ''), { timeout: 15000 }).catch(() => {});
     const glance = (await textOf(p, '.ab-glance')) || '';
     t.check('the glance shows the number, the title, the state and the priority', /INC0010001/.test(glance) && /VPN keeps disconnecting/.test(glance) && /In Progress/.test(glance) && /High/.test(glance), glance.replace(/\s+/g, ' ').slice(0, 200));
-    t.check('...the owner and when it was last updated (read with the glance read, no AI)', /Beth Anglin/.test(glance) && /Updated /.test(glance), glance.replace(/\s+/g, ' ').slice(0, 240));
-    const glanceLines = await p.$$eval('.ab-glance > p.ab-glance-line, .ab-glance > .ab-glance-head', (els) => els.filter((e) => e.getClientRects().length > 0).length);
-    t.check('the glance is calm: the number and title, the chips, one line of who and when', glanceLines <= 3, String(glanceLines));
+    const folded = await p.evaluate(() => ({ more: document.querySelector('.ab-glance-more')?.getAttribute('aria-expanded'), shown: [...document.querySelectorAll('.ab-glance-details')].some((d) => d.getClientRects().length > 0) }));
+    t.check('the glance is calm: the other facts wait behind "Ticket details"', folded.more === 'false' && !folded.shown, JSON.stringify(folded));
+    await p.click('.ab-glance-more');
+    await ctx.waitUntil('the owner in the details', async () => /Beth Anglin/.test((await textOf(p, '.ab-glance-details')) || ''), { timeout: 15000 }).catch(() => {});
+    const details = (await textOf(p, '.ab-glance-details')) || '';
+    t.check('...the owner and when it was last updated (read with the glance read, no AI)', /Beth Anglin/.test(details) && /Updated\s/.test(details), details.replace(/\s+/g, ' ').slice(0, 240));
+    await p.click('.ab-glance-more');
 
     t.check('the Insights half carries no AI mark', (await p.evaluate(() => [...document.querySelectorAll('[id$="-half-panel-insights"] .ab-ai-badge')].filter((e) => e.getClientRects().length > 0).length)) === 0);
 

@@ -6,8 +6,8 @@
 //   recordBlock()       a reason that stops EVERY AI action on this record (a blocked table, HR content not allowed). Said once,
 //                       above the actions, never on each button.
 //   featureBlock()      a reason that stops ONE action (it needs Strict privacy mode). Said on that button, which is disabled.
-//   actionPlan()        the 3 suggested for the ticket's stage (the first is the one primary button) and the rest by group.
-//   nextStep()          the first of those: the main step at the top of the Ticket screen.
+//   actionPlan()        the 3 suggested for the ticket's stage (the first is the one primary button) and the rest by group; and
+//                       every action in the registry's order (`items`: the side rail lists them all).
 //
 // The checks mirror the ones src/lib/pipeline.js assertRunnable makes when the action runs (same rules, same words), so a button that
 // is enabled here does not fail on the first step for a reason that was known all along. The pipeline still decides: nothing here
@@ -95,6 +95,7 @@ export function offeredFeatures({ record, header = null, eff, features = FEATURE
  *   stage: string|null, words: string, block: string,
  *   suggested: { feature, reason, caution }[],             the main choices; suggested[0] is the primary button
  *   groups: { id, label, items: { feature, reason, caution }[] }[],   the rest, under "More actions", by group (empty groups left out)
+ *   items: { feature, reason, caution }[],                  every action the record offers, in the registry's order (the side rail)
  *   more: number, total: number,
  * }}
  */
@@ -123,19 +124,8 @@ export function actionPlan({ record, header = null, eff, features = FEATURES, ga
     block: recordBlock({ record, eff }),
     suggested,
     groups,
+    items,
     more: rest.length,
     total: items.length,
   };
-}
-
-/**
- * The one step the ticket's state suggests first: the first of actionPlan's suggestions (the first row of the AI Assist list and the
- * main button at the top of the Ticket screen), or null when there is none or every AI action is stopped on this record. The checklist
- * action needs a read to know whether it is offered (useChecklistNeed), so it is never this step.
- * @param {{ record: object, header?: object|null, eff: object, features?: object[] }} input
- * @returns {object|null} the feature
- */
-export function nextStep({ record, header = null, eff, features = FEATURES }) {
-  const plan = actionPlan({ record, header, eff, features, gates: { 'fulfilment-checklist': false } });
-  return plan.block ? null : plan.suggested[0]?.feature || null;
 }

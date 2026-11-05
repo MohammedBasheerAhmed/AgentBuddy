@@ -171,3 +171,72 @@
   .ab-set .ab-set-table { font-size: var(--ab-text-sm); }
   .ab-set .ab-set-table th, .ab-set .ab-set-table td { padding: 6px 4px; }
 }
+
+/* ---- side rail (basics/RailSection.jsx): two rows of tabs (the kind of record; Insights or AI Assist), then the list of that kind and
+   half, one row per item: its icon, its name, a show/hide switch and Move up / Move down. Then the small bar on the ServiceNow page and
+   its actions as pills. No target is under 24 px (most are 32); the tabs and pills wrap at 320 px. ---- */
+.ab-set-rail-tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: 0 0 10px; padding: 3px; border-radius: var(--ab-radius-lg); background: var(--ab-bg-sunken); }
+.ab-set-rail-tab { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 32px; padding: 4px 10px; border: 1px solid transparent; border-radius: var(--ab-radius); background: transparent; color: var(--ab-fg-soft); font: inherit; font-size: var(--ab-text-md); font-weight: 500; white-space: nowrap; cursor: pointer; }
+.ab-set-rail-tab:hover { color: var(--ab-fg); }
+.ab-set-rail-tab[aria-selected='true'] { background: var(--ab-bg-raised); border-color: var(--ab-border); color: var(--ab-fg); font-weight: 600; }
+.ab-set .ab-set-rail-tab:focus-visible { border-radius: var(--ab-radius); }
+.ab-set-rail-tab .ab-icon { flex: none; }
+/* The two rows of tabs side by side read as one control: the half switch is short and sits under the kinds. */
+.ab-set-rail-tabs + .ab-set-rail-tabs { width: fit-content; max-width: 100%; }
+
+.ab-set-rail-panel { margin-top: 18px; }
+.ab-set-rail-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin: 0 0 6px; }
+.ab-set .ab-set-rail-title { margin: 0; font-size: var(--ab-text-base); font-weight: 600; }
+.ab-set-rail-subhead { font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg); }
+.ab-set-rail-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ab-divider); }
+.ab-set-rail-row { display: flex; align-items: center; gap: 4px 8px; min-height: 44px; padding: 4px 0; border-bottom: 1px solid var(--ab-divider); }
+.ab-set-rail-icon { flex: none; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--ab-radius-sm); background: var(--ab-bg-sunken); color: var(--ab-fg-soft); }
+.ab-set-rail-name { flex: 1 1 auto; min-width: 0; font-weight: 500; color: var(--ab-fg); overflow-wrap: anywhere; }
+.ab-set-rail-row.is-hidden .ab-set-rail-name { color: var(--ab-fg-muted); font-weight: 400; }
+.ab-set-rail-row.is-hidden .ab-set-rail-icon { background: transparent; color: var(--ab-fg-muted); }
+
+/* The show/hide switch: a real button (role="switch"), drawn like the switches above (the thumb is a border, so forced colours keep it). */
+.ab-set-rail-toggle {
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 24px;
+  margin-inline: 4px;
+  padding: 0;
+  border: 2px solid var(--ab-fg-muted);
+  border-radius: 999px;
+  background: var(--ab-bg);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.ab-set-rail-toggle::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  inset-inline-start: 4px;
+  width: 0;
+  height: 0;
+  border: 6px solid var(--ab-fg-muted);
+  border-radius: 50%;
+  transition: inset-inline-start 0.15s ease, border-width 0.15s ease, top 0.15s ease;
+}
+.ab-set-rail-toggle[aria-checked='true'] { background: var(--ab-accent); border-color: var(--ab-accent); }
+.ab-set-rail-toggle[aria-checked='true']::before { top: 2px; inset-inline-start: 18px; border-width: 8px; border-color: var(--ab-accent-fg); }
+.ab-set .ab-set-rail-toggle:focus-visible { border-radius: 999px; }
+
+.ab-set-rail-move { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--ab-radius-sm); background: transparent; color: var(--ab-fg-soft); cursor: pointer; }
+.ab-set-rail-move:hover:not(:disabled) { background: var(--ab-bg-sunken); color: var(--ab-fg); }
+.ab-set-rail-move:disabled { opacity: 0.35; cursor: default; }
+.ab-set .ab-set-rail-panel .ab-set-actions { margin: 12px 0 0; }
+.ab-set-rail-panel + .ab-set-switches { margin-top: 12px; }
+
+/* The small bar on the ServiceNow page: its actions for the kind chosen above, as pills that are pressed or not. */
+.ab-set-rail-page { margin-top: 8px; }
+.ab-set-rail-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.ab-set-rail-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; max-width: 100%; padding: 4px 12px; border: 1px solid var(--ab-border-strong); border-radius: 999px; background: var(--ab-bg-raised); color: var(--ab-fg); font: inherit; font-size: var(--ab-text-md); text-align: start; cursor: pointer; }
+.ab-set-rail-pill:hover:not(:disabled) { background: var(--ab-bg-subtle); }
+.ab-set-rail-pill[aria-pressed='true'] { border-color: var(--ab-accent-line); background: var(--ab-accent-soft); color: var(--ab-fg); font-weight: 500; }
+.ab-set-rail-pill[aria-pressed='true'] .ab-icon { flex: none; color: var(--ab-accent); }
+.ab-set-rail-pill:disabled { opacity: 0.55; cursor: not-allowed; }
+.ab-set .ab-set-rail-pill:focus-visible { border-radius: 999px; }
+.ab-set p.ab-set-rail-note { margin: 8px 0 0; }

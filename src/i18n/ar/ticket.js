@@ -1,5 +1,5 @@
 // Arabic texts: ticket part of the panel. See src/i18n/ar/index.js.
-// The Ticket screen (cards, quick bar, AI Assist) is here; the texts made by the pure modules behind it (src/checks,
+// The Ticket screen (cards, side rail, AI Assist) is here; the texts made by the pure modules behind it (src/checks,
 // src/insights, src/chat, src/itsm, src/features/quick.js) are in ticketLogic.js.
 import { AR_TICKET_LOGIC } from './ticketLogic.js';
 
@@ -31,16 +31,9 @@ const AR_TICKET_PANEL = {
   'Something went wrong.': 'حدث خطأ ما.',
 
   'Uses AI. Masked text goes to the AI you chose, after a preview.': 'يستخدم الذكاء الاصطناعي. يرسل النص بعد إخفاء البيانات الشخصية إلى الذكاء الاصطناعي الذي اخترته، بعد المعاينة.',
-  'Agent Buddy could not save that choice. Try again.': 'تعذر على Agent Buddy حفظ هذا الاختيار. أعد المحاولة.',
-  'Quick actions': 'إجراءات سريعة',
-  'Done choosing quick actions': 'إنهاء اختيار الإجراءات السريعة',
-  'Choose quick actions': 'اختر الإجراءات السريعة',
   Done: 'تم',
-  Choose: 'اختر',
   '{label} (AI)': '{label} (AI)',
   'Opens the card in Insights. Stays in ServiceNow.': 'يفتح البطاقة في الرؤى. تبقى في ServiceNow.',
-  'Pick up to {MAX_QUICK} for this kind of record. The AI ones also show on the ServiceNow page.': 'اختر حتى {MAX_QUICK} لهذا النوع من السجلات. تظهر إجراءات الذكاء الاصطناعي أيضا في صفحة ServiceNow.',
-  'Use the suggested ones': 'استخدم المقترحة',
 
   'Details are not available to you.': 'التفاصيل غير متاحة لك.',
   '(no short description)': '(بلا وصف مختصر)',
@@ -120,9 +113,15 @@ const AR_TICKET_PANEL = {
   Start: 'ابدأ',
   '{action}: {why}': '{action}: {why}',
 
-  // ---- the top of the Ticket screen: "Needs you now", the main step, the Insights rows ----
-  'Needs you now': 'يحتاج إليك الآن',
-  'See {card}': 'اعرض {card}',
+  // ---- the Ticket screen (the 2026-11-05 layout): the ticket at the top, the side rail, the Insights rows (what needs you now first) ----
+  'Ticket details': 'تفاصيل التذكرة',
+  'Priority {priority}': 'الأولوية {priority}',
+  'Nobody yet': 'لا أحد بعد',
+  Contact: 'جهة الاتصال',
+  Updated: 'آخر تحديث',
+  Service: 'الخدمة',
+  'All insights': 'كل الرؤى',
+  'Insights: {n} needs a look|Insights: {n} need a look': pl('الرؤى: {n} عناصر تحتاج إلى مراجعة', 'الرؤى: {n} عنصر يحتاج إلى مراجعة', 'الرؤى: {n} عنصران يحتاجان إلى مراجعة', 'الرؤى: {n} عناصر تحتاج إلى مراجعة', 'الرؤى: {n} عنصرا يحتاج إلى مراجعة', 'الرؤى: {n} عنصر يحتاج إلى مراجعة'),
   'The SLA is breached': 'تم تجاوز اتفاقية مستوى الخدمة (SLA)',
   'The SLA was due {span} ago': 'كان موعد اتفاقية مستوى الخدمة (SLA) قبل {span}',
   'The SLA is due in {span}': 'موعد اتفاقية مستوى الخدمة (SLA) بعد {span}',
@@ -131,7 +130,6 @@ const AR_TICKET_PANEL = {
   'The customer has waited about {span} for a reply': 'ينتظر العميل ردا منذ {span} تقريبا',
   '{n} message without a reply|{n} messages without a reply': pl('{n} رسائل بلا رد', '{n} رسالة بلا رد', '{n} رسالتان بلا رد', '{n} رسائل بلا رد', '{n} رسالة بلا رد', '{n} رسالة بلا رد'),
   'Possible outage: {line}': 'انقطاع محتمل: {line}',
-  'AI writes it from the masked ticket. You see what is sent first.': 'يكتبه الذكاء الاصطناعي من التذكرة بعد إخفاء البيانات الشخصية. ترى ما يُرسل أولا.',
   'Needs a look.': 'يحتاج إلى مراجعة.',
   'All clear in {list}': 'لا شيء يستدعي الانتباه في: {list}',
   Strict: 'صارم',
@@ -296,7 +294,6 @@ const AR_TICKET_PANEL = {
   'Ticket at a glance': 'نظرة سريعة على التذكرة',
   'The caller is marked VIP in ServiceNow.': 'المتصل مصنّف VIP في ServiceNow.',
   VIP: 'VIP',
-  'Show the tickets': 'اعرض التذاكر',
   'Request status': 'حالة الطلب',
   'Article checks': 'فحوصات المقال',
   'Chat facts': 'معلومات المحادثة',

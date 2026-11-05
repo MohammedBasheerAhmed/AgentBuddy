@@ -65,6 +65,9 @@
   --ab-radius-sm: 6px;
   --ab-radius: 8px;
   --ab-radius-lg: 12px;
+  /* the side panel's header and bar of screens, measured by App.jsx (useHeightVar) once they are drawn: the side rail sits between */
+  --ab-head-h: 57px;
+  --ab-bar-h: 53px;
 
   color-scheme: light;
 }

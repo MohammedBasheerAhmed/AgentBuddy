@@ -34,7 +34,11 @@ export const PATHS = {
   x: 'M18 6L6 18M6 6l12 12',
   check: 'M20 6L9 17l-5-5',
   chevronRight: 'M9 18l6-6-6-6',
+  chevronLeft: 'M15 18l-6-6 6-6',
   chevronDown: 'M6 9l6 6 6-6',
+  chevronUp: 'M18 15l-6-6-6 6',
+  // "All insights" at the top of the side rail: every row at a look
+  list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   refresh: 'M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8M21 3v5h-5M3 21v-5h5',
   keyboard: 'M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
   mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6',

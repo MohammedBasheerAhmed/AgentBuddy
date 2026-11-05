@@ -49,7 +49,7 @@ export function useAnswers({ page, eff, record }) {
     const { key: k, page: p, record: r } = cur.current;
     if (!k || !feature) return undefined;
     const e = runFor(k, p, r);
-    // The control that started it (a list button, the quick bar, the Ask button): the focus goes back there if the run ends empty.
+    // The control that started it (a list button, the side rail, the Ask button): the focus goes back there if the run ends empty.
     const el = typeof document !== 'undefined' ? document.activeElement : null;
     e.opener = { element: el && el !== document.body ? el : null, id: options.focusId || feature.id };
     return startRun(k, p, r, feature, options);

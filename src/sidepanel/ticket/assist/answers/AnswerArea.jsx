@@ -121,7 +121,7 @@ function focusAnswer(box, id) {
 
 /**
  * The focus back to the control that started a run: the element itself while it is still on the page and enabled, else the action
- * by its feature id (a list button or a quick-bar button; it may have been drawn again meanwhile).
+ * by its feature id (a list button or its item in the side rail; it may have been drawn again meanwhile).
  */
 function giveBack(opener) {
   if (typeof document === 'undefined' || !opener) return;
@@ -132,6 +132,6 @@ function giveBack(opener) {
   }
   if (!opener.id) return;
   const usable = (selector) => [...document.querySelectorAll(selector)].find((b) => !b.disabled) || null;
-  const found = usable(`[data-feature="${opener.id}"]`) || usable(`[data-quick="${opener.id}"]`);
+  const found = usable(`[data-feature="${opener.id}"]`) || usable(`[data-rail-id="${opener.id}"]`);
   found?.focus();
 }

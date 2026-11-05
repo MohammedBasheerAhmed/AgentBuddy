@@ -1,6 +1,8 @@
 import { useId, useMemo, useState } from 'react';
 import RecordLink from '../RecordLink.jsx';
-import { CardFrame, EmptyNote } from '../ui/primitives.jsx';
+import { EmptyNote } from '../ui/primitives.jsx';
+import { RailCard } from '../reports/RailCard.jsx';
+import { MYWORK_SECTIONS as S } from './railSections.js';
 import { groupQueue, filterChips, passes } from '../../mywork/rank.js';
 import { followUps, followUpReason, followUpText, followUpAction, FOLLOW_UP_DAY_CHOICES } from '../../mywork/followups.js';
 import { fullListUrl } from '../../mywork/links.js';
@@ -13,6 +15,7 @@ import { isolate, t, tn } from '../../i18n/index.js';
 // The four sections of the My work screen (N13 My queue, approvals waiting on me, N27 Follow-ups due, N14 Unassigned in my groups).
 // Every one is Insights: facts read with the person's own session, nothing sent anywhere, no AI. Calm: a section title with its counts,
 // then rows parted by dividers; what needs a look carries a status dot and a chip on its own row, never a red frame around the queue.
+// Each section is also an item of the side rail (railSections.js, RailCard): its title, its icon, and a mark while it holds a breach.
 
 const NO_ITEMS = []; // (one array, so the queue's filtered list and chips are not worked out again on every render)
 
@@ -68,9 +71,11 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
     return list;
   }, [items, filter, queue.names]);
   const row = (item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} />;
+  // The side rail marks the queue while it holds a breached SLA (what the summary counts and the row's chip shows).
+  const breached = items.some((i) => i.sla?.risk === 'breached' && i.work !== 'resolved');
 
   return (
-    <CardFrame id="mywork-queue" title={t('My queue')} summary={queueSummary(queue, items)}>
+    <RailCard rail={S.queue} railAttention={breached ? 'warn' : ''} summary={queueSummary(queue, items)}>
       {chips.length > 0 && <FilterChips chips={chips} value={filter} onChange={setFilter} />}
       {g.now.length > 0 ? (
         <RowList items={g.now} limit={5} render={row} />
@@ -103,7 +108,7 @@ export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
           <RowList items={g.resolved} limit={5} render={row} />
         </Fold>
       )}
-    </CardFrame>
+    </RailCard>
   );
 }
 
@@ -121,15 +126,16 @@ export function ApprovalsCard({ page, approvals, now }) {
       </Row>
     );
   };
+  const late = items.some((a) => a.dueAt && a.dueAt < now); // an overdue approval: its row's warning dot, and a mark in the rail
   return (
-    <CardFrame id="mywork-approvals" title={t('Approvals waiting on you')} summary={String(approvals.total || items.length)}>
+    <RailCard rail={S.approvals} railAttention={late ? 'warn' : ''} summary={String(approvals.total || items.length)}>
       <RowList items={items} limit={3} render={row} />
       {approvals.total > items.length && (
         <p className="ab-hint ab-mw-cap">
           {t('Showing {shown} of {total}.', { shown: items.length, total: approvals.total })} <FullList page={page} table="sysapproval_approver" query={approvals.listQuery} />
         </p>
       )}
-    </CardFrame>
+    </RailCard>
   );
 }
 
@@ -169,9 +175,8 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
   const due = list.length - replied;
   const summary = countLine([due ? t('{count} due', { count: due }) : '', replied ? t('{count} replied', { count: replied }) : '']);
   return (
-    <CardFrame
-      id="mywork-followups"
-      title={t('Follow-ups due')}
+    <RailCard
+      rail={S.followUps}
       summary={summary}
       actions={
         <>
@@ -193,7 +198,7 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
       ) : (
         <EmptyNote>{known || !data.queue.items.length ? tn(days, 'No customer has waited {n} day for a word from you.', 'No customer has waited {n} days for a word from you.') : t('Follow-ups need the comments on your tickets, which are not visible to you.')}</EmptyNote>
       )}
-    </CardFrame>
+    </RailCard>
   );
 }
 
@@ -203,8 +208,9 @@ export function GroupsCard({ page, groups, now, onOpen }) {
   const items = groups.items || [];
   const oldest = items[0]?.openedAt;
   const summary = items.length ? countLine([t('{count} waiting', { count: groups.total > items.length ? groups.total : items.length }), oldest ? t('oldest {span}', { span: spanText(now - oldest) }) : '']) : '';
+  const breached = items.some((i) => i.sla?.risk === 'breached'); // a breached SLA: the row's red dot, and a mark in the rail
   return (
-    <CardFrame id="mywork-groups" title={t('Unassigned in my groups')} summary={summary}>
+    <RailCard rail={S.groups} railAttention={breached ? 'warn' : ''} summary={summary}>
       {items.length > 0 ? (
         <RowList items={items} limit={3} render={(item) => <TicketRow key={item.sysId} page={page} item={item} now={now} onOpen={onOpen} where="group" />} />
       ) : (
@@ -216,6 +222,6 @@ export function GroupsCard({ page, groups, now, onOpen }) {
         </p>
       )}
       {groups.note && <p className="ab-hint">{shownText(groups.note)}</p>}
-    </CardFrame>
+    </RailCard>
   );
 }

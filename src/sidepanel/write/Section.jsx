@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AiBadge } from '../ui/primitives.jsx';
 import { Icon } from '../ui/icons.jsx';
+import { useRailSection } from '../shell/SideRail.jsx';
 import { t } from '../../i18n/index.js';
 
 // The calm layout of the Write and Knowledge screens (the 2026 redesign): a screen is a few sections kept apart by space and one
@@ -10,20 +11,24 @@ import { t } from '../../i18n/index.js';
 
 /**
  * One section of a screen.
+ *   rail       its entry in the screen's table (write/railSections.js, knowledgeScreen/railSections.js: { id, label(), icon }): the
+ *              section is then an item of the side rail, named by its heading (a click there opens it if it is folded, and brings
+ *              it into view), and its `id` and `title` come from the entry unless they are given
  *   id         data-card: how the tests and the e2e scenarios find a section
  *   title      its name (a noun: "Snippets"); summary: a few words beside it ("12 snippets"), '' for none
- *   attention  '' | 'warn': the summary is said in the warning colour (the words still say it)
+ *   attention  '' | 'warn': the summary is said in the warning colour (the words still say it); the rail marks the section too
  *   ai         an AI tool: the small grey spark next to the title
  *   fold       the heading opens and closes the section; `open` / `onToggle` controlled, or its own state from `defaultOpen`.
  *              The content stays mounted while folded, so what was typed or found in it survives.
  */
-export function Section({ id, title, summary = '', attention = '', ai = false, fold = false, open, defaultOpen = true, onToggle, className = '', children }) {
+export function Section({ rail = null, id = rail?.id, title = rail?.label(), summary = '', attention = '', ai = false, fold = false, open, defaultOpen = true, onToggle, className = '', children }) {
   const [own, setOwn] = useState(defaultOpen);
   const isOpen = !fold || (open === undefined ? own : open);
   const toggle = () => {
     if (open === undefined) setOwn(!isOpen);
     onToggle?.(!isOpen);
   };
+  const railRef = useRailSection({ id: rail ? id : '', label: title, icon: rail?.icon, attention, open: () => isOpen || toggle() });
   const classes = `ab-section ab-wk-section${fold ? ' ab-wk-fold' : ''}${attention ? ` ab-wk-${attention}` : ''}${className ? ` ${className}` : ''}`;
   const words = (
     <>
@@ -32,7 +37,7 @@ export function Section({ id, title, summary = '', attention = '', ai = false, f
     </>
   );
   return (
-    <section className={classes} data-card={id || undefined} aria-label={title}>
+    <section ref={rail ? railRef : undefined} className={classes} data-card={id || undefined} aria-label={title}>
       {fold ? (
         <h2 className="ab-wk-head">
           <button type="button" className="ab-wk-toggle" aria-expanded={isOpen} onClick={toggle}>

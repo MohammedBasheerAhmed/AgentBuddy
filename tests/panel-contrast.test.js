@@ -126,7 +126,7 @@ for (const [name, scope] of Object.entries(SCOPES)) {
 }
 
 test('the panel styles use colour tokens only (no literal colours) in the shared and the panel area files', () => {
-  for (const file of ['ui.css', 'areas/checks.css', 'areas/compose.css', 'areas/knowledge.css', 'areas/quick.css', 'areas/domain.css', 'areas/itsm.css', 'areas/portal.css', 'areas/shell.css', 'areas/insights.css', 'areas/assist-actions.css', 'areas/assist-answers.css', 'areas/mywork.css', 'areas/setup.css', 'areas/palette.css']) {
+  for (const file of ['ui.css', 'areas/checks.css', 'areas/compose.css', 'areas/knowledge.css', 'areas/domain.css', 'areas/itsm.css', 'areas/portal.css', 'areas/shell.css', 'areas/insights.css', 'areas/assist-actions.css', 'areas/assist-answers.css', 'areas/mywork.css', 'areas/setup.css', 'areas/palette.css']) {
     const css = fs.readFileSync(path.join(ROOT, 'src', 'ui', file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     // rgba() is allowed only inside the theme file's shadows and rings; panel styles take every colour from a token
     assert.ok(!/#[0-9a-f]{3,8}\b/i.test(css), `${file}: no hex colours`);
