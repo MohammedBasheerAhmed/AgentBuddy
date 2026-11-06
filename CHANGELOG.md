@@ -3,7 +3,7 @@
 All notable changes to Agent Buddy. The version stays 0.1.0 until the first release is cut (the lead decides the number). Rows in
 brackets are the `TRACKER.md` items.
 
-## Unreleased: round 4, "Loved" (2026-11-06/07, not committed yet)
+## Unreleased: round 4, "Loved" (2026-11-06/07, committed locally, not pushed)
 
 Your rule for this round: no clutter, and only the pain points ServiceNow cannot solve in the platform. Nothing new on screen: every
 addition is a line inside the five rows, a fact inside an open row, a My work chip or part of an existing answer. Mockup: the "Loved"
