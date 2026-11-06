@@ -55,3 +55,16 @@ Edge version (`edge://version`).
 18. **`defaultDashboard` as one object** (a `REG_SZ` holding JSON on Windows). `policy.md` 15.
 19. **Organisation snippets** from `orgSnippets` show as "From your organisation" and cannot be edited. `compose.md` 30.
 20. **The self-hosted install** on a pilot computer, then an update arriving. `i18n.md` 7, `docs/deployment.md` "Self-hosted install".
+
+## Answers so far
+
+**2026-11-06, Edge 156 on Windows, dev364920 (signed in as System Administrator), checked through Claude in Edge:**
+
+- 1 (partly): Agent Buddy runs in Edge on the instance: the site is turned on and the dock shows on INC0000055 (classic form) with
+  Summarise, Reply and "Ready to resolve?". No console error on the ticket page after a fresh load. Not seen yet: `edge://extensions`
+  (warnings, the build that is loaded) and the toolbar button; automation cannot open `edge://` or extension pages.
+- 3 (not answerable by automation): the dock refused the automated click and the automated Enter key with "Nothing was started:
+  something on the page was covering the bar". The automation draws on the page and holds it, and the bar's visibility check
+  (IntersectionObserver v2, `clickVerdict` in `src/content/barLogic.js`) counts that as covering. So the protection works in Edge; whether
+  a click opens the side panel must be checked by a person.
+- Everything else is still open and needs a person (the side panel, shortcuts, extension pages) or a managed computer (17 to 20).
