@@ -22,13 +22,18 @@ const list = (value) => (Array.isArray(value) ? value : []);
 // A short word or id from settings or the policy: letters, digits and - _ . : only, so free text cannot ride along.
 const word = (value, max = 60) => (/^[A-Za-z0-9_.:-]{1,80}$/.test(String(value ?? '')) ? String(value).slice(0, max) : '');
 
-/** "Chrome 130" / "Edge 130" from the browser's user agent string ('' when it says neither). */
+/** "Chrome 130" / "Edge 130" / "Firefox 128" / "Safari 17" from the browser's user agent string ('' when it says none of them). */
 export function browserName(userAgent) {
   const ua = String(userAgent || '');
   const edge = /\bEdg\/(\d+)/.exec(ua);
   if (edge) return `Edge ${edge[1]}`;
   const chrome = /\bChrome\/(\d+)/.exec(ua);
-  return chrome ? `Chrome ${chrome[1]}` : '';
+  if (chrome) return `Chrome ${chrome[1]}`;
+  const firefox = /\bFirefox\/(\d+)/.exec(ua);
+  if (firefox) return `Firefox ${firefox[1]}`;
+  // Safari says "Version/17.4 ... Safari/605"; Chrome and Edge also say "Safari/", which is why they are matched first.
+  const safari = /\bVersion\/(\d+)[\d.]*\b.*\bSafari\//.exec(ua);
+  return safari ? `Safari ${safari[1]}` : '';
 }
 
 const PROBLEM_OUTCOMES = new Set(['error', 'blocked']);

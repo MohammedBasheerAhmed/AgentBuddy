@@ -4,6 +4,8 @@
 //   node scripts/hashes.js dist                 print the list
 //   node scripts/hashes.js dist --out SHA256SUMS write it to a file instead
 //   node scripts/hashes.js dist --check SHA256SUMS   compare the folder with a list; exit 1 on any difference
+//
+// Any build folder works the same way: dist-firefox (the Firefox build), dist-enterprise, release/unpacked, release/unpacked-firefox.
 const fs = require('fs');
 const path = require('path');
 const { hashFolder, toSha256Sum, compareHashes } = require('./lib/hashes.js');

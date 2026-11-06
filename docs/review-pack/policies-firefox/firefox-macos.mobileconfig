@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Agent Buddy: installs it in Firefox on macOS and sets the recommended locked-down policy (a configuration profile for your MDM).
+  1. Replace the example instances, AI address, model and HR table prefix in the policy string with your own.
+  2. Give the two PayloadUUID values new UUIDs (uuidgen) and PayloadIdentifier your own reverse-DNS prefix.
+  3. ExtensionSettings is ONE policy for every add-on: if your profiles already set it, add the agentbuddy@agentbuddy entry there instead.
+  4. After installing, restart Firefox, open about:policies and check that ExtensionSettings and 3rdparty are under Active policies.
+  The settings are nested in mcx_preference_settings for the domain org.mozilla.firefox, as Mozilla documents for profiles, and
+  EnterprisePoliciesEnabled is set: Firefox on macOS reads no policy without it. The Agent Buddy policy is one JSON string, as Mozilla
+  documents for extension policy: written as a dict, true and false would reach Agent Buddy as 1 and 0.
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadDisplayName</key>
+  <string>Agent Buddy (Firefox)</string>
+  <key>PayloadIdentifier</key>
+  <string>example.corp.agentbuddy.firefox</string>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadScope</key>
+  <string>System</string>
+  <key>PayloadUUID</key>
+  <string>3D5A9C17-8E42-4B6F-A1D3-5C7E9F2B4A01</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadDisplayName</key>
+      <string>Install Agent Buddy and its policy (Firefox)</string>
+      <key>PayloadIdentifier</key>
+      <string>example.corp.agentbuddy.firefox.policy</string>
+      <key>PayloadType</key>
+      <string>com.apple.ManagedClient.preferences</string>
+      <key>PayloadUUID</key>
+      <string>3D5A9C17-8E42-4B6F-A1D3-5C7E9F2B4A02</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>PayloadContent</key>
+      <dict>
+        <key>org.mozilla.firefox</key>
+        <dict>
+          <key>Forced</key>
+          <array>
+            <dict>
+              <key>mcx_preference_settings</key>
+              <dict>
+                <key>EnterprisePoliciesEnabled</key>
+                <true/>
+                <key>ExtensionSettings</key>
+                <dict>
+                  <key>agentbuddy@agentbuddy</key>
+                  <dict>
+                    <key>installation_mode</key>
+                    <string>force_installed</string>
+                    <key>install_url</key>
+                    <string>https://extensions.corp.example/agentbuddy/agentbuddy.xpi</string>
+                    <key>update_url</key>
+                    <string>https://extensions.corp.example/agentbuddy/updates.json</string>
+                    <key>default_area</key>
+                    <string>navbar</string>
+                  </dict>
+                </dict>
+                <key>3rdparty</key>
+                <dict>
+                  <key>Extensions</key>
+                  <dict>
+                    <key>agentbuddy@agentbuddy</key>
+                    <string>{"allowedInstances":["https://acme.service-now.com","https://acme-test.service-now.com"],"aiProvider":"openai","aiBaseUrl":"https://ai-gateway.corp.example/v1","allowedModels":["gpt-5-mini"],"piiMode":"strict","previewMode":"always","keyStorage":"session","allowHrContent":false,"sensitiveTablePrefixes":["x_acme_hr_"],"disabledFeatures":["coaching-snapshot"],"tokenBudgetPerDay":200000,"auditExport":true,"coachingEnabled":false,"disablePageBar":false}</string>
+                  </dict>
+                </dict>
+              </dict>
+            </dict>
+          </array>
+        </dict>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>

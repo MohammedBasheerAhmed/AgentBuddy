@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SectionHead } from '../fields.jsx';
 import { t, tm } from '../../i18n/index.js';
+import { browserApi, canOpenShortcutSettings, openShortcutSettings } from '../../lib/platform.js';
 
 // The keyboard shortcuts of the manifest (src/background/commands.js): the name each one is shown by.
 const SHORTCUT_NAMES = { 'open-panel': tm('Open Agent Buddy'), summarise: tm('Summarise this ticket'), reply: tm('Draft a reply') };
@@ -24,13 +25,15 @@ export function ShortcutsSection() {
       alive = false;
     };
   }, []);
+  // Firefox opens its own page (about:addons, Manage Extension Shortcuts); Chrome and Edge open theirs in a tab. An older Firefox
+  // cannot be taken there, so it gets no button (src/lib/platform.js).
+  const api = browserApi();
+  const canOpen = canOpenShortcutSettings(api);
   const edge = typeof navigator !== 'undefined' && /\bEdg\//.test(navigator.userAgent);
   const openBrowserPage = () => {
-    try {
-      chrome.tabs.create({ url: edge ? 'edge://extensions/shortcuts' : 'chrome://extensions/shortcuts' });
-    } catch {
-      /* the browser did not open it: the address is in the hint */
-    }
+    openShortcutSettings(api, edge ? 'edge://extensions/shortcuts' : 'chrome://extensions/shortcuts').catch(() => {
+      /* the browser did not open it */
+    });
   };
   return (
     <section className="ab-section ab-set-section" aria-labelledby="h-shortcuts">
@@ -48,7 +51,11 @@ export function ShortcutsSection() {
         </ul>
       )}
       <div className="ab-set-actions">
-        <button type="button" className="ab-btn ab-btn-sm" onClick={openBrowserPage} aria-describedby="shortcuts-hint">{t('Change the shortcuts in the browser')}</button>
+        {canOpen && (
+          <button type="button" className="ab-btn ab-btn-sm" onClick={openBrowserPage} aria-describedby="shortcuts-hint">
+            {t('Change the shortcuts in the browser')}
+          </button>
+        )}
         <span className="ab-hint" id="shortcuts-hint">{t('The browser keeps your own choice when Agent Buddy updates.')}</span>
       </div>
     </section>

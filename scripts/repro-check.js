@@ -4,6 +4,8 @@
 //   node scripts/repro-check.js                                       the normal build
 //   node scripts/repro-check.js --enterprise enterprise/example.json  an enterprise build
 //   node scripts/repro-check.js --write SHA256SUMS                    also write the list to a file
+//   node scripts/repro-check.js --browser firefox                     the Firefox build (default chromium: Chrome and Edge); combines
+//                                                                     with the options above
 //
 // Exit code 0 when both builds are identical, 1 when they differ (each differing file is named). The temporary folders are removed.
 // Run it on a quiet tree: a source file that changes between the two builds is reported as a difference.
@@ -12,10 +14,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { hashFolder, toSha256Sum, compareHashes } = require('./lib/hashes.js');
+const { BROWSERS, BROWSER_IDS } = require('./lib/browsers.js');
 
 const root = path.join(__dirname, '..');
 const argv = process.argv.slice(2);
-const USAGE = 'Usage: node scripts/repro-check.js [--enterprise <config.json>] [--minify] [--write <file>]';
+const USAGE = `Usage: node scripts/repro-check.js [--browser ${BROWSER_IDS.join('|')}] [--enterprise <config.json>] [--minify] [--write <file>]`;
+let browser = 'chromium';
 let enterprise = '';
 let minify = false;
 let write = '';
@@ -31,6 +35,7 @@ const valueAfter = (i) => {
 };
 for (let i = 0; i < argv.length; i += 1) {
   if (argv[i] === '--enterprise') enterprise = valueAfter(i++);
+  else if (argv[i] === '--browser') browser = valueAfter(i++);
   else if (argv[i] === '--minify') minify = true;
   else if (argv[i] === '--write') write = valueAfter(i++);
   else {
@@ -38,11 +43,15 @@ for (let i = 0; i < argv.length; i += 1) {
     process.exit(1);
   }
 }
+if (!BROWSER_IDS.includes(browser)) {
+  console.error(`--browser must be one of ${BROWSER_IDS.join(', ')} (got "${browser}"). ${USAGE}`);
+  process.exit(1);
+}
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'agentbuddy-repro-'));
 const build = (name) => {
   const out = path.join(work, name);
-  const args = [path.join(root, 'build.js'), '--out', out, ...(enterprise ? ['--enterprise', path.resolve(enterprise)] : []), ...(minify ? ['--minify'] : [])];
+  const args = [path.join(root, 'build.js'), '--browser', browser, '--out', out, ...(enterprise ? ['--enterprise', path.resolve(enterprise)] : []), ...(minify ? ['--minify'] : [])];
   // Started from another folder on purpose: the output must not depend on where the build runs.
   const result = spawnSync(process.execPath, args, { cwd: name === 'a' ? root : work, encoding: 'utf8' });
   if (result.status !== 0) {
@@ -66,7 +75,8 @@ try {
     console.error('The two builds differ: the build is not reproducible (or the source changed while it ran).');
     process.exitCode = 1;
   } else {
-    console.error(`Reproducible: two ${enterprise ? 'enterprise ' : ''}builds gave the same ${first.length} files, byte for byte.${write ? ` Hashes written to ${write}.` : ''}`);
+    const kind = `${BROWSERS[browser].name} ${enterprise ? 'enterprise ' : ''}builds`;
+    console.error(`Reproducible: two ${kind} gave the same ${first.length} files, byte for byte.${write ? ` Hashes written to ${write}.` : ''}`);
   }
 } finally {
   fs.rmSync(work, { recursive: true, force: true });

@@ -1,4 +1,5 @@
-// Keyboard shortcuts (the manifest's "commands"; the person can change the keys at chrome://extensions/shortcuts or edge://extensions/shortcuts).
+// Keyboard shortcuts (the manifest's "commands"; the person can change the keys at chrome://extensions/shortcuts or edge://extensions/shortcuts,
+// and in Firefox at about:addons, the gear, Manage Extension Shortcuts; Settings opens the right one: src/lib/platform.js).
 //
 //   open-panel   open the Agent Buddy panel
 //   summarise    open the panel and start "Summarise this ticket" on the record that is open

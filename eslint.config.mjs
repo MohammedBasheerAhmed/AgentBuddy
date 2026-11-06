@@ -18,7 +18,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 const VIEWS = ['src/sidepanel/**', 'src/options/**', 'src/dashboard/**', 'src/formats/**/*.jsx'];
 
 export default [
-  { ignores: ['dist/**', 'dist-enterprise/**', 'release/**', 'selfhost/**', 'node_modules/**', '.test-dist*/**', '.build-tmp*/**'] },
+  { ignores: ['dist/**', 'dist-enterprise/**', 'dist-firefox/**', 'dist-firefox-enterprise/**', 'release/**', 'selfhost/**', 'node_modules/**', '.test-dist*/**', '.build-tmp*/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{js,jsx,mjs,cjs}'],

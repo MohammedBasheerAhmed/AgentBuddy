@@ -2,12 +2,14 @@
 
 Status: draft for the security team. Every claim that a test enforces names the test. Anything not yet verified on a real
 instance is marked **unverified**. Version 0.1.0, second hardening round (2026-10-30): a second independent audit
-(`docs/review/security-audit-2.md`), the review pack (`docs/review-pack/`), and the enterprise build.
+(`docs/review/security-audit-2.md`), the review pack (`docs/review-pack/`), and the enterprise build. Firefox support was added on
+2026-11-06 (section 3A): it is new, and none of it has been checked on a real instance yet.
 
 ## 1. What it is
 
-A Chrome/Edge extension for ServiceNow fulfillers (IT, customer service, HR cases, catalog) and their team leads. It reads
-the ticket the person already has open, masks personal data, asks an AI model of the organisation's choice for a summary,
+A browser extension for ServiceNow fulfillers (IT, customer service, HR cases, catalog) and their team leads. It runs in Chrome and
+Edge (one package for both) and, since 2026-11-06, in Firefox 128 or later (its own package; section 3A). Safari is not supported. It
+reads the ticket the person already has open, masks personal data, asks an AI model of the organisation's choice for a summary,
 reply draft, resolution notes and similar, and lets the person insert the result into the open form. It has no server, no
 account, no analytics.
 
@@ -17,7 +19,7 @@ account, no analytics.
 ServiceNow page (user already signed in)
    |  content script: GET-only reads with the user's own session (ACLs apply)
    v
-Side panel (extension page)
+Side panel (extension page; in Firefox, the same page in the sidebar)
    |  PII firewall: detect -> replace with [PLACEHOLDERS] -> seal -> (preview, user confirms)
    v
 AI endpoint chosen by the person or the organisation   <- the ONLY other network destination
@@ -32,31 +34,91 @@ The side panel is where every action runs and every answer is shown. The one thi
 small bar of main actions (section 4, "The bar on the page"); it runs nothing itself: a click opens the side panel and the panel runs
 the action behind the usual preview. The organisation can remove it with the policy key `disablePageBar`.
 
+In Firefox the panel is Firefox's sidebar and the service worker runs as an event page (section 3A). The flows above do not change.
+
 ## 3. Permissions and justification
+
+The table is the Chrome and Edge manifest. The Firefox manifest asks for the same, minus `sidePanel` (section 3A).
 
 | Permission | Why | Enforced by |
 |---|---|---|
 | `storage` | Settings, snippets, key (per chosen mode), local audit log | manifest test |
-| `sidePanel` | The panel is where actions run and answers are shown; also lets the click on the bar in the page open it | manifest test |
+| `sidePanel` | The panel is where actions run and answers are shown; also lets the click on the bar in the page open it. Chrome and Edge only: the Firefox build declares a `sidebar_action` instead, which needs no permission | manifest test, `tests/manifest-firefox.test.js` |
 | `scripting` | Register the content script only on instances the person enabled | manifest test |
 | `activeTab` | See the address of the tab the person clicked the button on, so "Turn on for this site" knows which site; and, once, look at that page for ServiceNow's marks (`g_ck`, `window.NOW`, ServiceNow script names) so "Turn on" is only offered on a ServiceNow page (round 3) | manifest test, `tests/panel-first-run.test.js` |
 | optional hosts `https://*/*`, `http://localhost/*`, `http://127.0.0.1/*` | Never granted wholesale. The browser asks for ONE host at a time: an instance or the AI address. Localhost is for a local model. An instance address is one plain https host: `*`, wildcards, user names and other schemes are refused before the browser is asked. | `tests/manifest.test.js`, `tests/policy-keys.test.js` |
 | Enterprise build: `host_permissions` = the configured instances + the AI host, no optional hosts | Access is granted at install for exactly those hosts and nothing else can be requested. | `tests/policy-enterprise.test.js`, `tests/manifest.test.js` |
 
 Not requested: `tabs`, `history`, `cookies`, `webRequest`, `debugger`, `downloads`, `clipboardRead`, `nativeMessaging`, static
-host permissions, static content scripts, `web_accessible_resources`, `externally_connectable`, keyboard commands.
-(`tests/manifest.test.js` fails if any of these appear.)
+host permissions, static content scripts, `web_accessible_resources`, `externally_connectable`.
+(`tests/manifest.test.js` fails if any of these appear.) The manifest has three keyboard shortcuts (open the panel, summarise, draft a
+reply) and no other command; a command adds no permission (`tests/manifest.test.js`).
 
 Extension-page CSP: `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src
 https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. No `unsafe-eval`, no
 `unsafe-inline`, no remote scripts. In the normal build `connect-src https:` is broad because the organisation chooses the AI
-address; the gate there is the per-host browser permission above.
+address; the gate there is the per-host browser permission above. The Firefox build carries the same CSP.
 
 The **enterprise build** (`npm run build:enterprise -- enterprise/<name>.json`, `docs/deployment.md`) compiles one organisation's
 hosts in: `host_permissions` lists exactly its instances and AI host, with no optional hosts, so nothing else can be requested;
 `connect-src` is exactly the AI origin; the config's policy is compiled in as a floor that the managed policy can only tighten. The
 config is validated strictly (https only, http only for localhost/127.0.0.1, canonical addresses, no wildcards, no keys) and the
-build refuses to write into `dist/`. Enforced by `tests/policy-enterprise.test.js` and `tests/manifest.test.js`.
+build refuses to write into `dist/` (or `dist-firefox/`). Enforced by `tests/policy-enterprise.test.js` and `tests/manifest.test.js`.
+A Firefox enterprise build (`node build.js --browser firefox --enterprise <config.json>`, into `dist-firefox-enterprise/`) carries the
+same changes; its update address moves to `browser_specific_settings.gecko.update_url`, where Firefox reads it
+(`tests/manifest-firefox.test.js`).
+
+## 3A. Browsers
+
+One source, one build per browser family. The families, their folders and the Firefox manifest are in `scripts/lib/browsers.js`; the
+only code that knows how the browsers differ at run time is `src/lib/platform.js` (it tells them apart by what their API offers,
+never by the user agent string).
+
+| Browser | Build | Panel | State |
+|---|---|---|---|
+| Chrome and Edge | `dist/`, one package for both | the side panel | Chrome: seen in part on a real instance (TRACKER.md V1). Edge: the same package; its real-instance checks are open (`docs/live-questions/edge.md`) |
+| Firefox 128 or later | `dist-firefox/` | the sidebar | **New (2026-11-06).** Unit tests (`tests/platform.test.js`, `tests/manifest-firefox.test.js`, `tests/senderCheck-content.test.js`) and an automated run in real Firefox (`npm run e2e:firefox`, `e2e/firefox/`). **Unverified** on a real instance (`docs/live-questions/firefox.md`) |
+| Safari | none | | Not supported. Planned: its panel will open in a window of its own (the places are marked "Safari" in `src/lib/platform.js`) |
+
+What a reviewer needs to know about the Firefox build:
+
+1. **The manifest.** Made from `manifest.json` by `browserManifest()` and differs only in this: the background is
+   `"scripts": [...]` (Firefox has no extension service workers; the same file runs as an event page and uses nothing only a service
+   worker has); `sidebar_action` replaces `side_panel`; no `sidePanel` permission and no `minimum_chrome_version`;
+   `browser_specific_settings.gecko` names the add-on id (`agentbuddy@agentbuddy`, the `GECKO_ID` constant; a branded copy sets its
+   own) and `strict_min_version: "128.0"`. 128 is the first Firefox that runs scripts in the page's MAIN world through the scripting
+   API, which the page bridge needs. The CSP, the permissions, the optional hosts and the shortcuts are otherwise identical.
+   `tests/manifest-firefox.test.js` fails on any other difference.
+2. **The sender check** (section 4, "Messages to the extension"). In Firefox the extension's own pages are
+   `moz-extension://<a random id made at install>`, which is not the add-on id. The check compares the sender's origin exactly with
+   the origin of the extension's own pages, taken from `runtime.getURL('')`, so it holds in Firefox too. In Chrome and Edge the
+   accepted origin is still exactly `chrome-extension://<id>`.
+3. **Opening the panel from the dock on the page.** Firefox opens its sidebar only from the person's action on the browser itself (the
+   toolbar button, a keyboard shortcut). A click on the dock reaches the background as a message from the content script, which does
+   not count. If the sidebar is open already, the panel picks up the request; if not, the dock says "Click the Agent Buddy button in
+   your browser toolbar. The action starts in the panel." and the request waits 30 seconds for the panel, as in Chrome. No control
+   changes: the request still names the exact tab and record, expires, and the panel still shows the preview.
+4. **Signing.** Release and Beta Firefox install only add-ons signed by Mozilla, so Mozilla is a party in the release chain, as Google
+   and Microsoft are for their stores. A temporary add-on (`about:debugging`) is for testing and goes when Firefox closes. Install and
+   policy: `docs/deployment.md`, section "Firefox".
+5. **The managed policy.** Firefox does not support `managed_schema.json`: the browser checks no policy value's type, and Agent Buddy's
+   own reading of the policy (`src/policy/policy.js`) is the only check. A registry REG_DWORD or a macOS `<true/>` reaches Agent Buddy as
+   1 or 0, which it reads as "not set", so the Firefox `.reg` and macOS profile carry the policy as one JSON text. A policy change takes
+   effect only after Firefox restarts. Details: `docs/deployment.md`, "How Firefox reads the policy".
+6. **Closing storage to content scripts** (`restrictStorageAccess`, `src/background/bar.js`) uses `setAccessLevel` where the browser
+   supports it, as in Chrome and Edge. Firefox 159 has no `setAccessLevel` for any area (checked by `npm run e2e:firefox` on
+   2026-11-06): `storage.session` does not exist in a Firefox content script at all (the bar's launch request stays out of its
+   reach), but **`storage.local` stays readable by the content script**. See limit 17.
+7. **Sites with a port.** Firefox's match patterns cannot name a port: a pattern with one matches nothing, and `https://host/*`
+   matches every port. So a site whose address has a port cannot be turned on in Firefox. Agent Buddy does not drop the port to make
+   it work, because that would widen what it may read. ServiceNow instances have no port.
+8. **Load warnings, not errors.** Firefox does not know `storage.managed_schema`, and ignores `version_name` (enterprise builds set
+   it); it loads the add-on with a warning for each.
+9. **Release decision still open.** addons.mozilla.org now requires `browser_specific_settings.gecko.data_collection_permissions` in
+   a new submission. The build does not set it yet: what to declare is a release decision, because ticket text (masked) goes to the
+   AI endpoint the person or organisation chose.
+
+"Copy diagnostics" in Settings names the browser (Chrome, Edge, Firefox or Safari, with its version).
 
 ## 4. Controls
 
@@ -79,7 +141,8 @@ build refuses to write into `dist/`. Enforced by `tests/policy-enterprise.test.j
 | Accountability | Every successful insert or copy lands in the audit log (the result card, the Write section, snippets, a carried draft), with the model that was really used and never any content. | `tests/insert-audit.test.js` |
 | Stored data | Settings has a "Stored data" list of everything Agent Buddy keeps (settings, the AI key per mode, snippets, the usage log, the activity log and its salt, checklist ticks, saved dashboards) and a button "Clear everything stored by Agent Buddy" that removes every `agentbuddy_*` key in local and session storage and empties the key vault, after a confirmation, and turns off the ServiceNow sites that were turned on. A test fails when the code uses a key the list does not describe. | `tests/insert-stored-data.test.js` |
 | Checklist ticks | Kept in the browser's session storage (memory only, cleared when the browser closes), under the same salted record hash the audit log uses, encrypted with a key made from the same salt. The record's sys_id and the step hashes are never stored in the clear, and a copy of the stored data says nothing without the salt. | `tests/checks-store.test.js` |
-| The bar on the page | The only UI inside a ServiceNow page: a small tab on the edge that opens to the 3 or 4 main actions for the record that is open. (1) It sits in a **closed shadow root**: the page's scripts cannot reach its buttons or read its text, and its styles are a constructed stylesheet, which a strict page CSP does not block. (2) It acts only on **real clicks and key presses** (`event.isTrusted`); a page script cannot press it. (3) It **runs nothing**: a click sends `BAR_LAUNCH` to the service worker, which opens the side panel and leaves a short request (tab, table, sys_id, feature id; no text) in `chrome.storage.session`, which a content script cannot read. The panel starts the action exactly as a click in its own list does: permission, masking, preview, policy. (4) A content script may make **only two requests** (`BAR_ACTIONS`, `BAR_LAUNCH`), only from the top frame of a page of an instance the person turned on (`contentScriptOrigin`, checked again against the enabled instances); every other request still needs an extension page. (5) The worker answers with the actions the person pinned (or the defaults for the kind) **minus** `disabledFeatures`, and nothing at all for a blocked table, for HR content the organisation does not allow, when the person switched the bar off, or when policy `disablePageBar` is true. A launch is accepted only for an action that answer contains. (6) The request **expires after 30 seconds** and names the exact record: a click that could not open the panel cannot start an AI request later, and moving to the next ticket does not run it on that one. A request that is old, for another tab, another record, an action the record does not have, or that arrives while an answer is on screen starts nothing. (7) It makes no request of its own, loads nothing, and keeps only `{open, side}` in the page's `localStorage`. (8) A click counts only when the bar is **in plain view**: its element is where and as Agent Buddy put it, and it has been on screen for half a second; where the browser reports it (IntersectionObserver v2) it must also be uncovered and fully opaque. Otherwise it says "Nothing was started". (9) **Switched off** (by the person or `disablePageBar`) it does not look at the page at all; it asks the service worker every 30 seconds whether it is on. (10) When its **site is turned off** (in Agent Buddy, in the browser's site access, by policy, or by "Clear everything"), the content script in every open tab retires: no bar, no answers to the panel; immediately from Agent Buddy, within 30 seconds after a browser or policy change. | `tests/bar-background.test.js`, `tests/quick-launch.test.js`, `tests/bar-logic.test.js`, `tests/bar-sync.test.js`, `tests/policy.test.js`, e2e scenarios y and z |
+| Messages to the extension | Only this extension's own pages (side panel, Settings, the full-page dashboard) may ask the service worker or a content script for anything. A message counts as one of them only when `sender.id` is this extension's id AND the origin of the frame that sent it (never the tab's address) is exactly the origin of the extension's own pages, taken from `runtime.getURL('')`: `chrome-extension://<id>` in Chrome and Edge, `moz-extension://<a random id made at install>` in Firefox (not the add-on id), `safari-web-extension://<id>` for Safari later. Everything is refused when the id or that origin is unknown or is not an extension page's origin; in Chrome and Edge the origin must also be the id's. Any part of this extension may tell a content script that its site was turned off, which only makes it do less. A content script may send only the bar's two requests (next row). No `externally_connectable`, so web pages and other extensions cannot send at all. | `tests/senderCheck-content.test.js`, `tests/platform.test.js`, `tests/bar-background.test.js` |
+| The bar on the page | The only UI inside a ServiceNow page: a small tab on the edge that opens to the 3 or 4 main actions for the record that is open. (1) It sits in a **closed shadow root**: the page's scripts cannot reach its buttons or read its text, and its styles are a constructed stylesheet, which a strict page CSP does not block. (2) It acts only on **real clicks and key presses** (`event.isTrusted`); a page script cannot press it. (3) It **runs nothing**: a click sends `BAR_LAUNCH` to the service worker, which opens the side panel (in Firefox it cannot open the sidebar from a click on the page: section 3A) and leaves a short request (tab, table, sys_id, feature id; no text) in `chrome.storage.session`, which a content script cannot read. The panel starts the action exactly as a click in its own list does: permission, masking, preview, policy. (4) A content script may make **only two requests** (`BAR_ACTIONS`, `BAR_LAUNCH`), only from the top frame of a page of an instance the person turned on (`contentScriptOrigin`, checked again against the enabled instances); every other request still needs an extension page. (5) The worker answers with the actions the person pinned (or the defaults for the kind) **minus** `disabledFeatures`, and nothing at all for a blocked table, for HR content the organisation does not allow, when the person switched the bar off, or when policy `disablePageBar` is true. A launch is accepted only for an action that answer contains. (6) The request **expires after 30 seconds** and names the exact record: a click that could not open the panel cannot start an AI request later, and moving to the next ticket does not run it on that one. A request that is old, for another tab, another record, an action the record does not have, or that arrives while an answer is on screen starts nothing. (7) It makes no request of its own, loads nothing, and keeps only `{open, side}` in the page's `localStorage`. (8) A click counts only when the bar is **in plain view**: its element is where and as Agent Buddy put it, and it has been on screen for half a second; where the browser reports it (IntersectionObserver v2) it must also be uncovered and fully opaque. Otherwise it says "Nothing was started". (9) **Switched off** (by the person or `disablePageBar`) it does not look at the page at all; it asks the service worker every 30 seconds whether it is on. (10) When its **site is turned off** (in Agent Buddy, in the browser's site access, by policy, or by "Clear everything"), the content script in every open tab retires: no bar, no answers to the panel; immediately from Agent Buddy, within 30 seconds after a browser or policy change. | `tests/bar-background.test.js`, `tests/quick-launch.test.js`, `tests/bar-logic.test.js`, `tests/bar-sync.test.js`, `tests/policy.test.js`, e2e scenarios y and z |
 | Key handling | The key is read only by extension pages (side panel, Settings), never by content scripts or the page, and sent only to its provider's address in that provider's header (`x-api-key`, `Authorization: Bearer`, or `api-key` for Azure). "This browser" (the default) keeps it in Agent Buddy's own IndexedDB database on the extension's origin (`agentbuddy_vault`), which content scripts cannot open; `chrome.storage.local`, which they can read, holds no key (a key saved by an earlier version is moved out the first time it is read). "Memory only" keeps it in `chrome.storage.session`, pinned to `TRUSTED_CONTEXTS`. "Encrypted" keeps a PBKDF2-HMAC-SHA256 (600,000 iterations) -> AES-256-GCM blob in the vault: a new 16-byte salt and 12-byte IV for every encryption, the blob bound to its provider slot, a passphrase of 8 characters or more; older blobs are re-encrypted when unlocked. A `keyStorage` the policy forces also applies to a key saved before it. A key the organisation supplies is used only when the policy also pins `aiProvider` or `aiBaseUrl`, and is never shown. The service worker closes `chrome.storage.session`, `local` and `sync` to content scripts where the browser supports it; the content script reads only three policy keys from managed storage, never an organisation-supplied key. Error messages never contain the key or the text that was sent. | `tests/keystore.test.js`, `tests/insert-stored-data.test.js`, `tests/options-settings.test.js`, `tests/providers-http.test.js`, `tests/policy.test.js`, `tests/readonly-content-policy.test.js` |
 | AI requests | Every provider call has a time limit (2 minutes; 5 for a model on this computer), is retried at most twice and only on 429/503/529 (honouring `Retry-After`, at most 20 seconds), can be cancelled by the person, and is sent with `redirect: 'error'`, `credentials: 'omit'`, `referrerPolicy: 'no-referrer'` and `cache: 'no-store'`, so a key is never re-sent to another host on a redirect. An address that fails validation is refused; nothing falls back to a public API. "Test connection" and "Load models" apply the same organisation rules as a run. A cut-short answer is marked as such. | `tests/providers-http.test.js`, `tests/providers-azure.test.js`, `tests/providers-answers.test.js`, `tests/providers-guard.test.js`, `tests/options-policy-check.test.js` |
 | Organisation control | `chrome.storage.managed` policy: allowed instances, AI endpoint and models, privacy mode floor, preview mode, key storage, disabled features, blocked tables and fields, extra sensitive table prefixes, HR switch, token budget, `allowedProviders`. Users can tighten, never loosen: `piiMode` and `previewMode` are floors (a person can choose stricter). An invalid `aiBaseUrl` blocks AI calls with a message instead of being ignored. Ids, table names, field names and provider ids are not case-sensitive; an allow-list that is not a list allows nothing. `scripts/check-policy.js` lists unknown or mistyped keys, and Settings shows `disabledFeatures` ids that match no feature. | `tests/policy.test.js`, `tests/policy-keys.test.js`, `tests/policy-enterprise.test.js`, `tests/policy-hardening-policy.test.js`, `tests/options-settings.test.js` |
@@ -90,6 +153,7 @@ build refuses to write into `dist/`. Enforced by `tests/policy-enterprise.test.j
 | Accountability | Local audit log: feature, table, salted record hash, provider/model, counts of masked items, tokens, outcome. It never holds content. CSV export. | `tests/audit.test.js`, `tests/pipeline.test.js` |
 | Cost / abuse | Daily call/token caps and a usage log (the person's own caps in Settings). The policy key `tokenBudgetPerDay` is enforced before every call: when today's tokens in the local usage log reach it, nothing is sent (`BUDGET`, audited as blocked). The smaller of the two caps applies, and Settings ("Usage and limits") shows which one and how much is left today. | `tests/policy-hardening-pipeline.test.js`, `tests/budget-caps.test.js` |
 | Supply chain | Three packages ship (React, React DOM, scheduler). No remote code, no CDN. Bundled with esbuild, no source maps shipped. Exact versions in `package.json` plus lockfile integrity hashes; a CycloneDX 1.5 SBOM (`docs/review-pack/sbom.cdx.json`, `npm run sbom`, no network) kept current by a test; a reproducible build (`npm run repro` builds twice from two folders and compares SHA-256 of every file). `npm audit --omit=dev`: 0 issues. | `tests/reviewpack.test.js`, `package-lock.json` |
+| One source for every browser | The Chrome and Edge build and the Firefox build come from the same source and the same lockfile; only the esbuild target (Chrome and Edge 116, Firefox 128) and the manifest differ. The Firefox manifest is made from `manifest.json` by `browserManifest()` (`scripts/lib/browsers.js`) with exactly the differences in section 3A, and widens nothing: same CSP, same permissions minus `sidePanel`, no host it did not ask for before. A build never goes into another browser's folder. Only `src/lib/platform.js` uses the browsers' panel APIs. The compile check covers both families; `npm run repro -- --browser firefox` checks that the Firefox build is reproducible. | `tests/manifest-firefox.test.js`, `tests/manifest.test.js`, `tests/platform.test.js` |
 
 ## 5. Known limits (stated plainly)
 
@@ -160,6 +224,15 @@ build refuses to write into `dist/`. Enforced by `tests/policy-enterprise.test.j
     (`setAccessLevel`); where the browser does not support it for `local`, a compromised ServiceNow page process could read or change
     settings and the activity log (never the AI key, which is in the vault or in session storage). **Unverified** on Chrome 116+ and
     Edge (`docs/review/security-audit-2.md`). Use policy `keyStorage: session` for the strictest set-up.
+    Firefox: **not supported** (Firefox 159, `npm run e2e:firefox`, 2026-11-06). In Firefox the content script can read
+    `storage.local`: the settings, the activity log, the usage counts, the audit salt and the key vault's stamp. Never the AI key: the
+    run checks that none is in `storage.local`, and `storage.session` does not exist in a Firefox content script.
+18. **Firefox support is new.** Built and tested on 2026-11-06 (section 3A); nothing of it has been checked on a real instance or by a
+    person yet (`docs/live-questions/firefox.md`). Two differences matter for a rollout: Firefox checks no policy value's type, so
+    Agent Buddy's own reading of the policy is the only check there (a value of the wrong type is ignored, so a true written as 1 does
+    not take effect; an `aiBaseUrl` that is not valid still blocks every AI call); and Release and Beta Firefox install only add-ons
+    Mozilla signed, so Mozilla signs every Firefox release. Before a first listing on addons.mozilla.org, what
+    `data_collection_permissions` declares must be decided.
 
 ## 5A. Auxiliary reads (tables and columns that are not fields of the open record)
 
@@ -213,20 +286,24 @@ to the panel. Names are display names: no other table is read to resolve them, e
 | Model output tries to leak data through an image or link | Not rendered; shown as text. |
 | Compromised page script | Can read what the page already has; cannot reach the AI key (extension pages only, kept where content scripts cannot open it) or write through the extension; cannot press the bar or start anything with a covered or restyled bar. |
 | Stolen AI key | Limited by the provider-side spend cap and by sending only to its own host; mode and policy options above. |
-| Malicious update | Distribution through the organisation's controlled channel (private/unlisted store listing or force-install with a self-hosted update URL); build is reproducible from source (`npm run repro`; verify with `node scripts/hashes.js <dir> --check SHA256SUMS`). |
+| Malicious update | Distribution through the organisation's controlled channel (private/unlisted store listing or force-install with a self-hosted update URL); build is reproducible from source (`npm run repro`, `npm run repro -- --browser firefox`; verify with `node scripts/hashes.js <dir> --check SHA256SUMS`). In Firefox every release is signed by Mozilla, which is a party in the release chain as Google and Microsoft are for their stores. |
 | Over-collection | Field allowlists, HR free text off by default, tables and fields blockable by policy. |
 
 ## 7. Review pack
 
 Delivered in `docs/review-pack/`: a reviewer guide (`README.md`: build from source, verify hashes, run the tests, what to read first),
-`data-flow.svg`, `stride.md` (26 threats, each with its control, the test that enforces it, the residual risk and an owner role),
+`data-flow.svg`, `stride.md` (27 threats, each with its control, the test that enforces it, the residual risk and an owner role),
 `dpia-template.md`, Chrome and Edge policy samples for Windows, macOS, Linux and the Google Admin console (`policies/`, checked by
-`scripts/check-policy.js`), `sbom.cdx.json`, and `traceability.md` (every control to its tests; `npm run traceability -- --check`).
+`scripts/check-policy.js`), Firefox policy samples (`policies-firefox/`: `firefox-policies.json`, `firefox-windows.reg`,
+`firefox-macos.mobileconfig`; checked by `tests/selfhost-firefox.test.js`, not yet by `scripts/check-policy.js`),
+`sbom.cdx.json`, and `traceability.md` (every control to its tests; `npm run traceability -- --check`).
 The enterprise build with baked-in hosts is in `build.js`. The second independent audit is `docs/review/security-audit-2.md`.
 
 Still open: a test run on a real instance as a non-admin user; the policy samples applied on a managed device (`chrome://policy`
 shows every key OK); whether `ExtensionSettings` runtime host limits also cover requests from extension pages; the enterprise build
-loaded in a real browser.
+loaded in a real browser. For more browsers: the Edge checks on a real instance (`docs/live-questions/edge.md`); the Firefox checks on
+a real instance (`docs/live-questions/firefox.md`); whether Firefox closes storage to content scripts (limit 17); the Firefox policy
+samples on a managed computer (`about:policies`); `data_collection_permissions` for addons.mozilla.org (section 3A); Safari.
 
 ## Additions from round 3 (2026-10-30)
 

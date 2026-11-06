@@ -15,6 +15,8 @@ person with only fulfiller roles, and what to change if it is different.
    If wrong: the bar already says "Click the Agent Buddy button in your browser toolbar. The action starts in the panel." and the request
    waits 30 seconds for the panel, so the person loses one click, not the action. If a browser never allows it, say so in the bar's tooltip
    and consider offering the bar only where the panel is already open.
+   Firefox never allows it (its sidebar opens only from the toolbar button or a shortcut): the note above is how it works there
+   (`firefox.md` 9 to 11). Edge: `edge.md` 3.
 
 2. **Does the panel start the action when it was closed and opens late?**
    Assumed: yes, within 30 seconds of the click (`LAUNCH_TTL_MS` in `src/lib/launch.js`). The panel reads the request when it opens.
@@ -70,6 +72,7 @@ person with only fulfiller roles, and what to change if it is different.
     service worker's console, `await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'})`, then in the ServiceNow
     tab's console (context "Agent Buddy") `await chrome.storage.local.get(null)` must fail. If not: the AI key is still safe (vault or
     session storage); settings and the activity log stay readable by a compromised page process (security.md limit 17).
+    Edge: `edge.md` 15. Firefox: `firefox.md` 19.
 12. **Does anything on a real classic, Workspace or portal page cover the bar?** The bar would then say "something on the page was
     covering the bar". Check with the page's dialogs, toasts and the Virtual Agent bubble; if a legitimate element does, drag the dock
     sideways by its mark, or raise `DOCK_BOTTOM_PX`.

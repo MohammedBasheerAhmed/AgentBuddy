@@ -5,10 +5,12 @@ at the same time. Following these rules is what keeps the pieces fitting and the
 
 ## What Agent Buddy is
 
-A Chrome/Edge extension (Manifest V3, plain JS/JSX, React 18, esbuild) for ServiceNow **fulfillers** (IT, customer service, HR
-cases, catalog) and their **team leads**. No admin role. It reads with the person's own session (ACLs apply), uses any AI key,
-masks personal data before any AI call, and never writes to ServiceNow. The UI is a side panel; fulfillers work on the classic UI,
-Workspaces **and portals** (Service Portal, Employee Center, customer service portal), so nothing may assume `g_form` or `g_user`.
+A browser extension (Manifest V3, plain JS/JSX, React 18, esbuild) for Chrome and Edge (one build, `dist/`) and Firefox 128 or later
+(`dist-firefox/`), for ServiceNow **fulfillers** (IT, customer service, HR cases, catalog) and their **team leads**. Safari is planned,
+not supported. No admin role. It reads with the person's own session (ACLs apply), uses any AI key, masks personal data before any AI
+call, and never writes to ServiceNow. The UI is a panel (the side panel in Chrome and Edge, the sidebar in Firefox); fulfillers work on
+the classic UI, Workspaces **and portals** (Service Portal, Employee Center, customer service portal), so nothing may assume `g_form`
+or `g_user`.
 
 ## Non-negotiable security rules (tests enforce several; a security team reviews all of them)
 
@@ -30,7 +32,8 @@ Workspaces **and portals** (Service Portal, Employee Center, customer service po
 5. **Show model output only through `SafeText` / `parseSafeText`.** No `innerHTML`, `dangerouslySetInnerHTML`, `eval`, `new Function`,
    no images or links that load, no `target=_blank` to unknown places.
 6. **No new network destinations, no telemetry, no new permissions, no manifest changes.** The only destinations are the person's
-   ServiceNow instance and the AI endpoint. If you believe the manifest must change, STOP and say so in your report.
+   ServiceNow instance and the AI endpoint. If you believe the manifest must change, STOP and say so in your report. A change to how
+   another browser's manifest is made from `manifest.json` (`scripts/lib/browsers.js`) is a manifest change too.
 7. **Store no ticket content.** `chrome.storage` holds settings, snippets and dashboard/report *configuration* only. Never cache
    record text, names or emails in storage. In-memory caches are fine and must be cleared on refresh.
 8. **Field allowlists are the contract.** A column is read only if it is on the feature's spec (`src/context/specs/<area>.js`), which
@@ -42,6 +45,13 @@ Workspaces **and portals** (Service Portal, Employee Center, customer service po
     treat every answer from the page world as untrusted data.
 11. **Policy wins.** Honour `disabledFeatures`, `blockedTables`, `blockedFields`, `piiMode`, `previewMode` (see `src/policy/policy.js`).
     A feature you add is automatically subject to them by using `useRun`; do not bypass.
+12. **Browser differences go in one place.** Only `src/lib/platform.js` knows how the browsers differ at run time: which panel there
+    is and how it opens, what the toolbar button does, the origin of the extension's own pages, the shortcuts page. Everything else
+    calls it. Tell browsers apart by what their API offers, never by the user agent string. A manifest difference goes only in
+    `scripts/lib/browsers.js` (`browserManifest()`); `manifest.json` stays the Chrome and Edge manifest. Write `chrome.*` as the
+    rest of the code does (Firefox accepts it too). `tests/platform.test.js` fails when any other file uses `sidePanel`,
+    `sidebarAction` or `setPanelBehavior`. A sender check takes `own` = `{ id, origin }` (`extensionIdentity`), never a bare id:
+    in Firefox the origin of the extension's pages is not its id.
 
 ## How to work
 
@@ -51,8 +61,9 @@ Workspaces **and portals** (Service Portal, Employee Center, customer service po
   describe the exact change in your final report. The lead applies it.
 - **Do not commit, do not push.** The lead commits. Leave your work in the tree.
 - **Run only what is safe in parallel:** `node tests/run.js [filter]` (own temp folder per process), `node scripts/check-compile.js`
-  (compiles every entry without writing) and `npx eslint <your files>`. Do NOT run `node build.js` or `npm run e2e` (they rebuild the
-  shared `dist/`); the lead does. `npm run verify` runs every gate CI runs, lint first.
+  (compiles every entry for every browser without writing) and `npx eslint <your files>`. Do NOT run `node build.js`, `npm run e2e`
+  or `npm run e2e:firefox` (they build or use the shared `dist/` and `dist-firefox/`); the lead does. `npm run verify` runs every gate CI
+  runs, lint first.
 - **Tests are required.** Add tests next to your work (`tests/<area>-*.test.js`, `require('node:test')` + ES imports as in existing
   tests). Pure logic gets thorough tests with injected dependencies (no `chrome.*`, no `fetch`). The whole suite
   (`node tests/run.js`) must pass when you finish, including other people's tests. If someone else's test fails because of your
@@ -66,7 +77,8 @@ Workspaces **and portals** (Service Portal, Employee Center, customer service po
   panel can be 320px wide.
 - **Unverified ServiceNow facts:** you cannot reach a real instance. Where you rely on a table, column, URL or DOM structure you
   could not verify, code defensively (fail soft, show "not available to you"), and record each assumption as a numbered question in
-  `docs/live-questions/<area>.md` (what you assumed, how to check it as a non-admin user, what to change if wrong).
+  `docs/live-questions/<area>.md` (what you assumed, how to check it as a non-admin user, what to change if wrong). What you assumed
+  a browser does goes the same way into `docs/live-questions/firefox.md` or `edge.md`.
 - **Be honest in the report:** what is built, what is tested and how, what is not verified, what you left out and why, any change you
   need in a shared file. Do not claim a live check you did not do.
 

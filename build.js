@@ -7,15 +7,21 @@
 //   node build.js --minify                          the same build with the bundles minified (what is shipped: smaller, faster to
 //                                                   load; the unminified build of the same source is the one a reviewer reads)
 //   node build.js --watch                           rebuild on change (the static files are copied again when they change)
+//   node build.js --browser chromium|firefox        which browser family to build for (default chromium: Chrome and Edge). Firefox
+//                                                   builds into dist-firefox/ (an enterprise one into dist-firefox-enterprise/), with
+//                                                   the Firefox manifest and bundles compiled for Firefox 128. Combines with the
+//                                                   options above; a build never goes into another browser's folder.
 //
 // The normal build is unaffected by the enterprise options: same manifest, same bundles, src/policy/baked.js left as it is (null).
-// The entry points and the esbuild options are in scripts/lib/entries.js (shared with scripts/check-compile.js and scripts/sbom.js).
+// The entry points and the esbuild options are in scripts/lib/entries.js (shared with scripts/check-compile.js and scripts/sbom.js);
+// the browser families, their folders and the Firefox manifest are in scripts/lib/browsers.js.
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 const { collect, loadCatalogue } = require('./scripts/lib/i18nCheck.js');
 const { ENTRIES, bundleOptions } = require('./scripts/lib/entries.js');
 const { bundledKeys } = require('./scripts/lib/sbom.js');
+const { BROWSERS, BROWSER_IDS, browserManifest } = require('./scripts/lib/browsers.js');
 
 const rootDir = __dirname;
 
@@ -24,28 +30,33 @@ function fail(message) {
   process.exit(1);
 }
 
+const EXAMPLE_VALUE = { '--out': '--out .build-tmp-check', '--enterprise': '--enterprise enterprise/example.json', '--browser': '--browser firefox' };
+
 function parseArgs(argv) {
-  const opts = { watch: false, minify: false, out: '', enterprise: '' };
+  const opts = { watch: false, minify: false, out: '', enterprise: '', browser: 'chromium' };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const eq = arg.indexOf('=');
     const flag = eq > 0 ? arg.slice(0, eq) : arg;
     if (flag === '--watch' && eq < 0) opts.watch = true;
     else if (flag === '--minify' && eq < 0) opts.minify = true;
-    else if (flag === '--out' || flag === '--enterprise') {
+    else if (flag === '--out' || flag === '--enterprise' || flag === '--browser') {
       const value = eq > 0 ? arg.slice(eq + 1) : argv[(i += 1)];
       // (.build-tmp-* is in .gitignore, so the example does not leave a folder git would want to add)
-      if (!value || value.startsWith('--')) fail(`${flag} needs a value, for example ${flag === '--out' ? '--out .build-tmp-check' : '--enterprise enterprise/example.json'}.`);
+      if (!value || value.startsWith('--')) fail(`${flag} needs a value, for example ${EXAMPLE_VALUE[flag]}.`);
       opts[flag.slice(2)] = value;
-    } else fail(`unknown option "${arg}". Options: --out <folder>, --enterprise <config.json>, --minify, --watch.`);
+    } else fail(`unknown option "${arg}". Options: --browser ${BROWSER_IDS.join('|')}, --out <folder>, --enterprise <config.json>, --minify, --watch.`);
   }
+  if (!BROWSER_IDS.includes(opts.browser)) fail(`--browser must be one of ${BROWSER_IDS.join(', ')} (got "${opts.browser}").`);
   return opts;
 }
 
 const opts = parseArgs(process.argv.slice(2));
 const isWatch = opts.watch;
-const defaultOut = path.join(rootDir, 'dist');
-const outdir = opts.out ? path.resolve(process.cwd(), opts.out) : opts.enterprise ? path.join(rootDir, 'dist-enterprise') : defaultOut;
+const browser = BROWSERS[opts.browser];
+const folderOf = (rel) => path.join(rootDir, ...rel.split('/'));
+const defaultOut = folderOf(browser.out); // dist/ for Chrome and Edge, dist-firefox/ for Firefox
+const outdir = opts.out ? path.resolve(process.cwd(), opts.out) : folderOf(opts.enterprise ? browser.enterpriseOut : browser.out);
 
 // Folders of the project a build must never delete or write into.
 const PROTECTED = new Set(['src', 'assets', 'docs', 'tests', 'scripts', 'e2e', 'enterprise', 'node_modules', '.git']);
@@ -69,8 +80,20 @@ function checkOutDir(dir) {
   if (!up.startsWith('..') && !path.isAbsolute(up)) fail('the output folder cannot contain the project folder.');
   const inside = !down.startsWith('..') && !path.isAbsolute(down);
   if (inside && PROTECTED.has(down.split(path.sep)[0])) fail(`the output folder cannot be inside ${down.split(path.sep)[0]}/.`);
-  if (opts.enterprise && same(dir, defaultOut)) fail('an enterprise build never goes into dist/ (that is the normal build). Use --out with another folder.');
-  if (same(dir, defaultOut)) return; // the normal build replaces dist/ as it always has
+  // Each browser family has its own folders (scripts/lib/browsers.js). A build never replaces another family's, nor goes inside one:
+  // dist/ loaded in Chrome must not turn into a Firefox build, nor dist-firefox/ into a Chrome one.
+  for (const other of Object.values(BROWSERS)) {
+    if (other.id === browser.id) continue;
+    for (const rel of [other.out, other.enterpriseOut, other.releaseOut]) {
+      const there = path.relative(realOrSelf(folderOf(rel)).toLowerCase(), real.toLowerCase());
+      if (!there || (!there.startsWith('..') && !path.isAbsolute(there))) fail(`${rel}/ is where the ${other.name} build goes, not the ${browser.name} one. Use --out with another folder.`);
+    }
+  }
+  // An enterprise build never replaces a normal build, of any browser.
+  for (const b of Object.values(BROWSERS)) {
+    if (opts.enterprise && same(dir, folderOf(b.out))) fail(`an enterprise build never goes into ${b.out}/ (that is the normal build). Use --out with another folder.`);
+  }
+  if (same(dir, defaultOut)) return; // the normal build replaces dist/ (dist-firefox/ for Firefox) as it always has
   if (fs.existsSync(dir)) {
     if (!fs.statSync(dir).isDirectory()) fail(`${dir} is a file, not a folder.`);
     const entries = fs.readdirSync(dir);
@@ -109,7 +132,7 @@ const bakedPlugins = () => {
   return [bakedPolicyPlugin(enterprise.source, enterprise.tools.BAKED_MODULE_FILTER)];
 };
 
-const shared = bundleOptions(rootDir); // loader, JSX, target, format, the production define, CSS read with LF endings
+const shared = bundleOptions(rootDir, browser.id); // loader, JSX, the browser's target, format, the production define, CSS read with LF endings
 const common = {
   ...shared,
   minify: opts.minify, // whitespace, names and syntax; the code is the same, so the tests of the unminified build hold (npm run repro -- --minify)
@@ -129,11 +152,14 @@ const readText = (file) => fs.readFileSync(path.join(rootDir, file), 'utf8').rep
 
 function copyStatic() {
   const copyText = (from, to = path.basename(from)) => fs.writeFileSync(path.join(outdir, to), readText(from));
-  if (enterprise) {
-    const manifest = enterprise.tools.enterpriseManifest(JSON.parse(readText('manifest.json')), enterprise.plan);
+  if (enterprise || browser.id !== 'chromium') {
+    // The enterprise changes first (hosts, connect-src, version name, update address), then the browser's own (scripts/lib/browsers.js):
+    // a Firefox enterprise build carries both.
+    const base = JSON.parse(readText('manifest.json'));
+    const manifest = browserManifest(enterprise ? enterprise.tools.enterpriseManifest(base, enterprise.plan) : base, browser.id);
     fs.writeFileSync(path.join(outdir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   } else {
-    copyText('manifest.json');
+    copyText('manifest.json'); // Chrome and Edge: the repository's manifest, byte for byte
   }
   copyText('managed_schema.json');
   copyText('src/sidepanel/sidepanel.html');
@@ -245,19 +271,23 @@ async function main() {
   if (enterprise) {
     checkBaked();
     const { plan } = enterprise;
+    const firefox = browser.id === 'firefox';
     console.log(
       [
-        `Built the enterprise build${plan.label ? ` "${plan.label}"` : ''} in ${shownOut}/ from ${path.relative(rootDir, enterprise.configPath).split(path.sep).join('/')}.`,
+        `Built the enterprise build${plan.label ? ` "${plan.label}"` : ''}${browser.id === 'chromium' ? '' : ` for ${browser.name}`} in ${shownOut}/ from ${path.relative(rootDir, enterprise.configPath).split(path.sep).join('/')}.`,
         `  instances:        ${plan.instances.join(', ')}`,
         `  AI endpoint:      ${plan.ai.provider} at ${plan.ai.baseUrl}`,
         `  host_permissions: ${plan.hostPermissions.join(', ')}`,
         `  connect-src:      ${plan.connectSrc.join(' ')}`,
+        // (Firefox reads its update address from browser_specific_settings.gecko.update_url, and expects an updates.json there)
+        ...(firefox && plan.updateUrl ? [`  update_url:       ${plan.updateUrl} (as gecko.update_url: Firefox expects an updates.json there, not Chrome's update.xml)`] : []),
         '  The compiled-in policy is a floor: the browser\'s managed policy can only make it stricter.',
       ].join('\n')
     );
     return;
   }
-  console.log(same(outdir, defaultOut) ? 'Built dist/. Load it as an unpacked extension.' : `Built ${shownOut}/. Load it as an unpacked extension.`);
+  if (browser.id === 'firefox') console.log(`Built ${shownOut}/. Load it in Firefox at about:debugging#/runtime/this-firefox (Load Temporary Add-on, then its manifest.json).`);
+  else console.log(same(outdir, defaultOut) ? 'Built dist/. Load it as an unpacked extension.' : `Built ${shownOut}/. Load it as an unpacked extension.`);
 }
 
 main().catch((err) => {

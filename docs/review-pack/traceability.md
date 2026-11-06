@@ -23,6 +23,7 @@ or when this file is out of date.
 | security.md 4 | Accountability | Every successful insert or copy lands in the audit log (the result card, the Write section, snippets, a carried draft), with the model that was really used and never any content. | `tests/insert-audit.test.js` | ok |
 | security.md 4 | Stored data | Settings has a "Stored data" list of everything Agent Buddy keeps (settings, the AI key per mode, snippets, the usage log, the activity log and its salt, checklist ticks, saved dashboards) and a ... | `tests/insert-stored-data.test.js` | ok |
 | security.md 4 | Checklist ticks | Kept in the browser's session storage (memory only, cleared when the browser closes), under the same salted record hash the audit log uses, encrypted with a key made from the same salt. | `tests/checks-store.test.js` | ok |
+| security.md 4 | Messages to the extension | Only this extension's own pages (side panel, Settings, the full-page dashboard) may ask the service worker or a content script for anything. | `tests/senderCheck-content.test.js`, `tests/platform.test.js`, `tests/bar-background.test.js` | ok |
 | security.md 4 | The bar on the page | The only UI inside a ServiceNow page: a small tab on the edge that opens to the 3 or 4 main actions for the record that is open. | `tests/bar-background.test.js`, `tests/quick-launch.test.js`, `tests/bar-logic.test.js`, `tests/bar-sync.test.js`, `tests/policy.test.js` | ok |
 | security.md 4 | Key handling | The key is read only by extension pages (side panel, Settings), never by content scripts or the page, and sent only to its provider's address in that provider's header (x-api-key, Authorization: ... | `tests/keystore.test.js`, `tests/insert-stored-data.test.js`, `tests/options-settings.test.js`, `tests/providers-http.test.js`, `tests/policy.test.js`, `tests/readonly-content-policy.test.js` | ok |
 | security.md 4 | AI requests | Every provider call has a time limit (2 minutes; 5 for a model on this computer), is retried at most twice and only on 429/503/529 (honouring Retry-After, at most 20 seconds), can be cancelled by the ... | `tests/providers-http.test.js`, `tests/providers-azure.test.js`, `tests/providers-answers.test.js`, `tests/providers-guard.test.js`, `tests/options-policy-check.test.js` | ok |
@@ -34,7 +35,8 @@ or when this file is out of date.
 | security.md 4 | Accountability | Local audit log: feature, table, salted record hash, provider/model, counts of masked items, tokens, outcome. | `tests/audit.test.js`, `tests/pipeline.test.js` | ok |
 | security.md 4 | Cost / abuse | Daily call/token caps and a usage log (the person's own caps in Settings). | `tests/policy-hardening-pipeline.test.js`, `tests/budget-caps.test.js` | ok |
 | security.md 4 | Supply chain | Three packages ship (React, React DOM, scheduler). | `tests/reviewpack.test.js` | ok |
-| stride.md | S1 | A web page or another extension sends requests to the service worker as if it were an Agent Buddy page | `tests/senderCheck-content.test.js`, `tests/bar-background.test.js` | ok |
+| security.md 4 | One source for every browser | The Chrome and Edge build and the Firefox build come from the same source and the same lockfile; only the esbuild target (Chrome and Edge 116, Firefox 128) and the manifest differ. | `tests/manifest-firefox.test.js`, `tests/manifest.test.js`, `tests/platform.test.js` | ok |
+| stride.md | S1 | A web page or another extension sends requests to the service worker as if it were an Agent Buddy page | `tests/senderCheck-content.test.js`, `tests/platform.test.js`, `tests/bar-background.test.js` | ok |
 | stride.md | S2 | A page script forges the bridge's answers (record id, form values, "inserted") | `tests/insert-content-fill.test.js`, `tests/portal-bridge.test.js` | ok |
 | stride.md | S3 | A look-alike site (`acme.service-now.com.evil.test`) or a wildcard is taken for an instance | `tests/policy.test.js`, `tests/policy-keys.test.js` | ok |
 | stride.md | S4 | Traffic to the AI endpoint goes to an impostor | `tests/policy.test.js`, `tests/policy-enterprise.test.js` | ok |
@@ -43,7 +45,8 @@ or when this file is out of date.
 | stride.md | T2 | Model output puts markup or a script into a form field | `tests/insert-fillable.test.js`, `tests/insert-review.test.js`, `tests/render-safetext.test.js` | ok |
 | stride.md | T3 | A person loosens the organisation's policy by editing their settings | `tests/policy.test.js`, `tests/policy-keys.test.js` | ok |
 | stride.md | T4 | A changed build or a poisoned dependency is installed | `tests/manifest.test.js`, `tests/reviewpack.test.js` | ok |
-| stride.md | T5 | A typo in the managed policy silently drops a control | `tests/policy-keys.test.js`, `tests/policy-enterprise.test.js` | ok |
+| stride.md | T5 | A typo in the managed policy silently drops a control | `tests/policy-keys.test.js`, `tests/policy-enterprise.test.js`, `tests/selfhost-firefox.test.js` | ok |
+| stride.md | T6 | The Firefox build is not what was reviewed for Chrome and Edge | `tests/manifest-firefox.test.js`, `tests/manifest.test.js`, `tests/platform.test.js` | ok |
 | stride.md | R1 | Nobody can tell who sent what to the AI | `tests/audit.test.js`, `tests/insert-audit.test.js` | ok |
 | stride.md | I1 | Personal data reaches the AI provider | `tests/seal.test.js`, `tests/pii-arabic.test.js`, `tests/pii-detectors.test.js`, `tests/pii-dictionary.test.js`, `tests/pii-firewall-mask.test.js`, `tests/pii-firewall-names.test.js`, `tests/pii-firewall.test.js`, `tests/pii-names.test.js`, `tests/pii-tokenizer.test.js`, `tests/pipeline.test.js` | ok |
 | stride.md | I2 | More of the record is read or sent than the action needs | `tests/context-access.test.js`, `tests/context-allowlists.test.js`, `tests/context-findings.test.js`, `tests/context-history.test.js`, `tests/context-journal.test.js`, `tests/context-kinds.test.js`, `tests/context-pack.test.js`, `tests/context-purity.test.js`, `tests/context-similar.test.js`, `tests/context-surface.test.js`, `tests/context-util.test.js`, `tests/policy-hardening-policy.test.js` | ok |
@@ -61,4 +64,4 @@ or when this file is out of date.
 | stride.md | E3 | Agent Buddy acts beyond the person's ServiceNow rights | `tests/readonly.test.js`, `tests/context-access.test.js` | ok |
 | stride.md | E4 | Code in a ServiceNow page reaches the AI key or the provider layer | `tests/readonly.test.js`, `tests/keystore.test.js` | ok |
 
-54 rows; 72 distinct test files named; 0 rows name a missing file.
+57 rows; 75 distinct test files named; 0 rows name a missing file.

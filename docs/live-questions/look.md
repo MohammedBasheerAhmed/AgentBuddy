@@ -2,7 +2,8 @@
 
 Built in R9 (the new header, icon tiles, state chips, light / dark / computer colours, the command palette). Everything was checked in
 a real Chrome against a fake ServiceNow (scenario `zx`, plus the accessibility audit `zz` and the Arabic scenario `zy`), never in the
-browser's own side panel and never on a real instance. These are the things only a person at the real Chrome and Edge can answer.
+browser's own side panel and never on a real instance. These are the things only a person at the real Chrome and Edge can answer
+(the Edge checks of every file are gathered in `edge.md`; Firefox's sidebar in `firefox.md` 14 and 15).
 
 1. **Does Ctrl+K reach the panel?** Click inside the side panel, press `Ctrl+K` (Mac: `Cmd+K`). Expected: the palette opens over the
    panel. Chrome and Edge keep some keys for themselves (Ctrl+K puts a search into the address bar on some builds). If the browser

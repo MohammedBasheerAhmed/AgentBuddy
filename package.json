@@ -8,10 +8,12 @@
   },
   "scripts": {
     "build": "node build.js",
+    "build:firefox": "node build.js --browser firefox",
     "build:enterprise": "node build.js --enterprise",
     "watch": "node build.js --watch",
     "test": "node tests/run.js",
     "e2e": "node build.js && node e2e/run.js",
+    "e2e:firefox": "node build.js --browser firefox && node e2e/firefox/run.js",
     "check": "node scripts/check-compile.js",
     "i18n": "node scripts/i18n-check.js",
     "lint": "eslint .",

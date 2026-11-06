@@ -1,15 +1,21 @@
 // The release package (TRACKER.md R2): build, then zip the build into release/agentbuddy-<version>.zip with its SHA-256 next to it
 // (release/agentbuddy-<version>.zip.sha256, in the format `sha256sum -c` reads). The zip is what is uploaded to the Chrome Web Store
-// or the Edge Add-ons site, or hosted by the organisation (docs/deployment.md).
+// or the Edge Add-ons site, or hosted by the organisation (docs/deployment.md). The Firefox build is zipped the same way into
+// release/agentbuddy-<version>-firefox.zip, manifest.json at the root of the zip, for addons.mozilla.org.
 //
-//   npm run package                        node build.js (into dist/), then zip dist/
-//   node scripts/package.js --dist <dir>   zip a build that is already in <dir> (node build.js --out <dir>); nothing is rebuilt
+//   npm run package                        node build.js (into dist/) and node build.js --browser firefox (into dist-firefox/), then
+//                                          zip each: release/agentbuddy-<version>.zip and release/agentbuddy-<version>-firefox.zip
+//   node scripts/package.js --dist <dir>   zip a build that is already in <dir> (node build.js --out <dir>); nothing is rebuilt. Its
+//                                          manifest says which browser it is for, and so which name the zip gets
 //   npm run package -- --minify            the release: minified bundles in release/agentbuddy-<version>.zip, and next to it
 //                                          release/agentbuddy-<version>-readable.zip, the same source built without minifying, which is
 //                                          what a security reviewer reads (the code is the same; `npm run repro -- --minify` rebuilds both).
 //                                          The minified build is made in release/unpacked/ and stays there (load it unpacked, run the
 //                                          end-to-end tests on it with E2E_DIST=release/unpacked, or pack it with scripts/selfhost.js
 //                                          --dist release/unpacked); dist/, the readable build people load while working, is left alone.
+//                                          The minified Firefox build is made in release/unpacked-firefox/ and zipped as above.
+//   --browser chromium|firefox             build and zip only that browser's release
+//   --out <folder>                         write the zips into <folder> instead of release/
 //
 // The zip is reproducible: entries in a fixed order, every file dated 1980-01-01 (or SOURCE_DATE_EPOCH), no extra fields, so the
 // same build gives the same bytes and the same SHA-256 (scripts/repro-check.js does the same for the build itself).
@@ -19,6 +25,7 @@ const path = require('path');
 const zlib = require('zlib');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+const { BROWSERS, BROWSER_IDS, browserOfManifest } = require('./lib/browsers.js');
 
 const root = path.join(__dirname, '..');
 
@@ -123,50 +130,102 @@ function fail(message) {
   process.exit(1);
 }
 
-function main(argv) {
-  const minify = argv.includes('--minify');
-  const at = argv.indexOf('--dist');
-  const given = at >= 0 ? argv[at + 1] : '';
-  if (at >= 0 && (!given || given.startsWith('--'))) fail('--dist needs a folder, for example --dist dist');
-  const dist = given ? path.resolve(given) : minify ? path.join(root, 'release', 'unpacked') : path.join(root, 'dist');
-  if (!given) execFileSync(process.execPath, [path.join(root, 'build.js'), ...(minify ? ['--minify', '--out', dist] : [])], { cwd: root, stdio: 'inherit' });
+const USAGE = `Usage: node scripts/package.js [--browser ${BROWSER_IDS.join('|')}] [--minify] [--dist <folder>] [--out <folder>]`;
 
+function parseArgs(argv) {
+  const opts = { minify: false, dist: '', browser: '', out: '' };
+  const examples = { '--dist': '--dist dist', '--browser': '--browser firefox', '--out': '--out release' };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--minify') opts.minify = true;
+    else if (Object.prototype.hasOwnProperty.call(examples, arg)) {
+      const value = argv[(i += 1)];
+      if (!value || value.startsWith('--')) fail(`${arg} needs a value, for example ${examples[arg]}`);
+      opts[arg.slice(2)] = value;
+    } else fail(`unknown option "${arg}". ${USAGE}`);
+  }
+  if (opts.browser && !BROWSER_IDS.includes(opts.browser)) fail(`--browser must be one of ${BROWSER_IDS.join(', ')} (got "${opts.browser}").`);
+  return opts;
+}
+
+/** The release zip's name: agentbuddy-<version>.zip for Chrome and Edge (as it always was), agentbuddy-<version>-<browser>.zip otherwise. */
+function zipNameFor(manifest, browser) {
+  return browser === 'chromium' ? `agentbuddy-${manifest.version}.zip` : `agentbuddy-${manifest.version}-${browser}.zip`;
+}
+
+const shown = (p) => path.relative(root, p).split(path.sep).join('/') || p;
+
+/**
+ * Zips one build into outDir as the release of the browser its manifest is for, with the SHA-256 next to it. Every file is zipped
+ * relative to the build folder, so manifest.json is at the root of the zip, as the stores (addons.mozilla.org too) require.
+ */
+function packageBuild(dist, { outDir, date, expect = '' }) {
   const manifestPath = path.join(dist, 'manifest.json');
-  if (!fs.existsSync(manifestPath)) fail(`${path.relative(root, dist) || dist} has no manifest.json. Build first (node build.js).`);
+  if (!fs.existsSync(manifestPath)) fail(`${shown(dist)} has no manifest.json. Build first (node build.js${expect && expect !== 'chromium' ? ` --browser ${expect}` : ''}).`);
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (manifest.version !== pkg.version) fail(`the build is version ${manifest.version} but package.json says ${pkg.version}. Build again.`);
   // The store package is the normal build. An enterprise build has the organisation's sites fixed in it and is deployed on its own.
   if (manifest.host_permissions) fail('this is an enterprise build (it has host_permissions). Package the normal build.');
+  const browser = browserOfManifest(manifest);
+  if (expect && browser !== expect) fail(`${shown(dist)} holds the ${BROWSERS[browser].name} build, not the ${BROWSERS[expect].name} one.`);
 
-  const epoch = Number(process.env.SOURCE_DATE_EPOCH);
-  const zip = zipFolder(dist, Number.isFinite(epoch) && epoch > 0 ? { date: new Date(epoch * 1000) } : {});
-  const outDir = path.join(root, 'release');
+  const zip = zipFolder(dist, date ? { date } : {});
   fs.mkdirSync(outDir, { recursive: true });
-  const name = `agentbuddy-${manifest.version}.zip`;
+  const name = zipNameFor(manifest, browser);
   fs.writeFileSync(path.join(outDir, name), zip);
   const hash = crypto.createHash('sha256').update(zip).digest('hex');
   fs.writeFileSync(path.join(outDir, `${name}.sha256`), `${hash}  ${name}\n`);
-  console.log(`Wrote release/${name} (${listFiles(dist).length} files, ${zip.length} bytes) from ${path.relative(root, dist).split(path.sep).join('/') || dist}/`);
-  console.log(`SHA-256 ${hash}  (release/${name}.sha256)`);
+  console.log(`Wrote ${shown(path.join(outDir, name))} (${BROWSERS[browser].name}, ${listFiles(dist).length} files, ${zip.length} bytes) from ${shown(dist)}/`);
+  console.log(`SHA-256 ${hash}  (${shown(path.join(outDir, name))}.sha256)`);
+  return { manifest, browser, name };
+}
 
-  if (minify && !given) {
+// npm run package builds and zips every browser family (scripts/lib/browsers.js): release/agentbuddy-<version>.zip for the Chrome Web
+// Store and Edge Add-ons, release/agentbuddy-<version>-firefox.zip for addons.mozilla.org. --browser makes only one; --dist zips one
+// build that is already there (its manifest says which browser it is for); --out puts the zips in another folder than release/.
+function main(argv) {
+  const opts = parseArgs(argv);
+  const { minify } = opts;
+  const outDir = opts.out ? path.resolve(opts.out) : path.join(root, 'release');
+  const epoch = Number(process.env.SOURCE_DATE_EPOCH);
+  const date = Number.isFinite(epoch) && epoch > 0 ? new Date(epoch * 1000) : null;
+
+  if (opts.dist) {
+    packageBuild(path.resolve(opts.dist), { outDir, date, expect: opts.browser });
+    return;
+  }
+
+  const browsers = opts.browser ? [opts.browser] : BROWSER_IDS;
+  let chromium = null;
+  for (const browser of browsers) {
+    // The minified release is built in its own folder (release/unpacked/, release/unpacked-firefox/); the readable build people load
+    // while working (dist/, dist-firefox/) is left alone.
+    const b = BROWSERS[browser];
+    const dist = path.join(root, ...(minify ? b.releaseOut : b.out).split('/'));
+    execFileSync(process.execPath, [path.join(root, 'build.js'), '--browser', browser, ...(minify ? ['--minify', '--out', dist] : [])], { cwd: root, stdio: 'inherit' });
+    const result = packageBuild(dist, { outDir, date, expect: browser });
+    if (browser === 'chromium') chromium = result;
+  }
+
+  if (minify && chromium) {
     // The copy for the security review: the same source, bundles not minified, in its own zip.
+    const { manifest } = chromium;
     const readableDir = path.join(root, '.build-tmp-readable');
     fs.rmSync(readableDir, { recursive: true, force: true });
     execFileSync(process.execPath, [path.join(root, 'build.js'), '--out', readableDir], { cwd: root, stdio: 'inherit' });
-    const readableZip = zipFolder(readableDir, Number.isFinite(epoch) && epoch > 0 ? { date: new Date(epoch * 1000) } : {});
+    const readableZip = zipFolder(readableDir, date ? { date } : {});
     fs.rmSync(readableDir, { recursive: true, force: true });
     const readableName = `agentbuddy-${manifest.version}-readable.zip`;
     fs.writeFileSync(path.join(outDir, readableName), readableZip);
     const readableHash = crypto.createHash('sha256').update(readableZip).digest('hex');
     fs.writeFileSync(path.join(outDir, `${readableName}.sha256`), `${readableHash}  ${readableName}
 `);
-    console.log(`Wrote release/${readableName} (for the security review, not minified, ${readableZip.length} bytes)`);
-    console.log(`SHA-256 ${readableHash}  (release/${readableName}.sha256)`);
+    console.log(`Wrote ${shown(path.join(outDir, readableName))} (for the security review, not minified, ${readableZip.length} bytes)`);
+    console.log(`SHA-256 ${readableHash}  (${shown(path.join(outDir, readableName))}.sha256)`);
   }
 }
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { crc32, zipFolder, listFiles, dosDateTime };
+module.exports = { crc32, zipFolder, listFiles, dosDateTime, zipNameFor };

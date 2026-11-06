@@ -3,6 +3,7 @@
 // so a new entry point added here is built, checked and counted in the SBOM alike (they used to find the entries in build.js with a
 // regular expression, which a reformatted line would have broken silently).
 const fs = require('fs');
+const { browserOf } = require('./browsers.js');
 
 /** Each bundle: its entry point (relative to the project folder) and the file it becomes in the build. */
 const ENTRIES = [
@@ -31,13 +32,16 @@ const cssTextWithLf = {
  * The esbuild options every tool compiles the entries with. Callers add their own (minify, outfile, metafile, more plugins).
  * @param {string} rootDir the project folder: esbuild's path comments are relative to it, so the output does not depend on where the
  *   build is started
+ * @param {string} [browser] the browser family (scripts/lib/browsers.js): the code is compiled for that family's oldest supported
+ *   version (Chrome and Edge 116, Firefox 128). An unknown one throws.
  */
-function bundleOptions(rootDir) {
+function bundleOptions(rootDir, browser = 'chromium') {
+  const { target } = browserOf(browser);
   return {
     bundle: true,
     loader: { '.js': 'jsx', '.jsx': 'jsx', '.css': 'text' },
     jsx: 'automatic',
-    target: ['chrome116', 'edge116'],
+    target: [...target],
     format: 'iife',
     legalComments: 'none', // the licences of the bundled packages ship as files instead (build.js, licenses/)
     absWorkingDir: rootDir,

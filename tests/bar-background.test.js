@@ -5,6 +5,7 @@ import { contentMessageAction, contentScriptOrigin } from '../src/lib/senderChec
 import { BAR_TYPES, handleBarMessage, restrictStorageAccess, retireOpenTabs } from '../src/background/bar.js';
 import { normalizePolicy } from '../src/policy/policy.js';
 import { QUICK_DEFAULTS } from '../src/features/quick.js';
+import { openPanel } from '../src/lib/platform.js';
 
 const ID = 'abcdefghijklmnopabcdefghijklmnop';
 const SITE = 'https://acme.service-now.com';
@@ -48,6 +49,8 @@ test('contentScriptOrigin refuses everything else', () => {
   no(fromPage({ origin: 'http://acme.service-now.com' }), ID);
   no(fromPage({ origin: `chrome-extension://${ID}`, url: `chrome-extension://${ID}/sidepanel.html` }), ID);
   no(fromPage({ origin: 'null', url: 'about:blank' }), ID);
+  no(fromPage({ origin: undefined, url: `moz-extension://5b0c3e2a-9d41-4c8e-a7f2-0e6d1b9c4a37/sidepanel.html` }), ID);
+  no(fromPage({ origin: 'safari-web-extension://8E1F2A3B-4C5D-4E6F-8A9B-0C1D2E3F4A5B' }), ID);
   no(null);
   no(fromPage(), '');
 });
@@ -153,6 +156,22 @@ test('BAR_LAUNCH says so when the panel could not be opened, and still leaves th
   assert.deepEqual(await handleBarMessage(launch, fromPage(), noApi), { opened: false });
 });
 
+test('Firefox: a click on the bar cannot open the sidebar; the answer says whether it was open already, and the request is left either way', async () => {
+  for (const alreadyOpen of [true, false]) {
+    const asked = [];
+    const sidebarAction = {
+      open: () => (asked.push('open'), Promise.reject(new Error('sidebarAction.open may only be called from a user input handler'))),
+      isOpen: async () => (asked.push('isOpen'), alreadyOpen),
+    };
+    const d = deps({ openPanel: (tabId) => openPanel({ sidebarAction }, tabId) });
+    const pending = handleBarMessage(launch, fromPage(), d);
+    assert.deepEqual(asked, ['open'], 'asked at once, as in Chrome');
+    // open: the sidebar picks the request up itself. Closed: the bar says "Click the Agent Buddy button in your browser toolbar".
+    assert.deepEqual(await pending, { opened: alreadyOpen });
+    assert.equal(d.calls.saved.length, 1);
+  }
+});
+
 test('BAR_LAUNCH refuses an action the bar was not allowed to offer here', async () => {
   for (const featureId of ['coaching-snapshot', 'change-cab-brief', 'nope', '', undefined, '../../x']) {
     const d = deps();
@@ -226,15 +245,32 @@ test('the content script retires on SITE_OFF from this extension, and answers no
   const panel = { id: ID, origin: `chrome-extension://${ID}`, url: `chrome-extension://${ID}/sidepanel.html` };
   const worker = { id: ID, url: `chrome-extension://${ID}/background.bundle.js` };
   const read = { type: MSG.READ, op: 'pack' };
-  assert.equal(contentMessageAction(read, panel, ID), 'answer');
-  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, ID), 'retire');
-  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, { id: ID }, ID), 'retire', 'the worker may not report an origin');
-  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, { id: 'another-extension' }, ID), 'ignore');
-  assert.equal(contentMessageAction(read, { id: 'another-extension', origin: 'chrome-extension://another-extension' }, ID), 'ignore');
-  assert.equal(contentMessageAction(read, fromPage(), ID), 'ignore', 'a content script is not an extension page');
+  const own = { id: ID, origin: `chrome-extension://${ID}` };
+  assert.equal(contentMessageAction(read, panel, own), 'answer');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, own), 'retire');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, { id: ID }, own), 'retire', 'the worker may not report an origin');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, { id: 'another-extension' }, own), 'ignore');
+  assert.equal(contentMessageAction(read, { id: 'another-extension', origin: 'chrome-extension://another-extension' }, own), 'ignore');
+  assert.equal(contentMessageAction(read, fromPage(), own), 'ignore', 'a content script is not an extension page');
   // retired: nothing at all, not even another SITE_OFF
-  assert.equal(contentMessageAction(read, panel, ID, true), 'ignore');
-  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, ID, true), 'ignore');
+  assert.equal(contentMessageAction(read, panel, own, true), 'ignore');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, own, true), 'ignore');
+  // "this extension" not known (no id): nothing, not even SITE_OFF
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, { origin: own.origin }), 'ignore');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, worker, ID), 'ignore', 'the bare id is not enough: the origin of our pages is needed too');
+});
+
+test('Firefox: the content script answers the sidebar (moz-extension://<uuid>), and retires on SITE_OFF from the event page', () => {
+  const GECKO = 'agentbuddy@ifbash.example';
+  const UUID = '5b0c3e2a-9d41-4c8e-a7f2-0e6d1b9c4a37';
+  const own = { id: GECKO, origin: `moz-extension://${UUID}` };
+  const read = { type: MSG.READ, op: 'pack' };
+  assert.equal(contentMessageAction(read, { id: GECKO, url: `moz-extension://${UUID}/sidepanel.html` }, own), 'answer');
+  assert.equal(contentMessageAction({ type: MSG.SITE_OFF }, { id: GECKO, url: `moz-extension://${UUID}/_generated_background_page.html` }, own), 'retire');
+  assert.equal(contentMessageAction(read, { id: GECKO, url: `moz-extension://${UUID.replace('5b', '6c')}/sidepanel.html` }, own), 'ignore', 'another install\'s pages');
+  // and the bar's requests from a content script in Firefox are told apart from the sidebar the same way
+  assert.equal(contentScriptOrigin(fromPage({ id: GECKO, origin: undefined }), GECKO), SITE);
+  assert.equal(contentScriptOrigin({ id: GECKO, tab: { id: 7 }, frameId: 0, url: `moz-extension://${UUID}/sidepanel.html` }, GECKO), '');
 });
 
 // ---- storage closed to content scripts (security audit 2, AB2-03) ----------------------------------------------------

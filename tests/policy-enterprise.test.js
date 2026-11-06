@@ -377,6 +377,30 @@ test('node build.js --enterprise writes a working enterprise build into its own 
   assert.ok(!read(out, 'pagebridge.js').includes('BAKED_POLICY'), 'the page bridge has no policy at all');
 });
 
+test('node build.js --browser firefox --enterprise writes a Firefox enterprise build: the enterprise changes and the Firefox ones', () => {
+  const { browserManifest } = require('../scripts/lib/browsers.js');
+  const out = path.join(tmp, 'enterprise-firefox');
+  const config = path.join(tmp, 'firefox-config.json');
+  const withUpdates = { ...example, updateUrl: 'https://ext.example.com/agentbuddy/updates.json' };
+  fs.writeFileSync(config, JSON.stringify(withUpdates));
+  const r = build('--browser', 'firefox', '--enterprise', config, '--out', out);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /enterprise build "Example Corp" for Firefox/);
+  assert.match(r.stdout, /connect-src:\s+https:\/\/ai-gateway\.example\.com/);
+  assert.match(r.stdout, /update_url:\s+https:\/\/ext\.example\.com\/agentbuddy\/updates\.json \(as gecko\.update_url/);
+  const built = JSON.parse(read(out, 'manifest.json'));
+  assert.deepEqual(built, browserManifest(enterpriseManifest(JSON.parse(read(ROOT, 'manifest.json')), validateEnterpriseConfig(withUpdates).plan), 'firefox'));
+  assert.deepEqual(built.host_permissions, validateEnterpriseConfig(example).plan.hostPermissions);
+  assert.equal(built.optional_host_permissions, undefined);
+  assert.equal(built.browser_specific_settings.gecko.update_url, withUpdates.updateUrl);
+  assert.deepEqual(built.background, { scripts: ['background.bundle.js'] });
+  for (const file of ['background.bundle.js', 'content.bundle.js', 'sidepanel.bundle.js', 'options.bundle.js', 'dashboard.bundle.js']) {
+    const text = read(out, file);
+    assert.ok(text.includes('"https://example-test.service-now.com"'), `${file} carries the compiled-in policy`);
+    assert.ok(!/BAKED_POLICY\d*\s*=\s*null/.test(text), `${file} has no empty policy`);
+  }
+});
+
 test('the normal build is unchanged: the manifest as it is in the repository, no compiled-in policy', () => {
   const out = path.join(tmp, 'normal');
   const r = build('--out', out);

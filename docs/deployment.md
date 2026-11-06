@@ -1,5 +1,9 @@
 # Agent Buddy: deployment and managed policy
 
+Agent Buddy runs in Chrome 116 or later, current Microsoft Edge and Firefox 128 or later. Most of this document applies to all three.
+Where Firefox differs (installing, the policy files, how it reads the policy), see "Firefox" below. Safari is not supported yet; it is
+planned.
+
 ## Recommended profile for a security-approved rollout
 
 | Setting | Value | Why |
@@ -69,15 +73,17 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 
 ### How a policy value is read
 
-- The browser checks each value against `managed_schema.json` first. A value of the wrong type, or a word that is not one of the allowed
+- Chrome and Edge check each value against `managed_schema.json` first. A value of the wrong type, or a word that is not one of the allowed
   ones, is rejected there: it shows as an error on `chrome://policy` (or `edge://policy`) and has **no effect**, as if the key were not
   set. Check that page on one device before a rollout.
+- Firefox checks nothing against `managed_schema.json`: it passes each value to Agent Buddy as it is written. See "How Firefox reads
+  the policy" below, in particular for true/false values in the registry or a macOS profile.
 - Agent Buddy then ignores keys it does not know, ignores the values the browser let through but that make no sense (an allow-list entry
   that is not one https host, a prefix of one letter), and reads case and spaces generously where nothing else could be meant: `" Strict"`
   is `strict`, `OpenAI` is `openai`, `Reply-Draft` is `reply-draft`, `https://ACME.service-now.com:443/` is `https://acme.service-now.com`.
 - Two cases block instead of being ignored, because ignoring them would loosen the policy: an `aiBaseUrl` that is not valid stops every
   AI call, and an `allowedInstances` list with no usable entry allows no site.
-- `true`/`false` keys count only as a real true or false (a registry REG_DWORD 1 or 0 is converted by the browser).
+- `true`/`false` keys count only as a real true or false (a registry REG_DWORD 1 or 0 is converted by Chrome and Edge, not by Firefox).
 - Check a policy file before deploying it: `node scripts/check-policy.js <file>` (a `.reg`, `.mobileconfig`, `.plist` or `.json` file)
   lists every key that would be ignored, read differently from how it is written, or that blocks AI calls, and prints the policy as
   Agent Buddy will read it. It exits with code 1 when something would not work as written.
@@ -229,7 +235,7 @@ switches off their AI buttons only. Use `blockedTables` to stop what they read.
 
 Ready-made files with the recommended profile are in `docs/review-pack/policies/`. In each, replace `EXTENSION_ID` with the id shown at
 `chrome://extensions` (or `edge://extensions`) for your build, and the example addresses with your own; then run
-`node scripts/check-policy.js <file>`.
+`node scripts/check-policy.js <file>`. Firefox takes other files in other places: see "Policy files for Firefox" below.
 
 | File | Where it goes |
 |---|---|
@@ -248,13 +254,15 @@ These formats follow the browsers' published documentation for extension ("3rdpa
 
 The browser can also limit where any extension may act, independently of Agent Buddy's own policy: the `ExtensionSettings` policy with
 `runtime_blocked_hosts` set to all sites and `runtime_allowed_hosts` set to your instances and AI host. It complements the enterprise
-build's host list; its exact behaviour for requests from extension pages is **unverified** here, so test it on one device.
+build's host list; its exact behaviour for requests from extension pages is **unverified** here, so test it on one device. Firefox
+153 and later have the same two settings in Firefox's own `ExtensionSettings` policy (there, a host pattern takes no path).
 
 ## Enterprise build: your hosts and policy compiled in
 
 ```
 npm run build:enterprise -- enterprise/<name>.json        # writes dist-enterprise/
 node build.js --enterprise enterprise/<name>.json --out <folder>
+node build.js --browser firefox --enterprise enterprise/<name>.json   # Firefox: writes dist-firefox-enterprise/
 ```
 
 Copy `enterprise/example.json`, put in your instances, your AI endpoint and your policy, and build. The config uses the keys of the
@@ -267,7 +275,7 @@ table above, written exactly (lower case, canonical addresses), plus three build
 | `aiBaseUrl` | for `azure` and `custom`; optional for `anthropic` and `openai` (their own API is used); for preset providers (Gemini, Mistral, Groq, DeepSeek, OpenRouter, Ollama) leave it out or write their fixed address | The AI address. https only, except `http://localhost` or `http://127.0.0.1` for a model on the person's computer. |
 | any other policy key | no | Compiled in as written (see "What the compiled-in policy does"). |
 | `label` | no | A short name shown next to the version (`version_name`), for example `Acme`. |
-| `updateUrl` | no | The https address of your update manifest, for a self-hosted, force-installed build (`update_url` in the manifest). |
+| `updateUrl` | no | The https address of your update manifest, for a self-hosted, force-installed build (`update_url` in the manifest). A Firefox build writes it as `browser_specific_settings.gecko.update_url`, and there it must be the address of `updates.json`, not `update.xml`: use a separate config for Firefox (see "Firefox"). |
 | `$comment` | no | Ignored. |
 
 The build stops, with a message saying what to write instead, on anything else: an unknown key, a wrong type, an address that is not
@@ -307,6 +315,8 @@ ignores.
 
 This is the route when Agent Buddy is not in the Chrome Web Store or the Edge Add-ons site. The browsers install it from an address
 you control and check that address for new versions by themselves. `scripts/selfhost.js` makes the files; no other tool is needed.
+This part is for Chrome and Edge. Firefox needs a package signed by Mozilla, so its steps differ: see "Self-hosted Firefox, step by step"
+below.
 
 **What you need first**
 
@@ -364,13 +374,143 @@ and key (same header size and layout; both verify and give the same id) and `tes
 The install on a managed computer and the update poll were **not** tried: do that with the pilot above and tell us what the browser
 says if it refuses.
 
+## Firefox
+
+Agent Buddy for Firefox is the same extension, built for Firefox: `node build.js --browser firefox` writes `dist-firefox/`, and
+`node build.js --browser firefox --enterprise enterprise/<name>.json` writes `dist-firefox-enterprise/`. Its add-on id is
+`agentbuddy@agentbuddy`. Firefox knows the add-on by that id, and every Firefox policy names it.
+
+### Which Firefox
+
+| Channel | What works |
+|---|---|
+| Any | Firefox 128 or later (the build's `strict_min_version` is `128.0`). An older Firefox refuses to install it. |
+| ESR | ESR 128, ESR 140 and ESR 153 are all new enough. Mozilla now updates only ESR 153 (153.6.0 in November 2026); ESR 128 and ESR 140 get no more security fixes, so move to ESR 153. ESR 115, which Mozilla still patches for old Windows and macOS, is too old. |
+| Release | Any current release. |
+
+### Installing
+
+| Route | When | How |
+|---|---|---|
+| Temporary | Testing on one computer | `about:debugging` > This Firefox > Load Temporary Add-on, then choose `manifest.json` in `dist-firefox/`. Works in any Firefox, signed or not, until Firefox restarts. The add-on id is fixed, so a managed policy applies to it too. |
+| Listed on addons.mozilla.org (AMO) | Agent Buddy's publisher lists it publicly | People install it from AMO and Firefox updates it from there. A listed version has no update address of its own (AMO refuses `gecko.update_url`). In `ExtensionSettings`, `install_url` is `https://addons.mozilla.org/firefox/downloads/latest/agentbuddy@agentbuddy/latest.xpi`. |
+| Signed, not listed ("On your own" on AMO) | You host it yourself | Mozilla signs the package without listing it, and you serve the `.xpi` and `updates.json` from your own https address. Steps below. |
+| For everyone in the organisation | Managed computers | Firefox's `ExtensionSettings` policy installs it from `install_url`: `force_installed` (people cannot remove or disable it) or `normal_installed` (they can disable it). The policy files below do this. |
+
+**Signing.** Release and Beta Firefox install only add-ons signed by Mozilla. An unsigned build installs only in Firefox ESR, Developer
+Edition or Nightly, after `xpinstall.signatures.required` is set to `false` in `about:config`. Mozilla recommends signing without
+listing instead, and so do we. Signing happens on AMO, done by a person with the organisation's own account. No script here signs in to
+AMO, asks for an AMO login or keeps an API key.
+
+Before you sign:
+
+- AMO accepts an add-on id from one account only: the first one to submit it. If `agentbuddy@agentbuddy` is already taken on AMO (for
+  example by Agent Buddy's publisher), your own build needs its own id. The build has no option for another id yet.
+- AMO asks for the source when a tool bundles the files, as esbuild does here. Upload the source of that version with
+  `package-lock.json`, and point to the build steps in `docs/review-pack/README.md` section 1.
+- Mozilla's reviewers can read what you upload. An enterprise build carries your instance addresses, your AI address and your policy.
+  If that is not acceptable, sign the normal build and set everything through the managed policy.
+- Each version is signed on its own: up to 24 hours, longer if Mozilla reviews it by hand.
+
+### Self-hosted Firefox, step by step
+
+1. Choose the https address the files will be served from, for example `https://extensions.corp.example/agentbuddy`. As for Chrome and
+   Edge: any static file server, with a certificate the computers trust.
+2. Build with the update address in it. In an enterprise config for Firefox, set
+   `"updateUrl": "https://extensions.corp.example/agentbuddy/updates.json"` and run
+   `node build.js --browser firefox --enterprise enterprise/<name>.json`. The normal build has no update address: Firefox 151 and later
+   take it from the policy files below, but Firefox 128 to 150 would never update it.
+3. `node scripts/selfhost.js firefox --base-url https://extensions.corp.example/agentbuddy` (add `--dist <folder>` when both
+   `dist-firefox-enterprise/` and `dist-firefox/` hold a build). It writes `selfhost/out/firefox/agentbuddy-<version>-unsigned.zip`
+   and `README.txt`, the signing steps. It stops if the build looks for updates anywhere but `<base-url>/updates.json`.
+4. Sign it on AMO: "Submit a New Add-on", then "On your own" (for a later version, upload it on the add-on's own page so AMO keeps it
+   as the same add-on). Upload the zip, answer the source-code question, wait for the email, then download the signed `.xpi`.
+5. `node scripts/selfhost.js firefox --base-url https://extensions.corp.example/agentbuddy --xpi <the signed .xpi>`. It checks that
+   the file carries Mozilla's signature files (Firefox checks the signature itself when it installs), names an add-on id and looks for
+   updates at `<base-url>/updates.json`. Then it writes `selfhost/out/firefox/`:
+
+   | File | What it is |
+   |---|---|
+   | `agentbuddy-<version>.xpi` | The signed package, as AMO gave it back. `updates.json` points at it. |
+   | `agentbuddy.xpi` | The same file under a fixed name. The policy installs from it. Replace it at every release. |
+   | `updates.json` | What Firefox checks for new versions (about once a day): this version, its address, its SHA-256. |
+   | `policies/` | `firefox-windows.reg`, `firefox-macos.mobileconfig` and `firefox-policies.json` (below), with your address and the package's add-on id. |
+   | `README.txt`, `SHA256SUMS` | The steps, and the hashes of the files above. |
+
+6. Upload both `.xpi` files and `updates.json` to the address. Keep the older versioned `.xpi` files there for a while.
+7. The first time only: deploy one policy file (below).
+
+Why a fixed name: once the installed copy came from another address (an update comes from the link in `updates.json`), Firefox
+downloads `install_url` again at every start, and Firefox 128 installs whatever version it finds there, an older one included. One
+address that always holds the newest package keeps every computer on the newest.
+
+### Policy files for Firefox
+
+`docs/review-pack/policies-firefox/` holds the same three files with the example address and the recommended profile
+(`node scripts/selfhost.js firefox-samples` writes them from `recommended-policy.json`; `tests/selfhost-firefox.test.js` checks they
+are current). Replace the example addresses and values with your own.
+
+| File | Where it goes |
+|---|---|
+| `firefox-windows.reg` | Windows: `HKLM\SOFTWARE\Policies\Mozilla\Firefox`. `ExtensionSettings` holds the install entry, and `3rdparty\Extensions`, value `agentbuddy@agentbuddy`, holds the Agent Buddy policy, each as one JSON text (REG_SZ). Deploy with Group Policy Preferences, Intune or your usual tool. |
+| `firefox-macos.mobileconfig` | macOS: a configuration profile for your MDM, for the preference domain `org.mozilla.firefox` (inside `mcx_preference_settings`, as Mozilla documents for profiles). It also sets `EnterprisePoliciesEnabled`: Firefox on macOS reads no policy without it. Give the `PayloadUUID` values new UUIDs. |
+| `firefox-policies.json` | Any system, without a management tool: save it as `policies.json` in `/etc/firefox/policies/` (Linux), in a `distribution` folder next to `firefox.exe` (Windows) or in `Firefox.app/Contents/Resources/distribution/` (macOS). Firefox reads one such file: if there is one already, add both entries to it. |
+
+The install entry in `ExtensionSettings`:
+
+| Key | Value | Why |
+|---|---|---|
+| `installation_mode` | `force_installed` | Installed for everyone; people cannot remove or disable it. `normal_installed` would let them disable it. |
+| `install_url` | `<base-url>/agentbuddy.xpi` | Where Firefox downloads it from. |
+| `update_url` | `<base-url>/updates.json` | Firefox 151 and later check this address for updates, in place of the build's own. Older versions ignore the key. |
+| `default_area` | `navbar` | The Agent Buddy button sits on the toolbar, not in the extensions menu (Firefox 113 and later). In Firefox that button is how people open the panel. |
+
+- **`ExtensionSettings` is one policy for every add-on.** If your organisation already sets it (Mozilla's ADMX templates write it as
+  one JSON value), add the `agentbuddy@agentbuddy` entry to yours. Deploying ours as it is replaces yours, with any rule for `*`.
+- Use one route per computer. Firefox combines the registry (or the macOS profile) and `policies.json` policy by policy: when both set
+  `ExtensionSettings` or `3rdparty`, the registry or the profile wins for that whole policy, not entry by entry.
+
+### How Firefox reads the policy
+
+- **No schema check.** Firefox does not support `managed_schema.json` and hands every value to Agent Buddy as it is. Agent Buddy's own
+  reading still applies (it ignores unknown keys and values that make no sense, and an `aiBaseUrl` that is not valid blocks every AI
+  call), but `about:policies` shows no error for a value of the wrong type.
+- **True and false must be real true and false.** From the registry or a macOS profile, Firefox passes a REG_DWORD or a `<true/>` on
+  as `1` or `0`, and Agent Buddy reads true/false keys only as a real `true` or `false`. `disablePageBar` set to 1 would be ignored
+  (the bar stays) and `aiEnabled` set to 0 would leave AI on. That is why the `.reg` file and the profile carry the policy as one JSON
+  text, as Mozilla recommends. In `policies.json`, write `true` and `false`.
+- Lists and objects (`orgSnippets`, `orgFormats`, `defaultDashboard`) go inside that JSON text as they are; there are no numbered
+  subkeys.
+- **Changes need a restart.** Firefox reads the policy when it starts. After a change, restart Firefox; until then Agent Buddy keeps
+  the old policy (the content script's check every 30 seconds sees no change either).
+- **Check it** on one computer. Restart Firefox and open `about:policies`: "Active Policies" lists `ExtensionSettings` and `3rdparty`
+  with your values, and "Errors" lists anything Firefox could not read (for example JSON text with a typo). Then open Agent Buddy's
+  Settings: each setting your policy fixes shows "Set by your organisation". `node scripts/check-policy.js` does not read the Firefox
+  files yet. To check the Agent Buddy part, save the object under `3rdparty` > `Extensions` > `agentbuddy@agentbuddy` as a `.json`
+  file and run it on that file.
+
+### What a person notices in Firefox
+
+| | In Firefox |
+|---|---|
+| The panel | Firefox's sidebar. The Agent Buddy button on the toolbar opens it, or Alt+Shift+1 (Control+Shift+1 on a Mac). |
+| The bar on the page (the dock) | Firefox does not let a click on a web page open the sidebar. When the sidebar is closed, the dock says "Click the Agent Buddy button in your browser toolbar. The action starts in the panel." The action starts if the panel is opened within 30 seconds. |
+| Keyboard shortcuts | Changed in `about:addons`: the gear icon, then Manage Extension Shortcuts. |
+
+**What was and was not verified here**: the files follow Mozilla's documentation (firefox-admin-docs.mozilla.org: "3rdparty",
+"ExtensionSettings" and "Configuring policies"; extensionworkshop.com: signing, self-distribution and updates) and Firefox's own source
+for how it reads the registry and installs from `install_url`. `tests/selfhost-firefox.test.js` checks that each file reads back to
+exactly the recommended policy. Nothing was tried on a managed computer, and no package was signed on AMO: pilot on one computer and
+check `about:policies` before everyone.
+
 ## Installing for everyone
 
 1. Build: `npm ci && npm run build` (or the enterprise build above). The `dist/` (or `dist-enterprise/`) folder is the extension.
-2. Pilot: load the folder unpacked in a test profile. Record the SHA-256 list of the files (`npm run repro -- --write SHA256SUMS`).
+2. Pilot: load the folder unpacked in a test profile (Firefox: `about:debugging` > This Firefox > Load Temporary Add-on). Record the
+   SHA-256 list of the files (`npm run repro -- --write SHA256SUMS`).
 3. Rollout: publish through the organisation's controlled channel. Either a private/unlisted store listing, or force-install with
    `ExtensionInstallForcelist` pointing at a self-hosted update manifest (the samples above include it). Pin the version; review each
-   update.
+   update. Firefox: a package signed by Mozilla, installed with the `ExtensionSettings` policy (see "Firefox").
 4. Browser access to a site: in the normal build the person grants it per site when they turn Agent Buddy on (the manifest declares no
    static host permissions). In the enterprise build access to your hosts is granted at install and no other site can be requested.
 

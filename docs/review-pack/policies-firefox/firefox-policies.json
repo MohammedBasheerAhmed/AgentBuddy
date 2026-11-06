@@ -1,0 +1,41 @@
+{
+  "policies": {
+    "ExtensionSettings": {
+      "agentbuddy@agentbuddy": {
+        "installation_mode": "force_installed",
+        "install_url": "https://extensions.corp.example/agentbuddy/agentbuddy.xpi",
+        "update_url": "https://extensions.corp.example/agentbuddy/updates.json",
+        "default_area": "navbar"
+      }
+    },
+    "3rdparty": {
+      "Extensions": {
+        "agentbuddy@agentbuddy": {
+          "allowedInstances": [
+            "https://acme.service-now.com",
+            "https://acme-test.service-now.com"
+          ],
+          "aiProvider": "openai",
+          "aiBaseUrl": "https://ai-gateway.corp.example/v1",
+          "allowedModels": [
+            "gpt-5-mini"
+          ],
+          "piiMode": "strict",
+          "previewMode": "always",
+          "keyStorage": "session",
+          "allowHrContent": false,
+          "sensitiveTablePrefixes": [
+            "x_acme_hr_"
+          ],
+          "disabledFeatures": [
+            "coaching-snapshot"
+          ],
+          "tokenBudgetPerDay": 200000,
+          "auditExport": true,
+          "coachingEnabled": false,
+          "disablePageBar": false
+        }
+      }
+    }
+  }
+}

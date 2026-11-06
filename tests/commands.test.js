@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { COMMAND_FEATURES, handleCommand } from '../src/background/commands.js';
 import { normalizePolicy } from '../src/policy/policy.js';
+import { openPanel } from '../src/lib/platform.js';
 
 // The keyboard shortcuts: which key opens the panel, which one starts an action, and that the rules of the page bar hold for them too.
 
@@ -96,6 +97,21 @@ test('no request is left when it should not start: unknown command, no tab, othe
   r = deps({ aiOn: async () => false });
   assert.deepEqual(await handleCommand('summarise', TAB, r.deps), { opened: true, started: false }, 'AI is off: only Insights items are offered, not Summarise');
   assert.deepEqual(r.calls.launches, []);
+});
+
+test('Firefox: a shortcut opens the sidebar, because it is asked while the key press is still being handled', async () => {
+  // Firefox opens its sidebar only during the browser's handling of a click or key press: the listener's first turn, nothing after.
+  let keyPress = false;
+  const sidebarAction = {
+    open: () => (keyPress ? Promise.resolve() : Promise.reject(new Error('sidebarAction.open may only be called from a user input handler'))),
+    isOpen: async () => false,
+  };
+  const { calls, deps: d } = deps({ openPanel: (tabId) => openPanel({ sidebarAction }, tabId) });
+  keyPress = true;
+  const done = handleCommand('summarise', TAB, d);
+  keyPress = false;
+  assert.deepEqual(await done, { opened: true, started: true });
+  assert.equal(calls.launches.length, 1);
 });
 
 test('a panel that cannot be opened does not stop the request being left, and a failure anywhere leaves the panel open', async () => {

@@ -4,22 +4,29 @@
 // externally_connectable is not declared. Every message that has a side effect must come from one of this extension's own
 // pages (side panel, settings). The check is against the frame that SENT the message (sender.origin, falling back to
 // sender.url), never the tab's top-level URL: a ServiceNow tab can hold frames from anywhere.
+//
+// "This extension" is `own` = { id, origin } (src/lib/platform.js extensionIdentity): sender.id must be its id AND the sender's origin
+// must be exactly the origin of its own pages. In Chrome and Edge that origin is chrome-extension://<id>; in Firefox it is
+// moz-extension://<a random id made at install>, which is not the add-on's id, so the id alone cannot stand for it.
 
 import { MSG } from './messages.js';
 import { tm } from '../i18n/core.js';
+import { extensionUrlOrigin } from './platform.js';
 
 // (an English text marked for the catalogue; it crosses to the panel as a message, and plainError there shows it in Arabic)
 export const EXTENSION_ONLY = tm("This request is only allowed from Agent Buddy's own pages.");
 
 function originOfUrl(url) {
+  // Extension pages (chrome-extension:, moz-extension:, safari-web-extension:) have non-special schemes, whose URL.origin is
+  // opaque outside the browser: platform.js builds theirs from the scheme and the host.
+  const extension = extensionUrlOrigin(url);
+  if (extension) return extension;
   let parsed;
   try {
     parsed = new URL(String(url || ''));
   } catch {
     return '';
   }
-  // Non-special schemes have an opaque URL.origin outside the browser.
-  if (parsed.protocol === 'chrome-extension:') return parsed.host ? `chrome-extension://${parsed.host}` : '';
   return parsed.origin === 'null' ? '' : parsed.origin;
 }
 
@@ -32,11 +39,25 @@ export function senderOrigin(sender) {
   return originOfUrl(sender?.url);
 }
 
-/** True when `sender` is one of this extension's own pages (not a content script, not another extension). */
-export function isFromExtensionPage(sender, runtimeId) {
-  if (!runtimeId || !sender || sender.id !== runtimeId) return false;
-  const origin = senderOrigin(sender);
-  return Boolean(origin) && origin === `chrome-extension://${runtimeId}`;
+// `own` is usable only when it names an id and an extension page's origin. A web page's origin given by mistake would otherwise turn
+// this extension's content scripts into "own pages". In Chrome and Edge the origin's host IS the id, and that is held exactly.
+function ownOrigin(own) {
+  const id = typeof own?.id === 'string' ? own.id : '';
+  const origin = typeof own?.origin === 'string' ? own.origin : '';
+  if (!id || !origin || extensionUrlOrigin(origin) !== origin) return '';
+  if (origin.startsWith('chrome-extension:') && origin !== `chrome-extension://${id}`) return '';
+  return origin;
+}
+
+/**
+ * True when `sender` is one of this extension's own pages (not a content script, not another extension).
+ * @param {object} sender the browser's MessageSender
+ * @param {{ id: string, origin: string }} own this extension (src/lib/platform.js extensionIdentity)
+ */
+export function isFromExtensionPage(sender, own) {
+  const origin = ownOrigin(own);
+  if (!origin || !sender || sender.id !== own.id) return false;
+  return senderOrigin(sender) === origin;
 }
 
 /**
@@ -60,15 +81,20 @@ export function contentScriptOrigin(sender, runtimeId) {
  *   'ignore'  anything else, and everything once the script has retired
  * A content script's runtime.onMessage only ever hears this extension (web pages and other extensions cannot reach it), but the
  * sender is checked anyway.
+ * @param {{ id: string, origin: string }} own this extension (src/lib/platform.js extensionIdentity)
  */
-export function contentMessageAction(message, sender, runtimeId, retired = false) {
-  if (retired || !runtimeId || !sender || sender.id !== runtimeId) return 'ignore';
+export function contentMessageAction(message, sender, own, retired = false) {
+  const id = typeof own?.id === 'string' ? own.id : '';
+  if (retired || !id || !sender || sender.id !== id) return 'ignore';
   if (message && message.type === MSG.SITE_OFF) return 'retire';
-  return isFromExtensionPage(sender, runtimeId) ? 'answer' : 'ignore';
+  return isFromExtensionPage(sender, own) ? 'answer' : 'ignore';
 }
 
-/** Throws unless the message came from this extension's own pages. */
-export function checkExtensionSender(sender, runtimeId) {
-  if (!isFromExtensionPage(sender, runtimeId)) throw new Error(EXTENSION_ONLY);
+/**
+ * Throws unless the message came from this extension's own pages.
+ * @param {{ id: string, origin: string }} own this extension (src/lib/platform.js extensionIdentity)
+ */
+export function checkExtensionSender(sender, own) {
+  if (!isFromExtensionPage(sender, own)) throw new Error(EXTENSION_ONLY);
   return 'extension';
 }

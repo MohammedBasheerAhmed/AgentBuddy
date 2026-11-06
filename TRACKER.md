@@ -8,14 +8,26 @@ progress log). **Next session: start at "Where to pick up" just below.**
 (built, tested and pushed; waiting for you to see it working, best on the real instance in V1) · `Partly built` (the row says
 what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` (only you can do it) · `Dropped`.
 
-## Where to pick up (updated 2026-11-05)
+## Where to pick up (updated 2026-11-06)
 
-**Focus layout of 2026-11-05 (newest, after your leaders' "too many features, it looks cluttered"):** every tab of the Ticket screen
+**More browsers, 2026-11-06 (newest):** you asked for Agent Buddy in Chrome, Edge, Firefox and Safari and approved five phases
+(table rows R16 to R20). Phases 1 and 2 are built, checked and committed on 2026-11-06 (not pushed yet):
+one module knows how the browsers differ (`src/lib/platform.js`); the sender check accepts the extension's own pages in every browser
+(`src/lib/senderCheck.js`); one build per browser family (`node build.js --browser firefox` writes `dist-firefox/`; `dist/` stays the
+Chrome and Edge build, unchanged); the Firefox build (its sidebar, Firefox 128 or later), its policy files and self-hosted install
+(`docs/deployment.md`, "Firefox"), an automated run in real Firefox (`npm run e2e:firefox`), and the documents (`docs/security.md`
+section 3A, the review pack, README, build rule 12, `docs/contracts.md`). Firefox works like Chrome except one thing you approved: with
+the sidebar closed, a click on the dock cannot open it, so the dock asks for the toolbar button and the action starts if the panel
+opens within 30 seconds. Next: the Edge check with you on dev364920 (phase 3, `docs/live-questions/edge.md`), then Firefox on dev364920
+(`docs/live-questions/firefox.md`; you install Firefox). Safari waits for a Mac with Xcode (phase 4). Release packages per browser,
+store accounts, the addons.mozilla.org decisions and the pull into the ifBash copy are phase 5.
+
+**Focus layout of 2026-11-05 (after your leaders' "too many features, it looks cluttered"):** every tab of the Ticket screen
 shows five, one per pain point you chose (understand the ticket, find the fix, the same caller, reply, close well); everything else is
 one step away in All tools (the header's grid button, Ctrl+K, or "More for this ticket" at the end of each half). New: the card
 "Caller's other tickets" (N30) and the AI action "Brief me on this caller" (AI31). The side rail is off unless Settings turns it on.
 Mockup boards "Focused" and "All tools" on https://claude.ai/artifact/WMmZMaVbxigc1WP3UrUgj3; spec `docs/focus-layout.md`; table row
-R15. Built and committed locally; seen in the fake ServiceNow only: look at it in the real panel on dev364920.
+R15. Built and pushed on 2026-11-05 (`f8c80f9`); seen in the fake ServiceNow only: look at it in the real panel on dev364920.
 
 **Side rail layout of 2026-11-05 (partly superseded by the focus layout above):** the screens in a bar at the bottom, everything a screen offers in a rail on the right (the
 Ticket screen: every Insights card or every AI action; the other screens: their sections), the Ticket screen's top compact with
@@ -33,9 +45,10 @@ still yours to decide (one meaning of a ticket's state across five classifiers; 
 https://claude.ai/artifact/FG1sRNpKMA8e5LVjCAfbyC: today, the mockup and the built panel side by side). Built and pushed on
 2026-11-05 (table row R13); seen in the fake ServiceNow only: look at it in the real panel on dev364920 (the side panel itself cannot be driven by automation).
 
-Everything above but the focus layout is on GitHub. Status: 91 ready for review, 3 need you (V1 to V3). On the real instance: 1 seen
-fully, 4 partly; none of R11 to R15 yet. The functions page (https://claude.ai/artifact/KSd7hDgkEyR5RR7d8q7iQX) shows the
-table in section 3.
+Everything above but the multi-browser work is on GitHub (up to `f8c80f9`). Status: 93 ready for review (R16 and R17
+committed, not pushed yet), 4 need you (V1 to V3, R18), 1 partly built (R20), 1 agreed for later (R19). On the real
+instance: 1 seen fully, 4 partly; none of R11 to R20 yet. The functions page (https://claude.ai/artifact/KSd7hDgkEyR5RR7d8q7iQX) shows
+the table in section 3 (not yet R16 to R20).
 
 **Done since the last wrap-up (2026-11-01, one long session):**
 
@@ -76,6 +89,10 @@ table in section 3.
 
 **When you say "continue", Claude starts here:**
 
+0. **Finish the multi-browser work.** Integrate and check phases 1 and 2 (`npm run verify`, `node scripts/traceability.js`,
+   `npm run e2e`, `npm run e2e:firefox`), fill in the Firefox `setAccessLevel` result in `docs/security.md` limit 17, then commit
+   (push when you say). Then phase 3 with you: `docs/live-questions/edge.md` in Edge on dev364920 (it can go with V1 below), and
+   `docs/live-questions/firefox.md` once Firefox is installed.
 1. **V1, the real-instance walk-through, whenever you are at Chrome.** Reload Agent Buddy in the already-open Chrome from
    `D:\AgentBuddy\dist` (no separate automation window), sign in to dev364920 yourself, and walk a real ticket screen by screen, in
    English and in Arabic. Answer the open questions in `docs/live-questions/`, `i18n.md` first (does the Arabic read well, is the layout
@@ -92,7 +109,8 @@ table in section 3.
 
 How to check a change: `npm run verify` (unit tests, compile check, `traceability.js --check` and the Arabic check, the same gates as
 CI; run `node scripts/traceability.js` without `--check` to rewrite a stale review map), then `npm run e2e` (builds `dist/`, then real
-Chrome; `npm ci` installs puppeteer-core; README "End-to-end" says what else it needs). Rules for every change: `docs/build-rules.md`.
+Chrome; `npm ci` installs puppeteer-core; README "End-to-end" says what else it needs) and `npm run e2e:firefox` (the Firefox build
+in real Firefox, `e2e/firefox/`). Rules for every change: `docs/build-rules.md`.
 
 ---
 
@@ -246,7 +264,7 @@ resolver), `REQ` (request fulfilment), `CSM` (customer service), `HR` (HR servic
 instance), `Partly` (the core existed but was hidden, limited or elsewhere), `New` (not built). **Real check**: seen working on
 dev364920 (`Seen`, `Partly`, `Not yet`, `-` for new). **Status**: see the top of this file.
 
-**Totals:** 94 rows. Built 60 · Partly 10 · New 24. Seen on the real instance: 1 fully, 4 partly, 68 not yet (21 have nothing to see).
+**Totals:** 99 rows. Built 60 · Partly 10 · New 29. Seen on the real instance: 1 fully, 4 partly, 71 not yet (23 have nothing to see).
 
 ### 3.1 Foundation (every screen stands on it)
 
@@ -393,6 +411,11 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | R13 | Redesign: a calmer, clearer panel | - | - | New | The look of round 3 and R9; you said the UI and layout were not great | From the mockup you approved ("calm and focused"): one accent colour, a grey AI mark, no boxes in boxes; the check before sending readable, hidden values as chips; My work and Team without repeated numbers; Write and Knowledge with the articles for the open ticket; Settings as a menu with switches. Found on the way: a card that could not read its data said "all clear"; fixed | Not yet | Ready for review |
 | R14 | Side rail: every option of the screen on the right, the screens at the bottom | - | - | New | The ticket's first screen was the facts, Needs you now, Summarise and a large quick-actions block; Insights and AI Assist started near the bottom | From the mockup you approved: the Ticket screen's top compact with Insights \| AI Assist under it; a rail on the right lists everything for the half on show (every Insights card, a dot when one needs you; every AI action, a click starts it with the preview first), names on hover or with "Show names"; My work, Team, Write and Knowledge list their sections there; the screens in a bar at the bottom with their names; Settings > Side rail hides and orders the rail per kind of record and half. Right side panel only, as you decided. `docs/rail-layout.md`; scenarios `x`, `zw` | Not yet | Ready for review |
 | R15 | Focus layout: five pain points per tab, everything else in All tools | - | - | New | Every Insights card and every AI action on the Ticket screen and in its rail; your leaders said too many features, cluttered | From the mockup you approved: Insights shows five rows (understand the ticket, find the fix, the same caller, reply, close well), each with its one line and a dot when it needs a look, opening in place; AI Assist shows the five actions for them, one filled Start for the ticket's state; the rest in All tools (the palette, grown into a sheet with groups: more for this ticket, Go to, Panel), opened from the header, Ctrl+K or "More for this ticket" at the end of each half; "Ask about this ticket" opens from there; the colours button left the header; the side rail is off unless Settings turns it on (then the five and All tools). `docs/focus-layout.md`; scenarios `x`, `zx`, `zw` | Not yet | Ready for review |
+| R16 | More browsers, phase 1: the browser layer, the sender check, one build per browser | - | - | New | Chrome and Edge only: the service worker called `chrome.sidePanel` itself; the sender check accepted only `chrome-extension://<id>`; one build, `dist/` | Built and checked 2026-11-06, committed (not pushed yet); the Chrome e2e still passes 1,193 of 1,193. `src/lib/platform.js` is the only code that knows how browsers differ (which panel, how it opens, the toolbar button, the origin of the extension's pages, the shortcuts page; by what the API offers, never the user agent); the sender check compares the sender's origin exactly with the origin of the extension's own pages from `runtime.getURL('')` (Chrome and Edge still exactly `chrome-extension://<id>`); `node build.js --browser chromium\|firefox`, the browser table and the Firefox manifest in `scripts/lib/browsers.js`; the compile check covers both; `repro-check --browser firefox`; build rule 12. `tests/platform.test.js`, `tests/senderCheck-content.test.js`, `tests/manifest-firefox.test.js` | Not yet | Ready for review |
+| R17 | More browsers, phase 2: Firefox | - | - | New | None | Built and checked 2026-11-06, committed (not pushed yet); `npm run e2e:firefox` passes 56 of 56. The run found one Firefox bug, fixed: the page bridge could not read the content script's request (`src/content/pageBridge.js`, a copy made with Firefox's `cloneInto`; `tests/pageBridge-firefox.test.js`). `dist-firefox/` for Firefox 128 or later: the sidebar, the background as an event page, the gecko id `agentbuddy@agentbuddy`; the dock with the sidebar closed asks for the toolbar button and the action starts if the panel opens within 30 seconds (your decision); Settings shows "Change the shortcuts" only where Firefox can open its page (137 and later); "Copy diagnostics" names Firefox; policy files (`docs/review-pack/policies-firefox/`) and the self-hosted install through AMO signing (`docs/deployment.md`, "Firefox"); `npm run e2e:firefox`. Two Firefox limits the run found (its two warnings; `docs/security.md` 3A and limit 17): Firefox cannot close `storage.local` to the content script (no `setAccessLevel`; the AI key is never there), and a site whose address has a port cannot be turned on (ServiceNow instances have none) | Not yet (`docs/live-questions/firefox.md`) | Ready for review |
+| R18 | More browsers, phase 3: Edge on the real instance | - | - | New | The same package as Chrome; the Edge checks were scattered over `docs/live-questions/` | Walk `docs/live-questions/edge.md` in Edge on dev364920 with you (the dock opening the side panel, shortcuts, right to left, storage access, a managed Edge) | Not yet (`docs/live-questions/edge.md`) | Needs you |
+| R19 | More browsers, phase 4: Safari | - | - | New | None | The panel in a window of its own (the places are marked "Safari" in `src/lib/platform.js`), Apple's converter in Xcode, an Apple developer account. Waits for a Mac with Xcode | - | Agreed |
+| R20 | More browsers, phase 5: release per browser | - | - | New | `npm run package`: one zip, for Chrome and Edge | Done: `npm run package` writes `release/agentbuddy-<version>.zip` (Chrome and Edge) and `release/agentbuddy-<version>-firefox.zip`. Left: store accounts when you release (Chrome Web Store $5 once, Edge Add-ons free, addons.mozilla.org free, Apple $99 a year); for addons.mozilla.org, what `data_collection_permissions` declares (it is required for a new submission; masked ticket text goes to the AI endpoint the person or organisation chose), that AMO accepts an add-on id from one account only (the first to submit it), and that AMO asks for the source because the build bundles the files; pull everything into the ifBash copy (`D:\ifBashAgentBuddy`, `git pull agentbuddy main`) | - | Partly built |
 
 ---
 
@@ -416,6 +439,8 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-10-31 | **Finish everything** that was partly built: N1 (refresh after Save), N4 (notes typed on a Workspace), N17 (organisation dashboard: policy `defaultDashboard`), N28 (priority accounts: policy `priorityAccounts`, a list of account names, since ServiceNow has no standard column), AI0.1 (unlock the key in the panel), AI9 (email draft into the email form, which opens in a new tab; the subject keeps the ticket number), and R7. R3, R5 and R6 stay agreed for later. |
 | 2026-11-01 | **Push round 3 to GitHub** (`main`, as for every earlier round). The MohammedBasheerAhmed login got the `workflow` permission so the CI file could be pushed. |
 | 2026-11-01 | R3, R5 and R6 were held back from round 3 by Claude, not by you; they wait for three decisions (store or self-hosted, minify, shortcuts and languages). On "continue", Claude asks those first and meanwhile builds R1 (e2e on GitHub) and the accessibility and dark-mode part of R6. |
+| 2026-11-06 | **Agent Buddy in Chrome, Edge, Firefox and Safari, in five phases** (approved): 1 the browser layer, the sender check and one build per browser; 2 Firefox; 3 Edge checked on dev364920 with you; 4 Safari (its panel in a window of its own); 5 release packages per browser, the documents, the pull into the ifBash copy. Phases 1 to 3 first; Safari waits until you have a Mac with Xcode. One source; one package for Chrome and Edge (`dist/` unchanged), one for Firefox. |
+| 2026-11-06 | Firefox, a click on the dock while the sidebar is closed (approved): the dock shows the existing "Click the Agent Buddy button in your browser toolbar" note, and the action starts if the panel opens within 30 seconds. |
 
 ## Baseline (2026-10-30, before any change)
 
@@ -453,3 +478,4 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | 2026-11-05 | **Screens at the bottom, every option in a side rail.** You said the Ticket screen's first screen was the ticket, Needs you now, Summarise and a big quick-actions block, with Insights and AI Assist near the bottom. Mockup (https://claude.ai/artifact/WMmZMaVbxigc1WP3UrUgj3) and your calls: right-side panel only (no console-style docking); the screens stay at the bottom; "the right side has all the options" for the half on show, on every screen. Lead: the rail (`src/sidepanel/shell/SideRail.jsx`, `railStore.js`), the bar of screens, `src/features/railLayout.js`, settings `railNames`/`railLayout`/`railByState`. Three agents in parallel from `docs/rail-layout.md`: the Ticket screen (compact top with "Ticket details", the SLA/customer/outage facts as the first Insights rows, no next step and no quick bar, every card and every AI action in the rail, one card alone), the other screens (their sections in the rail), Settings > Side rail (hide and order per kind and half; the page tab's actions). Found while integrating: the rail's own list scrolled "Show names" out of sight with 16 AI actions, and long names were cut; fixed (the list scrolls, the button stays at the foot, names wrap). Unit 3,050; end-to-end 1,169 of 1,169 (x and zw rewritten). |
 | 2026-11-05 | **Pushed to `main`** (`8de6fc4..336e517`: the audit, the redesign and the side rail, held locally until you said "push to github"); CI run 41964561739 passed all four jobs (checks on Linux and Windows, end-to-end on the build and on the minified build). Table section 3 brought up to date: rows R12 (audit), R13 (redesign) and R14 (side rail) added, F6, N1, R9 and R10 say what the side rail changed; the functions page (https://claude.ai/artifact/KSd7hDgkEyR5RR7d8q7iQX) shows all 91 rows. |
 | 2026-11-05 | **Five pain points first, everything else in All tools (R15).** You showed Agent Buddy to your leaders: "looks promising but has too many features and looks cluttered"; solve the main pain points, three to five at most, and keep the rest separate. You chose the five (understand the ticket, find the fix, raised by the same caller, reply, close well), that every function stays "through some other way", and that the bottom bar keeps its five screens with five in each tab. Mockup boards "Focused" and "All tools", approved ("approved go ahead"). The lead wrote the shared pieces (`src/features/focus.js`, the All tools opener, launch ids `show:<card>` and `ask:ticket`, icons, `docs/focus-layout.md`); three agents in parallel built the Ticket screen with the new card N30, the new AI action AI31 ("Brief me on this caller"; found on the way: on an HR case the employee is listed only as the subject person, so a plain caller lookup found nobody; both now use one `callerOf`), and All tools with the header and Settings (`railShow`, the per-kind rail lists removed). Team needed no change (its dashboards have five sections or fewer). Found while integrating: All tools listed actions without the ticket's header and without the checklist's read (it missed the major incident updates on a priority 1 incident, and offered the checklist where the instructions have steps); the Ticket screen now hands both over. Unit 3,118; end-to-end 1,193 of 1,193. |
+| 2026-11-06 | **More browsers, phases 1 and 2 built and committed (R16, R17).** You asked for Agent Buddy in Chrome, Edge, Safari and Firefox (clients use different browsers) and approved five phases. Built with agents in parallel: the browser layer and the sender check (the old check would have refused Firefox's own sidebar: its pages are `moz-extension://<random id>`, not the add-on id), one build per browser family, the Firefox manifest, the Firefox policy files and self-hosted install, an automated run in real Firefox, and the documents (`docs/security.md` 3A, the review pack, README, build rule 12, contracts, `docs/live-questions/firefox.md` and the Edge checks gathered in `edge.md`). The integration check: lint, the compile check for both browsers, traceability and Arabic pass; unit tests 3,181 of 3,182 (the one failure is the date-bound ticket-rail test, which fails the same without these changes); e2e Chrome 1,193 of 1,193; e2e Firefox 56 of 56 with the two known Firefox limits as warnings. The same day, separately: the ifBash-branded copy at `D:\ifBashAgentBuddy` for a client demo. |

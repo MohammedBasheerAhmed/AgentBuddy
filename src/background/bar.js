@@ -88,7 +88,8 @@ export async function handleBarMessage(message, sender, deps) {
 
   // The browser opens the side panel only while the click that asked for it is still being handled, and that ends the first time
   // this function waits for anything. So the panel is opened first, before the checks below; if a check then fails the person has
-  // an open panel and nothing else (no action is started).
+  // an open panel and nothing else (no action is started). Firefox does not count a click on the page as one: its sidebar opens only
+  // from the toolbar button or a shortcut, so `opened` is true there only when the sidebar was open already (src/lib/platform.js).
   let opening = null;
   if (message.type === MSG.BAR_LAUNCH && FEATURE_ID_RE.test(String(message.featureId || ''))) {
     try {

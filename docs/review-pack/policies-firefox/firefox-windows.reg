@@ -1,0 +1,16 @@
+Windows Registry Editor Version 5.00
+
+; Agent Buddy for Firefox on Windows: installs it for everyone and sets the recommended locked-down policy.
+; 1. Replace the example instances, AI address, model and HR table prefix in the policy with your own.
+; 2. ExtensionSettings is ONE policy for every add-on. If you already set it (for example with the Firefox ADMX templates), do not
+;    import that value: it would replace yours. Add the "agentbuddy@agentbuddy" entry to your own instead.
+; 3. Deploy through Group Policy Preferences, Intune or your usual tool, restart Firefox, open about:policies and check that
+;    ExtensionSettings and 3rdparty are under Active policies.
+; Both values are JSON text (REG_SZ), as Mozilla documents for extension policy: as REG_DWORD values or subkeys, true and false
+; would reach Agent Buddy as 1 and 0, which it does not read as true and false.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Mozilla\Firefox]
+"ExtensionSettings"="{\"agentbuddy@agentbuddy\":{\"installation_mode\":\"force_installed\",\"install_url\":\"https://extensions.corp.example/agentbuddy/agentbuddy.xpi\",\"update_url\":\"https://extensions.corp.example/agentbuddy/updates.json\",\"default_area\":\"navbar\"}}"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Mozilla\Firefox\3rdparty\Extensions]
+"agentbuddy@agentbuddy"="{\"allowedInstances\":[\"https://acme.service-now.com\",\"https://acme-test.service-now.com\"],\"aiProvider\":\"openai\",\"aiBaseUrl\":\"https://ai-gateway.corp.example/v1\",\"allowedModels\":[\"gpt-5-mini\"],\"piiMode\":\"strict\",\"previewMode\":\"always\",\"keyStorage\":\"session\",\"allowHrContent\":false,\"sensitiveTablePrefixes\":[\"x_acme_hr_\"],\"disabledFeatures\":[\"coaching-snapshot\"],\"tokenBudgetPerDay\":200000,\"auditExport\":true,\"coachingEnabled\":false,\"disablePageBar\":false}"

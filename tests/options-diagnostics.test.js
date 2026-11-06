@@ -80,6 +80,8 @@ test('anything odd in settings or the log is left out rather than copied', () =>
   assert.match(text, /Model: default/);
   assert.ok(!/Abel/.test(text));
   assert.equal(browserName('Mozilla/5.0 ... Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'), 'Edge 131');
+  assert.equal(browserName('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0'), 'Firefox 128');
+  assert.equal(browserName('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'), 'Safari 17');
   assert.equal(browserName(''), '');
   assert.match(diagnosticsText({ manifest: { version: '0.1.0', host_permissions: ['https://acme.service-now.com/*'] } }), /Build: enterprise/);
 });

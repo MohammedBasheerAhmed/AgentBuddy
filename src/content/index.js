@@ -22,6 +22,7 @@ import { handleRead } from './reads.js';
 import { readHeader } from './header.js';
 import { portalInfo, surfaceOf } from '../context/surface.js';
 import { contentMessageAction } from '../lib/senderCheck.js';
+import { extensionIdentity } from '../lib/platform.js';
 import { handleFillField } from './fill.js';
 import { policyGuard } from './policyGuard.js';
 import { startBar } from './bar.js';
@@ -33,6 +34,9 @@ import { TAKEOVER_EVENT, contentTakeover, runtimeAlive } from './barLogic.js';
 // copy replaces an old one whose extension context is gone, and tells any other old copy to remove its bar.
 const runtime = chrome.runtime;
 const alive = () => runtimeAlive(runtime);
+// This extension's id and the origin of its own pages (chrome-extension://<id>; moz-extension://<uuid> in Firefox), asked once while
+// the extension context is alive: only those pages get answers (src/lib/senderCheck.js).
+const own = extensionIdentity(runtime);
 const decision = contentTakeover(window.__abContent);
 if (decision === 'replace') {
   try {
@@ -139,7 +143,7 @@ if (decision !== 'skip') {
     // Only this extension's own pages (the side panel, the full-page dashboard) can ask. chrome.runtime.onMessage never delivers
     // web-page messages; the sender's origin (not "is it in a tab") tells an extension page from a content script. The service
     // worker may say the site was turned off, after which nothing is answered (src/lib/senderCheck.js contentMessageAction).
-    const action = contentMessageAction(message, sender, chrome.runtime.id, retired);
+    const action = contentMessageAction(message, sender, own, retired);
     if (action === 'retire') {
       retire();
       sendResponse({ ok: true });

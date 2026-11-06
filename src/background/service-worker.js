@@ -1,10 +1,12 @@
-// Agent Buddy service worker. Deliberately small: it holds no keys, makes no AI calls and never talks to ServiceNow.
-// Its jobs are (1) open the side panel from the toolbar button, (2) register the content scripts on exactly the
+// Agent Buddy service worker (in Firefox the same file runs as an event page: it uses nothing that only a service worker has).
+// Deliberately small: it holds no keys, makes no AI calls and never talks to ServiceNow.
+// Its jobs are (1) open the panel from the toolbar button, (2) register the content scripts on exactly the
 // instances the person enabled (and the browser granted), (3) keep that registration in sync with the permissions, and
 // (4) answer the bar on the ServiceNow page: which actions it may show, and "open the panel and run this one" (bar.js).
 import { MSG, pageStateMessage, toWireError } from '../lib/messages.js';
 import { tm } from '../i18n/core.js'; // (an English text marked for the catalogue: the panel shows it in its language, see plainError)
 import { checkExtensionSender } from '../lib/senderCheck.js';
+import { browserApi, extensionIdentity, openPanel, wireToolbarButton } from '../lib/platform.js';
 import { keyStore, loadPolicy, loadSettings, saveSettings } from '../lib/storage.js';
 import { instancePattern, isInstanceAllowed, normalizeInstance } from '../policy/policy.js';
 import { BAR_TYPES, barAiOn, handleBarMessage, restrictStorageAccess, retireOpenTabs } from './bar.js';
@@ -15,6 +17,14 @@ import { describeInstances, reinjectAfterInstalled, wantedInstances } from './in
 // First thing on every start of the worker: content scripts may not read or change chrome.storage.local / .session (where the
 // browser supports closing them). Nothing in a content script needs them; see restrictStorageAccess in bar.js.
 restrictStorageAccess(chrome.storage).catch(() => {});
+
+// How this browser differs (the side panel of Chrome and Edge, the sidebar of Firefox) is in src/lib/platform.js.
+const api = browserApi();
+// This extension's id and the origin of its own pages (chrome-extension://<id>; moz-extension://<uuid> in Firefox). Only those pages
+// may ask the worker for anything (src/lib/senderCheck.js).
+const OWN = extensionIdentity(chrome.runtime);
+// The toolbar button opens the panel. Set up on every start: in Firefox only a listener added while the event page starts wakes it.
+wireToolbarButton(api);
 
 const CONTENT_ID = 'ab-content';
 const BRIDGE_ID = 'ab-bridge';
@@ -117,7 +127,7 @@ async function disableInstance(rawOrigin) {
 
 // What the bar on the ServiceNow page may ask for (src/background/bar.js holds the rules).
 const barDeps = {
-  runtimeId: chrome.runtime.id,
+  runtimeId: OWN.id,
   activeInstances,
   loadSettings,
   loadPolicy,
@@ -125,7 +135,8 @@ const barDeps = {
   // Can the AI actions run for this person (the organisation allows AI, the person did not skip it, a key is saved or none is
   // needed)? Only whether a key is saved is looked at, never the key itself.
   aiOn: (settings, policy) => barAiOn(settings, policy, { keyMode: (provider) => keyStore().mode(provider) }),
-  openPanel: (tabId) => chrome.sidePanel.open({ tabId }),
+  // (asks the browser at once, before anything is awaited; resolves only when the panel is open: src/lib/platform.js)
+  openPanel: (tabId) => openPanel(api, tabId),
   // storage.session: the panel can read it, a content script cannot
   saveLaunch: (launch) => chrome.storage.session.set({ [LAUNCH_KEY]: launch }),
 };
@@ -143,7 +154,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // (No await before it: the panel can only be opened while the click that asked for it is still being handled.)
     if (BAR_TYPES.has(message?.type)) return handleBarMessage(message, sender, barDeps);
     // Everything else: only this extension's own pages may ask the worker for anything.
-    checkExtensionSender(sender, chrome.runtime.id);
+    checkExtensionSender(sender, OWN);
     switch (message?.type) {
       case MSG.ENABLE_INSTANCE:
         return enableInstance(message.origin);
@@ -163,10 +174,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // answer asynchronously
 });
 
-const setup = () => {
-  chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(() => {});
-  return syncContentScripts().catch(() => []);
-};
+// (the toolbar button is set up above, on every start)
+const setup = () => syncContentScripts().catch(() => []);
 chrome.runtime.onInstalled.addListener(async ({ reason } = {}) => {
   const origins = await setup();
   // After an update the content scripts in the open ServiceNow tabs belong to the old version and can no longer reach the extension;

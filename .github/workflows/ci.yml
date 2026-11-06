@@ -38,6 +38,8 @@ jobs:
         run: node scripts/check-compile.js
       - name: Build
         run: node build.js
+      - name: Build for Firefox (dist-firefox/; the same source, Firefox's manifest, scripts/lib/browsers.js)
+        run: node build.js --browser firefox
       - name: Traceability (every control names a test file that exists)
         run: npm run traceability:check
       - name: Arabic (every text a person reads has an Arabic entry)

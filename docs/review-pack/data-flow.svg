@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 700" width="960" height="700" role="img" aria-labelledby="title desc">
   <title id="title">Agent Buddy: data flow</title>
-  <desc id="desc">The ServiceNow tab and the Agent Buddy extension run on the person's computer. The content script reads the ServiceNow instance with GET requests and the person's own session. The side panel masks personal data in the PII firewall and sends the masked text to the AI endpoint the organisation chose. The answer is shown as plain text and can be inserted into one form field. The organisation's policy is read from the browser. Nothing else is contacted.</desc>
+  <desc id="desc">The ServiceNow tab and the Agent Buddy extension run on the person's computer. The content script reads the ServiceNow instance with GET requests and the person's own session. The side panel masks personal data in the PII firewall and sends the masked text to the AI endpoint the organisation chose. The answer is shown as plain text and can be inserted into one form field. The organisation's policy is read from the browser. Nothing else is contacted. In Firefox the panel is the sidebar and the service worker runs as an event page; the flows are the same.</desc>
   <style>
     .bg { fill: #ffffff; }
     .t { fill: #1f2328; font: 600 14px system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -133,6 +133,7 @@
   <text class="m" x="356" y="592">READ asks the content script for ticket data; the answer comes back to the panel.</text>
   <text class="m" x="356" y="610">FILL_FIELD carries the text the person chose to insert, for the record it was written for.</text>
   <text class="m" x="356" y="628">The bar on the page sends only "show actions" and "open the panel for this action".</text>
-  <text class="s" x="356" y="656">No Agent Buddy server exists. No analytics. No other destination.</text>
-  <text class="m" x="356" y="676">Details: docs/security.md sections 2 to 5; docs/review-pack/stride.md.</text>
+  <text class="m" x="356" y="646">Firefox: the panel is its sidebar, the service worker an event page. Same flows.</text>
+  <text class="s" x="356" y="668">No Agent Buddy server exists. No analytics. No other destination.</text>
+  <text class="m" x="356" y="688">Details: docs/security.md sections 2 to 5; docs/review-pack/stride.md.</text>
 </svg>

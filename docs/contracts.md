@@ -82,7 +82,8 @@ No HTML, no images, no links that load anything; URLs are shown as text. `<SafeT
 
 ## Messages (service worker ↔ content script ↔ panel)
 
-Defined in src/lib/messages.js (`MSG` constants). The worker validates the sender of every message (src/lib/senderCheck.js).
+Defined in src/lib/messages.js (`MSG` constants). The worker validates the sender of every message (src/lib/senderCheck.js, against
+this extension's id and the origin of its own pages: see "Additions for more browsers" below).
 
 The one exception to "extension pages only" is the bar on the ServiceNow page: its content script may send `BAR_ACTIONS` and
 `BAR_LAUNCH` to the worker (src/background/bar.js), from the top frame of an enabled instance and nothing else. `BAR_LAUNCH` leaves a
@@ -330,3 +331,56 @@ what). The contracts that cross areas:
   (`useEffective`) and Settings, each with a newest-read-wins counter.
 - **The page bridge** (`src/page/bridge.js`) is versioned (`BRIDGE_VERSION`, pinned to the file by `tests/page-bridge-version.test.js`):
   raise it with every change, so an open page swaps the old bridge for the new one after an extension update.
+
+## Additions for more browsers (2026-11-06)
+
+Chrome and Edge (one build, `dist/`) and Firefox 128 or later (`dist-firefox/`); Safari later. Build rule 12: browser differences go
+only in `src/lib/platform.js` (run time) and `scripts/lib/browsers.js` (manifests and build folders).
+
+**Platform** (`src/lib/platform.js`). Pure; every function takes the browser's API object, so tests pass a fake
+(`tests/platform.test.js`). Browsers are told apart by what their API has, never by the user agent string.
+
+```js
+browserApi(scope = globalThis)        // `browser` when it really is the extension API (Firefox, Safari), else `chrome`; null when neither
+panelKind(api)                         // 'side-panel' (Chrome, Edge) | 'sidebar' (Firefox) | 'none' (Safari for now)
+openPanel(api, tabId) → Promise<void>  // asks the browser NOW, before it returns: call it before your first await. Resolves when the
+                                       // panel is open. Firefox: from a click on the page the sidebar cannot open; resolves only if it
+                                       // is open already, else rejects. 'none': rejects
+wireToolbarButton(api) → kind          // once, at the top level of the background script (Firefox wakes the event page only for a
+                                       // listener added while it starts). Chrome, Edge: setPanelBehavior; Firefox: the click toggles
+                                       // the sidebar; a second call adds nothing
+extensionUrlOrigin(url) → string       // 'chrome-extension://<id>', 'moz-extension://<uuid>', 'safari-web-extension://<uuid>', or ''
+                                       // (any other scheme, a port, a user name, a host that is not an extension id)
+extensionOrigin(runtime) → string      // the origin of this extension's own pages, from runtime.getURL(''); '' when unknown
+extensionIdentity(runtime) → frozen { id, origin }   // `own` for the sender checks; ask once, when the script starts
+canOpenShortcutSettings(api) → bool    // Firefox 137+ (commands.openShortcutSettings), Chrome and Edge (a tab); else false
+openShortcutSettings(api, chromiumPage) → Promise<void>   // chromiumPage: chrome://extensions/shortcuts or edge://extensions/shortcuts
+EXTENSION_SCHEMES                      // ['chrome-extension:', 'moz-extension:', 'safari-web-extension:']
+```
+
+The places Safari will change are marked "Safari" in the file (its panel will be a window of its own).
+
+**Sender check** (`src/lib/senderCheck.js`). `own` = `{ id, origin }` from `extensionIdentity(runtime)`, never a bare id: in Firefox
+the origin of the extension's pages (`moz-extension://<uuid made at install>`) is not its id.
+
+```js
+isFromExtensionPage(sender, own) → bool          // sender.id === own.id AND the sending frame's origin === own.origin, exactly.
+                                                 // false when own's id or origin is missing, or the origin is not an extension
+                                                 // page's; in Chrome and Edge own.origin must be chrome-extension://<own.id>
+checkExtensionSender(sender, own) → 'extension'  // throws EXTENSION_ONLY otherwise (the worker's check for every message but the bar's)
+contentMessageAction(message, sender, own, retired = false) → 'answer' | 'retire' | 'ignore'   // the content script's check
+contentScriptOrigin(sender, runtimeId) → string  // unchanged: the https origin of this extension's content script in a top frame, or ''
+senderOrigin(sender) → string                    // sender.origin, else the origin of sender.url; never the tab's address
+```
+
+**Builds** (`scripts/lib/browsers.js`, CommonJS, pure; `tests/manifest-firefox.test.js`).
+
+- `BROWSERS`: `chromium` (Chrome and Edge 116; `dist/`, `dist-enterprise/`, `release/unpacked/`) and `firefox` (Firefox 128;
+  `dist-firefox/`, `dist-firefox-enterprise/`, `release/unpacked-firefox/`). `BROWSER_IDS`, `browserOf(id)` (an unknown id throws).
+- `browserManifest(base, browser, { geckoId })`: the manifest of one browser's build from `manifest.json` (or the enterprise manifest
+  made from it); Chrome and Edge get a copy, Firefox gets `firefoxManifest()`. The input is never changed.
+- `GECKO_ID` (`agentbuddy@agentbuddy`; a branded copy sets its own) and `FIREFOX_MIN_VERSION` (`128.0`).
+- `browserOfManifest(manifest)`: which browser a built manifest is for (scripts/package.js names the zip by it).
+- `bundleOptions(rootDir, browser)` (`scripts/lib/entries.js`) compiles for that family's target. `node build.js --browser <id>`,
+  `scripts/check-compile.js` (every family), `scripts/repro-check.js --browser <id>` and `scripts/package.js` read the table, so a new
+  family is one entry there plus, if its manifest differs, one function like `firefoxManifest()`.

@@ -7,6 +7,8 @@ dist/
 .build-tmp/
 .build-tmp-*/
 dist-enterprise/
+dist-firefox/
+dist-firefox-enterprise/
 release/
 
 # The self-hosted install (scripts/selfhost.js): the signing key and what is packed

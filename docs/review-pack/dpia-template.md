@@ -12,7 +12,7 @@ come from `docs/security.md` (controls, limits) and `docs/deployment.md` (policy
 | Who uses it | **[to fill: teams, number of people]** Fulfillers (IT, customer service, HR, catalog) and their team leads. No ServiceNow admin role is needed or used. |
 | Controller | **[to fill: your organisation]** |
 | Processors | The AI provider your organisation chooses: **[to fill: provider, contract, region]**. Agent Buddy has no server and no vendor that receives data. ServiceNow is already your processor for the ticket data. |
-| Systems | The person's browser (Chrome or Edge, managed), your ServiceNow instance(s) **[to fill]**, the AI endpoint **[to fill: e.g. an internal gateway]**. |
+| Systems | The person's browser (managed): Chrome or Edge, or Firefox 128 or later **[to fill: which]**. Firefox support is new (2026-11-06) and not yet checked on a real instance; Safari is not supported. Your ServiceNow instance(s) **[to fill]**, the AI endpoint **[to fill: e.g. an internal gateway]**. |
 
 ## 2. Data categories
 
@@ -44,7 +44,9 @@ leads. **[to fill: whether customers outside the organisation are included]**
 - The AI provider chosen in policy (`aiProvider`, `aiBaseUrl`). It receives masked text and the AI key. Country: **[to fill]**. Transfer
   mechanism: **[to fill]**. Its retention of prompts and answers: **[to fill from the contract]** (limit 5).
 - No one else. Agent Buddy has no server, no analytics and no telemetry (`docs/security.md` section 2; enforced by
-  `tests/readonly.test.js` and the manifest CSP).
+  `tests/readonly.test.js` and the manifest CSP). The browser vendors receive no data from Agent Buddy. For Firefox, Mozilla signs each
+  release (it sees the code, not ticket data); a listing on addons.mozilla.org must also declare what data the add-on sends
+  (`data_collection_permissions`, not yet decided: `docs/security.md` section 3A).
 
 ## 6. Retention
 

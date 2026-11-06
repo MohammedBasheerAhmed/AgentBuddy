@@ -18,6 +18,22 @@ export function newRequestId() {
 }
 
 /**
+ * The request's `detail` as the page's own world can read it. In Firefox an object a content script makes stays in the content
+ * script's world: the page bridge reading its `id` gets "Permission denied to access property" and never answers (found by the
+ * Firefox end-to-end run, e2e/firefox). Firefox gives content scripts cloneInto for exactly this: a copy made in the page's world.
+ * Chrome and Edge have no cloneInto and need none (a CustomEvent's detail reaches the page's world as a copy there), so they get the
+ * object unchanged. The page then sees a request exactly as it does in Chrome (any page script can listen for one, see newRequestId,
+ * which is why answers stay data to check), so the copy exposes nothing the design does not already assume.
+ * @param {{ id: string, action: string, args: any[] }} detail
+ * @param {object} [scope] the content script's global (a fake in tests)
+ */
+export function requestDetail(detail, scope = globalThis) {
+  const clone = scope?.cloneInto;
+  const view = scope?.document?.defaultView;
+  return typeof clone === 'function' && view ? clone(detail, view) : detail;
+}
+
+/**
  * Call an action exposed by src/page/bridge.js: getCsrfToken, getSessionInfo, getFormMeta, getFormValues, getFieldStates,
  * getBoxValues, fillField (the list in the bridge itself is the one that counts).
  * @returns {Promise<any>}
@@ -49,7 +65,7 @@ export function callPage(action, args = [], { timeoutMs = DEFAULT_TIMEOUT_MS } =
     }, timeoutMs);
 
     document.addEventListener(RESPONSE_EVENT, onResponse);
-    document.dispatchEvent(new CustomEvent(REQUEST_EVENT, { detail: { id, action, args } }));
+    document.dispatchEvent(new CustomEvent(REQUEST_EVENT, { detail: requestDetail({ id, action, args }) }));
   });
 }
 

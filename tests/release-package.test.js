@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
-const { crc32, zipFolder, listFiles, dosDateTime } = require('../scripts/package.js');
+import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+const { crc32, zipFolder, listFiles, dosDateTime, zipNameFor } = require('../scripts/package.js');
+const { browserManifest, GECKO_ID } = require('../scripts/lib/browsers.js');
 
 // R2: the release zip holds exactly the build's files, each one readable back byte for byte, and the same build gives the same bytes.
 
@@ -61,4 +64,81 @@ test('the package script refuses a build of another version and an enterprise bu
   assert.match(source, /if \(manifest\.host_permissions\) fail/);
   assert.match(source, /`\$\{name\}\.sha256`/);
   assert.match(source, /agentbuddy-\$\{manifest\.version\}\.zip/);
+});
+
+// ---- the Firefox release zip ------------------------------------------------------------------------------------------------------------
+
+const ROOT = path.join(__dirname, '..');
+const repoManifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+const runPackage = (...args) => spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'package.js'), ...args], { cwd: ROOT, encoding: 'utf8' });
+
+/** A small build folder as build.js writes it, with this manifest (the real Firefox build is tested in tests/manifest-firefox.test.js). */
+function fakeBuild(dir, manifest) {
+  fs.mkdirSync(path.join(dir, 'icons'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.writeFileSync(path.join(dir, 'icons', 'icon-16.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 3]));
+  fs.writeFileSync(path.join(dir, 'background.bundle.js'), '(() => {})();\n');
+  fs.writeFileSync(path.join(dir, 'sidepanel.html'), '<!doctype html>\n');
+}
+
+test('zip names: Chrome and Edge keep agentbuddy-<version>.zip, Firefox gets agentbuddy-<version>-firefox.zip next to it', () => {
+  assert.equal(zipNameFor({ version: '0.1.0' }, 'chromium'), 'agentbuddy-0.1.0.zip');
+  assert.equal(zipNameFor({ version: '0.1.0' }, 'firefox'), 'agentbuddy-0.1.0-firefox.zip');
+});
+
+test('the Firefox release zip: its own name, manifest.json at the root of the zip (as addons.mozilla.org requires), the SHA-256 next to it', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-pkg-firefox-'));
+  try {
+    const build = path.join(tmp, 'dist-firefox');
+    const out = path.join(tmp, 'release');
+    const manifest = browserManifest(repoManifest, 'firefox');
+    fakeBuild(build, manifest);
+    const r = runPackage('--dist', build, '--out', out);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const name = `agentbuddy-${repoManifest.version}-firefox.zip`;
+    assert.deepEqual(fs.readdirSync(out).sort(), [name, `${name}.sha256`]);
+    const zip = fs.readFileSync(path.join(out, name));
+    const files = readZip(zip);
+    assert.deepEqual(Object.keys(files), listFiles(build));
+    assert.ok(files['manifest.json'], 'manifest.json at the root, not inside a folder');
+    assert.ok(Object.keys(files).every((n) => !n.startsWith('/') && !n.includes('\\') && !n.startsWith('dist-firefox/')), 'paths relative to the build');
+    const zipped = JSON.parse(files['manifest.json'].toString('utf8'));
+    assert.deepEqual(zipped, manifest);
+    assert.equal(zipped.browser_specific_settings.gecko.id, GECKO_ID);
+    const hash = crypto.createHash('sha256').update(zip).digest('hex');
+    assert.equal(fs.readFileSync(path.join(out, `${name}.sha256`), 'utf8'), `${hash}  ${name}\n`);
+    assert.ok(zipFolder(build).equals(zip), 'reproducible: the same build gives the same bytes');
+
+    // The Chrome and Edge build next to it keeps its name.
+    const chrome = path.join(tmp, 'dist');
+    fakeBuild(chrome, repoManifest);
+    const r2 = runPackage('--dist', chrome, '--out', out);
+    assert.equal(r2.status, 0, r2.stderr + r2.stdout);
+    assert.deepEqual(fs.readdirSync(out).sort(), [`agentbuddy-${repoManifest.version}.zip`, `agentbuddy-${repoManifest.version}.zip.sha256`, name, `${name}.sha256`].sort());
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('the package script refuses a build for another browser than asked, an enterprise Firefox build and an unknown option', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-pkg-firefox-'));
+  try {
+    const out = path.join(tmp, 'release');
+    const firefox = path.join(tmp, 'firefox');
+    fakeBuild(firefox, browserManifest(repoManifest, 'firefox'));
+    const wrong = runPackage('--dist', firefox, '--browser', 'chromium', '--out', out);
+    assert.equal(wrong.status, 1);
+    assert.match(wrong.stderr, /holds the Firefox build, not the Chrome and Edge one/);
+    const enterprise = path.join(tmp, 'enterprise');
+    fakeBuild(enterprise, { ...browserManifest(repoManifest, 'firefox'), host_permissions: ['https://acme.service-now.com/*'] });
+    const ent = runPackage('--dist', enterprise, '--out', out);
+    assert.equal(ent.status, 1);
+    assert.match(ent.stderr, /enterprise build/);
+    assert.match(runPackage('--browser', 'safari').stderr, /--browser must be one of chromium, firefox/);
+    assert.match(runPackage('--fast').stderr, /unknown option "--fast"/);
+    assert.match(runPackage('--dist').stderr, /--dist needs a value/);
+    assert.ok(!fs.existsSync(out), 'nothing written');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

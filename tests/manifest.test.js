@@ -64,3 +64,16 @@ test('managed policy schema is declared and valid JSON', () => {
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'managed_schema.json'), 'utf8'));
   ['allowedInstances', 'piiMode', 'previewMode', 'keyStorage', 'disabledFeatures', 'blockedTables', 'allowHrContent'].forEach((k) => assert.ok(schema.properties[k], k));
 });
+
+// The Firefox build's manifest is made from this one (scripts/lib/browsers.js; tests/manifest-firefox.test.js has every difference).
+// What the security team approves for it is the same list, minus the side panel Firefox does not have.
+test('the Firefox manifest: the approved permissions minus sidePanel, the same optional hosts, the same CSP', () => {
+  const { browserManifest } = require('../scripts/lib/browsers.js');
+  const firefox = browserManifest(manifest, 'firefox');
+  assert.deepEqual([...firefox.permissions].sort(), ['activeTab', 'scripting', 'storage']);
+  assert.equal(firefox.host_permissions, undefined);
+  assert.deepEqual([...firefox.optional_host_permissions].sort(), ['http://127.0.0.1/*', 'http://localhost/*', 'https://*/*']);
+  assert.deepEqual(firefox.content_security_policy, manifest.content_security_policy);
+  assert.deepEqual(firefox.commands, manifest.commands);
+  for (const key of ['update_url', 'key', 'version_name', 'content_scripts', 'web_accessible_resources', 'externally_connectable', 'optional_permissions']) assert.equal(firefox[key], undefined, key);
+});
