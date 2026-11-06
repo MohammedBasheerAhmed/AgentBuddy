@@ -39,11 +39,13 @@ test('an incident in progress: reply and move it on', () => {
   for (const id of ['record-summary', 'next-best-action', 'reply-draft']) assert.ok(fiveIds(p).includes(id), id);
 });
 
-test('a resolved incident: wrap up (the resolution notes are the primary)', () => {
+// CHANGED in round 4 (docs/round4.md, approved by the user): "Prepare to close" fills the fifth slot and is the primary of a resolved
+// ticket; "Write resolution notes" is in All tools.
+test('a resolved incident: wrap up (Prepare to close is the primary)', () => {
   const p = plan('incident', 'Resolved');
-  assert.equal(p.primary, 'resolution-notes');
-  assert.equal(p.five.find((f) => f.pain === 'close').item.feature.id, 'resolution-notes');
-  assert.ok(ids(p.rest).includes('resolution-improve') && ids(p.rest).includes('kb-article-draft'));
+  assert.equal(p.primary, 'prepare-close');
+  assert.equal(p.five.find((f) => f.pain === 'close').item.feature.id, 'prepare-close');
+  assert.ok(ids(p.rest).includes('resolution-notes') && ids(p.rest).includes('resolution-improve') && ids(p.rest).includes('kb-article-draft'));
 });
 
 test('a closed incident: no reply, no questions for the customer, no next steps (AI7)', () => {

@@ -8,7 +8,19 @@ progress log). **Next session: start at "Where to pick up" just below.**
 (built, tested and pushed; waiting for you to see it working, best on the real instance in V1) · `Partly built` (the row says
 what is left) · `Done` (built, tested, shown to you, committed) · `Needs you` (only you can do it) · `Dropped`.
 
-## Where to pick up (updated 2026-11-06)
+## Where to pick up (updated 2026-11-07)
+
+**Round 4, "Loved", 2026-11-06/07 (newest, NOT committed: you review first):** after the fulfiller report
+(https://claude.ai/artifact/AgCNQgWksLoae67KHnUmUB) you set the rule "no clutter; solve the pain points ServiceNow cannot solve in the
+platform" and approved the "Loved" mockup boards (https://claude.ai/artifact/WMmZMaVbxigc1WP3UrUgj3, bottom row) and four decisions
+(`docs/round4.md`): build the Phase 0 fixes and the boards; "Prepare to close" may fill two fields; "since you last looked" may keep
+ticket ids and times; do not commit. Built by seven agents in parallel (table row R21). Phase 0: Arabic and other non-Latin tickets now
+get look-alikes, knowledge, risk and missing-details rules and Arabic email templates; security incident, vulnerability and GRC tables
+are sensitive by default; refused or limited reads say why. New, inside the existing five rows: since you last looked, Translate the
+caller's message (AI), error codes with one search, solved before by, the reply checks (a next step, the tone) and the caller's
+language, the close code from look-alikes, a repeat-issue warning, "Prepare to close" (AI) in the fifth slot, Undo after every
+Insert, and My work's "At risk" chip. Next: your review in the panel, then the real-instance walk on dev364920 (the new live questions
+in `docs/live-questions/{reads,fix,understand,close}.md` and the additions to i18n, mywork, compose), then commit and push on your word.
 
 **More browsers, 2026-11-06 (newest):** you asked for Agent Buddy in Chrome, Edge, Firefox and Safari and approved five phases
 (table rows R16 to R20). Phases 1 and 2 are built, checked and committed on 2026-11-06 (not pushed yet):
@@ -416,6 +428,7 @@ Grouped by what the agent is doing, offered by ticket state first (New: Understa
 | R18 | More browsers, phase 3: Edge on the real instance | - | - | New | The same package as Chrome; the Edge checks were scattered over `docs/live-questions/` | Walk `docs/live-questions/edge.md` in Edge on dev364920 with you (the dock opening the side panel, shortcuts, right to left, storage access, a managed Edge) | Not yet (`docs/live-questions/edge.md`) | Needs you |
 | R19 | More browsers, phase 4: Safari | - | - | New | None | The panel in a window of its own (the places are marked "Safari" in `src/lib/platform.js`), Apple's converter in Xcode, an Apple developer account. Waits for a Mac with Xcode | - | Agreed |
 | R20 | More browsers, phase 5: release per browser | - | - | New | `npm run package`: one zip, for Chrome and Edge | Done: `npm run package` writes `release/agentbuddy-<version>.zip` (Chrome and Edge) and `release/agentbuddy-<version>-firefox.zip`. Left: store accounts when you release (Chrome Web Store $5 once, Edge Add-ons free, addons.mozilla.org free, Apple $99 a year); for addons.mozilla.org, what `data_collection_permissions` declares (it is required for a new submission; masked ticket text goes to the AI endpoint the person or organisation chose), that AMO accepts an add-on id from one account only (the first to submit it), and that AMO asks for the source because the build bundles the files; pull everything into the ifBash copy (`D:\ifBashAgentBuddy`, `git pull agentbuddy main`) | - | Partly built |
+| R21 | Round 4, "Loved": Phase 0 fixes and the pain points ServiceNow cannot solve, inside the five | - | - | New | - | Built 2026-11-06/07 by seven agents (`docs/round4.md`), NOT committed. Phase 0: Unicode/Arabic keywords and rules (`src/lib/similar.js`, `src/insights/{missing,emailTemplates}.js`, `src/itsm/sentiment.js`, `src/checks/checklist.js`); security/vulnerability/GRC tables sensitive by default (`src/context/kinds.js`, `src/policy/policy.js`, the firewall); refusals with reasons (`src/context/access.js`, `src/content/tableApi.js`). New: since you last looked (`src/lib/lastViewed.js`, policy `rememberLastViewed`), Translate the caller's message (`translate-message`), error codes and solved-before-by (`src/insights/{errorCodes,solvedBy}.js`, op `fixCodeSearch`), reply checks and the caller's language (`src/safeSend/replyChecks.js`), close code and repeat warning (`src/insights/closeCode.js`), Prepare to close (`prepare-close`, two-field Insert: build rule 1's second exception), Undo after every Insert (bridge version 4), My work "At risk" (`src/mywork/risk.js`). Tests `tests/{round4-shared,languages-*,reads-*,fix-*,understand-*,close-*,mywork-risk,reply-*}.test.js` | Not yet | Ready for review |
 
 ---
 

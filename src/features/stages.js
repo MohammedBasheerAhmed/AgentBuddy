@@ -106,7 +106,7 @@ export function groupOf(feature) {
 export const SUGGEST = Object.freeze({
   new: Object.freeze(['record-summary', 'hr-case-brief', 'account-briefing', 'major-incident-comms', 'change-cab-brief', 'problem-rca', 'missing-info', 'routing-hint', 'request-explain', 'fulfilment-checklist', 'chat-reply', 'article-optimise', 'sentiment-risk']),
   working: Object.freeze(['reply-draft', 'major-incident-comms', 'hr-case-brief', 'change-cab-brief', 'problem-rca', 'chat-reply', 'request-explain', 'fulfilment-checklist', 'next-best-action', 'record-summary', 'case-eng-escalation', 'handoff-brief', 'chat-summary', 'article-optimise']),
-  resolve: Object.freeze(['resolution-notes', 'resolution-improve', 'kb-article-draft', 'chat-summary', 'record-summary', 'reply-draft']),
+  resolve: Object.freeze(['prepare-close', 'resolution-notes', 'resolution-improve', 'kb-article-draft', 'chat-summary', 'record-summary', 'reply-draft']),
   closed: Object.freeze(['record-summary', 'kb-article-draft', 'chat-summary', 'thread-summary']),
   // The state is not known (still loading, or a state we do not recognise): the everyday three.
   unknown: Object.freeze(['record-summary', 'reply-draft', 'chat-reply', 'chat-summary', 'article-optimise', 'next-best-action', 'resolution-notes', 'hr-case-brief', 'change-cab-brief', 'problem-rca']),

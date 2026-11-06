@@ -1,0 +1,30 @@
+/* Round 4 (docs/round4.md): styles of the close area. --ab-* tokens only. */
+
+/* ---- The Close well row (ResolveCard): the close code and the repeat, two short facts under the checks ---- */
+.ab-close-facts { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ab-close-fact { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 8px 10px; border-radius: var(--ab-radius); background: var(--ab-bg-subtle); min-width: 0; }
+.ab-close-fact-k { font-weight: 600; font-size: var(--ab-text-sm); color: var(--ab-fg-soft); }
+.ab-close-fact-v { flex: 1 1 12em; min-width: 0; font-size: var(--ab-text-md); overflow-wrap: anywhere; }
+.ab-close-fact.is-quiet { background: transparent; padding-block: 2px; }
+.ab-close-fact.is-quiet .ab-close-fact-v { color: var(--ab-fg-muted); }
+.ab-close-open { flex: 0 0 auto; text-decoration: none; }
+
+/* ---- Prepare to close: the answer's sections, each saying where it came from ---- */
+.ab-close-answer { display: flex; flex-direction: column; gap: 10px; }
+.ab-close-sec { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ab-close-sec + .ab-close-sec { padding-top: 10px; border-top: 1px solid var(--ab-divider); }
+.ab-close-sec-head { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; }
+.ab-close-sec-title { font-weight: 600; }
+.ab-close-sec-src { display: inline-flex; align-items: center; gap: 4px; font-size: var(--ab-text-xs); color: var(--ab-fg-muted); }
+.ab-close-sec-text { margin: 0; overflow-wrap: anywhere; }
+.ab-close-sec-text.is-quiet { color: var(--ab-fg-muted); }
+.ab-close-sec .ab-close-open { align-self: flex-start; margin-top: 2px; }
+.ab-close-findings { list-style: none; margin: 0; padding: 0; }
+.ab-close-findings > li { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; min-width: 0; }
+.ab-close-findings > li + li { border-top: 1px solid var(--ab-divider); }
+.ab-close-findings .ab-hint { margin: 0; }
+
+/* ---- After an Insert (every answer): the line, and Undo next to it while the insert can be taken back ---- */
+.ab-insert-note { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 8px; }
+.ab-insert-note > .ab-note { flex: 1 1 14em; min-width: 0; margin: 0; }
+.ab-insert-undo { flex: 0 0 auto; }

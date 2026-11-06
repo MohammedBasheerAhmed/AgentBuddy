@@ -120,8 +120,16 @@ module.exports = {
 
     // ---- Nothing about a record is left behind or logged -------------------------------------------------------------------
     const everythingStored = await ctx.ext(async () => JSON.stringify({ local: await chrome.storage.local.get(null), session: await chrome.storage.session.get(null), sync: await chrome.storage.sync.get(null) }));
-    const stored = findLeaks(everythingStored, data);
-    t.check('chrome.storage (local, session, sync) holds no ticket data: no names, emails, phones, cards, passwords or ticket text', stored.critical.length === 0 && stored.gaps.length === 0 && !/disconnecting|Printer offline|Issue:|recurring VPN|Ignore all previous/.test(everythingStored) && !everythingStored.includes(data.INCIDENT_ID), [...stored.critical, ...stored.gaps.map((g) => g.value)].join(' | '));
+    // Round 4: the one named exception to build rule 7, the last-viewed list (sys_id, table and time of each ticket opened), is checked
+    // on its own below; everything else must hold no ticket data at all, not even a record id.
+    const allStored = JSON.parse(everythingStored);
+    const { agentbuddy_last_viewed: lastViewed, ...localRest } = allStored.local;
+    const withoutLastViewed = JSON.stringify({ ...allStored, local: localRest });
+    const stored = findLeaks(withoutLastViewed, data);
+    t.check('chrome.storage (local, session, sync) holds no ticket data: no names, emails, phones, cards, passwords or ticket text', stored.critical.length === 0 && stored.gaps.length === 0 && !/disconnecting|Printer offline|Issue:|recurring VPN|Ignore all previous/.test(withoutLastViewed) && !withoutLastViewed.includes(data.INCIDENT_ID), [...stored.critical, ...stored.gaps.map((g) => g.value)].join(' | '));
+    const lastViewedShape = (lv) => !lv || (lv.v === 1 && Object.keys(lv).sort().join() === 'instances,v' && Object.entries(lv.instances || {}).every(([origin, map]) => /^https?:\/\/[^/\s]+$/.test(origin) && Object.entries(map || {}).every(([id, e]) => /^[0-9a-f]{32}$/.test(id) && Object.keys(e || {}).sort().join() === 'at,table' && /^[a-z0-9_]+$/.test(e.table) && !Number.isNaN(Date.parse(e.at)))));
+    const lvLeaks = findLeaks(JSON.stringify(lastViewed || {}), data);
+    t.check('the last-viewed list (build rule 7 exception) holds only sys_ids, table names and times: no number, title, text or names', lastViewedShape(lastViewed) && lvLeaks.critical.length === 0 && lvLeaks.gaps.length === 0, JSON.stringify(lastViewed || {}).slice(0, 240));
     t.info(`storage keys: ${Object.keys(JSON.parse(everythingStored).local).join(', ')}`);
     // The one IndexedDB database allowed is the key vault, and it may hold AI keys (plain or encrypted) and nothing else.
     const webStorage = await ctx.ext(async () => ({ local: localStorage.length, session: sessionStorage.length, idb: (await indexedDB.databases()).filter((d) => d.name !== 'agentbuddy_vault').length, caches: (await caches.keys()).length }));

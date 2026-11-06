@@ -69,7 +69,7 @@ test('the queue: most urgent first, one status chip, SLA time left, waiting and 
   const fake = setup(answer({ items: [resolved, waiting, paused, due, replied, breached] }));
   const ui = await mount(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => {}} />);
   assert.equal(fake.readsOf('myWork').length, 1);
-  assert.deepEqual(fake.readsOf('myWork')[0], { profiles: ['it'], allowSensitive: false });
+  assert.deepEqual(fake.readsOf('myWork')[0], { profiles: ['it'], allowSensitive: false, accounts: false });
   const text = ui.text();
   assert.match(text, /Read just now/);
   assert.match(text, /My queue 6 open, 1 SLA breached, 1 replied/);
@@ -156,14 +156,20 @@ test('follow-ups: a reminder and a status update to copy, the customer\'s answer
   assert.match(ui.text(), /Got the logs Customer replied today/);
   assert.match(ui.text(), /Need logs Waiting on the customer 4 d/);
   assert.match(ui.text(), /Slow VPN Customer not updated for 6 d/);
-  // The copy is a quiet action of its row, outside the link that opens the ticket.
-  assert.equal(ui.button('Copy reminder').closest('a'), null);
-  assert.ok(ui.button('Copy reminder').closest('.ab-mw-row'));
-  await click(ui.button('Copy reminder'));
+  // The copy is a quiet action of its row, outside the link that opens the ticket. (Round 4: every one reads "Copy draft"; its
+  // accessible name says which ticket, so a list of them is not a list of the same button.)
+  const drafts = ui.$$('button').filter((b) => b.textContent.trim() === 'Copy draft');
+  assert.equal(drafts.length, 2, 'a reminder and a status update; nothing to copy for the answered one');
+  const draftFor = (number) => drafts.find((b) => (b.getAttribute('aria-label') || '').includes(number));
+  assert.match(draftFor(waiting.number).getAttribute('aria-label'), /^Copy draft for /);
+  assert.equal(draftFor(waiting.number).closest('a'), null);
+  assert.ok(draftFor(waiting.number).closest('.ab-mw-row'));
+  await click(draftFor(waiting.number));
   assert.match(copied[0], new RegExp(`your reply on ${waiting.number} \\(Need logs\\)`));
   assert.match(ui.text(), /Copied\. Paste it into the customer comment of the ticket\./);
-  await click(ui.button('Copy status update'));
-  assert.match(copied[1], /A quick update on .* \(Slow VPN\)/);
+  await click(draftFor(stale.number));
+  assert.match(copied[1], /A quick update on .* \(Slow VPN\): we are still working on it, and it has not been forgotten\./);
+  assert.match(copied[1], /If anything has changed on your side, just reply to this message\.\n\nThank you for your patience\.$/);
   assert.equal(ui.$('label.ab-mw-sr').textContent.trim(), 'Follow up after');
   // The period is the setting: choosing it here saves the setting, and the screen shows what the setting says.
   await choose(ui.$('select'), '5');
@@ -237,7 +243,7 @@ test('read when shown; again when shown after 5 minutes, not before; HR as the p
   const ui = await mount(<MyWorkView page={page} eff={eff({ profiles: ['csm', 'hr'] }, { allowHrContent: true })} active={false} onOpenTicket={() => {}} />);
   assert.equal(fake.readsOf('myWork').length, 0, 'nothing is read while the screen is not on show');
   await ui.rerender(<MyWorkView page={page} eff={eff({ profiles: ['csm', 'hr'] }, { allowHrContent: true })} active onOpenTicket={() => {}} />);
-  assert.deepEqual(fake.readsOf('myWork'), [{ profiles: ['csm', 'hr'], allowSensitive: true }]);
+  assert.deepEqual(fake.readsOf('myWork'), [{ profiles: ['csm', 'hr'], allowSensitive: true, accounts: false }]);
   const realNow = Date.now;
   try {
     await ui.rerender(<MyWorkView page={page} eff={eff({ profiles: ['csm', 'hr'] }, { allowHrContent: true })} active={false} onOpenTicket={() => {}} />);
@@ -339,4 +345,65 @@ test('the screen\'s default export is this view; pure helpers', () => {
   assert.deepEqual(statusChip(item({ work: 'new', state: 'New' })), { text: 'New', tone: 'plain' });
   assert.deepEqual(statusChip(item({ marker: { ...M, replied: 'other' } })), { text: 'New comment', tone: 'reply' });
   assert.equal(statusChip(item({ work: 'resolved', state: 'Resolved', marker: { ...M, replied: 'customer' } })).text, 'Resolved');
+});
+
+// ---- round 4: tickets at risk first ------------------------------------------------------------------------------------------
+
+test('at risk: an "At risk" chip and the reasons on the row, at-risk tickets first, one more filter chip with its count', async () => {
+  const now = Date.now();
+  const bounced = item({ title: 'VPN drops every hour', priority: '2 - High', reassignments: 3, marker: { ...M, lastCustomerAt: now - 2 * DAY - HOUR, lastAt: now - 2 * DAY - HOUR, replied: 'customer' } });
+  const reopened = item({ table: 'sn_customerservice_case', type: 'sn_customerservice_case', number: 'CS0001023', title: 'Invoice portal shows an error', priority: '4 - Low', reopens: 2, account: 'Boxeo' });
+  const slaVip = item({ title: 'Mail slow for the CFO', vip: true, sla: { breached: false, paused: false, percentage: 80, dueAt: now + 3 * HOUR, risk: 'at-risk' } });
+  const fresh = item({ title: 'Fresh reply', marker: { ...M, lastCustomerAt: now - HOUR, lastAt: now - HOUR, replied: 'customer' } });
+  const calm = item({ title: 'Critical but calm', priority: '1 - Critical', reassignments: 1, reopens: 0, vip: false });
+  const done = item({ title: 'Done already', work: 'resolved', state: 'Resolved', reopens: 3 });
+  const unassigned = item({ title: 'Nobody has it', reassignments: 6, group: { id: 'g'.repeat(32), name: 'Service Desk' } });
+  const fake = setup(answer({ items: [calm, fresh, done, reopened, bounced, slaVip], groups: [unassigned] }));
+  const ui = await mount(<MyWorkView page={page} eff={eff({}, { priorityAccounts: ['Boxeo'] })} active onOpenTicket={() => {}} />);
+  // The organisation names priority accounts, so the read asks for a case's account.
+  assert.equal(fake.readsOf('myWork')[0].accounts, true);
+
+  // At risk first (the SLA one leads: its SLA ranks first anyway), then the rest in the order My work always had.
+  const rows = () => ui.$$('[data-card="mywork-queue"] .ab-mw-row a');
+  const titles = () => rows().map((a) => a.querySelector('.ab-mw-title').textContent);
+  assert.deepEqual(titles(), ['Mail slow for the CFO', 'VPN drops every hour', 'Invoice portal shows an error', 'Fresh reply', 'Critical but calm']);
+  const why = (a) => a.querySelector('.ab-mw-why')?.textContent || '';
+  assert.deepEqual(rows().map(why), ['SLA nearly used · VIP caller', 'Reassigned 3 times · waiting on you 2 days', 'Reopened twice · priority account', '', '']);
+  // The chip: amber, the SLA-risk chip's family, first on the line; only on the rows at risk.
+  const chips = rows().map((a) => a.querySelector('.ab-mw-risk'));
+  assert.deepEqual(chips.map(Boolean), [true, true, true, false, false]);
+  assert.match(chips[0].className, /(^| )ab-chip( |$)/);
+  assert.match(chips[0].className, /(^| )ab-chip-warn( |$)/);
+  assert.equal(chips[1].textContent, 'At risk');
+  assert.equal(chips[1].parentNode.firstChild, chips[1], 'the chip leads the line');
+  assert.match(rows()[1].textContent, /VPN drops every hour.*At risk.*Customer replied.*P2.*Reassigned 3 times/);
+  // Not on the unassigned tickets of my groups, not on a resolved ticket.
+  assert.equal(ui.$$('[data-card="mywork-groups"] .ab-mw-risk').length, 0);
+  await click(ui.button('Resolved, awaiting closure (1)'));
+  assert.ok(!ui.$$('.ab-mw-row a').find((a) => /Done already/.test(a.textContent)).querySelector('.ab-mw-risk'));
+
+  // One more chip in the existing row, first, with its count; a real button with aria-pressed, so the keyboard reaches it.
+  const first = ui.$('.ab-mw-chips button');
+  assert.equal(first.textContent.replace(/\s+/g, ' ').trim(), 'At risk 3');
+  assert.equal(first.getAttribute('type'), 'button');
+  assert.equal(first.getAttribute('aria-pressed'), 'false');
+  await click(ui.button('At risk 3'));
+  assert.equal(ui.button('At risk 3').getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(titles(), ['Mail slow for the CFO', 'VPN drops every hour', 'Invoice portal shows an error']);
+  await click(ui.button('At risk 3'));
+  assert.equal(rows().length, 5, 'pressed again: the filter is off');
+  // No new card or section: the same sections as before.
+  assert.deepEqual(ui.$$('.ab-mywork > .ab-cardx').map((c) => c.getAttribute('data-card')), ['mywork-queue', 'mywork-followups', 'mywork-groups']);
+  await ui.unmount();
+});
+
+test('at risk: without priority accounts the account is not asked for and is no reason; nothing at risk, no chip', async () => {
+  const boxeo = item({ table: 'sn_customerservice_case', type: 'sn_customerservice_case', number: 'CS0001024', title: 'Boxeo case', account: 'Boxeo' });
+  const fake = setup(answer({ items: [boxeo, item({ title: 'Plain' })] }));
+  const ui = await mount(<MyWorkView page={page} eff={eff()} active onOpenTicket={() => {}} />);
+  assert.equal(fake.readsOf('myWork')[0].accounts, false);
+  assert.equal(ui.$$('.ab-mw-risk').length, 0);
+  assert.equal(ui.$$('.ab-mw-why').length, 0);
+  assert.ok(!ui.hasButton(/^At risk/), 'a chip with nothing behind it is not shown');
+  await ui.unmount();
 });

@@ -16,7 +16,7 @@ planned.
 | `previewMode` | `first` or `always` | People see exactly what leaves the browser. Also a floor: people may choose to see it more often. |
 | `keyStorage` | `session` | The key is memory-only and cleared when the browser closes. Or supply the key through your gateway instead of per-person keys. |
 | `allowHrContent` | `false` (default) | HR case free text is never sent. Setting it to `true` is not enough on its own: see "HR content" below. |
-| `sensitiveTablePrefixes` | your own HR, legal or employee-relations table families, e.g. `["x_acme_hr_", "x_acme_legal_"]` | Treated like HR cases. `sn_hr_` is always included. |
+| `sensitiveTablePrefixes` | your own HR, legal or employee-relations table families, e.g. `["x_acme_hr_", "x_acme_legal_"]` | Treated like HR cases. Always included (round 4): `sn_hr_`, and the security and risk families `sn_si_`, `sn_vul_`, `sn_grc_`, `sn_risk_`, `sn_compliance_`, `sn_audit_`. `allowHrContent` opens ALL sensitive families, not only HR; there is no separate security switch yet. |
 | `disabledFeatures` | `["coaching-snapshot"]` until HR/works-council sign-off | Feature ids are not case-sensitive. The list is below. |
 | `blockedTables` / `blockedFields` | tables or fields that must never be read or sent | See "Blocked tables and fields" below. Names are not case-sensitive. |
 | `disablePageBar` | `true` if a bar drawn inside ServiceNow pages is not acceptable | Removes the small bar of main actions from ServiceNow pages for everyone (the side panel is unaffected). See "The bar on the page" in `docs/security.md`. |
@@ -55,7 +55,7 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 | `disabledFeatures` | list of text | every feature on | Feature ids to switch off (list below). Not case-sensitive. |
 | `blockedTables` | list of text | none | Tables that are never read or sent. Not case-sensitive. |
 | `blockedFields` | list of text | none | Columns that are never sent, also when a part of the request carries them. Not case-sensitive. |
-| `sensitiveTablePrefixes` | list of text | `sn_hr_` only | More table-name prefixes treated like HR cases. `sn_hr_` is always included. |
+| `sensitiveTablePrefixes` | list of text | `sn_hr_`, `sn_si_`, `sn_vul_`, `sn_grc_`, `sn_risk_`, `sn_compliance_`, `sn_audit_` | More table-name prefixes treated like HR cases. The built-in ones are always included. |
 | `allowHrContent` | true / false | `false` | Allows HR case free text, together with a pinned endpoint (below). |
 | `tokenBudgetPerDay` | whole number | no budget | Daily token budget per person on that computer. |
 | `auditExport` | true / false | `true` | Allows exporting the local activity log as CSV. |
@@ -69,6 +69,7 @@ a looser one. Locked settings show "Set by your organisation" in Settings.
 | `orgFormats` | list of objects | every action's own format | How some AI actions write their answer, for everyone: `{ "feature", "sections", "style", "words", "extra", "locked" }` (see "Formats for AI answers" below), at most 40. |
 | `internalPhrases` | list of text | the built-in list only | More words and phrases the safe-to-send check flags in customer-visible text (internal team or system names). |
 | `defaultDashboard` | object | the ready-made dashboards only | One Team-screen dashboard for everyone: exactly what "Save layout as a file" writes for one dashboard (see "Organisation dashboard and priority accounts" below). People with no dashboards yet on an instance start with it, first and on show; anyone else gets "Add your organisation's dashboard" in the dashboard's ⋯ menu. Never locked. |
+| `rememberLastViewed` | true / false | `true` | "Since you last looked": the browser keeps, per instance, the sys_id, table and time of each ticket opened in the panel (no number, title, text or names; at most 500, none older than 30 days; Settings > Stored data lists and clears it). `false` keeps nothing and hides the line. |
 | `priorityAccounts` | list of text | no account is marked | Customer accounts marked "Priority account" on customer service cases (the Account card and the line at the top of the ticket), written as ServiceNow shows the account's name. At most 500 names of up to 100 characters. |
 
 ### How a policy value is read
@@ -220,7 +221,7 @@ The HR case brief also needs Strict (or Local-only) privacy mode.
 
 | Where | Ids |
 |---|---|
-| Actions on a record | `record-summary`, `reply-draft`, `resolution-notes`, `handoff-brief`, `missing-info`, `sentiment-risk`, `next-best-action`, `thread-summary`, `routing-hint`, `kb-article-draft`, `major-incident-comms`, `hr-case-brief`, `account-briefing`, `caller-briefing`, `case-eng-escalation`, `problem-rca`, `change-cab-brief`, `article-optimise`, `chat-summary`, `chat-reply` |
+| Actions on a record | `record-summary`, `reply-draft`, `resolution-notes`, `prepare-close`, `handoff-brief`, `missing-info`, `sentiment-risk`, `next-best-action`, `thread-summary`, `routing-hint`, `kb-article-draft`, `major-incident-comms`, `hr-case-brief`, `account-briefing`, `caller-briefing`, `case-eng-escalation`, `problem-rca`, `change-cab-brief`, `article-optimise`, `chat-summary`, `chat-reply`, `translate-message` |
 | Knowledge tools | `kb-merge-draft`, `kb-gap-outline` |
 | Write: email drafts | `email-ask-info`, `email-status-update`, `email-resolution`, `email-approval-nudge`, `email-apology`, `email-closure` |
 | Write: rewrite and notes | `rewrite-short`, `rewrite-friendly`, `rewrite-plain`, `rewrite-formal`, `rewrite-fix`, `rewrite-translate`, `rewrite-bilingual`, `notes-to-ticket` |

@@ -4,6 +4,7 @@ import { EmptyNote } from '../ui/primitives.jsx';
 import { RailCard } from '../reports/RailCard.jsx';
 import { MYWORK_SECTIONS as S } from './railSections.js';
 import { groupQueue, filterChips, passes } from '../../mywork/rank.js';
+import { withRisk } from '../../mywork/risk.js';
 import { followUps, followUpReason, followUpText, followUpAction, FOLLOW_UP_DAY_CHOICES } from '../../mywork/followups.js';
 import { fullListUrl } from '../../mywork/links.js';
 import { askedText, dueAgoText, dueInText, spanText, dueToday } from '../../mywork/time.js';
@@ -56,9 +57,11 @@ function FullList({ page, table, query, children = t('Open the full list') }) {
 
 // ---- N13 My queue ------------------------------------------------------------------------------------------------------------
 
-export function QueueCard({ page, data, now, filter, setFilter, onOpen }) {
+export function QueueCard({ page, data, now, policy, filter, setFilter, onOpen }) {
   const { queue, groups } = data;
-  const items = queue.items || NO_ITEMS;
+  // The tickets at risk carry their reasons (worked out here: the organisation's priority accounts are known in the panel): the
+  // "At risk" chip and line on their rows, the "At risk" filter, and the order (at risk first, src/mywork/rank.js compareNow).
+  const items = useMemo(() => withRisk(queue.items || NO_ITEMS, { now, policy }), [queue.items, now, policy]);
   const shown = useMemo(() => items.filter((i) => passes(i, filter)), [items, filter]);
   const g = useMemo(() => groupQueue(shown, now), [shown, now]);
   const chips = useMemo(() => {
@@ -152,7 +155,13 @@ function FollowUpRow({ page, entry, onOpen }) {
   // The copy is a quiet action of the row, under its text and outside the link (a button inside a link would open the ticket too).
   const after = action ? (
     <div className="ab-mw-row-act">
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={copy} title={t('Copies a short text with the ticket number and title. Nothing is sent.')}>
+      <button
+        type="button"
+        className="ab-btn ab-btn-quiet ab-btn-sm"
+        onClick={copy}
+        aria-label={t('Copy draft for {number}', { number: isolate(entry.item.number) })}
+        title={t('Copies a short text with the ticket number and title. Nothing is sent.')}
+      >
         {action}
       </button>
       <span className="ab-hint" role="status">

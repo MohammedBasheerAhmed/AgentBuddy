@@ -9,7 +9,7 @@
 //
 // readNotesHints(args, deps) runs in the content script (src/content/ops/compose.js); the vote itself (voteRouting) is pure.
 
-import { similarKeywords, rankSimilar } from '../lib/similar.js';
+import { queryTerm, similarKeywords, rankSimilar } from '../lib/similar.js';
 import { STATUS, entry as accessEntry, softRead } from '../context/access.js';
 import { SYS_ID_RE, disp, oneLine, queryValue, raw } from '../context/util.js';
 
@@ -76,7 +76,7 @@ export async function readNotesHints({ table, text, names = [] }, deps) {
   const target = typeof table === 'string' && Object.hasOwn(HINT_TABLES, table) ? HINT_TABLES[table] : '';
   if (!target) throw new Error('Suggestions are only offered for a new incident or case.');
   const access = [];
-  const keywords = similarKeywords(String(text ?? '').slice(0, 300), 4).map((w) => w.replace(/[^a-z0-9_-]/g, '')).filter(Boolean);
+  const keywords = similarKeywords(String(text ?? '').slice(0, 300), 4).map(queryTerm).filter(Boolean);
   let routing = voteRouting([]);
   if (keywords.length) {
     const like = keywords.map((w, i) => `${i ? 'OR' : ''}short_descriptionLIKE${w}`).join('^');

@@ -9,12 +9,19 @@
 //                                        break becomes a space.
 //                       customerVisible  the person who raised the ticket (or the reader of the article) can read it. The
 //                                        send check looks at this text first. A field that is not listed counts as visible.
+//                       choice           (round 4) a choice list: filled with its STORED value, never a label and never typed
+//                                        into a box. Only a form with g_form can set one with certainty; elsewhere the page bridge
+//                                        refuses ('choice-by-hand') and the panel says which choice to pick by hand.
 //   expect            the record a text was written for. The panel sends it with FILL_FIELD; the content script compares it with
 //                     the form that is open now and answers 'wrong-record' on a mismatch.
 //   replacing         (round 3) the text this panel put into the same box before: on append, the page swaps that one copy for the
 //                     new text when the box still holds it as a whole block, so "Try again" + Insert never leaves two answers.
 //   describeInsert()  where an insert lands and what the person does next (Save; Post in a Workspace; the page's own Send on a
 //                     portal), said before the click (TRACKER.md F5).
+//   undo              (round 4, docs/round4.md) a FILL_FIELD answer carries what the box held before and what the insert left in
+//                     it (`undo: { previous, after }`, from the page, checked as data). The panel keeps them in memory only and
+//                     can put the earlier text back with a FILL_FIELD of mode 'undo' (buildUndoMessage), which the page refuses
+//                     ('changed') unless the box still holds exactly what the insert left there. Nothing is saved either way.
 //
 // A new insert in a feature pack needs its field here: tests/insert-fillable.test.js walks the whole registry and fails when an
 // insert field is missing, so a new feature cannot silently fail to insert.
@@ -44,6 +51,10 @@ export const FILLABLE_FIELDS = Object.freeze({
   impact: Object.freeze({ singleLine: true }),
   urgency: Object.freeze({ singleLine: true }),
   contact_type: Object.freeze({ singleLine: true }),
+  // Prepare to close (round 4): an incident's close code, by its stored value, next to the resolution notes. A code from the
+  // instance's own list, not text anyone wrote, so no send check. The second field of the user's named exception to "one field per
+  // Insert" (docs/build-rules.md, rule 1).
+  close_code: Object.freeze({ singleLine: true, choice: true }),
 });
 
 const has = (field) => typeof field === 'string' && Object.prototype.hasOwnProperty.call(FILLABLE_FIELDS, field);
@@ -56,6 +67,8 @@ export const fieldMeta = (field) => (has(field) ? FILLABLE_FIELDS[field] : null)
 
 export const isHtmlField = (field) => fieldMeta(field)?.html === true;
 export const isSingleLineField = (field) => fieldMeta(field)?.singleLine === true;
+/** A choice list (filled by its stored value, and only where the form can set it with certainty). */
+export const isChoiceField = (field) => fieldMeta(field)?.choice === true;
 
 /** Can the customer (or the reader of the article) see this field? A field nobody described counts as visible: the safe side. */
 export const isCustomerVisible = (field) => (has(field) ? FILLABLE_FIELDS[field].customerVisible === true : true);
@@ -83,6 +96,7 @@ const FIELD_NAMES = {
   short_description: tm('Short description'),
   subject: tm('the email subject'),
   body: tm('the email body'),
+  close_code: tm('Close code'),
 };
 // The email client's own boxes (an AI email draft carried to the email form, AI9). They are named for what they are, whatever the
 // page calls them, and nothing goes anywhere until the person presses Send there.
@@ -172,6 +186,11 @@ export const FILL_REASON_TEXT = Object.freeze({
   'set-failed': tm('The form did not accept the text.'),
   'bad-field': tm('That field cannot be filled.'),
   'wrong-record': tm('The open form is not the record this text was written for.'),
+  // Round 4: a choice list on a page without g_form (Workspace, portal), a value the form's list does not have, and an Undo of a box
+  // that no longer holds what the insert left there.
+  'choice-by-hand': tm('Agent Buddy does not pick from a list on this page.'),
+  'no-such-choice': tm('That choice is not in the list on this form.'),
+  changed: tm('The box was changed after the insert, so it was left as it is.'),
 });
 
 export const FILL_REASONS = Object.freeze(Object.keys(FILL_REASON_TEXT));
@@ -299,6 +318,8 @@ export const auditRefFromPage = (page) => ({ table: page?.record?.table || page?
 
 /** Longest `replacing` text sent with FILL_FIELD (the content script and the bridge use the same limit for any text). */
 export const MAX_REPLACING_CHARS = 20000;
+/** Longest text an Undo carries either way (what the box held before, what the insert left there): the same limit. */
+export const MAX_UNDO_CHARS = 20000;
 
 /**
  * The FILL_FIELD message for the content script. `value` is plain text: the content script turns it into HTML for an HTML field.
@@ -313,4 +334,42 @@ export function buildFillMessage({ field, value, label = '', mode = 'append', ex
   const earlier = typeof replacing === 'string' ? replacing.trim() : '';
   if (message.mode === 'append' && earlier && earlier.length <= MAX_REPLACING_CHARS && !isHtmlField(field)) message.replacing = earlier;
   return message;
+}
+
+// ---- Undo (round 4) ------------------------------------------------------------------------------------------------------
+
+const undoText = (v) => (typeof v === 'string' && v.length <= MAX_UNDO_CHARS ? v : null);
+
+/**
+ * One step an Undo can take, from a FILL_FIELD answer: the box, what it held before, what the insert left in it, and the record it
+ * belongs to. null when the answer carries nothing usable (an older content script, a page that said nothing, a text too long), when
+ * the insert changed nothing, or when it was not bound to a record (an Undo always names the record it is for).
+ * @param {object} answer the FILL_FIELD answer ({ ok: true, undo: { previous, after } })
+ * @param {{ field: string, fieldLabel?: string, expect?: object|null, stamp?: string }} target  stamp: page.formStamp at the insert
+ * @returns {{ field: string, fieldLabel: string, previous: string, after: string, expect: object, stamp: string } | null}
+ */
+export function undoStepOf(answer, { field, fieldLabel = '', expect = null, stamp = '' } = {}) {
+  if (!answer || answer.ok !== true || !isFillable(field)) return null;
+  const want = parseExpect(expect);
+  if (!want || want === 'invalid') return null;
+  const u = answer.undo && typeof answer.undo === 'object' ? answer.undo : null;
+  const previous = undoText(u?.previous);
+  const after = undoText(u?.after);
+  if (previous === null || after === null || !after.trim() || previous === after) return null;
+  return { field, fieldLabel: typeof fieldLabel === 'string' ? fieldLabel.slice(0, 100) : '', previous, after, expect, stamp: typeof stamp === 'string' ? stamp : '' };
+}
+
+/**
+ * The FILL_FIELD message that puts one box back: `value` is what it held before (it may be empty), `current` what the insert left
+ * there. The page refuses ('changed') when the box holds anything else now, so a text the person typed since is never lost.
+ */
+export function buildUndoMessage(step) {
+  return { type: MSG.FILL_FIELD, field: step.field, value: step.previous, current: step.after, label: step.fieldLabel || '', mode: 'undo', expect: step.expect };
+}
+
+/** Can an Undo still be offered on this page? The same record, and no Save since the insert (the form stamp, when the page has one). */
+export function undoStillFor(step, page) {
+  if (!step || !matchesExpect(step.expect, currentFromPage(page))) return false;
+  const now = typeof page?.formStamp === 'string' ? page.formStamp : '';
+  return !step.stamp || !now || step.stamp === now;
 }

@@ -21,6 +21,7 @@ import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from '../reports/layoutFile.js';
 import { FORMAT_LIMITS, cleanFormats, normalizeFormat, readOrgFormats, specOf } from '../formats/formats.js';
 import { TABLE_RE } from '../context/util.js';
+import { BUILT_IN_SENSITIVE_PREFIXES } from '../context/kinds.js';
 
 export const PII_MODES = ['standard', 'strict', 'local-only'];
 export const PREVIEW_MODES = ['always', 'first', 'never'];
@@ -58,6 +59,7 @@ export const POLICY_KEYS = Object.freeze([
   'internalPhrases',
   'defaultDashboard',
   'priorityAccounts',
+  'rememberLastViewed',
 ]);
 
 // Stricter is later in the list. A user choice below the policy floor is raised to it.
@@ -78,10 +80,11 @@ const oneOf = (value, allowed) => {
 };
 const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
-// Tables whose names start with one of these are sensitive (HR-family): free text and identities are only read when the
-// organisation allows HR content, and the AI endpoint must be an approved one. 'sn_hr_' is always on the list; the policy key
-// `sensitiveTablePrefixes` ADDS to it (a custom HR, legal or employee-relations table family), it can never remove it.
-export const DEFAULT_SENSITIVE_PREFIXES = Object.freeze(['sn_hr_']);
+// Tables whose names start with one of these are sensitive: free text and identities are only read when the organisation allows
+// sensitive (HR) content, and the AI endpoint must be an approved one. The built-in families (HR, and since round 4 security
+// incidents, vulnerabilities and GRC/risk/compliance/audit: src/context/kinds.js) are always on the list; the policy key
+// `sensitiveTablePrefixes` ADDS to them (a custom HR, legal or employee-relations table family), it can never remove one.
+export const DEFAULT_SENSITIVE_PREFIXES = BUILT_IN_SENSITIVE_PREFIXES;
 const PREFIX_RE = /^[a-z][a-z0-9_]{1,63}$/;
 
 function sensitivePrefixes(value) {
@@ -309,6 +312,9 @@ function readPolicy(raw) {
     defaultDashboard: parseOrgDashboard(p.defaultDashboard).layout,
     // Customer accounts the Account card and the Glance mark as "Priority account" (N28).
     priorityAccounts: readPriorityAccounts(p.priorityAccounts),
+    // "Since you last looked" keeps, per instance, the sys_id, table and time of the tickets the agent opened (src/lib/lastViewed.js:
+    // the one exception to "store no ticket content", docs/build-rules.md rule 7). false turns it off for everyone. Unset is on.
+    rememberLastViewed: p.rememberLastViewed !== false,
     // Not a policy key: '' or the reason no AI call may be made under this policy.
     aiBlocked: endpoint && !endpoint.ok ? t(BLOCKED_ENDPOINT) : '',
   };
@@ -409,6 +415,8 @@ export function mergePolicies(floorInput, managedInput) {
     defaultDashboard: parseOrgDashboard(b.defaultDashboard || a.defaultDashboard).layout,
     // Both lists name priority accounts; together they name all of them.
     priorityAccounts: readPriorityAccounts([...a.priorityAccounts, ...b.priorityAccounts]),
+    // Keeping less is stricter: off when either policy turns it off.
+    rememberLastViewed: a.rememberLastViewed && b.rememberLastViewed,
     aiBlocked: reasons[0] || '',
   };
 }
@@ -463,7 +471,10 @@ const KEY_TYPES = {
   internalPhrases: 'list',
   defaultDashboard: 'layout',
   priorityAccounts: 'list',
+  rememberLastViewed: 'boolean',
 };
+// The switches that are on unless they are a real false (every other switch is off unless it is a real true).
+const ON_UNLESS_FALSE = ['auditExport', 'aiEnabled', 'rememberLastViewed'];
 const FEATURE_RE = /^[a-z][a-z0-9-]{0,79}$/;
 const shown = (value) => {
   try {
@@ -506,7 +517,7 @@ export function policyProblems(raw, { providers, checkDashboard } = {}) {
       continue;
     }
     if (type === 'boolean' && typeof value !== 'boolean') {
-      error(key, `${key} must be true or false; ${shown(value)} is read as ${key === 'auditExport' || key === 'aiEnabled' ? 'true' : 'false'}.`);
+      error(key, `${key} must be true or false; ${shown(value)} is read as ${ON_UNLESS_FALSE.includes(key) ? 'true' : 'false'}.`);
       continue;
     }
     if (key === 'orgFormats') {

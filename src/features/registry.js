@@ -18,8 +18,10 @@ import reports from './packs/reports.js';
 import checks from './packs/checks.js';
 import assist from './packs/assist.js';
 import caller from './packs/caller.js';
+import translate from './packs/translate.js';
+import close from './packs/close.js';
 
-export const FEATURES = [...core, ...itsm, ...domain, ...knowledge, ...compose, ...reports, ...checks, ...assist, ...caller];
+export const FEATURES = [...core, ...itsm, ...domain, ...knowledge, ...compose, ...reports, ...checks, ...assist, ...caller, ...translate, ...close];
 
 export const featureById = (id) => FEATURES.find((f) => f.id === id) || null;
 

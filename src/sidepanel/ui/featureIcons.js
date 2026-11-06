@@ -4,6 +4,8 @@ const FEATURE_ICONS = {
   'record-summary': 'file',
   'reply-draft': 'reply',
   'resolution-notes': 'checkCircle',
+  'prepare-close': 'checkCircle',
+  'translate-message': 'globe',
   'handoff-brief': 'clipboard',
   'missing-info': 'help',
   'sentiment-risk': 'alert',

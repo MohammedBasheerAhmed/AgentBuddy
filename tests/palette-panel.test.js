@@ -186,7 +186,7 @@ test('typing keeps the headings of the groups that have a match; the arrows move
     await type(box, 'email');
     assert.deepEqual(headings(ui), [groupLabel('ticket-assist')], 'only AI Assist has an email');
     assert.ok(ui.$$('[role="option"]').every((o) => o.closest('[role="group"]').getAttribute('data-group') === 'ticket-assist'));
-    await type(box, 'language');
+    await type(box, 'arabic');
     assert.deepEqual(headings(ui), [groupLabel('panel')]);
     assert.equal(active(ui), 'language:en', 'the first match is the highlighted one');
     // The best match is the highlighted one wherever its group is (Enter runs it); the groups keep their order, so nothing jumps.

@@ -51,16 +51,22 @@ export function groupLevel(cards = [], reports = {}, needs = []) {
 
 /**
  * A row's one line, shown without opening it. "Understand the ticket": the first fact that needs the agent now when there is one (the
- * facts come most urgent first), else its first card's line. The others: their cards' lines, the ones that need a look first, two at
- * most, joined by " · ".
+ * facts come most urgent first), else its first card's line; when something changed since the agent last opened the ticket, that
+ * comes first, with the most urgent fact in a few words after it ("Since you looked: the caller wrote twice · SLA 1h 20m"). The
+ * others: their cards' lines, the ones that need a look first, two at most, joined by " · ".
  */
 export function groupLine(group, reports = {}, needs = []) {
   const lines = orderMembers(group?.cards || [], reports)
     .map((c) => lineOfReport(reports, c.id))
     .filter(Boolean);
   if (group?.id === 'understand') {
-    const fact = needs.find((n) => typeof n?.text === 'string' && n.text.trim());
-    return fact ? fact.text.trim() : lines[0] || '';
+    const said = (v) => (typeof v === 'string' ? v.trim() : '');
+    const facts = Array.isArray(needs) ? needs : [];
+    // The plain facts (since you looked, what the caller wrote) have no level: only the facts that need a look are "today's line".
+    const fact = facts.find((n) => LOOK.has(n?.level) && said(n.text));
+    const since = facts.find((n) => n?.id === 'since' && said(n.line));
+    if (since) return [said(since.line), fact ? said(fact.short) || said(fact.text) : ''].filter(Boolean).join(' · ');
+    return fact ? said(fact.text) : lines[0] || '';
   }
   return lines.slice(0, 2).join(' · ');
 }

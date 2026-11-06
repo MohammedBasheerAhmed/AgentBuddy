@@ -8,6 +8,8 @@
 
 import { STOP_TICKET, keywordsOf, wordsOf } from './text.js';
 import { tm } from '../i18n/core.js';
+import { normalizeArabic } from '../lib/scriptDetect.js';
+import { withoutArabicArticle } from '../lib/similar.js';
 
 export const MIN_CLUSTER = 2;
 export const MAX_CLUSTERS = 15;
@@ -18,15 +20,19 @@ const MAX_KEYWORDS = 8;
 const lower = (text) => String(text || '').trim().toLowerCase();
 
 // Email addresses, links, phone numbers and record numbers are not topics, and an address or a number repeated across tickets
-// must never turn into a group label (labels are what an outline is drafted from).
-const NOISE = [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, /https?:\/\/\S+/gi, /\+?\d[\d\s().-]{6,}\d/g, /\b[A-Z]{2,8}\d{5,}\b/g];
+// must never turn into a group label (labels are what an outline is drafted from). Phone numbers in Arabic-Indic or Persian digits too.
+const NOISE = [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, /https?:\/\/\S+/gi, /\+?[\d٠-٩۰-۹][\d٠-٩۰-۹\s().-]{6,}[\d٠-٩۰-۹]/g, /\b[A-Z]{2,8}\d{5,}\b/g];
 const withoutNoise = (text) => NOISE.reduce((out, re) => out.replace(re, ' '), String(text ?? ''));
+
+// A name word as it is compared: lower case, Arabic folded and without the article, so "أحمد" also takes out "احمد" and "العتيبي"
+// takes out "عتيبي".
+const nameKey = (word) => withoutArabicArticle(normalizeArabic(String(word).toLowerCase()));
 
 // The people a ticket names (its caller or contact) are not a topic either: their name words are taken out of the title, so a
 // person who raised several tickets never becomes a group label. (A name that is not the caller's cannot be recognised.)
 function withoutNames(text, names) {
-  const tokens = new Set(names.flatMap((n) => wordsOf(n)).filter((w) => w.length > 1));
-  return tokens.size ? text.replace(/[\p{L}\p{N}]+/gu, (word) => (tokens.has(word.toLowerCase()) ? ' ' : word)) : text;
+  const tokens = new Set(names.flatMap((n) => wordsOf(n)).filter((w) => w.length > 1).map(nameKey));
+  return tokens.size ? text.replace(/[\p{L}\p{N}][\p{L}\p{M}\p{N}]*/gu, (word) => (tokens.has(nameKey(word)) ? ' ' : word)) : text;
 }
 
 function prepare(ticket) {

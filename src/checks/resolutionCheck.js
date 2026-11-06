@@ -413,6 +413,50 @@ export function buildCheckView(pack, facts, options) {
   return { checks: orderChecks(checks), summary: summarizeChecks(checks), usedForm: Boolean(source), formSource: source };
 }
 
+// ---- The Close well row and "Prepare to close" (round 4, docs/round4.md) --------------------------------------------------
+
+// What each check is about, in a few words, for the row's line ("Not yet: the caller has not confirmed"). A check without one is
+// named by its title.
+const SHORT = {
+  notes: () => t('the resolution notes need work'),
+  code: () => t('no close code chosen'),
+  customer: () => t('the caller has not confirmed'),
+  children: () => t('work under it is still open'),
+  pii: () => t('personal data in the text'),
+  hold: () => t('a hold reason is filled in'),
+};
+
+/**
+ * The first part of the "Close well" row's line, from a check view (buildCheckView): "Not yet: the caller has not confirmed" (and
+ * "..., and 2 more" when more things need a look), "Nothing wrong, a few notes", "Looks ready"; '' while there is no view.
+ */
+export function readyLine(view) {
+  if (!Array.isArray(view?.checks)) return '';
+  const warns = view.checks.filter((c) => c.status === 'warn');
+  if (warns.length) {
+    const reason = SHORT[warns[0].id]?.() || warns[0].title;
+    return warns.length > 1 ? t('Not yet: {reason}, and {n} more', { reason, n: warns.length - 1 }) : t('Not yet: {reason}', { reason });
+  }
+  return view.checks.some((c) => c.status === 'info') ? t('Nothing wrong, a few notes') : t('Looks ready');
+}
+
+/** The findings still open (to look at first, then notes), in the view's order: the "Ready to resolve?" part of Prepare to close. */
+export const openFindings = (view) => (Array.isArray(view?.checks) ? view.checks.filter((c) => c.status === 'warn' || c.status === 'info') : []);
+
+/** The code field of a kind ('close_code', 'resolution_code'), or '' for a kind that has none. */
+export const codeFieldOf = (kind) => CODE_FIELD[kind] || '';
+
+/**
+ * The ticket's close code as it is now: what is picked on the form (not saved yet; a classic form gives the stored value) or else the
+ * saved one (a display value). '' when there is none, or the kind has no code. What closeCodeVote compares its suggestion with.
+ */
+export function currentCloseCode(pack, facts = {}) {
+  const field = CODE_FIELD[pack?.kind];
+  if (!field) return '';
+  const { form } = formOf(facts);
+  return text(effective(pack, form, field).value);
+}
+
 /**
  * The pack with the notes the agent has typed on the form (not yet saved) in place of the saved close notes, for "Improve my
  * resolution notes". The text still goes out only as a part of the pack, through the firewall. Returns a new pack.

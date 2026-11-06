@@ -7,6 +7,7 @@
 
 import { forgetSessionToken, sessionHeaders } from './sessionToken.js';
 import { TABLE_RE } from '../context/util.js';
+import { READ_CODE, READ_REASON, READ_TEXT, deniedReason, isMissingColumn, isMissingTable } from '../context/access.js';
 
 // Hard ceiling on rows per request. Guards against a mistyped query pulling tens of thousands of rows into memory.
 const MAX_LIMIT = 1000;
@@ -26,7 +27,8 @@ export function clampLimit(limit) {
 
 // ---- Session and error handling shared by every request ------------------------------------
 
-export const SESSION_EXPIRED_MESSAGE = 'Your ServiceNow session has expired. Sign in to ServiceNow again (reload the page), then try again.';
+// (the text is kept with the other reasons in src/context/access.js, READ_TEXT, so the panel can show it in the person's language)
+export const SESSION_EXPIRED_MESSAGE = READ_TEXT.session;
 
 // Every read has a time limit. An instance that is busy or a network that stalls must not leave the panel waiting for minutes with
 // nothing to say: after READ_TIMEOUT_MS the read stops with a plain reason (code SN_TIMEOUT) and the panel offers "Try again". The
@@ -40,6 +42,7 @@ export const READ_TIMEOUT_MESSAGE = `ServiceNow did not answer within ${Math.rou
 export function readTimeoutError() {
   const err = new Error(READ_TIMEOUT_MESSAGE);
   err.code = READ_TIMEOUT_CODE;
+  err.reason = READ_REASON.TIMEOUT;
   return err;
 }
 
@@ -94,7 +97,44 @@ const LOGIN_URL = /\/(?:login|logout|login_redirect|external_logout_complete)\.d
 function sessionExpiredError() {
   const err = new Error(SESSION_EXPIRED_MESSAGE);
   err.code = 'SESSION_EXPIRED';
+  err.reason = READ_REASON.SESSION;
   return err;
+}
+
+// An error that says why the instance refused or limited a read: `reason` (READ_REASON in src/context/access.js) for the readers in
+// the content script, `code` because it survives the trip to the panel, and the HTTP status for whoever needs the number.
+function readError(message, { code = '', reason = READ_REASON.ERROR, status = 0 } = {}) {
+  const err = new Error(message);
+  if (code) err.code = code;
+  err.reason = reason;
+  if (status) err.status = status;
+  return err;
+}
+
+const looksLikeHtml = (text) => /^\s*</.test(text || '');
+
+/**
+ * The error for an answer that is not OK (after the retries of instanceFetch). Every refusal is said as one, and none of them is retried
+ * here or read another way (build rule 9):
+ *   403  ACCESS_DENIED: an access rule (reason 'acl') or the organisation's restriction of this kind of read ('policy')
+ *   429  the instance is limiting requests; 503, 502, 504: busy or under maintenance
+ *   400 about a table or column this instance does not have, and 404: 'missing' (left out quietly by the readers), ServiceNow's own
+ *        words kept in the message because isMissingTable reads them
+ *   any other status with a page instead of a JSON error: 'not-data'
+ */
+function refusalError(status, text, what) {
+  const detail = serviceNowErrorText(text);
+  if (status === 403) {
+    const reason = deniedReason(detail);
+    const message = reason === READ_REASON.POLICY ? READ_TEXT.policy : `Your user is not allowed to read this (403)${detail ? `: ${detail}` : ''}.`;
+    return readError(message, { code: 'ACCESS_DENIED', reason, status });
+  }
+  if (status === 429) return readError(READ_TEXT.rateLimited, { code: READ_CODE.RATE_LIMITED, reason: READ_REASON.RATE_LIMITED, status });
+  if (status === 502 || status === 503 || status === 504) return readError(READ_TEXT.unavailable, { code: READ_CODE.UNAVAILABLE, reason: READ_REASON.UNAVAILABLE, status });
+  const message = `${what} failed (${status})${detail ? `: ${detail}` : ''}`;
+  if (status === 404 || (status === 400 && (isMissingTable(detail) || isMissingColumn(detail)))) return readError(message, { reason: READ_REASON.MISSING, status });
+  if (!detail && looksLikeHtml(text)) return readError(READ_TEXT.notData, { code: READ_CODE.NOT_DATA, reason: READ_REASON.NOT_DATA, status });
+  return readError(message, { status });
 }
 
 function isSessionExpired(response, text) {
@@ -165,7 +205,8 @@ function waitUnlessAborted(ms, signal) {
 /**
  * Read a JSON answer. Throws one clear error for an expired session (401, a login redirect or a login page served as
  * 200). A 403 becomes an error with code ACCESS_DENIED so callers can say "you don't have access" instead of failing
- * generically. Returns null for an empty body.
+ * generically; every other refusal or limit says why (refusalError). Returns null for an empty body. A failure always throws:
+ * nothing that failed can come back as an empty answer a caller would keep.
  */
 export async function readJson(response, what) {
   // An abort while the body is read is the caller's own cancel: it must not turn into an empty (and cacheable) answer.
@@ -179,24 +220,15 @@ export async function readJson(response, what) {
     forgetSessionToken();
     throw sessionExpiredError();
   }
-  if (!response.ok) {
-    const detail = serviceNowErrorText(text);
-    if (response.status === 403) {
-      const err = new Error(`Your user is not allowed to read this (403)${detail ? `: ${detail}` : ''}.`);
-      err.code = 'ACCESS_DENIED';
-      throw err;
-    }
-    if (RETRY_STATUSES.has(response.status)) {
-      throw new Error(`${what} failed (${response.status}): the instance is busy${detail ? ` (${detail})` : ''}. Wait a moment and retry.`);
-    }
-    throw new Error(`${what} failed (${response.status})${detail ? `: ${detail}` : ''}`);
-  }
+  if (!response.ok) throw refusalError(response.status, text, what);
   if (!text) return null;
   try {
     return JSON.parse(text);
   } catch {
-    const kind = /^\s*</.test(text) ? 'an HTML page' : 'something else';
-    throw new Error(`${what} returned ${kind} instead of JSON (${response.status}). Reload the page and try again.`);
+    // A page (an SSO step the login checks above did not recognise, a maintenance page, a proxy's page) or something else where data
+    // was asked for. The token is dropped too: if this was a sign-in page, the sign-in that follows brings a new one.
+    forgetSessionToken();
+    throw readError(READ_TEXT.notData, { code: READ_CODE.NOT_DATA, reason: READ_REASON.NOT_DATA, status: response.status });
   }
 }
 

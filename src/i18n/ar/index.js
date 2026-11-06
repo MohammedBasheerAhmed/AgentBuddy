@@ -11,5 +11,12 @@ import { AR_PALETTE } from './palette.js';
 import { AR_FORMATS } from './formats.js';
 import { AR_FOCUS } from './focus.js';
 import { AR_CALLER } from './caller.js';
+import { AR_LANGRULES } from './langrules.js';
+import { AR_READS } from './reads.js';
+import { AR_FIX } from './fix.js';
+import { AR_UNDERSTAND } from './understand.js';
+import { AR_CLOSE } from './close.js';
+import { AR_MYWORK } from './mywork.js';
+import { AR_REPLY } from './reply.js';
 
-export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_FORMATS, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS, ...AR_FOCUS, ...AR_CALLER });
+export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_FORMATS, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS, ...AR_FOCUS, ...AR_CALLER, ...AR_LANGRULES, ...AR_READS, ...AR_FIX, ...AR_UNDERSTAND, ...AR_CLOSE, ...AR_MYWORK, ...AR_REPLY });

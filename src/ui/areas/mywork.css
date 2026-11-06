@@ -42,6 +42,11 @@
 .ab-mw-sla { white-space: nowrap; }
 .ab-mw-sla-paused { font-style: italic; }
 
+/* a ticket at risk (round 4): the amber "At risk" chip first (the shared .ab-chip-warn, the SLA-risk chip's family), and one line at
+   the end of the row that says why. The line takes the whole width under the chips and wraps on a 320 px panel. */
+.ab-mw-risk { flex: none; white-space: nowrap; }
+.ab-mw-why { flex: 1 1 100%; min-width: 0; color: var(--ab-fg-soft); overflow-wrap: anywhere; }
+
 /* a row's quiet action (Copy status update), under its text, in line with the title */
 .ab-mw-row-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: -6px; padding-block: 0 8px; padding-inline: 36px 16px; }
 .ab-mw-row-act .ab-btn { margin-inline-start: -10px; }

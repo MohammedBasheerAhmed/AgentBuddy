@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
-import { EmptyNote } from '../ui/primitives.jsx';
+import { AiBadge, EmptyNote } from '../ui/primitives.jsx';
+import { LAUNCH_KEY, makeLaunch } from '../../lib/launch.js';
+import { TRANSLATE_ID } from '../../features/packs/translate.js';
 import { Icon } from '../ui/icons.jsx';
 import { painIcon } from '../ui/featureIcons.js';
 import { shownFor } from '../../profiles/profiles.js';
@@ -118,6 +120,85 @@ function NeedRow({ item }) {
 }
 
 /**
+ * A plain fact of "Understand the ticket" (round 4): what changed since the agent last looked ("Since you last looked (yesterday
+ * 17:05)", what changed in a quiet line under it), or "Nothing new since you looked (...)". A grey dot: it needs no look.
+ */
+function SinceRow({ item }) {
+  return (
+    <li className="ab-ins-need ab-ins-since" data-need={item.id}>
+      <div className="ab-row ab-ins-need-row">
+        <span className="ab-dot ab-dot-neutral" aria-hidden="true" />
+        <span className="ab-row-main">
+          <span className="ab-row-title ab-ins-need-text">{item.text}</span>
+          {item.sub && <span className="ab-row-sub ab-ins-need-sub">{item.sub}</span>}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+// A message longer than this is cut to a few lines at first ("Show all" opens the rest).
+const LONG_MESSAGE = 280;
+
+/**
+ * What the caller wrote last (round 4): "The caller wrote, today 09:14", then the message as it was read, in its own direction
+ * (dir="auto": an Arabic message reads right to left in an English panel). "Translate" (with the AI mark) when the message is in another
+ * script than the panel's language: it starts the AI action in AI Assist, where the check before sending comes first. Nothing here
+ * sends anything.
+ */
+function CallerWroteRow({ item, onTranslate = null }) {
+  const [all, setAll] = useState(false);
+  const textId = `ab-said${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const message = typeof item.message === 'string' ? item.message : '';
+  const long = message.length > LONG_MESSAGE;
+  return (
+    <li className="ab-ins-need ab-ins-said" data-need={item.id}>
+      <div className="ab-row ab-ins-need-row">
+        <span className="ab-dot ab-dot-neutral" aria-hidden="true" />
+        <span className="ab-row-main">
+          <span className="ab-row-title ab-ins-need-text">{item.text}</span>
+          <span id={textId} className={`ab-ins-said-text${long && !all ? ' is-cut' : ''}`} dir="auto">
+            {message}
+          </span>
+          {(long || (item.translate && onTranslate)) && (
+            <span className="ab-ins-said-actions">
+              {item.translate && onTranslate && (
+                <button type="button" className="ab-btn ab-btn-sm ab-ins-translate" title={t('Opens AI Assist. You see what will be sent first.')} onClick={onTranslate}>
+                  <AiBadge label="" title="" />
+                  {t('Translate')}
+                </button>
+              )}
+              {long && (
+                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" aria-expanded={all} aria-controls={textId} onClick={() => setAll(!all)}>
+                  {all ? t('Show fewer') : t('Show all')}
+                </button>
+              )}
+            </span>
+          )}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+// chrome.storage.session, where a request for the Ticket screen waits (src/lib/launch.js); null where there is none.
+const launchArea = () => (typeof chrome !== 'undefined' && chrome.storage?.session && typeof chrome.storage.session.set === 'function' ? chrome.storage.session : null);
+
+/**
+ * Start an AI action of the record on screen in AI Assist, from Insights, the way the bar on the ServiceNow page does: a request
+ * (src/lib/launch.js makeLaunch: a tab, a record and a feature id, nothing else) left in the panel's session storage, which the panel
+ * takes once (src/sidepanel/useLaunch.js) and the Ticket screen runs exactly as a click in AI Assist would: the same checks (offered,
+ * AI set up, not busy), the same preview before anything is sent. Insights itself runs no AI. False when no request could be made.
+ */
+export function launchFromInsights({ page, record, featureId, area = launchArea(), now = Date.now() }) {
+  const request = makeLaunch({ tabId: page?.tabId, table: record?.table, sysId: record?.sysId, featureId, now });
+  if (!request || !area) return false;
+  const pending = area.set({ [LAUNCH_KEY]: request });
+  if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+  return true;
+}
+
+/**
  * One of the five (a pain point): its icon in a small tile (a dot on it when the row needs a look), its name, one line, a chevron. A
  * click opens it in place. While one of its cards is shown alone, the row's own button steps aside and only that card shows.
  */
@@ -149,7 +230,8 @@ function GroupRow({ group, rowId, open, focusHere, hidden, onToggle, children })
 /**
  * The Ticket screen's Insights half (docs/focus-layout.md, A): FIVE rows, one per pain point (understand the ticket, find the fix, the
  * same caller, reply, close well), each with one line that answers it without opening it; a click opens the row in place.
- * "Understand the ticket" starts with what needs the agent now (the SLA, a customer waiting, a possible outage: plain rows). A row
+ * "Understand the ticket" starts with what needs the agent now (the SLA, a customer waiting, a possible outage: plain rows), after
+ * what changed since the agent last looked and what the caller wrote last (round 4; "Translate" starts an AI action in AI Assist). A row
  * with one card shows that card's content directly; a row with several shows them as rows of their own (the dot, the title, one
  * line), the ones that need a look first. The rest of the record's cards are in All tools ("More for this ticket: n Insights").
  *
@@ -178,6 +260,9 @@ export default function TicketInsights({ page, eff, record, header, active, need
   groupsNow.current = groups;
   const focusId = focus?.id && cards.some((c) => c.id === focus.id) ? focus.id : null;
   const focusGroup = groupOfCard(groups, focusId);
+  // "Translate" next to the caller's message: the AI action in AI Assist (never here), when a request can be left for it.
+  const canLaunch = Boolean(launchArea());
+  const translate = () => launchFromInsights({ page, record, featureId: TRANSLATE_ID });
 
   // The cards of the rest that were asked for on this record: mounted from then on (hidden when not alone), so they keep reporting
   // and keep what was typed in them. Another record starts with none.
@@ -285,9 +370,11 @@ export default function TicketInsights({ page, eff, record, header, active, need
       <GroupRow key={g.id} group={g} rowId={`${idBase}-g-${g.id}`} open={isOpen} focusHere={focusHere} hidden={Boolean(focusId) && !focusHere} onToggle={(v) => setOpenGroups((o) => ({ ...o, [g.id]: v }))}>
         {g.needs.length > 0 && (
           <ul className="ab-rows ab-ins-needs" hidden={focusHere || undefined}>
-            {g.needs.map((item) => (
-              <NeedRow key={item.id} item={item} />
-            ))}
+            {g.needs.map((item) => {
+              if (item.id === 'since') return <SinceRow key={item.id} item={item} />;
+              if (item.id === 'caller') return <CallerWroteRow key={item.id} item={item} onTranslate={canLaunch ? translate : null} />;
+              return <NeedRow key={item.id} item={item} />;
+            })}
           </ul>
         )}
         {body}

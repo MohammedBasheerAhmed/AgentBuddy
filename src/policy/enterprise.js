@@ -239,7 +239,7 @@ export function validateEnterpriseConfig(raw) {
     if (!problems.length) policy.defaultDashboard = JSON.parse(JSON.stringify(raw.defaultDashboard));
   }
 
-  for (const key of ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar', 'aiEnabled']) {
+  for (const key of ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar', 'aiEnabled', 'rememberLastViewed']) {
     if (!has(key)) continue;
     if (typeof raw[key] !== 'boolean') errors.push(`${key} must be true or false (not ${shown(raw[key])}).`);
     else policy[key] = raw[key];

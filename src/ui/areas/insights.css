@@ -72,6 +72,14 @@
 
 /* ---- what needs the agent now: the first rows of "Understand the ticket", plain (a dot, one sentence, a quiet line); nothing to click ---- */
 .ab-ins-need-row > .ab-dot { margin-top: 7px; }
+/* round 4: "Since you last looked (...)" and what the caller wrote last, before them; a grey dot (they need no look) */
+.ab-ins-since .ab-ins-need-sub { overflow-wrap: anywhere; }
+/* the caller's words as read, in their own direction (dir="auto"), set apart by a quiet bar at the start; long ones cut to five lines */
+.ab-ins-said-text { display: block; margin-top: 4px; padding-block: 2px; padding-inline: 10px 0; border-inline-start: 2px solid var(--ab-border-strong); color: var(--ab-fg); font-size: var(--ab-text-md); white-space: pre-line; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+.ab-ins-said-text.is-cut { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
+.ab-ins-said-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ab-ins-said-actions > .ab-btn { min-width: 0; }
+.ab-ins-translate .ab-ai-badge { color: var(--ab-fg-soft); }
 
 /* ---- "More for this ticket: n ...": the quiet way to All tools at the end of each half (AI Assist's too): accent words, no fill ---- */
 button.ab-row.ab-more-tools { align-items: center; min-height: 44px; color: var(--ab-accent); font-size: var(--ab-text-md); font-weight: 500; }

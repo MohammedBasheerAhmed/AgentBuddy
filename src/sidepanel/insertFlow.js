@@ -20,13 +20,21 @@
 //   primaryOf(feature)                            'copy' | 'insert': which button is the main one on the answer card.
 //   choicesOf(feature, plain)                     separate texts for an answer that is a set of choices (the three chat replies).
 //
+// Round 4 (docs/round4.md):
+//
+//   every insert's outcome carries `undo`         what the box held before and what the insert left there (from the page, kept in
+//                                                 memory only), or null when the page could not say
+//   undoInserts({ page, steps, send })            put those boxes back, the last insert first, through FILL_FIELD's 'undo' mode
+//   insertCloseAndNotes({ ... })                  Prepare to close: one Insert that fills the close code, then the notes (the
+//                                                 user's named exception to "one field", docs/build-rules.md rule 1)
+//
 // Every guard stays where it was: insert only into the record the text was written for (expect), one whitelisted field (the content
 // script refuses anything else), never a save, HTML escaped for an HTML field (the content script), the safe-to-send review first.
 
-import { buildFillMessage, describeInsert, expectForInsert, fillModeFor, fillModesFor, fillReasonText, insertedNote, isFillable, wrongRecordText } from '../lib/fillable.js';
+import { buildFillMessage, buildUndoMessage, describeInsert, expectForInsert, fillModeFor, fillModesFor, fillReasonText, insertedNote, isFillable, undoStepOf, undoStillFor, wrongRecordText } from '../lib/fillable.js';
 import { insertsFor } from '../features/registry.js';
 import { reviewForInsert } from '../safeSend/review.js';
-import { t, tm, t as tr } from '../i18n/index.js';
+import { isolate, t, tm, t as tr } from '../i18n/index.js';
 
 export function createGuard() {
   let busy = false;
@@ -88,8 +96,9 @@ export function reviewInsert(field, text, review = {}) {
  * @returns {Promise<
  *   { status: 'empty' } |
  *   { status: 'findings', items: object[], hints: object[] } |
- *   { status: 'inserted', answer: object, note: string, hints: object[] } |
+ *   { status: 'inserted', answer: object, note: string, hints: object[], undo: object|null } |
  *   { status: 'failed', answer: object, why: string }>}
+ *   undo: the step an Undo takes (fillable.js undoStepOf), or null when the page did not say what the box held before
  */
 export async function performInsert({ page, spec, value, force = false, expect, number = '', review = {}, replacing = '', target = null, send }) {
   const text = String(value ?? '');
@@ -108,7 +117,12 @@ export async function performInsert({ page, spec, value, force = false, expect, 
     answer = null;
   }
   if (!answer || typeof answer !== 'object' || answer.error) answer = { ok: false, reason: 'no-form' };
-  if (answer.ok) return { status: 'inserted', answer, note: insertedNote(answer, target), hints };
+  if (answer.ok) {
+    // What the box held before stays with the Undo step only (memory, never shown, never stored).
+    const undo = undoStepOf(answer, { field: spec.field, fieldLabel: spec.fieldLabel || '', expect: message.expect ?? null, stamp: page?.formStamp });
+    const { undo: _undo, ...shown } = answer;
+    return { status: 'inserted', answer: shown, note: insertedNote(shown, target), hints, undo };
+  }
   return { status: 'failed', answer, why: answer.reason === 'wrong-record' ? wrongRecordText({ expect: message.expect, number }) : fillReasonText(answer.reason) };
 }
 
@@ -264,6 +278,130 @@ export async function insertText({ page, target, text, mode, source = null, pinn
   if (outcome?.status === 'inserted') {
     if (lastInserted.size >= MAX_REMEMBERED) lastInserted.delete(lastInserted.keys().next().value);
     lastInserted.set(key, String(text ?? '').trim());
+    // (the box's key goes with the Undo step: once the box is put back it no longer holds this text to swap)
+    if (outcome.undo) outcome.undo = { ...outcome.undo, box: key, target: target.key || '' };
   }
   return outcome;
+}
+
+// ---- Undo (round 4) --------------------------------------------------------------------------------------------------------
+
+const nameOf = (step) => tr(step?.fieldLabel || step?.field || '') || t('This box');
+const namesOf = (steps) => {
+  const names = steps.map(nameOf);
+  return names.length > 1 ? t('{names} and {last}', { names: names.slice(0, -1).join(t(', ')), last: names[names.length - 1] }) : names[0] || '';
+};
+
+/**
+ * Put back what the boxes of an Insert held before, the last one first (Prepare to close filled the code, then the notes: the notes
+ * go back first). Each box on its own, through FILL_FIELD's 'undo' mode: a box that was changed since the insert is left as it is
+ * ('changed', said plainly: Agent Buddy cannot undo it safely); the others still go back. Nothing is saved, nothing is asked.
+ * @param {{ page: object, steps: object[], send: (tabId: number, message: object) => Promise<object> }} args
+ * @returns {Promise<{ status: 'undone'|'partial'|'failed', undone: object[], kept: { step: object, reason: string }[], note: string }>}
+ */
+export async function undoInserts({ page, steps, send }) {
+  const list = (Array.isArray(steps) ? steps : []).filter((s) => s && typeof s === 'object' && isFillable(s.field));
+  const undone = [];
+  const kept = [];
+  for (const step of [...list].reverse()) {
+    if (!undoStillFor(step, page)) {
+      kept.push({ step, reason: 'wrong-record' });
+      continue;
+    }
+    let answer;
+    try {
+      // eslint-disable-next-line no-await-in-loop -- one box at a time, in the reverse order of the insert
+      answer = await send(page.tabId, buildUndoMessage(step));
+    } catch {
+      answer = null;
+    }
+    if (answer && answer.ok === true) {
+      undone.push(step);
+      if (step.box) lastInserted.delete(step.box);
+    } else kept.push({ step, reason: typeof answer?.reason === 'string' ? answer.reason : 'no-form' });
+  }
+  const lines = [];
+  if (undone.length) {
+    lines.push(undone.length > 1 ? t('Undone: {fields} are back to what they were before. Nothing is saved.', { fields: namesOf([...undone].reverse()) }) : t('Undone: {field} is back to what it was before. Nothing is saved.', { field: nameOf(undone[0]) }));
+  }
+  for (const { step, reason } of kept) {
+    lines.push(
+      reason === 'changed'
+        ? t('{field} was changed after the insert, so Agent Buddy cannot undo it safely. Change it by hand if you need to.', { field: nameOf(step) })
+        : reason === 'wrong-record'
+          ? t('{field} is on a form that is no longer open, so it was not put back.', { field: nameOf(step) })
+          : t('{field} could not be put back. {why}', { field: nameOf(step), why: fillReasonText(reason) })
+    );
+  }
+  const status = undone.length && !kept.length ? 'undone' : undone.length ? 'partial' : 'failed';
+  return { status, undone, kept, note: lines.join(' ') };
+}
+
+// ---- Prepare to close: the close code and the notes with one Insert (round 4) ---------------------------------------------
+
+/**
+ * The line after Prepare to close's Insert:
+ *   "Filled Close code and Resolution notes. Press Save in ServiceNow to keep them."
+ *   "Filled Resolution notes. Press Save in ServiceNow to keep it. Choose the close code Solved (Work Around) yourself."
+ * @param {{ filled: object[] (the steps' targets: { fieldLabel, field }), byHand?: string (the code's label), label?: string }} args
+ *   label: the box the notes went into on a page without g_form, named so a wrong box is easy to see
+ */
+export function closeFilledNote({ filled = [], byHand = '', label = '' } = {}) {
+  const names = filled.map((x) => ({ fieldLabel: x.fieldLabel, field: x.field }));
+  let base = names.length > 1 ? t('Filled {fields}. Press Save in ServiceNow to keep them.', { fields: namesOf(names) }) : t('Filled {field}. Press Save in ServiceNow to keep it.', { field: nameOf(names[0]) });
+  if (label) base = t('{base} It went into the box labelled "{label}".', { base, label: isolate(label) });
+  return byHand ? `${base} ${t('Choose the close code {code} yourself.', { code: isolate(byHand) })}` : base;
+}
+
+/**
+ * Prepare to close's Insert: the close code (a choice, by its stored value) and then the notes, one FILL_FIELD each, after the person
+ * saw both in the answer (docs/build-rules.md rule 1, the user's named exception). The notes are reviewed FIRST (the safe-to-send
+ * review), so nothing at all is written when the review stops them. The code is a value of the instance's own list, not reviewed,
+ * and optional: when the page cannot set it (a Workspace, a portal, a value this form does not list) the notes still go in and the
+ * outcome says which code to pick by hand. Nothing is saved; `undo` holds a step per box that went in (code first).
+ * @param {{
+ *   page: object, source?: object|null, review?: object, force?: boolean, send: Function,
+ *   code: { target: object, value: string, label: string } | null,   the code's target (insertTargets shape, field close_code)
+ *   byHand?: string,                                                   a code to pick by hand that is not tried at all (a Workspace)
+ *   notes: { target: object, text: string, mode?: string },            the notes' target and text
+ * }} args
+ * @returns {Promise<{ status: 'empty'|'blocked'|'findings'|'inserted'|'failed', code: 'filled'|'by-hand'|'none', undo: object[],
+ *   note?: string, why?: string, items?: object[], hints?: object[], codeWhy?: string }>}
+ */
+export async function insertCloseAndNotes({ page, code = null, byHand = '', notes, source = null, review = {}, force = false, send }) {
+  const text = String(notes?.text ?? '');
+  if (!notes?.target || !text.trim()) return { status: 'empty', code: 'none', undo: [] };
+  if (notes.target.blocked) return { status: 'blocked', why: notes.target.blocked, code: 'none', undo: [] };
+  let hints = [];
+  if (!force) {
+    const found = reviewInsert(notes.target.field, text, review);
+    if (found.serious.length) return { status: 'findings', items: found.serious, hints: found.hints, code: 'none', undo: [] };
+    hints = found.hints;
+  }
+  const undo = [];
+  const filled = [];
+  let codeState = 'none';
+  let codeWhy = '';
+  if (code && code.target && typeof code.value === 'string' && code.value.trim()) {
+    const outcome = code.target.blocked
+      ? { status: 'blocked', why: code.target.blocked }
+      : await insertText({ page, target: code.target, text: code.value, mode: 'replace', source, review, force: true, send });
+    if (outcome?.status === 'inserted') {
+      codeState = 'filled';
+      filled.push(code.target);
+      if (outcome.undo) undo.push(outcome.undo);
+    } else {
+      codeState = 'by-hand';
+      codeWhy = outcome?.why || '';
+    }
+  }
+  const out = await insertText({ page, target: notes.target, text, mode: notes.mode, source, review, force: true, send });
+  if (out?.status === 'inserted') {
+    filled.push(notes.target);
+    if (out.undo) undo.push(out.undo);
+    const label = out.answer?.method === 'dom' && typeof out.answer.label === 'string' ? out.answer.label : '';
+    const pick = codeState === 'by-hand' ? code.label || code.value : codeState === 'none' && typeof byHand === 'string' ? byHand : '';
+    return { status: 'inserted', code: codeState, codeWhy, undo, hints, answer: out.answer, note: closeFilledNote({ filled, byHand: pick, label }) };
+  }
+  return { status: out?.status === 'blocked' ? 'blocked' : 'failed', why: out?.why || fillReasonText('no-form'), code: codeState, codeWhy, undo, hints };
 }

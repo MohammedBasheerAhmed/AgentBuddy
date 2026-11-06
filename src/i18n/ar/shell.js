@@ -342,7 +342,6 @@ export const AR_SHELL = {
   'This is everything Agent Buddy keeps in this browser. It never keeps ticket text, names or the AI\'s answers.': 'هذا كل ما يحتفظ به Agent Buddy في هذا المتصفح. لا يحتفظ أبدا بنص التذاكر أو الأسماء أو إجابات الذكاء الاصطناعي.',
   'Clear everything stored by Agent Buddy': 'امسح كل ما خزّنه Agent Buddy',
   'Remove everything?': 'إزالة كل شيء؟',
-  'Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards and checklist ticks are deleted, and the ServiceNow sites you turned on are turned off. This cannot be undone.': 'ستحذف إعداداتك ومفتاح الذكاء الاصطناعي المحفوظ والمقتطفات وسجلا الاستخدام والنشاط ولوحات المعلومات المحفوظة وعلامات قوائم المراجعة، وتوقف مواقع ServiceNow التي شغّلتها. لا يمكن التراجع عن ذلك.',
   'The AI usage log stays while your organisation sets a daily limit.': 'يبقى سجل استخدام الذكاء الاصطناعي ما دامت مؤسستك تحدد حدا يوميا.',
   'Removing…': 'جار الإزالة…',
   'Yes, remove everything': 'نعم، أزل كل شيء',

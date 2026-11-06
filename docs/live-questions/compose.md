@@ -156,3 +156,32 @@ instead of Insert" or a less specific email suggestion, never a wrong write.
     fulfiller can read `sys_user.email` and `department` (field ACLs may blank them; the line then shows the name only); (b) `name=` with a
     space in the value works in `sysparm_query` (it is URL-encoded by the Table API client); (c) category display values come back with
     `sysparm_display_value=all`. Nothing is filled: caller, category and group are not in `FILLABLE_FIELDS`.
+
+## Added 2026-11-06 (round 4: the Reply row, docs/round4.md)
+
+35. **"No next step" and "Tone" are word lists, not understanding** (`src/safeSend/replyChecks.js`, no AI). Assumed: a reply that has
+    none of the listed promises ("I will", "سأقوم"), times ("tomorrow", "within 2 hours", "غدا", "خلال ساعتين"), requests ("please
+    confirm", "يرجى التأكيد") or a question mark says nothing about what happens next. A reply under 7 words, Latin text with fewer than
+    two common English words (French, Spanish...) and other scripts are not judged. Check with a few fulfillers on dev364920: in Write >
+    Check my comment, paste ten of their real (sent) replies in English and Arabic and count the "Say what happens next" hints that feel
+    wrong. If more than one in five is wrong, add the missed wording to `NEXT_STEP_WORDS` or raise `NEXT_STEP_MIN_WORDS`.
+36. **Which fields get which check.** Assumed: the next-step hint belongs only to a reply (`comments`, the email `body`); resolution
+    notes, a description and an article get the tone hint only, and work notes neither. Check with a team lead whether resolution notes
+    that reach the caller in the resolution email should also say what happens next ("closes automatically in 5 days unless you reply");
+    if yes, add `close_notes` to `REPLY_FIELDS`.
+37. **Arabic tone phrases are ambiguous without vowels.** "كما ذكرت سابقا" can be "as I said before" (defensive) or "as you said before"
+    (neutral); the list keeps it because the user named it, and leaves out "كما ذكرت" alone. Check with an Arabic-speaking agent whether
+    the tone hint on these phrases is more help than noise in real replies; drop the entry from `TONE_PHRASES.ar` if not.
+38. **Shouting thresholds.** Assumed: three or more words in capitals in a row, 12 or more capital letters, one word of 5 or more letters,
+    not right after a quote mark. Product names and acronyms ("VPN SAP CRM", "HTTP SSL TLS VPN") stay below it. Check on real resolution
+    notes and comments that quote error messages in capitals without quotes ("ACCESS DENIED FOR USER"): if they are flagged often, raise
+    `SHOUT_MIN_WORDS` to 4. Three exclamation marks in a whole text (not only in a row) are a hint; check that this is not noisy.
+39. **The caller's language on the Reply row** (`callerLanguage` in `src/compose/emailRecommend.js`) comes from the latest comment whose
+    author is the caller (matched by name, email or login as in `src/context/identity.js`), else the description, else the title. On a
+    Workspace or portal record the comment author can be a login rather than a name; then no comment counts as the caller's and the
+    description decides. Check on dev364920 with an Arabic comment added as the caller (impersonation is not needed: ask the caller's
+    test user to add it from the portal) that the row says "the caller writes in Arabic".
+40. **"Draft a reply writes in Arabic too, unless you choose English"** relies on the reply prompt following the customer's most recent
+    message (`LANGUAGE_CUSTOMER` in `src/prompts/rules.js`) when Settings > Language of AI answers is "The language of the ticket". Check
+    on dev364920 with an Arabic caller comment and an English description: the draft should be in Arabic. If the model follows the
+    description instead, the sentence must say "the ticket's language" and `callerLanguage` must weigh the description first.

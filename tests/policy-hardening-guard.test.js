@@ -3,6 +3,7 @@
 // an empty result, a zero, or "you cannot see it".
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILT_IN_SENSITIVE_PREFIXES as BUILT_IN_SENSITIVE_PREFIXES_KINDS } from '../src/context/kinds.js';
 import { POLICY_TTL_MS, blockedError, createPolicyGuard } from '../src/content/policyGuard.js';
 import { STATUS, classifyReadError, confirmEmptyIsReallyEmpty, softRead } from '../src/context/access.js';
 import { readContextPack } from '../src/context/pack.js';
@@ -86,7 +87,7 @@ test('a browser that never answers, or a loader that throws at once, does not ha
 test('the policy is cleaned the same way the panel cleans it: names are lower-cased, junk is dropped', async () => {
   const state = await guardFor({ blockedTables: ['Incident', ' SC_ITEM_OPTION_MTOM ', 7, ''], sensitiveTablePrefixes: ['X_Acme_HR_'] }).state();
   assert.deepEqual([...state.blocked].sort(), ['7', 'incident', 'sc_item_option_mtom']);
-  assert.deepEqual(state.sensitivePrefixes, ['sn_hr_', 'x_acme_hr_']);
+  assert.deepEqual(state.sensitivePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES_KINDS, 'x_acme_hr_']);
 });
 
 // ---- The wrapped deps ------------------------------------------------------------------------------------------------------
@@ -172,7 +173,7 @@ test('the other properties of the deps are kept, and the policy is offered to th
   assert.equal(deps.extra, 'kept');
   assert.equal(deps.isBlocked('Incident'), true);
   assert.equal(deps.isBlocked('problem'), false);
-  assert.deepEqual(deps.sensitivePrefixes, ['sn_hr_', 'x_hr_']);
+  assert.deepEqual(deps.sensitivePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES_KINDS, 'x_hr_']);
   assert.ok(Object.isFrozen(deps));
   const unknown = await guardFor({}, false).deps(base);
   assert.equal(unknown.sensitivePrefixes, undefined, 'no policy known: the context engine uses its defaults');

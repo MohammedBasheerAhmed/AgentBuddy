@@ -1,7 +1,8 @@
 // Ordering, grouping and filtering My work's lists. Pure: everything takes plain items (src/mywork/read.js) and `now`.
 //
 // An item: { table, sysId, number, title, priority, state, work ('open'|'new'|'waiting-customer'|'on-hold'|'resolved'), holdReason,
-//            updatedAt, openedAt, ci: { id, name } | null, sla: null | { breached, paused, percentage, dueAt, risk }, marker: {...} }
+//            updatedAt, openedAt, ci: { id, name } | null, sla: null | { breached, paused, percentage, dueAt, risk }, marker: {...},
+//            atRisk?: [reasons] } (atRisk: set by src/mywork/risk.js withRisk in the panel; without it no ticket is "at risk")
 //
 // The groups of the queue:
 //   'now'       waiting on you: live work, and anything the customer answered (even a ticket still marked "on hold")
@@ -18,6 +19,12 @@ export function priorityRank(display) {
 
 /** Did someone (the customer, or someone else when no customer is known) write after my last customer-visible comment? */
 export const hasReply = (item) => Boolean(item?.marker?.replied);
+
+/** Is the ticket one of the few that cost the most time (src/mywork/risk.js names why)? Never a resolved one. */
+export const isAtRisk = (item) => Array.isArray(item?.atRisk) && item.atRisk.length > 0 && item.work !== 'resolved';
+
+// At risk first: 0 for a ticket at risk, 1 for the rest. It decides before anything else inside a group (see compareNow).
+const band = (item) => (isAtRisk(item) ? 0 : 1);
 
 /** Which group of the queue an item belongs to. */
 export function groupOf(item) {
@@ -47,11 +54,18 @@ function slaKey(item, now) {
 const idle = (item, now) => (Number.isFinite(item.updatedAt) ? now - item.updatedAt : 0);
 
 /**
- * "Waiting on you", most urgent first: breached SLA, then SLA at risk (75 % used or under 2 hours left), then tickets the customer
- * answered, then the rest. Inside the first two: the least time left first. Inside the others: priority, then the SLA that ends
- * soonest (paused ones after running ones), then the ticket nobody touched for longest.
+ * "Waiting on you", most urgent first. Tickets at risk come first (src/mywork/risk.js); inside each of the two bands the order is
+ * the one My work always had: breached SLA, then SLA at risk (75 % used or under 2 hours left), then tickets the customer answered,
+ * then the rest. Inside the first two: the least time left first. Inside the others: priority, then the SLA that ends soonest (paused
+ * ones after running ones), then the ticket nobody touched for longest.
+ * A breached or nearly breached SLA is itself a reason to be at risk, so those tickets always lead the first band; in effect the
+ * order is: breached, SLA at risk, at risk and answered, at risk, answered, the rest. Without risk reasons (the page script ranks
+ * before the panel adds them) the bands are one and the order is the old one.
  */
 export function compareNow(a, b, now) {
+  const ba = band(a);
+  const bb = band(b);
+  if (ba !== bb) return ba - bb;
   const ta = tier(a);
   const tb = tier(b);
   if (ta !== tb) return ta - tb;
@@ -75,12 +89,12 @@ export function compareNow(a, b, now) {
 // Waiting: the one that has waited longest first (the first to chase). Resolved: the oldest first.
 const waitedSince = (item) => item.marker?.lastAt ?? item.updatedAt ?? 0;
 
-/** The queue in its three groups, each in its own order. */
+/** The queue in its three groups, each in its own order (in "waiting" too, the tickets at risk first). */
 export function groupQueue(items, now) {
   const out = { now: [], waiting: [], resolved: [] };
   for (const item of items || []) out[groupOf(item)].push(item);
   out.now.sort((a, b) => compareNow(a, b, now));
-  out.waiting.sort((a, b) => waitedSince(a) - waitedSince(b) || String(a.number).localeCompare(String(b.number)));
+  out.waiting.sort((a, b) => band(a) - band(b) || waitedSince(a) - waitedSince(b) || String(a.number).localeCompare(String(b.number)));
   out.resolved.sort((a, b) => (a.updatedAt ?? 0) - (b.updatedAt ?? 0) || String(a.number).localeCompare(String(b.number)));
   return out;
 }
@@ -101,6 +115,7 @@ export function passes(item, id) {
   if (dim === 'prio') return String(priorityRank(item.priority)) === value;
   if (dim === 'ci') return item.ci?.id === value;
   if (dim === 'status') {
+    if (value === 'risk') return isAtRisk(item);
     if (value === 'replied') return hasReply(item) && item.work !== 'resolved';
     if (value === 'waiting') return groupOf(item) === 'waiting';
     if (value === 'breached') return item.sla?.risk === 'breached';
@@ -110,14 +125,16 @@ export function passes(item, id) {
 }
 
 /**
- * The filter chips with their counts, only the ones that would show something: "SLA breached 2", "SLA at risk 1",
- * "Customer replied 3", "On hold 4", then "P1 2", "P2 5", then the types when there is more than one ("Incidents 12", "Catalog tasks 8").
+ * The filter chips with their counts, only the ones that would show something: "At risk 3" first (the tickets the person wants
+ * first), "SLA breached 2", "SLA at risk 1", "Customer replied 3", "On hold 4", then "P1 2", "P2 5", then the types when there is
+ * more than one ("Incidents 12", "Catalog tasks 8").
  * @returns {{ id: string, label: string, count: number }[]}
  */
 export function filterChips(items, { classNames = {} } = {}) {
   const list = items || [];
   const count = (id) => list.filter((i) => passes(i, id)).length;
   const chips = [
+    { id: 'status:risk', label: tm('At risk') },
     { id: 'status:breached', label: tm('SLA breached') },
     { id: 'status:due', label: tm('SLA at risk') },
     { id: 'status:replied', label: tm('Replied') },

@@ -8,7 +8,7 @@
 import { LIMITS } from './allowlists.js';
 import { STATUS, classifyReadError, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
 import { SYS_ID_RE, cleanText, disp, formatSnTime, mapLimit, oneLine, parseSnTime, queryValue, raw, stripHtml } from './util.js';
-import { similarKeywords } from '../lib/similar.js';
+import { queryTerm, similarKeywords } from '../lib/similar.js';
 // The ranking of the ticket's "Knowledge that may help" (src/context/similar.js, Insights agent), used read-only so both rank alike.
 import { scoreArticle } from './similar.js';
 
@@ -153,7 +153,8 @@ const ARTICLE_NUMBER_RE = /^[A-Za-z]{2,8}\d{4,12}$/;
 
 /**
  * The words a typed search is made of: no email addresses, links or phone numbers, no filler words, acronyms first; or the article
- * number when the person typed one. Every word is plain a-z, 0-9, dash and underscore, so it can go into a query as it is.
+ * number when the person typed one. Words of any script that writes spaces between words (English, Arabic...: src/lib/similar.js);
+ * every word is letters, digits, dash and underscore only (queryTerm), so it can go into a query as it is.
  * @param {string} input what the person typed
  * @returns {{ number: string, keywords: string[] }}
  */
@@ -164,7 +165,7 @@ export function searchTerms(input) {
     .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, ' ')
     .replace(/https?:\/\/\S+/gi, ' ')
     .replace(/\+?\d[\d\s().-]{6,}\d/g, ' ');
-  const keywords = similarKeywords(clean, KB_SEARCH_MAX_TERMS).map((w) => w.replace(/[^a-z0-9_-]/g, '')).filter((w) => w.length >= 2);
+  const keywords = similarKeywords(clean, KB_SEARCH_MAX_TERMS).map(queryTerm).filter((w) => w.length >= 2);
   return { number: '', keywords: [...new Set(keywords)] };
 }
 
@@ -174,7 +175,7 @@ export function searchTerms(input) {
  */
 export function knowledgeSearchQuery({ number = '', keywords = [] } = {}, { all = true } = {}) {
   if (number) return ARTICLE_NUMBER_RE.test(number) ? `workflow_state=published^number=${number}` : '';
-  const safe = keywords.map((w) => String(w).replace(/[^a-z0-9_-]/gi, '')).filter(Boolean);
+  const safe = keywords.map(queryTerm).filter(Boolean);
   if (!safe.length) return '';
   const words = all ? safe.map((w) => `short_descriptionLIKE${w}^ORtextLIKE${w}`).join('^') : safe.flatMap((w) => [`short_descriptionLIKE${w}`, `textLIKE${w}`]).join('^OR');
   return `workflow_state=published^${words}^ORDERBYDESCsys_updated_on`;

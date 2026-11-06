@@ -1,0 +1,8 @@
+/* Round 4 (docs/round4.md): styles of the reads area. --ab-* tokens only. */
+
+/* A read the instance limited or answered with a page (src/sidepanel/ErrorNote.jsx, tone "calm"): the colours of .ab-note-warn, and its
+   "Try again" button edged in the same family so the note does not read as an alarm. */
+.ab-reads-calm .ab-btn { border-color: var(--ab-warn-line); }
+
+/* A refusal in a card (src/sidepanel/ticket/cards/bits.jsx ReadState): one plain line; long names wrap in a 320px panel. */
+.ab-reads-refused { overflow-wrap: anywhere; }

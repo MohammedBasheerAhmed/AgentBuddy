@@ -42,13 +42,32 @@ export function kindForTable(table) {
   return 'other';
 }
 
-// HR data (cases about a person's leave, pay, conduct) is the most sensitive thing a fulfiller reads. Its tables are
-// recognised by prefix so custom tables in the same family are covered too. The organisation's policy can add prefixes
-// (`sensitiveTablePrefixes`, src/policy/policy.js); `sn_hr_` is always on the list.
-const SENSITIVE_PREFIXES = ['sn_hr_'];
+// HR data (cases about a person's leave, pay, conduct) is the most sensitive thing a fulfiller reads. Security and audit data is as
+// sensitive: a security incident names the people and systems under investigation, a vulnerability says where a system can be
+// attacked, a GRC issue or audit finding says what is wrong with a control. Their tables are recognised by prefix so custom tables in
+// the same family are covered too. These prefixes are always on the list; the organisation's policy can add more
+// (`sensitiveTablePrefixes`, src/policy/policy.js) and never remove one.
+//
+// A built-in prefix behaves exactly as a prefix the policy adds: free text and identities are read only when the organisation allows
+// sensitive content (`allowHrContent`); the AI path asks the same question through isSensitiveByPolicy (src/policy/policy.js), which
+// must consult this list too (an AI run on such a record then needs that switch, an approved endpoint and Strict mode). What stays
+// HR-only is decided by the table KIND, not by this list: kindForTable above still gives 'hr_case' to the sn_hr_ case family alone
+// (the HR case brief, the HR work profile), so a security incident is never treated as an HR case.
+// Unverified table names: docs/live-questions/reads.md.
+export const BUILT_IN_SENSITIVE_PREFIXES = Object.freeze([
+  'sn_hr_', // HR Service Delivery: cases, tasks, lifecycle events, employee relations
+  'sn_si_', // Security Incident Response: security incidents, their tasks and requests
+  'sn_vul_', // Vulnerability Response: vulnerable items, vulnerabilities, remediation tasks
+  'sn_grc_', // Governance, risk and compliance (IRM): issues, profiles, indicators
+  'sn_risk_', // Risk management: risks, risk assessments
+  'sn_compliance_', // Policy and compliance: controls, policies, citations
+  'sn_audit_', // Audit management: engagements, audit tasks, findings
+]);
+const SENSITIVE_PREFIXES = BUILT_IN_SENSITIVE_PREFIXES;
 
 /**
- * True for tables whose free text and identities are only read when the caller asks for sensitive data.
+ * True for tables whose free text and identities are only read when the caller asks for sensitive data: the built-in families
+ * (BUILT_IN_SENSITIVE_PREFIXES) and the policy's own prefixes.
  * @param {string} table
  * @param {string[]} [extraPrefixes] the policy's sensitiveTablePrefixes (lower case); the content script passes `deps.sensitivePrefixes`
  */

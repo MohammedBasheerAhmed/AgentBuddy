@@ -7,8 +7,14 @@
 //   - a one-line field is replaced, never appended to, and its line breaks become spaces
 //   - an HTML field gets the text as escaped HTML (toSafeHtml); the bridge uses it on a form with g_form, and types the plain
 //     text into the rich-text editor of a Workspace
+//   - a choice list (close_code, round 4) gets its stored value, short and on one line; the bridge sets it through g_form only
 //
-// The bridge's answer comes from the page, so it is data: only two shapes go back to the panel.
+// Round 4, Undo (docs/round4.md): the bridge also says what the box held before and what the insert left in it, and the panel may
+// put the earlier text back with mode 'undo' (handleUndo below): the same checks (a fillable field, the record it was made on, which
+// an Undo must always name), and the page refuses unless the box still holds exactly what the insert left there. Nothing is saved.
+//
+// The bridge's answer comes from the page, so it is data: only two shapes go back to the panel (texts checked as strings of a sane
+// length; anything else is dropped).
 //
 // Dependencies are injected so this is tested without a browser (tests/insert-content-fill.test.js).
 
@@ -18,6 +24,31 @@ import { formShowsRecord } from './formRecord.js';
 import { FIELD_RE } from '../context/util.js';
 
 export const MAX_INSERT_CHARS = 20000;
+/** A choice's stored value is a short code ("Solved (Work Around)", "resolved_by_caller"): anything longer is not one. */
+export const MAX_CHOICE_CHARS = 100;
+
+// What the page says a box held before an insert and holds after it (for Undo): plain strings of a sane length, or nothing.
+function undoOf(answer) {
+  const ok = (v) => typeof v === 'string' && v.length <= MAX_INSERT_CHARS;
+  return ok(answer?.previous) && ok(answer?.after) ? { previous: answer.previous, after: answer.after } : null;
+}
+
+// Is the form that is open now the one named by `expect`? 'ok', or the reason to answer with. (A record that cannot be determined
+// does not match.)
+async function checkRecord(expect, { currentRecord, currentNewRecord, href }) {
+  const want = parseExpect(expect);
+  if (want === 'invalid') return 'wrong-record';
+  // The email body belongs to the email client: on any other page there is no such field (not a different record's form).
+  if (want && want.kind === 'email' && !emailClientTarget(href())) return 'no-such-field';
+  if (want) {
+    const [record, newRecord] = await Promise.all([Promise.resolve(currentRecord()).catch(() => null), Promise.resolve(currentNewRecord()).catch(() => null)]);
+    if (!matchesExpect(expect, { record, newRecord, href: href() })) return 'wrong-record';
+  }
+  return 'ok';
+}
+
+// A reason the page gave, if it is one we know (a page cannot claim 'wrong-record': only this script decides that).
+const reasonOf = (answer) => (FILL_REASONS.includes(answer?.reason) && answer.reason !== 'wrong-record' ? answer.reason : 'no-form');
 
 // What a control is called, from the page: short, printable, one line (the panel shows it as text).
 const hex4 = (n) => `\\u${n.toString(16).padStart(4, '0')}`; // (written as numbers so this file stays plain ASCII)
@@ -32,29 +63,22 @@ const cleanLabel = (value) => (typeof value === 'string' ? value.replace(INVISIB
  *   currentNewRecord: () => Promise<{table: string}|null>,
  *   href: () => string,
  * }} deps
- * @returns {Promise<{ ok: true, method: 'gform'|'dom', label?: string } | { ok: false, reason: string }>}
+ * @returns {Promise<{ ok: true, method: 'gform'|'dom', label?: string, undo?: { previous: string, after: string } } | { ok: false, reason: string }>}
  */
 export async function handleFillField(message, { callPage, currentRecord, currentNewRecord, href }) {
+  if (message?.mode === 'undo') return handleUndo(message, { callPage, currentRecord, currentNewRecord, href });
   const field = message?.field;
   if (typeof field !== 'string' || !FIELD_RE.test(field) || !isFillable(field)) return { ok: false, reason: 'bad-field' };
   const meta = fieldMeta(field);
   let text = String(message.value ?? '');
   if (meta.singleLine) text = toOneLine(text);
   if (!text.trim()) return { ok: false, reason: 'bad-field' };
-  if (text.length > MAX_INSERT_CHARS) return { ok: false, reason: 'too-long' };
+  if (text.length > MAX_INSERT_CHARS || (meta.choice && text.length > MAX_CHOICE_CHARS)) return { ok: false, reason: 'too-long' };
 
   try {
     // The form must be the record the text was written for (checked now, not when the panel last looked).
-    const want = parseExpect(message.expect);
-    if (want === 'invalid') return { ok: false, reason: 'wrong-record' };
-    // The email body belongs to the email client: on any other page there is no such field (not a different record's form).
-    if (want && want.kind === 'email' && !emailClientTarget(href())) return { ok: false, reason: 'no-such-field' };
-    if (want) {
-      const [record, newRecord] = await Promise.all([Promise.resolve(currentRecord()).catch(() => null), Promise.resolve(currentNewRecord()).catch(() => null)]);
-      if (!matchesExpect(message.expect, { record, newRecord, href: href() })) {
-        return { ok: false, reason: 'wrong-record' };
-      }
-    }
+    const where = await checkRecord(message.expect, { currentRecord, currentNewRecord, href });
+    if (where !== 'ok') return { ok: false, reason: where };
 
     // Only an explicit 'append' adds below what the field holds, and never on a one-line field.
     const append = message.mode === 'append' && !meta.singleLine;
@@ -65,12 +89,42 @@ export async function handleFillField(message, { callPage, currentRecord, curren
     // The text this panel put into the same box before (append only, plain fields only): the bridge swaps it for the new one when
     // the box still holds it word for word, so Try again + Insert does not leave two copies. Anything odd is simply not sent.
     const previous = append && !meta.html && typeof message.replacing === 'string' && message.replacing.trim() && message.replacing.length <= MAX_INSERT_CHARS ? message.replacing.trim() : '';
-    const answer = await callPage('fillField', previous ? [field, text, label, append, html, previous] : [field, text, label, append, html]);
+    // The last argument: a choice list is set by g_form only (never typed into a box), and the page says what the box held before
+    // and holds after, for Undo.
+    const answer = await callPage('fillField', [field, text, label, append, html, previous, { choice: meta.choice === true, undo: true }]);
     if (answer?.ok === true) {
       const matched = cleanLabel(answer.label);
-      return { ok: true, method: answer.method === 'gform' ? 'gform' : 'dom', ...(matched ? { label: matched } : {}) };
+      const undo = undoOf(answer);
+      return { ok: true, method: answer.method === 'gform' ? 'gform' : 'dom', ...(matched ? { label: matched } : {}), ...(undo ? { undo } : {}) };
     }
-    return { ok: false, reason: FILL_REASONS.includes(answer?.reason) && answer.reason !== 'wrong-record' ? answer.reason : 'no-form' };
+    return { ok: false, reason: reasonOf(answer) };
+  } catch {
+    return { ok: false, reason: 'no-form' };
+  }
+}
+
+/**
+ * Undo one insert (FILL_FIELD with mode 'undo'): put back what the box held before, if it still holds exactly what the insert left.
+ * The same checks as an insert, and stricter on the record: an Undo must name the record it was made on (no expectation = no Undo).
+ * `value` (what the box held before) may be empty; `current` (what the insert left) may not.
+ * @param {{ field?: string, value?: string, current?: string, label?: string, expect?: object }} message from the side panel
+ * @returns {Promise<{ ok: true, method: 'gform'|'dom' } | { ok: false, reason: string }>}
+ */
+export async function handleUndo(message, { callPage, currentRecord, currentNewRecord, href }) {
+  const field = message?.field;
+  if (typeof field !== 'string' || !FIELD_RE.test(field) || !isFillable(field)) return { ok: false, reason: 'bad-field' };
+  const meta = fieldMeta(field);
+  const { value, current } = message;
+  if (typeof value !== 'string' || typeof current !== 'string' || !current.trim()) return { ok: false, reason: 'bad-field' };
+  if (value.length > MAX_INSERT_CHARS || current.length > MAX_INSERT_CHARS) return { ok: false, reason: 'too-long' };
+  if (message.expect === undefined || message.expect === null) return { ok: false, reason: 'wrong-record' };
+  try {
+    const where = await checkRecord(message.expect, { currentRecord, currentNewRecord, href });
+    if (where !== 'ok') return { ok: false, reason: where };
+    const label = typeof message.label === 'string' ? message.label.slice(0, 100) : '';
+    const answer = await callPage('restoreField', [field, value, current, label, { choice: meta.choice === true }]);
+    if (answer?.ok === true) return { ok: true, method: answer.method === 'gform' ? 'gform' : 'dom' };
+    return { ok: false, reason: reasonOf(answer) };
   } catch {
     return { ok: false, reason: 'no-form' };
   }

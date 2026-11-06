@@ -1,10 +1,13 @@
 // Everything Agent Buddy keeps in the browser, in one list, and the one function that removes all of it. Pure: the storage areas are
 // passed in (chrome.storage.local, chrome.storage.session and the key vault in Settings, fakes in tests/insert-stored-data.test.js).
 //
-// What is kept is configuration and counts, never ticket content (build rule 7). The list is what Settings shows under
-// "Stored data", so a security reviewer can see it in one place; a test fails when a key appears in the code that is not described here.
+// What is kept is configuration and counts, never ticket content (build rule 7), with one named exception: the record ids, tables and
+// times of the tickets opened in the panel, for "since you last looked" (src/lib/lastViewed.js; no number, title, text or names). The
+// list is what Settings shows under "Stored data", so a security reviewer can see it in one place; a test fails when a key appears in
+// the code that is not described here.
 
 import { tm } from '../i18n/index.js';
+import { LAST_VIEWED_KEY, countLastViewed } from './lastViewed.js';
 
 export const KEY_PREFIX = 'agentbuddy_';
 
@@ -31,6 +34,15 @@ export const STORED_DATA = Object.freeze([
   { id: 'audit', title: tm('Activity log'), detail: tm('What Agent Buddy did: action, table, number of masked items, outcome. A salted code for the record, never its text. Also the random salt itself.'), area: 'local', keys: ['agentbuddy_audit', 'agentbuddy_audit_salt'] },
   { id: 'checklist', title: tm('Checklist ticks'), detail: tm('Which steps you ticked on a task, under a salted code for the record and encrypted. Memory only: gone when the browser closes.'), area: 'session', keys: ['agentbuddy_checklists'] },
   { id: 'dashboards', title: tm('Saved dashboards'), detail: tm('The settings of dashboards you saved (what to count, how to group it). No ticket data.'), area: 'local', keys: ['agentbuddy_dashboards'] },
+  // "Since you last looked" (src/lib/lastViewed.js): the one exception to "no ticket content" (docs/build-rules.md rule 7). Settings
+  // shows how many (lastViewedCount below); the organisation can turn it off (policy rememberLastViewed).
+  {
+    id: 'lastViewed',
+    title: tm('Tickets you opened'),
+    detail: tm('When you last opened each ticket in the panel, so it can say what is new since then: the record id, its table and the time, never its number, title, text or names. At most 500 tickets, none older than 30 days.'),
+    area: 'local',
+    keys: ['agentbuddy_last_viewed'],
+  },
 ]);
 
 export const AREAS = Object.freeze(['local', 'session', 'vault and session']);
@@ -45,10 +57,24 @@ export const describeKey = (key) => STORED_DATA.find((item) => ownsKey(item, key
  * @param {string[]} localKeys
  * @param {string[]} sessionKeys
  * @param {string[]} vaultKeys
+ * @param {{ counts?: Record<string, number> }} [options] counts: how many an item holds, by item id (storedCounts), shown with it
  */
-export function summarizeStored(localKeys = [], sessionKeys = [], vaultKeys = []) {
+export function summarizeStored(localKeys = [], sessionKeys = [], vaultKeys = [], { counts = {} } = {}) {
   const keys = [...localKeys, ...sessionKeys, ...vaultKeys].filter((k) => typeof k === 'string' && k.startsWith(KEY_PREFIX) && k !== 'agentbuddy_keyvault_stamp');
-  return STORED_DATA.map((item) => ({ ...item, present: keys.some((k) => ownsKey(item, k)) }));
+  return STORED_DATA.map((item) => {
+    const present = keys.some((k) => ownsKey(item, k));
+    const count = Object.prototype.hasOwnProperty.call(counts || {}, item.id) && Number.isFinite(counts[item.id]) ? counts[item.id] : null;
+    return count === null ? { ...item, present } : { ...item, present: present && count > 0, count };
+  });
+}
+
+/**
+ * The counts Settings shows next to an item, from the values in chrome.storage.local: { lastViewed: number of tickets remembered }.
+ * Only what can be counted without reading anything but the item's own key. Pure.
+ */
+export function storedCounts(localValues = {}, now = Date.now()) {
+  const values = localValues && typeof localValues === 'object' ? localValues : {};
+  return { lastViewed: countLastViewed(values[LAST_VIEWED_KEY], now) };
 }
 
 /**

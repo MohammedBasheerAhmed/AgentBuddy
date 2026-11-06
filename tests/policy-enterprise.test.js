@@ -106,6 +106,7 @@ test('where the calls go: vendor defaults, presets and a model on this computer'
 
 test('every policy key but providedApiKey can be compiled in, exactly as written', () => {
   const full = {
+    rememberLastViewed: false,
     allowedInstances: ['https://acme.service-now.com'],
     aiProvider: 'openai',
     aiBaseUrl: 'https://gw.corp.example/v1',

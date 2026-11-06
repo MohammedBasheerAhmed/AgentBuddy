@@ -11,6 +11,8 @@ import { SYS_ID_RE, TABLE_RE, parseSnTime } from '../context/util.js';
 import { authorRole, identities } from '../context/identity.js';
 import { isLocalTime } from '../context/journal.js';
 import { isolate, t, tm, tn } from '../i18n/index.js';
+import { scriptOf } from '../lib/scriptDetect.js';
+import { looksEnglish } from '../safeSend/replyChecks.js';
 
 // label and blurb are shown to the person: marked with tm() here, shown with t() on the property.
 export const EMAIL_TYPES = Object.freeze([
@@ -319,6 +321,67 @@ export function recommendEmails(pack, { now = Date.now(), max = MAX_PICKS, minSc
     .map((c) => ({ ...emailTypeById(c.id), why: c.why, score: c.score }));
   const picked = new Set(picks.map((c) => c.id));
   return { picks, others: EMAIL_TYPES.filter((type) => !picked.has(type.id)), facts: factsFor(s), note };
+}
+
+// ---- The caller's language (round 4) -------------------------------------------------------------------------------
+
+const LANGUAGE_OF_SCRIPT = { arabic: 'ar' };
+
+/** 'ar', 'en' or '' (another language, a mix of scripts, or too few letters to tell) for one text. No AI: the script and common words. */
+export function languageOfText(value) {
+  const s = text(value);
+  const script = scriptOf(s);
+  if (LANGUAGE_OF_SCRIPT[script]) return LANGUAGE_OF_SCRIPT[script];
+  return script === 'latin' && looksEnglish(s) ? 'en' : '';
+}
+
+/**
+ * The language the caller writes in: that of the latest comment the caller wrote (the customer-visible notes, by name, email or
+ * login, src/context/identity.js), else that of the description, else that of the title. The AI's reply follows the same text by
+ * default (src/prompts/rules.js LANGUAGE_CUSTOMER: "the language the customer used in their most recent message").
+ * @returns {'ar' | 'en' | ''}
+ */
+export function callerLanguage(pack) {
+  const p = pack && typeof pack === 'object' ? pack : {};
+  const journal = Array.isArray(p.journal) ? p.journal : [];
+  const ids = identities(p);
+  for (let i = journal.length - 1; i >= 0; i -= 1) {
+    const entry = journal[i];
+    if (!entry || typeof entry !== 'object' || entry.type !== 'comment' || !text(entry.text)) continue;
+    if (authorRole(entry.by, ids) === 'customer') return languageOfText(entry.text);
+  }
+  for (const name of ['description', 'short_description']) {
+    const value = text(p.fields?.[name]);
+    if (scriptOf(value)) return languageOfText(value);
+  }
+  return '';
+}
+
+/**
+ * What the Reply row says about the language, true for the setting "Language of AI answers" (Settings > Language): 'ticket' (the
+ * default) writes in the customer's language, 'panel' in the panel's (src/prompts/rules.js answerLanguageRule). Said only when the
+ * caller writes in another language than the panel's: an English ticket in an English panel needs no line.
+ * @param {{ caller: 'ar'|'en'|'', setting?: string, panel?: string, ai?: boolean }} options
+ *   caller: callerLanguage(pack); setting: settings.answerLanguage; panel: the panel's language now; ai: Draft a reply is available
+ * @returns {{ reply: string, fact: string, line: string }} reply: the language Draft a reply writes in ('' when not known); fact: the
+ *   sentence for the card; line: the words added to the row's line
+ */
+export function replyLanguage({ caller, setting = 'ticket', panel = 'en', ai = true } = {}) {
+  if ((caller !== 'ar' && caller !== 'en') || caller === panel) return { reply: caller === 'ar' || caller === 'en' ? caller : '', fact: '', line: '' };
+  const reply = setting === 'panel' && (panel === 'ar' || panel === 'en') ? panel : caller;
+  const arabic = caller === 'ar';
+  let fact;
+  if (!ai) fact = arabic ? t('The caller writes in Arabic.') : t('The caller writes in English.');
+  else if (reply === caller) {
+    fact = arabic
+      ? t('The caller writes in Arabic. Draft a reply writes in Arabic too, unless you choose English.')
+      : t('The caller writes in English. Draft a reply writes in English too, unless you choose Arabic.');
+  } else {
+    fact = arabic
+      ? t('The caller writes in Arabic. Draft a reply writes in English (your setting).')
+      : t('The caller writes in English. Draft a reply writes in Arabic (your setting).');
+  }
+  return { reply, fact, line: arabic ? t('the caller writes in Arabic') : t('the caller writes in English') };
 }
 
 // ---- The draft ---------------------------------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_SENSITIVE_PREFIXES, isFeatureEnabled, isSensitiveByPolicy, isTableAllowed, normalizePolicy } from '../src/policy/policy.js';
 import { featuresFor, isFeatureAvailable, featureById, FEATURES } from '../src/features/registry.js';
-import { isSensitiveTable } from '../src/context/kinds.js';
+import { BUILT_IN_SENSITIVE_PREFIXES, isSensitiveTable } from '../src/context/kinds.js';
 import { allowedFields } from '../src/context/allowlists.js';
 import { readContextPack } from '../src/context/pack.js';
 import { checkPackFeature, handleRead } from '../src/content/reads.js';
@@ -58,20 +58,21 @@ test('the feature ids named in docs/deployment.md exist, are lower case and are 
 
 // ---- SEC-04: sensitiveTablePrefixes ----------------------------------------------------------------------------------------
 
-test('SEC-04: sensitiveTablePrefixes defaults to sn_hr_, adds to it, and can never remove it', () => {
-  assert.deepEqual(DEFAULT_SENSITIVE_PREFIXES, ['sn_hr_']);
-  assert.deepEqual(normalizePolicy({}).sensitiveTablePrefixes, ['sn_hr_']);
-  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: [] }).sensitiveTablePrefixes, ['sn_hr_']);
-  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: ['X_Acme_HR_', 'x_acme_legal_'] }).sensitiveTablePrefixes, ['sn_hr_', 'x_acme_hr_', 'x_acme_legal_']);
+test('SEC-04: sensitiveTablePrefixes defaults to the built-in families (HR; since round 4 security and risk too), adds to them, and can never remove one', () => {
+  assert.deepEqual(DEFAULT_SENSITIVE_PREFIXES, BUILT_IN_SENSITIVE_PREFIXES);
+  assert.deepEqual(DEFAULT_SENSITIVE_PREFIXES, ['sn_hr_', 'sn_si_', 'sn_vul_', 'sn_grc_', 'sn_risk_', 'sn_compliance_', 'sn_audit_']);
+  assert.deepEqual(normalizePolicy({}).sensitiveTablePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES]);
+  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: [] }).sensitiveTablePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES]);
+  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: ['X_Acme_HR_', 'x_acme_legal_'] }).sensitiveTablePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES, 'x_acme_hr_', 'x_acme_legal_']);
   // a list that tries to replace the default still has it
   assert.ok(normalizePolicy({ sensitiveTablePrefixes: ['x_acme_'] }).sensitiveTablePrefixes.includes('sn_hr_'));
 });
 
 test('SEC-04: garbage prefixes are dropped, never guessed (one letter, spaces, punctuation, a number, not a list)', () => {
   const p = normalizePolicy({ sensitiveTablePrefixes: ['x', 'has space', 'a;b', '9lives_', '*', '', 42, 'ok_prefix_'] });
-  assert.deepEqual(p.sensitiveTablePrefixes, ['sn_hr_', 'ok_prefix_']);
-  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: 'x_acme_hr_' }).sensitiveTablePrefixes, ['sn_hr_']);
-  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: { 0: 'x_acme_' } }).sensitiveTablePrefixes, ['sn_hr_']);
+  assert.deepEqual(p.sensitiveTablePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES, 'ok_prefix_']);
+  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: 'x_acme_hr_' }).sensitiveTablePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES]);
+  assert.deepEqual(normalizePolicy({ sensitiveTablePrefixes: { 0: 'x_acme_' } }).sensitiveTablePrefixes, [...BUILT_IN_SENSITIVE_PREFIXES]);
 });
 
 test('SEC-04: isSensitiveByPolicy and isSensitiveTable use the policy prefixes and keep the default behaviour', () => {

@@ -4,14 +4,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { USAGE_KEY } from '../../lib/aiUsage.js';
 import { loadSettings, keyVault } from '../../lib/storage.js';
 import { MSG } from '../../lib/messages.js';
-import { clearAllStored, summarizeStored } from '../../lib/storedData.js';
+import { clearAllStored, storedCounts, summarizeStored } from '../../lib/storedData.js';
 import { SectionHead } from '../fields.jsx';
-import { t, t as tr } from '../../i18n/index.js';
+import { t, tn, t as tr } from '../../i18n/index.js';
 
 // "saved now", "nothing saved", and for what lives in memory only "..., memory only"
 function storedState(item) {
   const state = item.present ? t('saved now') : t('nothing saved');
   return item.area === 'session' ? t('{state}, memory only', { state }) : state;
+}
+
+// An item's name; the tickets you opened (src/lib/lastViewed.js) say how many, and that only their ids and times are kept.
+function storedTitle(item) {
+  if (item.id === 'lastViewed' && Number.isFinite(item.count)) return tn(item.count, 'Tickets you opened: {n} (ids and times only)', 'Tickets you opened: {n} (ids and times only)');
+  return tr(item.title);
 }
 
 /**
@@ -28,10 +34,10 @@ export function StoredDataSection({ eff, onCleared }) {
 
   const load = useCallback(async () => {
     try {
-      const local = Object.keys((await chrome.storage.local.get(null)) || {});
+      const localValues = (await chrome.storage.local.get(null)) || {};
       const session = chrome.storage.session ? Object.keys((await chrome.storage.session.get(null)) || {}) : [];
       const vault = keyVault() ? Object.keys((await keyVault().get(null)) || {}) : [];
-      setItems(summarizeStored(local, session, vault));
+      setItems(summarizeStored(Object.keys(localValues), session, vault, { counts: storedCounts(localValues, Date.now()) }));
     } catch {
       setItems(summarizeStored([], []));
     }
@@ -89,7 +95,7 @@ export function StoredDataSection({ eff, onCleared }) {
           {items.map((item) => (
             <li key={item.id} className="ab-set-item">
               <span className="ab-set-item-main">
-                <span className="ab-set-item-title">{tr(item.title)}</span>
+                <span className="ab-set-item-title">{storedTitle(item)}</span>
                 <span className="ab-hint ab-set-item-sub">{tr(item.detail)}</span>
               </span>
               <span className={`ab-chip ${item.present ? 'ab-chip-ok' : 'ab-chip-neutral'}`}>{storedState(item)}</span>
@@ -105,7 +111,7 @@ export function StoredDataSection({ eff, onCleared }) {
         <div className="ab-set-confirm" role="alertdialog" aria-labelledby="clear-title" aria-describedby="clear-text">
           <strong id="clear-title" className="ab-set-confirm-title">{t('Remove everything?')}</strong>
           <p id="clear-text" className="ab-set-confirm-text">
-            {t('Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards and checklist ticks are deleted, and the ServiceNow sites you turned on are turned off. This cannot be undone.')}
+            {t('Your settings, the saved AI key, snippets, the usage and activity logs, saved dashboards, checklist ticks and the list of tickets you opened are deleted, and the ServiceNow sites you turned on are turned off. This cannot be undone.')}
             {budgeted ? ` ${t('The AI usage log stays while your organisation sets a daily limit.')}` : ''}
           </p>
           <div className="ab-set-actions">

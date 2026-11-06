@@ -4,7 +4,10 @@ import { AiBadge } from '../../../ui/primitives.jsx';
 import { Icon } from '../../../ui/icons.jsx';
 import { applyFieldStates, choicesOf, insertTargets, readFieldStates, reviewInsert } from '../../../insertFlow.js';
 import { useInsertActions } from '../../../useInsertActions.js';
-import InsertFindings from '../../../InsertFindings.jsx';
+import InsertFindings, { InsertNote } from '../../../InsertFindings.jsx';
+import { useCloseWell } from '../../cards/ResolveCard.jsx';
+import PrepareCloseBody from './PrepareClose.jsx';
+import { CODE_KINDS, closePlan, closeSections, codeTargetFor, isPrepareClose, notesOf } from './prepareClose.js';
 import { auditRefFromPage, currentFromPage, isCustomerVisible, matchesExpect, sourceFromPack, wrongRecordText } from '../../../../lib/fillable.js';
 import { auditInsert } from '../../../../lib/storage.js';
 import { resolveProviderConfig } from '../../../../providers/config.js';
@@ -37,6 +40,11 @@ const NO_TEXTS = [];
  * new tab and carries the draft there (src/sidepanel/pendingDraft.js, shown by PendingDraft.jsx, where Insert subject / Insert body
  * are); "Copy body" is next to it, "Copy subject" and "Copy all" under More.
  *
+ * Round 4 (docs/round4.md): every Insert can be undone while the same record is open and not saved (InsertNote, useInsertActions).
+ * A "Prepare to close" answer shows its sections (PrepareClose.jsx: the resolve check, the close code, the AI's notes, a repeat), each
+ * saying where it came from, and its Insert fills the close code and then the notes (prepareClose.js closePlan, insertFlow
+ * insertCloseAndNotes): the user's named exception to "one field per Insert".
+ *
  * props: answer (from the store), open, onToggle(open), page, eff, record, busy (a run is going on for this ticket: Refine and Try
  * again wait), lead (the newest answer: its Insert is the screen's main button), onRefine(answer, preset, choice), onAgain(answer),
  * onClose(answer)
@@ -59,6 +67,14 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   // (keyed on what the targets depend on, not on the page object, so the form is not asked again on every render)
   const baseTargets = useMemo(() => insertTargets(base, { record, page }), [base, record?.kind, page.surface, page.record?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const targets = useMemo(() => applyFieldStates(baseTargets, states), [baseTargets, states]);
+  // Prepare to close (round 4): the facts of the Close well row (no AI; shared reads, made only while this answer is open) and the
+  // close code's box, which the check before the click asks about too.
+  const isClose = isPrepareClose(base);
+  const kind = record?.kind || page.record?.kind || '';
+  const closeWell = useCloseWell({ page, eff, record, active: Boolean(open && isClose && !wrongRecord) });
+  const codeBase = useMemo(() => (isClose && CODE_KINDS.includes(kind) ? codeTargetFor({ kind, surface: page.surface }) : null), [isClose, kind, page.surface]);
+  const askTargets = useMemo(() => (codeBase ? [...baseTargets, codeBase] : baseTargets), [baseTargets, codeBase]);
+  const codeTarget = useMemo(() => (codeBase ? applyFieldStates([codeBase], states)[0] : null), [codeBase, states]);
   const primary = answerPrimary(answer, record?.kind);
   const choices = useMemo(() => choicesOf(base, plain), [base, plain]);
   // An AI email draft (AI9): its subject and body, and the email form of the ticket it was written for, where it is inserted.
@@ -70,12 +86,12 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   useEffect(() => {
     if (!open || wrongRecord || !baseTargets.length) return undefined;
     let cancelled = false;
-    readFieldStates(page, baseTargets, read, answer.source?.expect || null).then((s) => !cancelled && setStates(s));
+    readFieldStates(page, askTargets, read, answer.source?.expect || null).then((s) => !cancelled && setStates(s));
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the tab and address, not the page object, so the form is not asked again on every render
-  }, [open, wrongRecord, baseTargets, page.tabId, page.href, answer.source]);
+  }, [open, wrongRecord, askTargets, page.tabId, page.href, answer.source]);
 
   const config = resolveProviderConfig(eff.values, eff.apiKey);
   const ref = sourceFromPack(answer.lastPack) ? answer.lastPack : auditRefFromPage(page);
@@ -91,16 +107,39 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     }
   };
 
-  // Copy and Insert (useInsertActions: the one insert path, one at a time, the review's findings, the edit box).
-  const { note, setNote, findings, editing, setEditing, done, busy: inserting, copy, insert, insertNow, startEdit: openEditor } = useInsertActions({
+  // Prepare to close: the notes without a close-code line (what the card shows, Copy copies and Insert puts in the notes box), the
+  // sections around them, and what one Insert does here.
+  const closeNotes = useMemo(() => (isClose ? notesOf(plain) : ''), [isClose, plain]);
+  const first = targets[0] || null;
+  const plan = useMemo(
+    () => (isClose ? closePlan({ kind, surface: page.surface, vote: closeWell.vote, notes: first, code: codeTarget, form: states?.known ? states.form : 'none' }) : null),
+    [isClose, kind, page.surface, closeWell.vote, first, codeTarget, states]
+  );
+  // (a problem's notes go into two boxes, cause and fix: the section shows them whole, under "Resolution notes")
+  const sections = useMemo(
+    () => (isClose ? closeSections({ view: closeWell.view, vote: closeWell.vote, repeat: closeWell.repeat, notesLabel: kind === 'problem' ? '' : first?.fieldLabel || '', notes: closeNotes, loading: !wrongRecord && (closeWell.state.phase === 'loading' || closeWell.state.phase === 'idle') }) : null),
+    [isClose, kind, wrongRecord, closeWell.view, closeWell.vote, closeWell.repeat, closeWell.state.phase, first, closeNotes]
+  );
+
+  // Copy and Insert (useInsertActions: the one insert path, one at a time, the review's findings, the edit box, Undo).
+  const { note, setNote, findings, editing, setEditing, done, busy: inserting, copy, insert, insertNow, startEdit: openEditor, insertClose, undo, undoNow } = useInsertActions({
     page,
     source: answer.source,
     review,
     audit,
-    copyValue: plain,
+    copyValue: isClose ? closeNotes : plain,
     textFor,
     emptyText: t('That part is not in the text, so there is nothing to insert. Use Copy instead.'),
   });
+  // Prepare to close's Insert of the notes box: the close code first when the plan has it, then the notes (one FILL_FIELD each).
+  const closeInsert = (target, text, mode, force = false) => insertClose({ code: plan?.code || null, byHand: plan?.byHand || '', notes: { target, text, mode }, force });
+  const insertFirst = (target) => {
+    if (!(isClose && first && target.key === first.key)) return insertNow(target);
+    const text = textFor(target);
+    if (!text) return setNote({ kind: 'danger', text: t('That part is not in the text, so there is nothing to insert. Use Copy instead.') });
+    return closeInsert(target, text, target.mode, false);
+  };
+  const insertFrom = (target, text, mode, force) => (isClose && first && target.key === first.key ? closeInsert(target, text, mode, force) : insert(target, text, mode, force));
 
   // Low findings (another person's name, an IP address) are shown, never hidden; they block nothing.
   // The same review the insert runs (reviewInsert): in resolution notes, words shared with the work notes are a hint, not a stop.
@@ -159,7 +198,6 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     );
   }
 
-  const first = targets[0] || null;
   // The button that leads (ab-answer-main): Insert (or "Open the email form") is filled when this is the screen's main answer (`lead`);
   // Copy, Refine and More are outlined.
   const insertButton = (target, main) => {
@@ -169,8 +207,8 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
         type="button"
         className={`ab-btn${main ? ` ab-answer-main${lead ? ' ab-btn-primary' : ''}` : ''}`}
         disabled={inserting || inserted || Boolean(target.blocked) || (wrongRecord && !target.table)}
-        title={target.blocked || target.where || ''}
-        onClick={() => insertNow(target)}
+        title={target.blocked || (isClose && plan?.line) || target.where || ''}
+        onClick={() => insertFirst(target)}
       >
         {inserted ? t('Inserted') : target.label}
       </button>
@@ -190,7 +228,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     : email && emailUrl
       ? t('Open the email form to insert the subject and body there. Nothing is sent until you press Send.')
       : primary === 'insert' && first
-        ? first.blocked || `${first.where} ${first.next}`
+        ? first.blocked || (isClose && plan?.line) || `${first.where} ${first.next}`
         : t('AI can be wrong: check it before you use it.');
   const question = answer.meta?.question || '';
   // What the request was made without (the pipeline's list, src/features/parts.js; else the pack's own access entries).
@@ -210,22 +248,26 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
         </button>
       </div>
       {question && <p className="ab-answer-q">{t('You asked: {question}', { question })}</p>}
-      <div className="ab-output">
-        {choices.length ? (
-          <ol className="ab-answer-choices">
-            {choices.map((c, i) => (
-              <li key={i}>
-                <SafeText text={c} />
-                <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={t('Copy reply {number}', { number: i + 1 })}>
-                  {t('Copy this')}
-                </button>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <SafeText text={answer.text} />
-        )}
-      </div>
+      {isClose && sections ? (
+        <PrepareCloseBody sections={sections} page={page} />
+      ) : (
+        <div className="ab-output">
+          {choices.length ? (
+            <ol className="ab-answer-choices">
+              {choices.map((c, i) => (
+                <li key={i}>
+                  <SafeText text={c} />
+                  <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm" onClick={() => copy('', c)} aria-label={t('Copy reply {number}', { number: i + 1 })}>
+                    {t('Copy this')}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <SafeText text={answer.text} />
+          )}
+        </div>
+      )}
       {gapsLine && <p className="ab-hint ab-answer-gaps">{gapsLine}</p>}
       {wrongRecord && <p className="ab-note ab-note-warn" role="status">{wrongRecordText(answer.source)}</p>}
       {first?.caution && !wrongRecord && <p className="ab-note ab-note-warn ab-answer-caution">{first.caution}</p>}
@@ -235,12 +277,12 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
           field={findings.target.field}
           items={findings.items}
           busy={inserting}
-          onInsertAnyway={() => insert(findings.target, findings.text, findings.mode, true)}
+          onInsertAnyway={() => (findings.close ? insertClose({ code: findings.close.code, byHand: findings.close.byHand, notes: { target: findings.target, text: findings.text, mode: findings.mode }, force: true }) : insert(findings.target, findings.text, findings.mode, true))}
           onEditFirst={() => startEdit(findings.target, findings.text)}
         />
       )}
       {!findings && !editing && <ReviewHints hints={hints} />}
-      {note && <p className={`ab-note ab-note-${note.kind}`} role="status">{note.text}</p>}
+      <InsertNote note={note} undo={undo && !wrongRecord} busy={inserting} onUndo={undoNow} />
 
       {editing ? (
         <InsertEditor
@@ -251,7 +293,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
           page={page}
           record={record}
           busy={inserting}
-          onInsert={(target, text, mode, force) => insert(target, text, mode, force)}
+          onInsert={insertFrom}
           onCancel={() => setEditing(null)}
         />
       ) : (

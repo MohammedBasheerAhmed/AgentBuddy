@@ -2,15 +2,16 @@
 // messages). Pure: no browser, no network, no AI. The numbers are handed to the model as one labelled part, so its answer
 // about mood and escalation risk is grounded in things anyone can check, not only in its own reading of the thread.
 //
-// Honest limits, stated where the person reads them (see signalsText): these are word and count rules. They miss sarcasm,
-// other languages and polite anger, and a word list over-counts ("manager" can be a neutral mention). They are evidence for
-// the model and the agent, never a verdict.
+// Honest limits, stated where the person reads them (see signalsText): these are word and count rules. They read English and
+// Arabic (round 4: the Arabic lists below give the same labels), miss sarcasm, other languages and polite anger, and a word list
+// over-counts ("manager" can be a neutral mention). They are evidence for the model and the agent, never a verdict.
 //
 // Nothing here quotes ticket text. The output holds counts and labels from our own word lists only, so the signals part
 // cannot carry a name or number of its own.
 
 import { authorRole, identities } from '../context/identity.js';
 import { parseSnTime } from '../context/util.js';
+import { arabicFolded, arabicRule } from '../lib/similar.js';
 
 // Kept here as before for the modules that import them from this file (src/itsm/parts.js, src/insights/glance.js and journey.js).
 export { identities };
@@ -88,6 +89,93 @@ const CHASE = [
 
 const THANKS = /\b(?:thanks|thank you|thx|appreciat(?:e|ed|es|ion)|cheers|grateful)\b/gi;
 
+// ---- The same lists in Arabic ---------------------------------------------------------------------------
+// { label: entries }: the labels are the English lists' own labels (so the card and the signals part name them the same way);
+// each entry is regular-expression source in plain Arabic, matched as a whole word in the text folded with normalizeArabic, with
+// "و", "ف", "ب", "ل", "ك" and the article allowed in front (src/lib/similar.js arabicRule). Modern Standard Arabic first, and the
+// few everyday words customers write in every dialect. A space stands for any run of spaces.
+
+export const ARABIC_WORDS = Object.freeze({
+  frustration: {
+    frustrated: ['محبط(?:ة|ين)?', 'إحباط'],
+    annoyed: ['منزعج(?:ة|ين)?', 'انزعاج', 'مزعج(?:ة)?', 'إزعاج'],
+    ridiculous: ['سخيف(?:ة)?', 'سخافة'],
+    unacceptable: ['غير مقبول(?:ة)?', 'لا يقبل', 'لا يمكن قبوله'],
+    terrible: ['سيئ(?:ة)? جدا', 'سيء(?:ة)? جدا', 'فظيع(?:ة)?', 'مروع(?:ة)?', 'كارثي(?:ة)?', 'كارثة', 'مزري(?:ة)?'],
+    useless: ['بلا فائدة', 'لا فائدة', 'عديم(?:ة)? الفائدة', 'غير مجد(?:ي|ية)?', 'فاشل(?:ة|ين)?'],
+    'fed up': ['سئمت', 'مللت', 'طفح الكيل', 'زهقت', 'تعبت من', 'ضقت ذرعا'],
+    angry: ['غاضب(?:ة|ين)?', 'غضب', 'مستفز(?:ة)?', 'حانق(?:ة)?'],
+    disappointed: ['خيبة أمل', 'مخيب(?:ة)? للآمال', 'مستاء(?:ة|ين)?', 'استياء', 'غير راض(?:ي|ية)?', 'غير سعيد(?:ة)?', 'زعلان(?:ة)?'],
+    worst: ['أسوأ'],
+    'waste of time': ['مضيعة (?:لل)?وقت', 'إضاعة (?:لل|ال)?وقت', 'هدر (?:لل|ال)?وقت', 'تضييع (?:لل|ال)?وقت'],
+    shocking: ['صادم(?:ة)?'],
+    'poor service': ['(?:خدمة|دعم|تجربة) (?:سيئة|سيئ|سيء|رديئة|رديء|ضعيفة|ضعيف)', 'سوء (?:ال)?خدمة'],
+    nonsense: ['هراء', 'مهزلة', 'كلام فارغ'],
+  },
+  escalation: {
+    escalate: ['تصعيد', 'سأصعد', 'سنصعد', 'أصعد (?:الموضوع|الأمر|المشكلة)'],
+    // ("رئيسي" is left out: it is also "main", as in the main server.)
+    'manager or executive': ['مدير(?:ي|نا|ك|كم|ه|هم)?', 'مشرف(?:ي|نا|ك|كم)?', 'رئيس القسم', 'الرئيس التنفيذي', 'الإدارة العليا', 'نائب الرئيس'],
+    complaint: ['شكوى', 'شكاوى', 'شكاوي', 'أشتكي', 'سأشتكي', 'نشتكي', 'سنشتكي'],
+    legal: ['محام(?:ي|ين)?', 'محكمة', 'دعوى قضائية', 'قضائي(?:ة)?', 'قانوني(?:ة|ا)?'],
+    cancel: ['(?:إلغاء|ألغي|سألغي|نلغي|سنلغي).{0,20}(?:عقد|اشتراك|حساب|خدمة|ترخيص)(?:نا|ي|كم|ه)?'],
+    refund: ['استرداد', 'استرجاع (?:ال)?مبلغ', 'رد (?:ال)?مبلغ', 'تعويض'],
+  },
+  urgency: {
+    urgent: ['عاجل(?:ة|ا)?', 'مستعجل(?:ة)?', 'ضروري جدا'],
+    asap: ['أسرع وقت(?: ممكن)?', 'أقرب وقت(?: ممكن)?', 'أقصى سرعة'],
+    immediately: ['فورا', 'فوري(?:ة)?', 'حالا', 'على الفور'],
+    critical: ['حرج(?:ة)?', 'بالغ(?:ة)? الأهمية'],
+    emergency: ['طوارئ', 'طارئ(?:ة)?'],
+    deadline: ['موعد نهائي', 'آخر موعد', 'مهلة نهائية'],
+    'right now': ['في الحال', 'في هذه اللحظة'],
+    'cannot work': [
+      '(?:لا|لم) (?:أستطيع|أقدر|يمكنني|أتمكن من|نستطيع|يمكننا|نتمكن من)(?: على)? (?:العمل|أعمل|الدخول|تسجيل الدخول|الوصول|أداء عملي|إنجاز عملي)',
+      '(?:عملي|العمل) متوقف',
+    ],
+    'production down': ['(?:توقف|تعطل) (?:بيئة )?الإنتاج', '(?:بيئة )?الإنتاج (?:متوقف(?:ة)?|معطل(?:ة)?|واقف(?:ة)?)'],
+    blocked: ['محظور(?:ة)?', 'محجوب(?:ة)?'],
+  },
+  repeat: {
+    // ("هل من جديد" is "any news?", a chaser, not "again".)
+    again: ['مرة أخرى', 'مرة ثانية', 'مجددا', '(?<!هل\\s+)من جديد'],
+    still: ['(?:ما|لا)\\s*(?:زال|زالت|زلت|زلنا|يزال|تزال|أزال|نزال)'],
+    'nth time': ['مرة ال(?:ثانية|ثالثة|رابعة|خامسة|سادسة|سابعة|ثامنة|تاسعة|عاشرة|عشرين|مليون)', '(?:ثاني|ثالث|رابع|خامس|سادس|عاشر) مرة', 'مرة [0-9٠-٩]+'],
+    'every time': ['كل مرة'],
+    'once more': ['مرة تلو الأخرى', 'مرارا(?: وتكرارا)?', 'مرة بعد مرة'],
+    'already told': [
+      'سبق (?:أن |وأن |و)?(?:أبلغت|أخبرت|ذكرت|أرسلت|شرحت|طلبت|جربت|قلت|أوضحت)(?:كم|ك)?',
+      'كما (?:ذكرت|قلت|أخبرتكم|أوضحت)',
+      '(?:ذكرت|أبلغت|أرسلت|أخبرتكم|شرحت|قلت) (?:لكم )?(?:سابقا|من قبل)',
+    ],
+    'same problem': ['نفس (?:ال)?(?:مشكلة|خطأ|عطل)', '(?:مشكلة|خطأ|عطل) (?:نفسه|نفسها|ذاته|ذاتها)', '(?:مشكلة|عطل|خطأ) متكرر(?:ة)?'],
+    'many times': ['مرتين', 'عدة مرات', 'مرات عديدة', 'مرات كثيرة', 'أكثر من مرة', 'كم مرة', '(?:ثلاث|أربع|خمس) مرات'],
+  },
+  chase: [
+    'أي (?:تحديث|جديد|أخبار|مستجدات)',
+    'هل من (?:جديد|تحديث|أخبار|مستجدات)',
+    'هل (?:هناك|يوجد) (?:أي )?(?:تحديث|جديد|أخبار|مستجدات)',
+    'ما (?:الجديد|الأخبار|المستجدات)',
+    'متابعة',
+    'أتابع',
+    'تذكير',
+    '(?:ما|لا)\\s*(?:زلت|زلنا|أزال|نزال) (?:أنتظر|ننتظر|بانتظار|في انتظار)',
+    '(?:بانتظار|في انتظار) (?:الرد|ردكم|ردك|رد|التحديث)',
+    '(?:لم|ما) (?:يصلني|يصلنا|أتلق|نتلق|أستلم|نستلم) (?:أي )?(?:رد|جواب|تحديث)',
+    '(?:لم|لا) (?:يرد|يتم الرد|يوجد رد)',
+    'لا (?:أحد|يوجد أحد) (?:يرد|رد)',
+  ],
+  thanks: ['شكرا', 'أشكرك(?:م)?', 'نشكرك(?:م)?', 'مشكور(?:ين|ة)?', 'ممتن(?:ة|ين)?', 'جزاك(?:م)? الله(?: خيرا)?'],
+});
+
+const arabicList = (spec) => Object.entries(spec).map(([label, entries]) => [label, arabicRule(entries)]);
+const AR_FRUSTRATION = arabicList(ARABIC_WORDS.frustration);
+const AR_ESCALATION = arabicList(ARABIC_WORDS.escalation);
+const AR_URGENCY = arabicList(ARABIC_WORDS.urgency);
+const AR_REPEAT = arabicList(ARABIC_WORDS.repeat);
+const AR_CHASE = arabicRule(ARABIC_WORDS.chase);
+const AR_THANKS = arabicRule(ARABIC_WORDS.thanks, 'gu');
+
 // Capital words that are normal in IT writing: not shouting.
 const ACRONYMS = new Set(
   (
@@ -102,7 +190,11 @@ const ACRONYMS = new Set(
 // Curly apostrophes (U+2018, U+2019, U+02BC) become plain ones so "can't" matches. Written as numbers: this file stays plain ASCII.
 const CURLY_APOSTROPHES = new RegExp(`[${String.fromCharCode(0x2018, 0x2019, 0x2bc)}]`, 'g');
 const plainQuotes = (text) => String(text ?? '').replace(CURLY_APOSTROPHES, "'");
-const labelsFound = (list, text) => list.filter(([, re]) => re.test(text)).map(([label]) => label);
+// The labels found, in the English list's order: by the English pattern in the text, or by the Arabic one in the folded text.
+const labelsFound = (list, text, arList, folded) => {
+  const arabic = folded ? new Set(arList.filter(([, re]) => re.test(folded)).map(([label]) => label)) : null;
+  return list.filter(([label, re]) => re.test(text) || Boolean(arabic?.has(label))).map(([label]) => label);
+};
 
 /**
  * What one piece of text shows. Labels come from the word lists above, never from the text itself.
@@ -111,20 +203,23 @@ const labelsFound = (list, text) => list.filter(([, re]) => re.test(text)).map((
  */
 export function analyseText(text) {
   const t = plainQuotes(text);
+  // The text folded for the Arabic lists ('' when it has no Arabic letter: those lists are skipped).
+  const ar = arabicFolded(t);
   const shouted = (t.match(/\b[A-Z]{3,}\b/g) || []).filter((w) => !ACRONYMS.has(w));
-  // A message shouts when two words are in capitals, or one long word (URGENT) is.
+  // A message shouts when two words are in capitals, or one long word (URGENT) is. (Arabic has no capital letters.)
   const shouting = shouted.length >= 2 || shouted.some((w) => w.length >= 6);
-  const runs = (t.match(/[!?]{2,}/g) || []).filter((r) => r.includes('!') || r.length >= 3);
+  // The Arabic question mark counts like "?".
+  const runs = (t.match(/[!?؟]{2,}/g) || []).filter((r) => r.includes('!') || r.length >= 3);
   return {
-    frustration: labelsFound(FRUSTRATION, t),
-    escalation: labelsFound(ESCALATION, t),
-    urgency: labelsFound(URGENCY, t),
-    repeat: labelsFound(REPEAT, t),
-    chase: CHASE.some((re) => re.test(t)),
+    frustration: labelsFound(FRUSTRATION, t, AR_FRUSTRATION, ar),
+    escalation: labelsFound(ESCALATION, t, AR_ESCALATION, ar),
+    urgency: labelsFound(URGENCY, t, AR_URGENCY, ar),
+    repeat: labelsFound(REPEAT, t, AR_REPEAT, ar),
+    chase: CHASE.some((re) => re.test(t)) || (ar !== '' && AR_CHASE.test(ar)),
     shoutedWords: shouted.length,
     shouting,
     exclamationRuns: runs.length,
-    thanks: (t.match(THANKS) || []).length,
+    thanks: (t.match(THANKS) || []).length + (ar ? (ar.match(AR_THANKS) || []).length : 0),
   };
 }
 

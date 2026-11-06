@@ -3,7 +3,8 @@
 // pattern on a low-priority ticket). Every signal says WHY in plain words. Pure.
 //
 // These are word and count rules, not a judgement: the card says so once. Words are named by OUR labels ("unacceptable",
-// "fed up"), never quoted from the ticket.
+// "fed up"), never quoted from the ticket. The rules read English and Arabic: an Arabic word ("غاضب", "عاجل") is found by the
+// Arabic list of the same label (src/itsm/sentiment.js ARABIC_WORDS) and named by that label, in the panel's language.
 
 import { computeSignals } from '../itsm/sentiment.js';
 import { TIME, shortSpan } from './time.js';

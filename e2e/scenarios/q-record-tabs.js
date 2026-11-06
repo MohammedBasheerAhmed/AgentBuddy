@@ -103,7 +103,8 @@ module.exports = {
     t.check('ticking two steps shows the progress and checks the boxes', JSON.stringify(await ticked()) === '[true,false,true]', (await p.evaluate(() => document.querySelector('.ab-chk-progress-text')?.innerText)) || '');
 
     const session = await sessionStore(ctx);
-    const local = await localStore(ctx);
+    // The last-viewed list (round 4, build rule 7's named exception) holds the ids of tickets opened, by design; it is checked in e.
+    const local = JSON.stringify((({ agentbuddy_last_viewed, ...rest }) => rest)(JSON.parse(await localStore(ctx))));
     const sessionData = JSON.parse(session).agentbuddy_checklists || {};
     const keys = Object.keys(sessionData);
     t.check('storage holds ONE entry for the ticks, in SESSION storage, under a 12-character salted hash (not the record id)', keys.length === 1 && /^[0-9a-f]{12}$/.test(keys[0]) && !session.includes(data.CHECKLIST_TASK_ID), keys.join(','));
@@ -162,7 +163,7 @@ module.exports = {
     t.check('Ready to resolve?: it says it checked what is on the form now (a classic form is readable)', /Checked against what is on the form now/.test(await text()));
     let rows = await checkRows(p);
     t.check('no resolution notes yet: a warning, and it notes that the work note typed on the form is not a substitute', findCheck(rows, /No resolution notes yet/)?.status === 'warn' && /work note you have typed is separate/i.test(findCheck(rows, /No resolution notes yet/)?.text || ''), findCheck(rows, /resolution notes/i)?.text);
-    t.check('the card summary counts what needs a look', /\d+ to look at/.test(await summaryIn(p, 'resolve')), await summaryIn(p, 'resolve'));
+    t.check('the card summary says it is not ready yet (round 4: "Not yet: ...")', /^Not yet: /.test(await summaryIn(p, 'resolve')), await summaryIn(p, 'resolve'));
     t.check('...and a finding about the customer points to the email card', /Go to: Which email fits/.test(await cardText(p, 'resolve')) || !/customer has not replied/i.test(await cardText(p, 'resolve')));
 
     // Type "Done." into the CLASSIC form's resolution notes (unsaved) and check again

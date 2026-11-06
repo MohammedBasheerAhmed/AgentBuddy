@@ -15,7 +15,8 @@ import { isolate, t, t as tr } from '../../i18n/index.js';
 // the person's own session (src/content/ops/mywork.js), nothing is sent anywhere and there is no AI half.
 //
 // Calm by design (TRACKER.md 2.4, the 2026 redesign): one status line on top (when it was read, Refresh), a quiet attention line when
-// several of my tickets share one configuration item, then sections parted by dividers: the queue, most urgent first, with the
+// several of my tickets share one configuration item, then sections parted by dividers: the queue, most urgent first (round 4: the
+// tickets at risk first, each with an "At risk" chip and the reasons, and an "At risk" filter; src/mywork/risk.js), with the
 // waiting and the resolved tickets folded; the approvals only when there are some; follow-ups; the unassigned tickets of my groups;
 // one line at the bottom for anything that could not be read. Every ticket is a row (status dot, number, title, chips).
 //
@@ -103,7 +104,7 @@ export default function MyWorkView({ page, eff, active, onOpenTicket }) {
               </span>
             </div>
           )}
-          <QueueCard page={page} data={data} now={now} filter={filter} setFilter={setFilter} onOpen={openTicket} />
+          <QueueCard page={page} data={data} now={now} policy={eff?.policy} filter={filter} setFilter={setFilter} onOpen={openTicket} />
           <ApprovalsCard page={page} approvals={data.approvals} now={now} />
           <FollowUpsCard page={page} data={data} now={now} days={days} setDays={setDays} onOpen={openTicket} />
           <GroupsCard page={page} groups={data.groups} now={now} onOpen={openTicket} />

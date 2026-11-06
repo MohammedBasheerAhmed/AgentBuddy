@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SafeText } from '../render/SafeText.jsx';
 import { parseSafeText, toPlainText } from '../render/safeText.js';
 import { reviewForCustomer } from '../safeSend/review.js';
+import { isReplyField } from '../safeSend/replyChecks.js';
 import { insertsFor } from '../features/registry.js';
 import { currentFromPage, expectForInsert, fillModeFor, isCustomerVisible, matchesExpect, wrongRecordText } from '../lib/fillable.js';
 import { openNewRecord } from './openRecord.js';
@@ -74,7 +75,10 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
 
   // Low-severity findings (another person's name, an IP address...) are shown, never hidden: they do not block anything.
   const hints = useMemo(
-    () => (insertsFor(feature).some((s) => isCustomerVisible(s.field)) ? reviewForCustomer(plain, { people, scan, internalTexts, internalPhrases }).hints : []),
+    () =>
+      insertsFor(feature).some((s) => isCustomerVisible(s.field))
+        ? reviewForCustomer(plain, { people, scan, internalTexts, internalPhrases, reply: insertsFor(feature).some((s) => isReplyField(s.field)) }).hints
+        : [],
     [feature, plain, people, scan, internalTexts, internalPhrases]
   );
 

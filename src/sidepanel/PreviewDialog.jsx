@@ -339,6 +339,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
           <div className="ab-dialog-head">
             <h2 className="ab-sheet-title" id={ids.title}>{t('Send to the AI?')}</h2>
             <p className="ab-sheet-sub">{subLine}</p>
+            {feature.previewNote && <p className="ab-sheet-sub">{feature.previewNote}</p>}
           </div>
           <div className="ab-dialog-body">
             <p className="ab-confirm-short" id={ids.short}>{t('Uses {others} from other records. You checked the rest of what this action sends before.', { others })}</p>
@@ -371,6 +372,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
         <div className="ab-dialog-head">
           <h2 className="ab-sheet-title" id={ids.title}>{t('Check before sending')}</h2>
           <p className="ab-sheet-sub">{subLine}</p>
+          {feature.previewNote && <p className="ab-sheet-sub">{feature.previewNote}</p>}
         </div>
         <div className="ab-dialog-body">
           <HiddenSummary stats={prepared.stats} />

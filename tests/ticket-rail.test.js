@@ -153,7 +153,7 @@ test('the screen publishes the Insights rail: the five rows it draws, the dots t
     }
     // The fixture's SLA was due days ago: "Understand the ticket" says so on its row, with the dot, and the tab counts that row.
     const understand = groupRow(ui, 'understand');
-    assert.match(understand.querySelector('.ab-ins-pain-line').textContent, /^The SLA was due 9 d ago/);
+    assert.match(understand.querySelector('.ab-ins-pain-line').textContent, /^The SLA was due \d+ d ago/); // the fixture's date is fixed, today is not
     assert.ok(understand.querySelector('.ab-ins-tile-dot'));
     assert.equal(r.items[0].attention, 'danger');
     const tab = ui.$('#ab-ticket-half-tab-insights');

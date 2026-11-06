@@ -6,7 +6,9 @@ export const MSG = Object.freeze({
   PING: 'ab:ping',
   PAGE_STATE: 'ab:page-state', // { policy? } -> { href, title, record: {table, sysId, number}|null, user, form }  (pageStateMessage below)
   READ: 'ab:read', // { op: 'pack' | 'history' | 'similar' | 'knowledge' | ..., args } -> plain JSON
-  FILL_FIELD: 'ab:fill-field', // { field, value, label, mode, expect } -> { ok, method?, label?, reason? }
+  FILL_FIELD: 'ab:fill-field', // { field, value, label, mode, expect, replacing? } -> { ok, method?, label?, undo?: { previous, after }, reason? }
+  //   mode 'undo' (round 4): { field, value: what the box held before, current: what the insert left there, label, expect } ->
+  //   { ok, method? , reason? }; the page refuses ('changed') unless the box still holds `current`. Never a save (src/content/fill.js).
 
   // service worker -> content script: "this site was turned off". The content script stops its bar and stops answering until the
   // page is reloaded (src/content/index.js). Only ever makes Agent Buddy do less.

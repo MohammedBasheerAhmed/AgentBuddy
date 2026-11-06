@@ -6,7 +6,8 @@
 // customer is, the hold reason) and its own state labels (the `task` table's state choices are not the incident's: an incident
 // "On Hold" is 3, which `task` would show as "Closed Complete").
 import { TABLE_RE } from '../context/util.js';
-import { isSensitiveTable } from '../context/kinds.js';
+import { isSensitiveTable, kindForTable } from '../context/kinds.js';
+import { RISK_COLUMNS, VIP_COLUMNS, ACCOUNT_COLUMNS } from '../context/specs/mywork.js';
 import { tm } from '../i18n/core.js';
 
 // Columns every task-derived table has. Nothing here is free text except the title (short_description).
@@ -81,15 +82,38 @@ export function singularOf(table, display = '') {
   return name && !/^[a-z0-9_]+$/.test(name) ? name : tm('Ticket');
 }
 
-/** The columns read from one table: the common ones, the hold reason where there is one, the customer's login where known. */
-export function columnsFor(table, { group = false } = {}) {
+/**
+ * The columns read from one table: the common ones, the hold reason where there is one, the customer's login where known; for the
+ * rows of my own queue (`risk`) also what says why a ticket is at risk (riskColumnsFor).
+ */
+export function columnsFor(table, { group = false, risk = false, accounts = false } = {}) {
   const known = KNOWN_TABLES[table];
   const cols = [...COMMON_COLUMNS];
   if (known?.hold) cols.push('hold_reason');
   if (known?.customer) cols.push(`${known.customer}.user_name`);
   if (group) cols.push('assignment_group');
+  if (risk) cols.push(...riskColumnsFor(table, { accounts }));
   return cols;
 }
+
+/**
+ * The "at risk" columns of one table, by its kind (src/context/specs/mywork.js, where each has its reason): the reassignment and
+ * reopen counts, the customer's VIP flag, and, only when the organisation names priority accounts (`accounts`), a case's account.
+ * A class the spec does not name (a custom one: kind 'other') gets none.
+ */
+export function riskColumnsFor(table, { accounts = false } = {}) {
+  const kind = kindForTable(table);
+  const cols = Object.keys(RISK_COLUMNS).filter((column) => RISK_COLUMNS[column].includes(kind));
+  if (VIP_COLUMNS[kind]) cols.push(VIP_COLUMNS[kind]);
+  if (accounts && ACCOUNT_COLUMNS[kind]) cols.push(ACCOUNT_COLUMNS[kind]);
+  return cols;
+}
+
+/** The dot-walked column that holds the customer's VIP flag on this table, or ''. */
+export const vipColumn = (table) => VIP_COLUMNS[kindForTable(table)] || '';
+
+/** The column that holds a case's account name on this table, or ''. */
+export const accountColumn = (table) => ACCOUNT_COLUMNS[kindForTable(table)] || '';
 
 /** The dot-walked column that holds the customer's login on this table, or ''. */
 export const customerColumn = (table) => (KNOWN_TABLES[table]?.customer ? `${KNOWN_TABLES[table].customer}.user_name` : '');

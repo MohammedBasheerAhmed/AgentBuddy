@@ -3,6 +3,37 @@
 All notable changes to Agent Buddy. The version stays 0.1.0 until the first release is cut (the lead decides the number). Rows in
 brackets are the `TRACKER.md` items.
 
+## Unreleased: round 4, "Loved" (2026-11-06/07, not committed yet)
+
+Your rule for this round: no clutter, and only the pain points ServiceNow cannot solve in the platform. Nothing new on screen: every
+addition is a line inside the five rows, a fact inside an open row, a My work chip or part of an existing answer. Mockup: the "Loved"
+boards on https://claude.ai/artifact/WMmZMaVbxigc1WP3UrUgj3. Contracts and ownership: `docs/round4.md`.
+
+### Fixes first (Phase 0)
+- **Arabic tickets are understood.** Look-alikes, steps that worked before, knowledge suggestions, the duplicate finder and the gap
+  radar read Arabic and other scripts with spaces (they kept only a to z before); risk signals, missing details and checklist steps
+  have Arabic word lists; the six email templates have Arabic versions, chosen by the "Language of AI answers" rule.
+- **Security records are sensitive by default:** Security Incident Response, Vulnerability Response and GRC/risk/compliance/audit
+  tables (`sn_si_`, `sn_vul_`, `sn_grc_`, `sn_risk_`, `sn_compliance_`, `sn_audit_`), like a `sensitiveTablePrefixes` entry.
+- **A refused read says why:** your role, your organisation's REST policy, ServiceNow limiting requests, the instance busy, or a login
+  page instead of data; never "all clear", never retried around a refusal.
+
+### New, inside the five rows
+- **Understand the ticket:** "Since you last looked": what changed since you last opened this ticket (the browser keeps only its id and
+  the time; policy `rememberLastViewed`), and the caller's newest message with **Translate** (AI, the check before sending first)
+  when it is written in another script than your panel.
+- **Find the fix:** error codes found in the ticket with one search of articles and solved tickets; "solved before by" (the group and
+  person most look-alikes were solved by).
+- **Reply:** the caller's language and what the draft will be written in; before a reply is sent, two new gentle checks: is a next
+  step promised, and the tone (blame phrases, shouting, many exclamation marks), in English and Arabic.
+- **Close well:** the close code most solved look-alikes used, and "looks like a repeat" when the caller has the same issue open.
+- **"Prepare to close"** (AI) takes the fifth slot: the resolve check, the close code, the notes and a repeat warning in one answer,
+  each marked with where it came from (only the notes are written by the AI). One Insert fills the close code and the notes (a classic
+  incident form; elsewhere only the notes, and the panel names the code to pick). Nothing is saved.
+- **Undo after every Insert**, while the record is open and unsaved and the box still holds what was inserted.
+- **My work:** "At risk" first (reassigned twice or more, reopened, waiting on you for days, SLA nearly used, VIP or priority
+  account), one more filter chip and the reason on each row; follow-ups have "Copy draft".
+
 ## Unreleased: round 3 (one release with both halves)
 
 ### Five pain points first, everything else in All tools (the focus layout you approved as a mockup, 2026-11-05)

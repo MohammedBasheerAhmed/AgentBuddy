@@ -112,7 +112,7 @@ module.exports = {
     await ctx.waitUntil('the five AI rows', async () => (await fiveActions(p)).length === 5, { timeout: 10000 });
     let acts = await fiveActions(p);
     t.check('AI Assist shows five actions, one per pain point', JSON.stringify(acts.map((x) => x.pain)) === JSON.stringify(PAINS), JSON.stringify(acts));
-    t.check('...Summarise, Next best action, the caller briefing, Draft a reply, Resolution notes', JSON.stringify(acts.map((x) => x.feature)) === JSON.stringify(['record-summary', 'next-best-action', 'caller-briefing', 'reply-draft', 'resolution-notes']), JSON.stringify(acts.map((x) => x.feature)));
+    t.check('...Summarise, Next best action, the caller briefing, Draft a reply, Prepare to close', JSON.stringify(acts.map((x) => x.feature)) === JSON.stringify(['record-summary', 'next-best-action', 'caller-briefing', 'reply-draft', 'prepare-close']), JSON.stringify(acts.map((x) => x.feature)));
     t.check('...one filled "Start": the reply, for a ticket in progress', JSON.stringify(acts.filter((x) => x.primary).map((x) => x.feature)) === '["reply-draft"]', JSON.stringify(acts.filter((x) => x.primary)));
     t.check('...and no "Ask about this ticket" box until it is asked for', !(await p.$('#ab-ticket-half-panel-assist form.ab-ask')));
     const moreAi = await moreButton(p);
@@ -144,7 +144,11 @@ module.exports = {
     await closeAllTools(p, ctx);
     await chooseTool(p, /^Ask about this ticket/);
     await ctx.waitUntil('the Ask box', () => p.evaluate(() => [...document.querySelectorAll('#ab-ticket-half-panel-assist form.ab-ask')].some((f) => f.getClientRects().length > 0)), { timeout: 8000 });
-    t.check('"Ask about this ticket" from All tools opens its box at the top of AI Assist, with the focus in it', await p.evaluate(() => Boolean(document.activeElement?.closest('form.ab-ask'))));
+    // The focus moves into the box once it is drawn (an effect after the render), so it is waited for, as the box itself is.
+    const askFocused = await ctx
+      .waitUntil('the focus in the Ask box', () => p.evaluate(() => Boolean(document.activeElement?.closest('form.ab-ask'))), { timeout: 3000 })
+      .then(() => true, () => false);
+    t.check('"Ask about this ticket" from All tools opens its box at the top of AI Assist, with the focus in it', askFocused);
     const before = ai.requests.length;
     await chooseTool(p, /^Write a hand-off brief/);
     await p.waitForSelector('.ab-dialog', { timeout: 15000 });
@@ -156,7 +160,7 @@ module.exports = {
     await ctx.configure({ railShow: true });
     await ctx.waitUntil('the AI Assist rail', async () => (await railItems(p)).length >= 5, { timeout: 8000 });
     let rail = await railItems(p);
-    t.check('turned on, the rail of AI Assist lists the five actions, then All tools', JSON.stringify(rail) === JSON.stringify(['record-summary', 'next-best-action', 'caller-briefing', 'reply-draft', 'resolution-notes', 'all-tools']), JSON.stringify(rail));
+    t.check('turned on, the rail of AI Assist lists the five actions, then All tools', JSON.stringify(rail) === JSON.stringify(['record-summary', 'next-best-action', 'caller-briefing', 'reply-draft', 'prepare-close', 'all-tools']), JSON.stringify(rail));
     await p.click('.ab-rail [data-rail-id="all-tools"]');
     await ctx.waitUntil('All tools from the rail', async () => Boolean(await allTools(p)), { timeout: 5000 });
     t.check('...its "All tools" opens All tools at the AI Assist group', (await allTools(p)).activeGroup === 'ticket-assist');

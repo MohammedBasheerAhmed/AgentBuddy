@@ -14,6 +14,10 @@
 //  - It exposes exactly ONE write: fillField(), which sets one existing field's value on the open form, the same as typing
 //    into it. It never saves the form (there is no save action here), never calls REST, never evaluates caller-supplied code.
 //    The agent presses the form's own Save, so ACLs, business rules, client scripts and the audit trail all apply.
+//    Its Undo, restoreField() (round 4), only takes that same write back: it puts one field's earlier value back, and only while
+//    the field still holds exactly what fillField left there (anything the person typed since is never overwritten).
+//    A choice list (the close code) is set through g_form only, by its stored value, and only when it is one of the form's
+//    choices; on a page without g_form it is refused ('choice-by-hand'), never typed or clicked.
 //  - On a portal page (Service Portal, Employee Center, customer service portal: no g_form, an Angular page) fillField finds the
 //    comment or work-notes box in the page and types into it like a person would. It refuses when it cannot tell which box is
 //    meant, and it never presses a button of the page: the person reads the text and presses the portal's own Send.
@@ -29,7 +33,7 @@
 (function () {
   // Raise this with every change to this file, or an open page keeps the bridge it had (and answers "Unknown action." to an action
   // added since). tests/page-bridge-version.test.js pins the number to the file's contents.
-  var BRIDGE_VERSION = 3;
+  var BRIDGE_VERSION = 4;
 
   // The first bridge kept only a flag, no handle: it counts as version 1, and its listener cannot be removed (see onRequest).
   var installed;
@@ -525,13 +529,32 @@
     return '';
   }
 
+  // The text a box holds now: a text box's value, an editable area's text.
+  function boxValue(el) {
+    var value = el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' ? el.value : el.innerText != null ? el.innerText : el.textContent;
+    return value == null ? '' : String(value);
+  }
+
+  // For Undo (round 4): what the field held before the write and holds after it, added to a successful answer when both fit.
+  function withUndo(out, before, after) {
+    var b = before == null ? '' : String(before);
+    var a = after == null ? '' : String(after);
+    if (b.length <= MAX_FIELD_CHARS && a.length <= MAX_FIELD_CHARS) {
+      out.previous = b;
+      out.after = a;
+    }
+    return out;
+  }
+
   // Put the text into the chosen box the way typing would, then read it back: a box that put its own value back is a failure,
-  // never a success.
-  function writeInto(c, text, append, previous) {
+  // never a success. With `wantUndo` the answer also says what the box held before and holds now.
+  function writeInto(c, text, append, previous, wantUndo) {
     var el = c.el;
     var label = controlLabel(c);
+    var before = wantUndo ? boxValue(el) : '';
     function done() {
-      return label ? { ok: true, method: 'dom', label: label } : { ok: true, method: 'dom' };
+      var out = label ? { ok: true, method: 'dom', label: label } : { ok: true, method: 'dom' };
+      return wantUndo ? withUndo(out, before, boxValue(el)) : out;
     }
     try {
       if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
@@ -556,10 +579,33 @@
     }
   }
 
-  function fillPortalField(name, text, label, append, previous) {
+  function fillPortalField(name, text, label, append, previous, wantUndo) {
     var chosen = chooseControl(name, label);
     if (!chosen.c) return { ok: false, reason: chosen.reason };
-    return writeInto(chosen.c, text, append, previous);
+    return writeInto(chosen.c, text, append, previous, wantUndo);
+  }
+
+  // Undo on a page without g_form: the box an insert would choose, put back to `previous` only while it still holds what the
+  // insert left (`expected`; compared without regard to runs of white space, which an editor may tidy). Typed the same way.
+  function restoreInto(c, previous, expected) {
+    var el = c.el;
+    try {
+      if (squash(boxValue(el)) !== squash(expected)) return { ok: false, reason: 'changed' };
+      if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+        if (el.maxLength > 0 && previous.length > el.maxLength) return { ok: false, reason: 'too-long' };
+        setControlValue(el, previous);
+        fireEvent(el, 'input', true);
+        fireEvent(el, 'change', true);
+        if (/blur/i.test(String(el.getAttribute('ng-model-options') || el.getAttribute('data-ng-model-options') || ''))) {
+          fireEvent(el, 'blur', false);
+          fireEvent(el, 'focusout', true);
+        }
+        return squash(el.value) === squash(previous) ? { ok: true, method: 'dom' } : { ok: false, reason: 'set-failed' };
+      }
+      return writeEditable(el, previous, false) ? { ok: true, method: 'dom' } : { ok: false, reason: 'set-failed' };
+    } catch (e) {
+      return { ok: false, reason: 'set-failed' };
+    }
   }
 
   // ---- Workspace: the box of a field, by its exact name or label --------------------------------------------------
@@ -622,10 +668,10 @@
     return { c: scored[0].c };
   }
 
-  function fillWorkspaceField(name, text, label, append, previous) {
+  function fillWorkspaceField(name, text, label, append, previous, wantUndo) {
     var chosen = chooseWorkspaceControl(name, label);
     if (!chosen.c) return { ok: false, reason: chosen.reason };
-    return writeInto(chosen.c, text, append, previous);
+    return writeInto(chosen.c, text, append, previous, wantUndo);
   }
 
   // What getFieldStates says about a field on a page without g_form: the box an insert would choose, found WITHOUT writing.
@@ -748,13 +794,21 @@
     // Returns { ok, method: 'gform' | 'dom', label?, reason }. `label` is the box that was used (Workspace and portal pages).
     // `previous` (append only, never with HTML): the text Agent Buddy put into this box before; when the box still holds it exactly,
     // that copy is replaced by the new text instead of a second copy being added below (see appendOrSwap).
-    fillField: function (name, value, label, append, html, previous) {
+    // `options` (round 4): { choice: true } for a choice list (the close code): `value` is its STORED value, set through g_form only,
+    // only when the form's list has it (getOption, where the form offers it) and only when it reads back the same; a page without
+    // g_form answers 'choice-by-hand' and touches nothing. { undo: true }: the answer also carries `previous` and `after`, what the
+    // field held before and holds now, so the panel can offer Undo (restoreField).
+    fillField: function (name, value, label, append, html, previous, options) {
       if (typeof name !== 'string' || !FIELD_RE.test(name) || SECRET_NAME_RE.test(name)) return { ok: false, reason: 'bad-field' };
       var text = String(value == null ? '' : value);
       if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
       var htmlText = typeof html === 'string' ? html : '';
       if (htmlText.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
       var earlier = append === true && !htmlText && typeof previous === 'string' && previous.length <= MAX_FIELD_CHARS ? previous : '';
+      var opts = options && typeof options === 'object' ? options : {};
+      var choice = opts.choice === true;
+      var wantUndo = opts.undo === true;
+      if (choice && (append === true || htmlText || !text.trim())) return { ok: false, reason: 'bad-field' };
 
       var w = resolveFormWindow();
       if (w) {
@@ -777,19 +831,73 @@
           if (isHtmlType && !htmlText) return { ok: false, reason: 'bad-field' };
           // Use the HTML text when the form says the field holds HTML, or when it does not say what the field holds at all.
           if (htmlText && (isHtmlType || !type)) text = htmlText;
-          if (append === true) text = appendOrSwap(f.getValue(name), text, earlier);
+          var before = f.getValue(name);
+          if (append === true) text = appendOrSwap(before, text, earlier);
           if (text.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
+          // A choice: only one of the form's own choices, by its stored value (a label or a made-up value is refused).
+          if (choice && typeof f.getOption === 'function' && !f.getOption(name, text)) return { ok: false, reason: 'no-such-choice' };
           f.setValue(name, text);
-          return { ok: true, method: 'gform' };
+          if (choice && String(f.getValue(name) == null ? '' : f.getValue(name)) !== text) {
+            // The form did not take it (no such choice after all): what was there goes back, and nothing is claimed.
+            try {
+              f.setValue(name, before == null ? '' : String(before));
+            } catch (e2) {
+              /* the form refuses that too: it keeps what it has */
+            }
+            return { ok: false, reason: 'no-such-choice' };
+          }
+          var out = { ok: true, method: 'gform' };
+          return wantUndo ? withUndo(out, before, f.getValue(name)) : out;
         } catch (e) {
           return { ok: false, reason: 'set-failed' };
         }
       }
 
       // No g_form: a portal page (an Angular page of boxes found by their names) or a Workspace (components found by aria-label).
-      // Both type plain text into the page's own editor, which does its own escaping.
-      if (onPortalPage()) return fillPortalField(name, text, String(label || '').slice(0, 100), append, earlier);
-      return fillWorkspaceField(name, text, String(label || '').slice(0, 100), append, earlier);
+      // Both type plain text into the page's own editor, which does its own escaping. A choice list there is a component of the
+      // page that cannot be set with certainty without clicking it: the person picks it (the panel says which).
+      if (choice) return { ok: false, reason: 'choice-by-hand' };
+      if (onPortalPage()) return fillPortalField(name, text, String(label || '').slice(0, 100), append, earlier, wantUndo);
+      return fillWorkspaceField(name, text, String(label || '').slice(0, 100), append, earlier, wantUndo);
+    },
+
+    // UNDO of fillField (round 4): put `previous` (what the field held before an insert) back into one field, only while the field
+    // still holds exactly `expected` (what the insert left there). Anything else in it now (the person typed, the form changed it)
+    // answers 'changed' and nothing is written. Found and written the same way fillField does (g_form; else the same box an insert
+    // would choose); a choice list only through g_form. Nothing is saved. Returns { ok, method } or { ok: false, reason }.
+    restoreField: function (name, previous, expected, label, options) {
+      if (typeof name !== 'string' || !FIELD_RE.test(name) || SECRET_NAME_RE.test(name)) return { ok: false, reason: 'bad-field' };
+      if (typeof previous !== 'string' || typeof expected !== 'string' || !expected) return { ok: false, reason: 'bad-field' };
+      if (previous.length > MAX_FIELD_CHARS || expected.length > MAX_FIELD_CHARS) return { ok: false, reason: 'too-long' };
+      var choice = Boolean(options && typeof options === 'object' && options.choice === true);
+      var w = resolveFormWindow();
+      if (w) {
+        var f = w.g_form;
+        var exists;
+        try {
+          exists = typeof f.hasField === 'function' ? !!f.hasField(name) : f.getValue(name) !== undefined;
+        } catch (e) {
+          exists = false;
+        }
+        if (!exists) return { ok: false, reason: 'no-such-field' };
+        try {
+          if (typeof f.isReadOnly === 'function' && typeof f.getEditableFields === 'function') {
+            var editable = f.getEditableFields();
+            if (editable && editable.length && editable.indexOf(name) === -1) return { ok: false, reason: 'read-only' };
+          }
+          var now = f.getValue(name);
+          if ((now == null ? '' : String(now)) !== expected) return { ok: false, reason: 'changed' };
+          f.setValue(name, previous);
+          return { ok: true, method: 'gform' };
+        } catch (e) {
+          return { ok: false, reason: 'set-failed' };
+        }
+      }
+      if (choice) return { ok: false, reason: 'choice-by-hand' };
+      var asked = String(label || '').slice(0, 100);
+      var chosen = onPortalPage() ? chooseControl(name, asked) : chooseWorkspaceControl(name, asked);
+      if (!chosen.c) return { ok: false, reason: chosen.reason };
+      return restoreInto(chosen.c, previous, expected);
     },
 
     // READ ONLY: before the person clicks Insert, can these fields be filled on the open form? Nothing is written or focused.

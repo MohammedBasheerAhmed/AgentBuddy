@@ -9,7 +9,8 @@
 //   2. READ each class from its own table, in pages, most urgent priority first and the least recently touched first, up to a cap per
 //      class. A capped class says "200 of 340" and the screen offers the full list in ServiceNow. A class the organisation blocks is
 //      not read ('blocked'); HR and other sensitive classes only with HR content allowed (and the HR profile on, for HR); a table the
-//      instance does not have is left out without a word.
+//      instance does not have is left out without a word. My own queue also reads the few columns that say why a ticket is at risk
+//      (the reassignment and reopen counts, the customer's VIP flag, a case's account: src/context/specs/mywork.js); no text.
 //   3. SLAs of every ticket in batches (task_sla, one read per 50 tickets).
 //   4. WHO WROTE LAST: one read per 40 tickets of the newest customer-visible comments (sys_journal_field, element = comments), with
 //      only the author's login and the time, never the text. Compared with my login and the customer's (read on the ticket as a
@@ -22,7 +23,7 @@ import { classifyReadError, confirmEmptyIsReallyEmpty, STATUS } from '../context
 import { readMyTeam } from '../reports/engine/scope.js';
 import { normalizeGroups } from '../reports/engine/reader.js';
 import { SLA_COLUMNS } from '../reports/myDay.js';
-import { columnsFor, customerColumn, tablesForProfiles, readDecision, pluralOf, singularOf } from './tables.js';
+import { columnsFor, customerColumn, vipColumn, accountColumn, tablesForProfiles, readDecision, pluralOf, singularOf } from './tables.js';
 import { workState } from './states.js';
 import { mostPressingSla } from './sla.js';
 import { entriesByTicket, markerFor, windowStart, UNKNOWN_MARKER } from './markers.js';
@@ -182,12 +183,33 @@ export async function readPages(deps, table, query, fields, { cap, pageSize, tot
 
 // ---- items ------------------------------------------------------------------------------------------------------------------
 
-/** One ticket row as My work keeps it. `type` is the table it was read from (labels, filters); `table` its own class (the link). */
+/** A counter column (reassignment_count, reopen_count) as a whole number; null when the row does not carry it. */
+function countOf(value) {
+  const text = raw(value).trim();
+  if (!/^\d{1,6}$/.test(text)) return null;
+  return Number(text);
+}
+
+/** A true/false column (the customer's VIP flag): true, false, or null when the row does not carry it. */
+function flagOf(value) {
+  const text = raw(value).trim().toLowerCase();
+  if (text === 'true' || text === '1') return true;
+  if (text === 'false' || text === '0') return false;
+  return null;
+}
+
+/**
+ * One ticket row as My work keeps it. `type` is the table it was read from (labels, filters); `table` its own class (the link).
+ * The "at risk" facts (src/mywork/risk.js) are there only when the row was read with them (my queue, src/context/specs/mywork.js):
+ * reassignments and reopens (null when not read), vip (null when not known) and account (a case's account name, '' when not read).
+ */
 export function itemOf(row, type) {
   const cls = raw(row.sys_class_name).toLowerCase();
   const ci = raw(row.cmdb_ci).toLowerCase();
   const group = raw(row.assignment_group).toLowerCase();
   const table = TABLE_RE.test(cls) ? cls : type;
+  const vip = vipColumn(type);
+  const account = accountColumn(type);
   return {
     table,
     type,
@@ -202,6 +224,10 @@ export function itemOf(row, type) {
     openedAt: ms(row.opened_at),
     ci: SYS_ID_RE.test(ci) ? { id: ci, name: oneLine(disp(row.cmdb_ci), 80) } : null,
     group: SYS_ID_RE.test(group) ? { id: group, name: oneLine(disp(row.assignment_group), 80) } : null,
+    reassignments: countOf(row.reassignment_count),
+    reopens: countOf(row.reopen_count),
+    vip: vip ? flagOf(row[vip]) : null,
+    account: account ? oneLine(disp(row[account]), 80) : '',
     sla: null,
     marker: UNKNOWN_MARKER,
   };
@@ -225,7 +251,7 @@ function skipEntry(decision, table, count, names) {
  * Read the rows of every class `counted` names, per class, through `readDecision`.
  * @returns {{ items, logins: Map, access, totals: object, answered: string[] }}
  */
-async function readClasses(deps, counted, { query, order, cap, pageSize, group, policy, run, max }) {
+async function readClasses(deps, counted, { query, order, cap, pageSize, group, risk = false, accounts = false, policy, run, max }) {
   const items = [];
   const logins = new Map();
   const access = [];
@@ -242,7 +268,7 @@ async function readClasses(deps, counted, { query, order, cap, pageSize, group, 
         return;
       }
       try {
-        const got = await readPages(deps, table, `${query}${order}`, columnsFor(table, { group }), { cap, pageSize, total, run });
+        const got = await readPages(deps, table, `${query}${order}`, columnsFor(table, { group, risk, accounts }), { cap, pageSize, total, run });
         answered.push(table);
         const column = customerColumn(table);
         for (const r of got.rows) {
@@ -323,7 +349,7 @@ async function addMarkers(deps, items, logins, me, { run, limits }) {
 
 // ---- the three lists --------------------------------------------------------------------------------------------------------
 
-async function readQueue(deps, userId, { profiles, policy, run, limits }) {
+async function readQueue(deps, userId, { profiles, accounts, policy, run, limits }) {
   const query = `assigned_to=${userId}^active=true`;
   const counted = await countByClass(deps, query, tablesForProfiles(profiles), run);
   const got = await readClasses(deps, counted, {
@@ -332,6 +358,9 @@ async function readQueue(deps, userId, { profiles, policy, run, limits }) {
     cap: limits.perClass,
     pageSize: limits.pageSize,
     group: false,
+    // (my own tickets only: what says why one is at risk, src/context/specs/mywork.js)
+    risk: true,
+    accounts,
     policy,
     run,
     max: limits.classes,
@@ -470,9 +499,10 @@ async function readGroupQueue(deps, userId, { profiles, policy, run, limits }) {
 /**
  * @param {{ userId: string, userName?: string }} who the signed-in user (from the page; never from the panel)
  * @param {object} deps queryTable, countRecords, countByColumn, and the guard's isBlocked / sensitivePrefixes
- * @param {{ profiles?: string[], allowSensitive?: boolean, now?: number, limits?: object }} [options] limits: smaller caps (tests)
+ * @param {{ profiles?: string[], allowSensitive?: boolean, accounts?: boolean, now?: number, limits?: object }} [options] accounts: read
+ *   a case's account (the organisation names priority accounts); limits: smaller caps (tests)
  */
-export async function readMyWork({ userId, userName = '' }, deps, { profiles = [], allowSensitive = false, now = Date.now(), limits: given = {} } = {}) {
+export async function readMyWork({ userId, userName = '' }, deps, { profiles = [], allowSensitive = false, accounts = false, now = Date.now(), limits: given = {} } = {}) {
   const limits = { ...LIMITS, ...given };
   if (!SYS_ID_RE.test(userId || '')) throw new Error(tm('Agent Buddy could not tell who is signed in. Reload the page and try again.'));
   const me = userId.toLowerCase();
@@ -491,7 +521,7 @@ export async function readMyWork({ userId, userName = '' }, deps, { profiles = [
   }
 
   const [queue, approvals, groups] = await Promise.all([
-    readQueue(deps, me, { profiles, policy, run, limits }),
+    readQueue(deps, me, { profiles, accounts: accounts === true, policy, run, limits }),
     readApprovals(deps, me, { policy, run, limits }),
     readGroupQueue(deps, me, { profiles, policy, run, limits }),
   ]);

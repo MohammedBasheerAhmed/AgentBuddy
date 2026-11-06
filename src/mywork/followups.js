@@ -119,10 +119,14 @@ export function followUpText(entry) {
     ].join('\n');
   }
   if (entry.kind === 'update') {
+    // A complete status update (round 4): where it stands, that it is not forgotten, what happens next and what the customer can do.
+    // Kind and true for live work and for a ticket on hold for somebody else alike; nothing in it but the number and the title.
     return [
       t('Hello,'),
       '',
-      t('A quick update on {about}: we are still working on it, and we will let you know as soon as there is news.', { about }),
+      t('A quick update on {about}: we are still working on it, and it has not been forgotten.', { about }),
+      '',
+      t('We will write again as soon as there is news. If anything has changed on your side, just reply to this message.'),
       '',
       t('Thank you for your patience.'),
     ].join('\n');
@@ -130,5 +134,8 @@ export function followUpText(entry) {
   return '';
 }
 
-/** The copy button's name: "Copy reminder" or "Copy status update"; '' for a ticket the customer just answered. */
-export const followUpAction = (entry) => (entry.kind === 'reminder' ? t('Copy reminder') : entry.kind === 'update' ? t('Copy status update') : '');
+/**
+ * The copy button's name: "Copy draft" for a reminder and for a status update (its title says what it copies); '' for a ticket the
+ * customer just answered (there is nothing to draft: the agent reads the answer).
+ */
+export const followUpAction = (entry) => (entry.kind === 'reminder' || entry.kind === 'update' ? t('Copy draft') : '');

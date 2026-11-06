@@ -2,7 +2,7 @@
 // Plain keyword matching on the short description (src/lib/similar.js), boosted by a shared CI or category. No AI tokens.
 // Results are for local display: they carry sysId/table so the panel can link them, and are not ContextPack data.
 
-import { rankSimilar, similarKeywords, similarQuery } from '../lib/similar.js';
+import { matchKey, rankSimilar, similarKeywords, similarQuery, textHas, withoutArabicArticle } from '../lib/similar.js';
 import { FIELDS_BY_KIND, LIMITS } from './allowlists.js';
 import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
 import { isSensitiveTable, kindForTable } from './kinds.js';
@@ -40,18 +40,23 @@ const same = (a, b) => Boolean(a) && Boolean(b) && String(a).trim().toLowerCase(
 
 // Words worth searching for in a ticket: no email addresses, links or phone numbers, and not the names of the people
 // on the record (a caller's name says nothing about the problem). Same extraction as src/lib/similar.js otherwise.
+// Names are compared in the match form, with and without the Arabic article, so "أحمد" also takes out "احمد" and "العتيبي"
+// takes out "عتيبي"; their words are taken out of the text before the keywords are picked.
 export function searchKeywords(pack, { extra = '', max = 4 } = {}) {
-  const text = `${pack.fields?.short_description || ''} ${extra}`
-    .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, ' ')
-    .replace(/https?:\/\/\S+/gi, ' ')
-    .replace(/\+?\d[\d\s().-]{6,}\d/g, ' ');
   const names = new Set(
     (pack.people || [])
       .flatMap((p) => [p.name, p.firstName, p.lastName])
-      .flatMap((n) => String(n || '').toLowerCase().split(/[^\p{L}]+/u))
+      .flatMap((n) => String(n || '').split(/[^\p{L}\p{M}]+/u))
       .filter(Boolean)
+      .flatMap((w) => [matchKey(w), matchKey(withoutArabicArticle(w))])
   );
-  return similarKeywords(text, max + names.size + 2).filter((w) => !names.has(w)).slice(0, max);
+  const isName = (word) => names.has(matchKey(word)) || names.has(matchKey(withoutArabicArticle(word)));
+  const text = `${pack.fields?.short_description || ''} ${extra}`
+    .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, ' ')
+    .replace(/\p{L}[\p{L}\p{M}\p{N}_-]*/gu, (word) => (names.size && isName(word) ? ' ' : word));
+  return similarKeywords(text, max);
 }
 
 // ---- Similar tickets -----------------------------------------------------------------------------------
@@ -103,6 +108,10 @@ function toHit(row, table, routing = false) {
     state: oneLine(disp(row.state), 40),
     close_notes: cleanText(disp(row.close_notes), LIMITS.similarCloseNotes),
     close_code: oneLine(disp(row.close_code) || disp(row.resolution_code), 60),
+    // The stored value of the same choice (a form's choice field is filled by value, src/insights/closeCode.js) and who solved it
+    // (the "solved before by" line). Both columns were read already; nothing new is asked of the instance.
+    close_code_value: oneLine(raw(row.close_code) || raw(row.resolution_code), 60),
+    assigned_to: oneLine(disp(row.assigned_to), 100),
     resolved_at: oneLine(disp(row.resolved_at) || disp(row.closed_at), 40),
     category: oneLine(disp(row.category), 100),
     cmdb_ci: oneLine(disp(row.cmdb_ci), 100),
@@ -146,8 +155,7 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
   const hits = ranked
     .map(({ row, shared, total }) => {
       const item = toHit(byId.get(raw(row.sys_id)) || row, table, routing);
-      const text = item.short_description.toLowerCase();
-      const { score, why } = scoreHit({ item, shared, total, words: keywords.filter((w) => text.includes(w)) }, pack);
+      const { score, why } = scoreHit({ item, shared, total, words: keywords.filter((w) => textHas(item.short_description, w)) }, pack);
       return { ...item, score, why };
     })
     .filter((hit) => !resolvedOnly || hit.close_notes)
@@ -254,8 +262,8 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
 
 /** Rank articles by keyword overlap: a keyword in the title counts double a keyword in the text. Pure. */
 export function scoreArticle({ title, body }, keywords) {
-  const inTitle = keywords.filter((w) => title.toLowerCase().includes(w));
-  const inBody = keywords.filter((w) => !inTitle.includes(w) && body.toLowerCase().includes(w));
+  const inTitle = keywords.filter((w) => textHas(title, w));
+  const inBody = keywords.filter((w) => !inTitle.includes(w) && textHas(body, w));
   const points = inTitle.length * 2 + inBody.length;
   const why = [];
   if (inTitle.length) why.push(`title mentions ${inTitle.join(', ')}`);

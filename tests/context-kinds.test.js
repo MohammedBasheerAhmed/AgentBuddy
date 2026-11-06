@@ -31,9 +31,13 @@ test('tables map to the kinds of the contract', () => {
   assert.equal(kindForTable(undefined), 'other');
 });
 
-test('the HR family is sensitive, nothing else is', () => {
+test('the HR family and the security, vulnerability, GRC and audit families are sensitive, nothing else is', () => {
   for (const t of ['sn_hr_core_case', 'sn_hr_core_task', 'sn_hr_le_case', 'SN_HR_core_case']) assert.equal(isSensitiveTable(t), true, t);
-  for (const t of ['incident', 'sn_customerservice_case', 'task', 'sys_user', '', null]) assert.equal(isSensitiveTable(t), false, String(t));
+  // Round 4 (docs/round4.md): on the built-in list too (tests/reads-sensitive.test.js has the rest).
+  for (const t of ['sn_si_incident', 'sn_vul_vulnerable_item', 'sn_grc_issue', 'sn_risk_risk', 'sn_compliance_control', 'sn_audit_engagement']) assert.equal(isSensitiveTable(t), true, t);
+  for (const t of ['incident', 'sn_customerservice_case', 'task', 'sys_user', 'sys_audit', '', null]) assert.equal(isSensitiveTable(t), false, String(t));
+  // Still only the sn_hr_ case family is an HR case.
+  assert.equal(kindForTable('sn_si_incident'), 'other');
 });
 
 test('record numbers suggest their table', () => {

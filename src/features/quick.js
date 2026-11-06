@@ -29,6 +29,12 @@ export const QUICK_LABELS = Object.freeze({
   get 'resolution-notes'() {
     return t('Resolution notes');
   },
+  get 'prepare-close'() {
+    return t('Prepare to close');
+  },
+  get 'translate-message'() {
+    return t('Translate message');
+  },
   get 'handoff-brief'() {
     return t('Hand-off brief');
   },

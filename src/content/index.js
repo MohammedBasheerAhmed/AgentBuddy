@@ -6,7 +6,9 @@
 //               every request and no record is remembered between requests. formStamp changes when the form is saved.
 //   READ        GET-only reads with the person's own session (the context engine in src/context)
 //   FILL_FIELD  put text into ONE field on the open form (the only write; the person presses Save). Only the fields in
-//               src/lib/fillable.js, only on the record the text was written for, with HTML escaped for an HTML field (fill.js)
+//               src/lib/fillable.js, only on the record the text was written for, with HTML escaped for an HTML field (fill.js).
+//               Its mode 'undo' (round 4) puts one box back as it was before an insert, only while it still holds what the
+//               insert left there (fill.js handleUndo); routed the same way, never a save
 //
 // The one thing it puts on the page is the small bar of main actions (bar.js, in a closed shadow root). The bar runs nothing itself:
 // a click asks the service worker to open the side panel and run the action there. Nothing is sent to any server from here, and the

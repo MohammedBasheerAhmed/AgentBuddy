@@ -10,7 +10,8 @@ import { activeProfiles } from '../../profiles/profiles.js';
 //   - optional refresh every STALE_MS while the screen is on show (the person switches it on; remembered for the browser session)
 //   - a read that takes longer than SLOW_MS says what it waits for, and can be stopped; "Try again" starts it over. A stopped or
 //     replaced read's late answer is dropped. While a new read runs, the last answer stays on screen.
-//   - an answer is kept with what it was read for (the tab, the instance, the profiles, the HR rule) and shown only while that is
+//   - an answer is kept with what it was read for (the tab, the instance, the profiles, the HR rule, whether the organisation names
+//     priority accounts) and shown only while that is
 //     still so: after the tab moves to another instance, the other instance's tickets are never listed (a click would open their
 //     sys_id here), not while the new read runs, nor after it fails or is stopped.
 //   - nothing is stored: the answer lives in this hook's state and goes when the panel closes.
@@ -54,6 +55,8 @@ export function useMyWork({ page, eff, active }) {
   const tabId = page?.tabId;
   const profiles = activeProfiles(eff);
   const allowSensitive = Boolean(eff?.policy?.allowHrContent);
+  // A case's account is read only when the organisation names priority accounts (the "At risk" reason, src/mywork/risk.js).
+  const accounts = Array.isArray(eff?.policy?.priorityAccounts) && eff.policy.priorityAccounts.length > 0;
   // Another tab, another instance in the same tab, other profiles or another HR rule: what is on screen is not this person's view.
   let origin;
   try {
@@ -61,7 +64,7 @@ export function useMyWork({ page, eff, active }) {
   } catch {
     origin = '';
   }
-  const argsKey = `${tabId}|${origin}|${profiles.join(',')}|${allowSensitive}`;
+  const argsKey = `${tabId}|${origin}|${profiles.join(',')}|${allowSensitive}|${accounts}`;
 
   const load = useCallback(async () => {
     run.current += 1;
@@ -74,7 +77,7 @@ export function useMyWork({ page, eff, active }) {
       for (let attempt = 0; ; attempt += 1) {
         try {
           // eslint-disable-next-line no-await-in-loop -- one try at a time
-          const answer = await read(tabId, 'myWork', { profiles, allowSensitive });
+          const answer = await read(tabId, 'myWork', { profiles, allowSensitive, accounts });
           if (mine === run.current) {
             const at = Date.now();
             setNow(at);
@@ -98,7 +101,7 @@ export function useMyWork({ page, eff, active }) {
     } finally {
       clearTimeout(slowTimer);
     }
-    // argsKey stands for tabId, profiles and allowSensitive
+    // argsKey stands for tabId, profiles, allowSensitive and accounts
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [argsKey]);
 

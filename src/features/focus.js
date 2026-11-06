@@ -29,7 +29,8 @@ export const PAIN_POINTS = Object.freeze([
   point('fix', () => t('Find the fix'), ['checklist', 'steps', 'knowledge'], ['next-best-action', 'problem-rca', 'fulfilment-checklist']),
   point('caller', () => t('Same caller'), ['caller', 'account'], ['caller-briefing', 'account-briefing']),
   point('reply', () => t('Reply'), ['email'], ['reply-draft', 'chat-reply']),
-  point('close', () => t('Close well'), ['resolve'], ['resolution-notes', 'chat-summary']),
+  // (round 4: "Prepare to close" first; "Write resolution notes" fills the slot only where it is not offered, and is in All tools)
+  point('close', () => t('Close well'), ['resolve'], ['prepare-close', 'resolution-notes', 'chat-summary']),
 ]);
 
 export const PAIN_IDS = Object.freeze(PAIN_POINTS.map((p) => p.id));

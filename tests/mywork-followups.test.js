@@ -64,7 +64,8 @@ test('waiting on the customer past N days -> reminder; under N days -> nothing; 
   assert.equal(out[1].days, 4);
   assert.equal(followUpReason(out[0]), 'Customer replied today');
   assert.equal(followUpReason(out[1]), 'Waiting on the customer 4 d');
-  assert.equal(followUpAction(out[1]), 'Copy reminder');
+  // (round 4: the button reads "Copy draft" for a reminder and a status update alike)
+  assert.equal(followUpAction(out[1]), 'Copy draft');
   assert.equal(followUpAction(out[0]), '');
 });
 
@@ -84,7 +85,7 @@ test('customer not updated for N days -> status update; never written on an old 
   assert.ok(out.every((f) => f.kind === 'update'));
   assert.equal(followUpReason(out[1]), 'Customer not updated for 5 d');
   assert.equal(followUpReason(out[2]), 'No update to the customer in 4 d');
-  assert.equal(followUpAction(out[1]), 'Copy status update');
+  assert.equal(followUpAction(out[1]), 'Copy draft');
 });
 
 test('no follow-up is claimed when the comments could not be read, on resolved tickets, or on tickets with no customer', () => {
@@ -121,6 +122,30 @@ test('templates: fixed wording, the ticket number and title only, nothing for a 
   const update = followUpText({ kind: 'update', item: item({ number: 'RITM0010001', title: '' }), days: 5 });
   assert.match(update, /A quick update on RITM0010001: we are still working on it/);
   assert.equal(followUpText({ kind: 'replied', item: item(), days: 0 }), '');
+  assert.equal(followUpAction({ kind: 'replied', item: item(), days: 0 }), '', 'nothing to draft for an answer to read');
   const long = followUpText({ kind: 'update', item: item({ title: 'x'.repeat(500) }), days: 5 });
   assert.ok(long.length < 400, 'a long title is cut');
+});
+
+test('the status-update draft is kind and complete: where it stands, not forgotten, what happens next, how to add something, thanks', () => {
+  const t = item({ number: 'INC0010008', title: 'Printer on floor 3 jams', marker: { ...BASE_MARKER, lastMineAt: NOW - 4 * DAY, lastAt: NOW - 4 * DAY } });
+  const [entry] = followUps([t], { now: NOW, days: 3 });
+  assert.equal(entry.kind, 'update');
+  assert.equal(
+    followUpText(entry),
+    [
+      'Hello,',
+      '',
+      'A quick update on INC0010008 (Printer on floor 3 jams): we are still working on it, and it has not been forgotten.',
+      '',
+      'We will write again as soon as there is news. If anything has changed on your side, just reply to this message.',
+      '',
+      'Thank you for your patience.',
+    ].join('\n')
+  );
+  // Built from what the row shows (number and title) and nothing else: no names, no comment text, no state words.
+  const other = item({ number: 'INC0010009', title: 'Printer on floor 3 jams', holdReason: 'Awaiting Vendor', state: 'On Hold', work: 'on-hold', marker: { ...BASE_MARKER, lastMineAt: NOW - 4 * DAY, lastAt: NOW - 4 * DAY } });
+  const held = followUpText(followUps([other], { now: NOW, days: 3 })[0]);
+  assert.ok(!/Vendor|On Hold/.test(held), held);
+  assert.equal(held.replace('INC0010009', 'INC0010008'), followUpText(entry), 'the same kind words for a ticket on hold');
 });

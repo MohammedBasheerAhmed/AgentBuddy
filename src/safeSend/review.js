@@ -6,7 +6,7 @@
 //   isCustomerVisible(field)                                 -> from FILLABLE_FIELDS (src/lib/fillable.js)
 //
 // `serious` findings stop the insert until the person chooses "Insert anyway". `hints` are low severity (another person's name,
-// an IP or MAC address, "escalated to"): shown as a non-blocking "Worth a look" list, never hidden.
+// an IP or MAC address, "escalated to", the tone, a missing next step): shown as a non-blocking "Worth a look" list, never hidden.
 //
 // What it looks at, in one place:
 //   - personal data and secrets (checkOutgoing, the same detectors the firewall uses), and what the firewall hid on the way out
@@ -17,6 +17,9 @@
 //   - words copied from an internal work note of the same record (6 or more in a row); for resolution notes the insert flow
 //     (src/sidepanel/insertFlow.js reviewInsert) and checkTypedText make that a hint
 //   - the organisation's own internal-only phrases (policy `internalPhrases`), on top of the built-in ones
+//   - (round 4) the tone: a phrase that sounds like blame, a long run of capitals, three or more exclamation marks; and, for a reply
+//     (the customer comment, the email body: `reply`), whether it says what happens next. Both are hints, in English and Arabic
+//     (src/safeSend/replyChecks.js)
 //
 //   checkTypedText(field, text, opts)  -> "Check my comment": the same review for what the agent typed into the form themselves
 //
@@ -24,9 +27,10 @@
 
 import { DEFAULT_INTERNAL_PHRASES, checkOutgoing, maskExcerpt } from './index.js';
 import { isCustomerVisible } from '../lib/fillable.js';
+import { isReplyField, nextStepFindings, toneFindings } from './replyChecks.js';
 import { tm, t as tr } from '../i18n/index.js';
 
-export { isCustomerVisible };
+export { isCustomerVisible, isReplyField };
 
 /**
  * The internal-only phrases to look for: the built-in list plus the organisation's own (policy `internalPhrases`: team names, system
@@ -196,12 +200,13 @@ const split = (all) => ({ serious: all.filter((f) => f.severity !== 'low'), hint
 /**
  * Review text that the customer (or the reader of an article) will be able to read.
  * @param {string} text the text about to be inserted
- * @param {{ people?: object[], scan?: (text: string) => object[], internalTexts?: string[] }} [options]
+ * @param {{ people?: object[], scan?: (text: string) => object[], internalTexts?: string[], reply?: boolean }} [options]
  *   people: the record's people (their own email addresses are not flagged); scan: the firewall's scan() from the run that
- *   produced the text; internalTexts: the record's work notes
+ *   produced the text; internalTexts: the record's work notes; reply: the text is a reply to the customer (a comment, an email
+ *   body), so a missing next step is a hint too (reviewForInsert and checkTypedText set it from the field)
  * @returns {{ serious: object[], hints: object[] }} findings: { kind, severity, start, end, excerpt, advice }
  */
-export function reviewForCustomer(text, { people = [], scan = null, internalTexts = [], internalPhrases, overlapSeverity = 'medium' } = {}) {
+export function reviewForCustomer(text, { people = [], scan = null, internalTexts = [], internalPhrases, overlapSeverity = 'medium', reply = false } = {}) {
   const plain = String(text ?? '');
   // The organisation's phrases are ADDED to the built-in ones; without any, checkOutgoing uses its defaults as before.
   const phrases = Array.isArray(internalPhrases) && internalPhrases.length ? phrasesWith(internalPhrases) : undefined;
@@ -214,6 +219,8 @@ export function reviewForCustomer(text, { people = [], scan = null, internalText
     ...linkFindings(plain),
     ...placeholderFindings(plain, 'medium'),
     ...overlapFindings(plain, internalTexts).map((f) => ({ ...f, severity: overlapSeverity === 'low' ? 'low' : f.severity })),
+    ...toneFindings(plain),
+    ...(reply === true ? nextStepFindings(plain) : []),
   ].sort(byPosition);
   return split(all);
 }
@@ -221,10 +228,11 @@ export function reviewForCustomer(text, { people = [], scan = null, internalText
 /**
  * Review text for the field it is going into. A field the customer can read gets the whole review; an internal one (work notes)
  * still gets the markup check (journal fields render [code] as HTML) and a note about a leftover placeholder.
- * options: people, scan, internalTexts, internalPhrases (the organisation's, added to the built-in list).
+ * options: people, scan, internalTexts, internalPhrases (the organisation's, added to the built-in list). A reply field (comments, the
+ * email body) is also checked for a next step.
  */
 export function reviewForInsert(field, text, options = {}) {
-  if (isCustomerVisible(field)) return reviewForCustomer(text, options);
+  if (isCustomerVisible(field)) return reviewForCustomer(text, { ...options, reply: isReplyField(field) });
   const plain = String(text ?? '');
   return split([...markupFindings(plain), ...placeholderFindings(plain, 'low')].sort(byPosition));
 }
@@ -248,7 +256,7 @@ export function checkTypedText(field, text, options = {}) {
   if (!plain.trim()) return { status: 'empty', serious: [], hints: [] };
   if (!isCustomerVisible(field)) return { status: 'internal', serious: [], hints: [] };
   // Resolution notes are written from the work notes: shared words are a hint there, as for an insert (src/sidepanel/insertFlow.js).
-  const { serious, hints } = reviewForCustomer(plain, { ...options, overlapSeverity: OVERLAP_IS_A_HINT.has(field) ? 'low' : 'medium' });
+  const { serious, hints } = reviewForCustomer(plain, { ...options, reply: isReplyField(field), overlapSeverity: OVERLAP_IS_A_HINT.has(field) ? 'low' : 'medium' });
   return { status: serious.length || hints.length ? 'findings' : 'clean', serious, hints };
 }
 

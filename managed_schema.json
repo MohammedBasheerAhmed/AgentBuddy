@@ -331,6 +331,11 @@
       "items": {
         "type": "string"
       }
+    },
+    "rememberLastViewed": {
+      "title": "Remember when tickets were last opened",
+      "description": "true (the default) lets \"Understand the ticket\" say what is new since the agent last opened a ticket. For that the browser keeps, per ServiceNow instance, the record id (sys_id), the table and the time of each ticket opened in the panel: no number, title, text or names; at most 500 tickets, none older than 30 days. false keeps nothing and hides the line.",
+      "type": "boolean"
     }
   }
 }

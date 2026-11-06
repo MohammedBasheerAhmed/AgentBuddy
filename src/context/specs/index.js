@@ -10,8 +10,11 @@ import checks from './checks.js';
 import insights from './insights.js';
 import mywork from './mywork.js';
 import caller from './caller.js';
+import understand from './understand.js';
+import fix from './fix.js';
+import close from './close.js';
 
-const parts = [itsm, domain, knowledge, compose, reports, checks, insights, mywork, caller];
+const parts = [itsm, domain, knowledge, compose, reports, checks, insights, mywork, caller, understand, fix, close];
 const merge = (key) => Object.assign({}, ...parts.map((p) => p[key] || {}));
 
 // extendFields adds columns to the display ceiling of a kind that already exists (never removes or replaces any):

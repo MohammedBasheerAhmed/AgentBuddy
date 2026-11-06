@@ -82,7 +82,8 @@ test('AI not usable now, or an answer on its way: every action is off and none i
 
 test('the state decides the filled row: a new ticket the summary, a resolved one the resolution notes, a closed one no reply row', () => {
   assert.match(html({ header: head('New') }), /ab-act-primary" data-feature="record-summary"/);
-  assert.match(html({ header: head('Resolved') }), /ab-act-primary" data-feature="resolution-notes"/);
+  // (round 4: Prepare to close is the fifth slot's action and the primary of a resolved ticket)
+  assert.match(html({ header: head('Resolved') }), /ab-act-primary" data-feature="prepare-close"/);
   const closed = html({ header: head('Closed') });
   assert.ok(!/data-feature="reply-draft"/.test(closed));
   assert.ok(!/<p class="ab-act-pain">Reply</.test(closed));

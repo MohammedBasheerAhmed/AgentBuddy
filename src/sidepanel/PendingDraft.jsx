@@ -8,7 +8,7 @@ import { SafeText } from '../render/SafeText.jsx';
 import { read } from './ask.js';
 import { applyFieldStates, insertTargets, readFieldStates, reviewInsert } from './insertFlow.js';
 import { useInsertActions } from './useInsertActions.js';
-import InsertFindings from './InsertFindings.jsx';
+import InsertFindings, { InsertNote } from './InsertFindings.jsx';
 import { auditInsert } from '../lib/storage.js';
 import { EMAIL_NEXT, insertedNote } from '../lib/fillable.js';
 import { t, isolate, t as tr } from '../i18n/index.js';
@@ -144,7 +144,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
     auditInsert({ feature: draft.feature?.id || '', table: expect.table, sysId: expect.sysId, provider: draft.provider, model: draft.model, mode: eff?.values?.piiMode, outcome });
 
   // Copy and Insert (useInsertActions), with the email form of THAT ticket as the only place the text may land.
-  const { note, findings, editing, setEditing, done, busy, copy, insert, insertNow, startEdit } = useInsertActions({
+  const { note, findings, editing, setEditing, done, busy, copy, insert, insertNow, startEdit, undo, undoNow } = useInsertActions({
     page,
     source,
     pinned: expect,
@@ -201,7 +201,7 @@ function EmailDraftCard({ draft, page, eff, onUsedUp }) {
         />
       )}
       {!findings && !editing && <ReviewHints hints={hints} />}
-      {note && <p className={`ab-note ab-note-${note.kind}`} role="status">{note.text}</p>}
+      <InsertNote note={note} undo={undo} busy={busy} onUndo={undoNow} />
       {editing ? (
         <InsertEditor
           targets={[...targets.filter((item) => item.key === editing.key), ...targets.filter((item) => item.key !== editing.key)]}

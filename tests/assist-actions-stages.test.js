@@ -54,7 +54,7 @@ test('the brief\'s grouping: understand, reply, work it, resolve', () => {
 });
 
 test('names start with a verb and the two summaries are clearly different (AI1, AI2)', () => {
-  const VERBS = /^(Summarise|Catch|Check|Brief|Draft|Ask|Tell|Suggest|Write|Prepare|Improve)\b/;
+  const VERBS = /^(Summarise|Catch|Check|Brief|Draft|Ask|Tell|Suggest|Write|Prepare|Improve|Translate)\b/;
   for (const f of ticketFeatures()) assert.match(f.title, VERBS, f.id);
   assert.equal(featureById('record-summary').title, 'Summarise this ticket');
   assert.equal(featureById('thread-summary').title, 'Catch up on the discussion');

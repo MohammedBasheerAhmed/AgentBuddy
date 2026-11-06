@@ -357,7 +357,6 @@ const AR_TICKET_PANEL = {
   'This task belongs to {number}; the status is for that item.': 'تتبع هذه المهمة {number}؛ الحالة خاصة بذلك العنصر.',
   'Checked against what is on the form now, plus the saved ticket.': 'تم الفحص مقابل ما في النموذج الآن، مع التذكرة المحفوظة.',
   'Checked the saved ticket only: this page has no form Agent Buddy can read.': 'تم فحص التذكرة المحفوظة فقط: لا تحتوي هذه الصفحة على نموذج يستطيع Agent Buddy قراءته.',
-  '{n} to look at': '{n} تستحق النظر',
   'Nothing wrong, a few notes': 'لا شيء خاطئ، مع بعض الملاحظات',
   'Looks ready': 'تبدو جاهزة',
   'Go to: {label}': 'انتقل إلى: {label}',

@@ -5,8 +5,9 @@
 // few articles of one cluster the person picked: overlapping 3-word shingles. Titles decide what is shown; the text figure
 // only helps the person judge, and says how much of the shorter article also appears in the other.
 
-import { STOP_TITLE, jaccard, stemsOf, wordsOf } from './text.js';
+import { STOP_TITLE, jaccard, stemsWithForms, wordsOf } from './text.js';
 import { parseSnTime } from '../context/util.js';
+import { normalizeArabic } from '../lib/scriptDetect.js';
 
 export const DUPLICATE_THRESHOLD = 0.55;
 export const MIN_SHARED_WORDS = 2;
@@ -14,12 +15,18 @@ export const MAX_CLUSTERS = 25;
 
 // ---- Titles ---------------------------------------------------------------------------------------
 
-/** { words: string[], unigrams: Set, bigrams: Set } for a title. Order matters a little (bigrams), not much. */
+/**
+ * { words: string[], unigrams: Set, bigrams: Set, forms: Map } for a title. Order matters a little (bigrams), not much. `forms` maps
+ * each stem to the word as the title writes it (lower case), for showing: an Arabic stem is folded and cut, not something to read.
+ */
 export function titleProfile(title) {
-  const words = stemsOf(title, STOP_TITLE);
+  const terms = stemsWithForms(title, STOP_TITLE);
+  const words = terms.map((x) => x.stem);
+  const forms = new Map();
+  for (const { stem, form } of terms) if (!forms.has(stem)) forms.set(stem, form);
   const bigrams = new Set();
   for (let i = 0; i + 1 < words.length; i += 1) bigrams.add(`${words[i]} ${words[i + 1]}`);
-  return { words, unigrams: new Set(words), bigrams };
+  return { words, unigrams: new Set(words), bigrams, forms };
 }
 
 /**
@@ -82,7 +89,8 @@ export function findDuplicateClusters(articles, { threshold = DUPLICATE_THRESHOL
       keep: strip(centre),
       articles: [strip(centre), ...members.map((m) => strip(m.other))],
       score: Math.round((members.reduce((sum, m) => sum + m.score, 0) / members.length) * 100) / 100,
-      sharedWords: [...sharedAll],
+      // The shared words as the centre's title writes them (the stems are for comparing only).
+      sharedWords: [...sharedAll].map((w) => centre.profile.forms?.get(w) || w),
       exactTitle: members.every((m) => m.score >= 0.999),
     });
   }
@@ -96,9 +104,12 @@ export function findDuplicateClusters(articles, { threshold = DUPLICATE_THRESHOL
 
 const SHINGLE = 3;
 
-/** The set of 3-word shingles of a text (all words, no stop list: wording matters when comparing bodies). */
+/**
+ * The set of 3-word shingles of a text (all words, no stop list: wording matters when comparing bodies). Words are folded with
+ * normalizeArabic, so the same Arabic sentence written with and without hamza or short vowels still meets.
+ */
 export function textShingles(text) {
-  const words = wordsOf(text);
+  const words = wordsOf(text).map(normalizeArabic);
   const out = new Set();
   if (words.length < SHINGLE) {
     if (words.length) out.add(words.join(' '));

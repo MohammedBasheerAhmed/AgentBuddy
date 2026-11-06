@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
-import { buildCheckView } from '../../../checks/resolutionCheck.js';
+import { buildCheckView, currentCloseCode, readyLine } from '../../../checks/resolutionCheck.js';
+import { closeCodeFact, closeCodeVote, closeWellLine, repeatOfCaller } from '../../../insights/closeCode.js';
 import { fixFor } from '../../../insights/fixes.js';
 import { stateBucket } from '../../../insights/order.js';
 import { plainNote } from '../../plainAccess.js';
+import RecordLink from '../../RecordLink.jsx';
 import { ShowMore } from '../../ui/primitives.jsx';
 import { Tag } from '../../checks/Bits.jsx';
-import { allowSensitiveOf, read } from './data.js';
+import { allowSensitiveOf, read, useHistory, useLookalikes, useTicketFacts } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { CardJump, QuietButton, ReadState } from './bits.jsx';
 import { t } from '../../../i18n/index.js';
@@ -15,6 +17,14 @@ import { t } from '../../../i18n/index.js';
 // not saved yet where the page has a form it can read (on a Workspace page: the notes boxes only), and reads again each time the
 // card is shown (the agent keeps typing).
 // Advice only: nothing is blocked or changed. Each finding points to where it is fixed. (The AI rewrite of the notes is in AI Assist.)
+//
+// Round 4 (docs/round4.md), the "Close well" row: two facts more, no AI, from reads the Insights half makes anyway:
+//   Close code          "Suggested: Solved (Work Around). 4 of 5 look-alikes used it." (the solved look-alikes' vote; nothing
+//                       when there is none; a quiet line when the ticket has that code already)
+//   Looks like a repeat "INC0010019 from the same caller is the same issue: link it, or raise a problem if it comes back." with
+//                       "Open INC0010019" (a new tab: the ticket being closed is never replaced)
+// and the row's line says where the ticket stands: "Not yet: the caller has not confirmed · close code suggested".
+// "Prepare to close" (AI Assist) shows the same facts through useCloseWell.
 
 const labelFor = (status) => {
   const labels = { warn: [t('Look at this'), 'warn'], info: [t('Note'), ''], ok: [t('Fine'), 'ok'] };
@@ -31,9 +41,10 @@ const hintFor = (source) => {
   return hints[source] || hints[''];
 };
 
-export default function ResolveCard({ page, eff, record, header, active, setSummary, setAttention, onShowCard }) {
-  const ref = { table: record.table, sysId: record.sysId };
-  const state = useInsight({
+/** The resolve check's read (the saved ticket and what is typed on the form), shared by this card and Prepare to close. */
+export function useResolveCheck({ page, eff, record, active }) {
+  const ref = { table: record?.table, sysId: record?.sysId };
+  return useInsight({
     key: `${recordKey(page, record)}|resolve`,
     load: async () => {
       // A failed facts read must not hide the checks: the saved ticket is still worth checking.
@@ -47,10 +58,60 @@ export default function ResolveCard({ page, eff, record, header, active, setSumm
     maxAgeMs: 15000,
     refreshOnShow: true,
   });
+}
+
+/**
+ * Everything the Close well row knows, without AI: the resolve check (`state`, `view`), the close code the solved look-alikes used
+ * (`vote`, closeCodeVote) and an earlier ticket of the same caller about the same issue (`repeat`, repeatOfCaller). Each comes from
+ * a read the Insights half shares (panel memory), made only while `active`. A read that failed or is not there yet leaves its part
+ * out (no vote, no repeat), never "none".
+ */
+export function useCloseWell({ page, eff, record, active }) {
+  const state = useResolveCheck({ page, eff, record, active });
+  const looks = useLookalikes({ page, record, eff, active });
+  const history = useHistory({ page, record, eff, active });
+  const ticket = useTicketFacts({ page, record, eff, active });
   const data = state.data;
   const view = useMemo(() => (data ? buildCheckView(data.pack, data.facts, { now: data.at }) : null), [data]);
+  const hits = looks.data && !looks.error ? looks.data.hits : null;
+  const vote = useMemo(() => (hits ? closeCodeVote(hits, { current: data ? currentCloseCode(data.pack, data.facts) : '' }) : null), [hits, data]);
+  const fields = ticket.data?.pack?.fields || null;
+  const past = history.data && !history.error ? history.data : null;
+  const repeat = useMemo(() => (fields && past ? repeatOfCaller(fields, past) : null), [fields, past]);
+  return { state, view, vote, repeat };
+}
+
+/** The two facts (close code, repeat): a short list, or nothing when there is neither. */
+export function CloseFacts({ page, vote, repeat }) {
+  const code = closeCodeFact(vote);
+  if (!code && !repeat) return null;
+  return (
+    <ul className="ab-close-facts">
+      {code && (
+        <li className={`ab-close-fact${vote.matchesCurrent === true ? ' is-quiet' : ''}`} data-fact="code">
+          <span className="ab-close-fact-k">{t('Close code')}</span>
+          <span className="ab-close-fact-v">{code}</span>
+        </li>
+      )}
+      {repeat && (
+        <li className="ab-close-fact" data-fact="repeat">
+          <span className="ab-close-fact-k">{t('Looks like a repeat')}</span>
+          <span className="ab-close-fact-v">{repeat.line}</span>
+          {repeat.sysId && (
+            <RecordLink page={page} item={{ table: repeat.table, sysId: repeat.sysId }} newTab className="ab-btn ab-btn-sm ab-close-open">
+              {t('Open {number}', { number: repeat.number })}
+            </RecordLink>
+          )}
+        </li>
+      )}
+    </ul>
+  );
+}
+
+export default function ResolveCard({ page, eff, record, header, active, setSummary, setAttention, onShowCard }) {
+  const { state, view, vote, repeat } = useCloseWell({ page, eff, record, active });
   const warn = view?.summary.warn || 0;
-  useReport(setSummary, view ? (warn ? t('{n} to look at', { n: warn }) : view.summary.info ? t('Nothing wrong, a few notes') : t('Looks ready')) : '');
+  useReport(setSummary, view ? closeWellLine({ ready: readyLine(view), vote, repeat }) : '');
   useReport(setAttention, warn && ['resolved', 'closed'].includes(stateBucket(header?.state)) ? 'warn' : '');
 
   return (
@@ -78,6 +139,7 @@ export default function ResolveCard({ page, eff, record, header, active, setSumm
               );
             }}
           />
+          <CloseFacts page={page} vote={vote} repeat={repeat} />
           <div className="ab-ins-foot">
             <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>
               {t('Check again')}

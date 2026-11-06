@@ -2,20 +2,62 @@
 import { useEffect, useId, useState } from 'react';
 import RecordLink from '../../RecordLink.jsx';
 import ErrorNote from '../../ErrorNote.jsx';
-import Notes from '../../knowledge/Notes.jsx';
-import { readFailure } from '../../plainAccess.js';
+import { plainError } from '../../ask.js';
+import { describeAccess, plainSource } from '../../plainAccess.js';
+import { READ_REASON, readFailureText, readReasonOf } from '../../../context/access.js';
 import { EmptyNote } from '../../ui/primitives.jsx';
 import { Icon } from '../../ui/icons.jsx';
 import { copyText } from '../../reports/download.js';
 import { t } from '../../../i18n/index.js';
 
-export { EmptyNote, Notes };
+export { EmptyNote };
 
 const SLOW_MS = 3000;
 
+// How a failed read is shown (the reasons: src/context/access.js READ_REASON).
+// A refusal: an access rule, the organisation's restriction of this kind of read, its block in Agent Buddy, a record that is not there
+// for this person, a table this instance does not have. A plain line, no "Try again": trying again cannot change it (build rule 9).
+const REFUSED = new Set([READ_REASON.ACL, READ_REASON.POLICY, READ_REASON.BLOCKED, READ_REASON.NOT_FOUND, READ_REASON.MISSING]);
+// The instance limited the read or did not answer with data: said calmly, with "Try again".
+const INSTANCE = new Set([READ_REASON.RATE_LIMITED, READ_REASON.UNAVAILABLE, READ_REASON.NOT_DATA, READ_REASON.TIMEOUT]);
+
+/**
+ * The lines under a card's results for the reads that could not see everything (access entries), so a missing list is never taken for
+ * "nothing there". Each line in plain words (src/sidepanel/plainAccess.js), except the reasons that are about the instance or the
+ * organisation rather than one table: those say what happened and what to do (readFailureText), once for all the reads they stopped.
+ */
+export function accessLines(access) {
+  const lines = [];
+  const policy = []; // the things the organisation's restriction stopped: one line names them all
+  let policyAt = -1;
+  for (const entry of Array.isArray(access) ? access : []) {
+    const [plain] = describeAccess([entry]);
+    if (!plain) continue; // read, empty, or left out on purpose: nothing to say
+    const reason = readReasonOf(entry);
+    if (reason === READ_REASON.POLICY) {
+      if (policyAt < 0) policyAt = lines.push('') - 1;
+      const thing = plainSource(entry.source);
+      if (!policy.includes(thing)) policy.push(thing);
+      continue;
+    }
+    const line = INSTANCE.has(reason) ? readFailureText(entry, { translate: t }) : plain;
+    if (!lines.includes(line)) lines.push(line);
+  }
+  if (policyAt >= 0) lines[policyAt] = readFailureText({ reason: READ_REASON.POLICY }, { thing: policy.join(t(', ')), translate: t });
+  return lines;
+}
+
+/** What could not be read, in plain words, never a table name (accessLines). */
+export function Notes({ access }) {
+  const lines = accessLines(access);
+  if (!lines.length) return null;
+  return <p className="ab-hint ab-kb-notes">{lines.join(' ')}</p>;
+}
+
 /**
  * The state of a read when there is nothing to draw yet: "Looking…", after 3 seconds what it is waiting for, a refusal as a plain
- * line ("not available to you"), any other failure as an error with "Try again". Draws nothing once data is there.
+ * line ("not available to you with your role"), the instance limiting or not answering with data as a calm note with "Try again", any
+ * other failure as an error with "Try again". Draws nothing once data is there.
  *   state: { phase, data, error }, what: "earlier tickets", onRetry
  */
 export function ReadState({ state, what = 'ServiceNow', onRetry }) {
@@ -32,9 +74,12 @@ export function ReadState({ state, what = 'ServiceNow', onRetry }) {
   if (state.data && state.phase !== 'error') return null;
   if (waiting) return <p className="ab-hint" role="status">{slow ? t('Still waiting for {what} from ServiceNow…', { what }) : t('Looking…')}</p>;
   if (state.phase === 'error') {
-    const failure = readFailure(state.error, what.charAt(0).toUpperCase() + what.slice(1));
-    if (failure.kind !== 'error') return <p className="ab-hint">{failure.text}</p>;
-    return <ErrorNote error={failure.text} onRetry={onRetry} />;
+    const thing = what.charAt(0).toUpperCase() + what.slice(1);
+    const reason = readReasonOf(state.error);
+    if (REFUSED.has(reason)) return <p className="ab-hint ab-reads-refused">{readFailureText(state.error, { thing, translate: t })}</p>;
+    if (INSTANCE.has(reason)) return <ErrorNote error={readFailureText(state.error, { translate: t })} onRetry={onRetry} tone="calm" />;
+    // A lost session and every other failure: in plain words, with "Try again".
+    return <ErrorNote error={plainError(state.error, t('{thing} could not be read.', { thing }))} onRetry={onRetry} tone="danger" />;
   }
   return null;
 }

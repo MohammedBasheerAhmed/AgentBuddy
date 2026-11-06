@@ -49,7 +49,7 @@ test('docs/deployment.md has one row per policy key in "Every policy key", and n
 
 test('every schema key has a title, a type the parser expects and a description; enums match the code', () => {
   const lists = ['allowedInstances', 'allowedProviders', 'allowedModels', 'disabledFeatures', 'blockedTables', 'blockedFields', 'sensitiveTablePrefixes', 'disabledSections', 'allowedProfiles', 'lockedProfiles', 'internalPhrases', 'priorityAccounts'];
-  const booleans = ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar', 'aiEnabled'];
+  const booleans = ['allowHrContent', 'auditExport', 'coachingEnabled', 'disablePageBar', 'aiEnabled', 'rememberLastViewed'];
   for (const [key, def] of Object.entries(schema.properties)) {
     assert.ok(def.title, `${key} has a title`);
     assert.ok(def.description || key === 'allowedModels', `${key} has a description`);

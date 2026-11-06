@@ -2,7 +2,8 @@ import { useId, useState } from 'react';
 import RecordLink from '../RecordLink.jsx';
 import { Icon } from '../ui/icons.jsx';
 import { slaText, idleText, waitingText } from '../../mywork/time.js';
-import { priorityRank } from '../../mywork/rank.js';
+import { priorityRank, isAtRisk } from '../../mywork/rank.js';
+import { riskLine } from '../../mywork/risk.js';
 import { isolate, t, t as tr } from '../../i18n/index.js';
 
 // The small pieces the My work cards share: a ticket row, a list of rows with "Show all", a fold, the filter chips. (Copying a template:
@@ -69,22 +70,27 @@ export function Row({ page, item, number, title, dot = 'neutral', onOpen, childr
 }
 
 /**
- * One ticket: number and title; one status chip, the SLA (or how long it has been quiet) and the priority under them.
+ * One ticket: number and title; one status chip, the SLA (or how long it has been quiet) and the priority under them. A ticket of my
+ * queue that is at risk (src/mywork/risk.js) leads that line with an amber "At risk" chip (the SLA-risk chip's colour) and ends the
+ * row with one line that says why ("Reassigned 3 times · waiting on you 2 days").
  *   where: 'queue' | 'group' (the group queue shows the group and how long it has been waiting instead of the last update)
  */
 export function TicketRow({ page, item, now, onOpen, where = 'queue' }) {
   const chip = where === 'group' ? null : statusChip(item);
   const sla = slaText(item.sla, now);
   const risk = item.sla?.risk || 'none';
+  const why = where !== 'group' && isAtRisk(item) ? riskLine(item.atRisk) : '';
   const quiet = where === 'group' ? (item.openedAt ? waitingText(item.openedAt, now) : '') : sla ? '' : idleText(item.updatedAt, now);
   const meta = [priorityShort(item.priority), where === 'group' ? item.group?.name : '', quiet].filter(Boolean).join(' · ');
   // A breached or nearly breached SLA is a chip in its colour; any other SLA time is plain text.
   const slaChip = risk === 'breached' ? ' ab-chip ab-chip-danger' : risk === 'at-risk' ? ' ab-chip ab-chip-warn' : '';
   return (
     <Row page={page} item={item} number={item.number} title={item.title || t('No title')} dot={rowDot(item, where)} onOpen={() => onOpen(item)}>
+      {why && <span className="ab-chip ab-chip-warn ab-mw-risk">{t('At risk')}</span>}
       {chip && <span className={`ab-chip ${CHIP[chip.tone]} ab-mw-state`}>{chip.text}</span>}
       {sla && <span className={`ab-mw-sla ab-mw-sla-${risk}${slaChip}`}>{sla}</span>}
       {meta && <span className="ab-mw-meta">{meta}</span>}
+      {why && <span className="ab-mw-why">{why}</span>}
     </Row>
   );
 }

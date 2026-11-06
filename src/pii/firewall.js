@@ -39,6 +39,7 @@ import { seal } from './seal.js';
 import { invisibleChars } from '../lib/invisible.js';
 import { columnsForPart } from '../features/partColumns.js';
 import { UNTRUSTED } from '../prompts/rules.js';
+import { BUILT_IN_SENSITIVE_PREFIXES } from '../context/kinds.js';
 
 export class FirewallError extends Error {
   /**
@@ -54,10 +55,11 @@ export class FirewallError extends Error {
 
 const MODES = Object.freeze(['standard', 'strict', 'local-only']);
 
-// HR-family tables: their free text is not sent in Strict mode unless the organisation allowed it. 'sn_hr_' always counts; the
-// policy can add prefixes (sensitiveTablePrefixes) and the caller can say the record is sensitive for another reason (a base-class
-// record whose real class could not be resolved).
-const DEFAULT_SENSITIVE_PREFIXES = ['sn_hr_'];
+// Sensitive tables (HR, and since round 4 security incidents, vulnerabilities and GRC/risk/compliance/audit): their free text is not
+// sent in Strict mode unless the organisation allowed it. The built-in families always count (src/context/kinds.js); the policy can
+// add prefixes (sensitiveTablePrefixes) and the caller can say the record is sensitive for another reason (a base-class record whose
+// real class could not be resolved).
+const DEFAULT_SENSITIVE_PREFIXES = BUILT_IN_SENSITIVE_PREFIXES;
 
 /**
  * Fixed, trusted text added to every system message, after the feature's own task. It contains no ticket data. This is the ONE

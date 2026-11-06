@@ -280,7 +280,6 @@ const CHECK = {
   'The pasted text': 'النص الملصق',
   'Your {field}': '{field} الذي كتبته',
   Field: 'الحقل',
-  'Checks what you typed for personal data, passwords and internal wording before the customer sees it.': 'يفحص ما كتبته بحثا عن بيانات شخصية وكلمات مرور وصياغة داخلية قبل أن يراه العميل.',
   'Reading the form…': 'جارٍ قراءة النموذج…',
   'Checking…': 'جارٍ الفحص…',
   'There is nothing to check yet.': 'لا يوجد ما يمكن فحصه بعد.',
@@ -738,10 +737,7 @@ const MYWORK = {
     'ما زلنا بانتظار ردك بخصوص {about}. هل يمكنك إرسال المعلومات التي طلبناها، أو إخبارنا إن لم تعد بحاجة إلى المساعدة؟',
   'If we do not hear back from you, this ticket may be closed. You can reopen it by replying.': 'إذا لم نسمع منك، فقد تغلق هذه التذكرة. يمكنك إعادة فتحها بالرد.',
   'Thank you.': 'شكرا لك.',
-  'A quick update on {about}: we are still working on it, and we will let you know as soon as there is news.': 'تحديث سريع بخصوص {about}: ما زلنا نعمل عليها، وسنخبرك فور وجود جديد.',
   'Thank you for your patience.': 'شكرا لصبرك.',
-  'Copy reminder': 'انسخ التذكير',
-  'Copy status update': 'انسخ تحديث الحالة',
   'Customer replied {n} d ago|Customer replied {n} d ago': DAYS('رد العميل منذ {n} يوم', 'رد العميل منذ {n} يوم', 'رد العميل منذ {n} يومين', 'رد العميل منذ {n} أيام', 'رد العميل منذ {n} يوما', 'رد العميل منذ {n} يوم'),
   'Waiting on the customer {n} d|Waiting on the customer {n} d': DAYS('بانتظار العميل منذ {n} يوم', 'بانتظار العميل منذ {n} يوم', 'بانتظار العميل منذ {n} يومين', 'بانتظار العميل منذ {n} أيام', 'بانتظار العميل منذ {n} يوما', 'بانتظار العميل منذ {n} يوم'),
   'No update to the customer in {n} d|No update to the customer in {n} d': DAYS(

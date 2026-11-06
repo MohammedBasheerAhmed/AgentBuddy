@@ -10,6 +10,8 @@ import { isolate, t, tn, t as tr } from '../../i18n/index.js';
 // N22 "Check my comment": the safe-to-send check on what the agent TYPED into the form, before they press Post or Save. The same
 // review an insert gets (src/safeSend/review.js): personal data and secrets, another person's name or email, markup, links, words
 // copied from an internal work note, and internal-only wording (the built-in list plus the organisation's `internalPhrases`).
+// Round 4: the tone (a phrase that sounds like blame, shouting) on every field, and for the comment whether it says what happens next;
+// both are hints in the "Worth a look" list (src/safeSend/replyChecks.js), in English and Arabic.
 //
 // The text is read from the open form (the page bridge's form read, classic forms only) or pasted; the record's people and notes
 // are read so the record's own people are not flagged and copied work-note words are. Nothing leaves the browser and nothing is kept.
@@ -109,7 +111,7 @@ export default function SafeSendCheck({ page, eff, active, onSummary = () => {} 
 
   return (
     <div className="ab-write-check">
-      <p className="ab-wk-lead">{t('Checks what you typed for personal data, passwords and internal wording before the customer sees it.')}</p>
+      <p className="ab-wk-lead">{t('Checks what you typed for personal data, passwords, internal wording, a next step and the tone before the customer sees it.')}</p>
       <div className="ab-field ab-wk-field">
         <label className="ab-label" htmlFor="ab-check-field">{t('Field')}</label>
         <div className="ab-wk-inline">

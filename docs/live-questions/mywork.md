@@ -67,3 +67,39 @@ end-to-end run uses the fake instance (`e2e/fakeInstance.js`). Check each as a N
     is on the Ticket screen (Insights agent).
 16. **Templates** (follow-ups) are fixed English text with the ticket number and title only. Check the wording with the service desk
     lead, and whether the "may be closed" line matches the desk's own rule (3 strikes, 5 days...).
+
+## Tickets at risk (round 4, 2026-11-06)
+
+What it reads and why: `src/context/specs/mywork.js` (`RISK_COLUMNS`, `VIP_COLUMNS`, `ACCOUNT_COLUMNS`); the rule: `src/mywork/risk.js`.
+Only the rows of the person's own queue carry these columns (not the unassigned tickets of their groups), and a column the instance
+does not return is unknown, never zero: the reason is simply not shown.
+
+17. **`reassignment_count` on every ticket table.** Read on incident, problem, sc_req_item, sc_task, sn_customerservice_case and the
+    task-kind tables (incident_task, problem_task, change_task, sn_customerservice_task, sn_hr_core_task); not on change_request or HR
+    cases (not on their field ceilings). Assumed: a task column every class inherits, readable by `itil` and by a CSM agent without
+    `itil` (no field ACL). Check: on a ticket reassigned twice (two group changes in its activity), My work shows "Reassigned 2 times";
+    or open the classic list of your queue, add the "Reassignment count" column (list personalisation, no admin needed) and compare.
+    If an instance hides it: nothing to change (the reason does not show); if the count is reset by a custom rule, say so here.
+18. **`reopen_count` on incident only.** Assumed: the base incident column, raised each time a resolved incident goes back to work.
+    Not asked on other tables: is there a reopen counter on `sn_customerservice_case`, `sn_hr_core_case` or `sc_req_item` on this
+    release? Check the dictionary from a list (add the column "Reopen count" to the cases list if it exists). If cases have one, add
+    `case` to `RISK_COLUMNS.reopen_count` and to the case ceiling (`extendFields` in `src/context/specs/mywork.js`; note that this also
+    lets the `insights-ticket` spec read it on cases: check with its owner first).
+19. **The customer's VIP flag, dot-walked.** `caller_id.vip` (incident), `requested_for.vip` (sc_req_item),
+    `request_item.requested_for.vip` (sc_task), `contact.vip` (sn_customerservice_case: a customer contact is a `sys_user` row, so it
+    has the column). The walks are the ones My work already makes for the customer's login (`.user_name`), so a policy that blocks
+    `sys_user` already stops both. Assumed: `itil` (and a CSM agent) may read `sys_user.vip` through a dot-walk in the Table API, and
+    it comes back as `true` / `false`. Check: a ticket whose caller is marked VIP (the Ticket screen's Glance shows "VIP", read
+    directly from `sys_user`) also says "VIP caller" in My work; a non-VIP caller's ticket does not. If the walk comes back empty while
+    the Glance says VIP, a field rule hides it from dot-walks: then read the flag like the Glance does (one `sys_user` read by sys_id
+    per batch of customers) instead.
+20. **Waiting on you.** From the same authors-and-times read as "Customer replied" (questions 6 and 7): the customer (or, where the
+    ticket names no customer we could match, anybody else) wrote a customer-visible comment after the agent's last one, 2 whole days
+    ago or more by the browser clock. Check: a ticket the caller answered by email three days ago and nobody answered says "waiting
+    on you 3 days"; answering it (a customer-visible comment) takes the reason away at the next read.
+21. **Priority account.** A case's `account` is read (display name) only when the policy names `priorityAccounts`; it is compared in
+    the panel exactly as N28 compares the Account card's name (`isPriorityAccount`). Check with a policy naming one account: its cases
+    in My work say "priority account"; with no list, the read asks for no `account` column.
+22. **The SLA reason** uses the queue's existing SLA rule (`src/mywork/sla.js`): breached, or 75 % used, or a running SLA with under
+    2 hours left. Check with the desk lead that "under 2 hours left" belongs in "At risk" (it keeps every ticket the SLA ranks first
+    inside the at-risk group, so the order stays breach, SLA risk, ...).

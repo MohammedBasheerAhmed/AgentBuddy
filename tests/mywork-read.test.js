@@ -302,8 +302,11 @@ test('paging stops at a short page; a page past the count is not asked', async (
 });
 
 test('the operation: profiles validated, the user from the page, HR as the guard decided', async () => {
-  assert.deepEqual(cleanMyWorkArgs({ profiles: ['it', 'hr', 'x', 'it', 5] }), { profiles: ['it', 'hr'] });
-  assert.deepEqual(cleanMyWorkArgs(undefined), { profiles: [] });
+  // (round 4: `accounts` too, true only when the panel says the organisation names priority accounts)
+  assert.deepEqual(cleanMyWorkArgs({ profiles: ['it', 'hr', 'x', 'it', 5] }), { profiles: ['it', 'hr'], accounts: false });
+  assert.deepEqual(cleanMyWorkArgs(undefined), { profiles: [], accounts: false });
+  assert.deepEqual(cleanMyWorkArgs({ profiles: ['csm'], accounts: true }), { profiles: ['csm'], accounts: true });
+  assert.deepEqual(cleanMyWorkArgs({ accounts: 'yes' }), { profiles: [], accounts: false }, 'anything but true is false');
   assert.equal(typeof OPS.myWork, 'function');
   const deps = instance({ incident: [ticket('incident', 1)], sn_hr_core_case: [ticket('sn_hr_core_case', 1)] });
   const ops = makeMyWorkOps({ whoAmI: async () => ({ userId: USER, userName: LOGIN }), now: () => NOW });
@@ -312,4 +315,54 @@ test('the operation: profiles validated, the user from the page, HR as the guard
   assert.ok(!out.queue.items.some((i) => i.type === 'sn_hr_core_case'));
   const nobody = makeMyWorkOps({ whoAmI: async () => ({ userId: '' }) });
   await assert.rejects(nobody.myWork({}, { deps }), /who is signed in/);
+});
+
+// ---- round 4: what says why a ticket is at risk ---------------------------------------------------------------------------------
+
+test('at risk: my queue reads the counters and the customer\'s VIP flag per kind; a case\'s account only when asked; the group queue none', async () => {
+  const inc = ticket('incident', 1, { reassignment_count: v('3'), reopen_count: v('1'), 'caller_id.vip': v('true'), 'caller_id.user_name': v('abel.tuter') });
+  const sct = ticket('sc_task', 1, { reassignment_count: v('2'), 'request_item.requested_for.vip': v('false') });
+  const cs = ticket('sn_customerservice_case', 1, { reassignment_count: v('0'), account: v('c'.repeat(32), 'Boxeo'), 'contact.vip': v('true') });
+  const fac = ticket('u_facilities', 1, { reassignment_count: v('5') });
+  const unassigned = ticket('incident', 9, { assigned_to: v('', ''), reassignment_count: v('4') });
+  const member = { sys_id: v('m1'), user: v(USER), group: v(GROUP, 'Service Desk'), 'group.active': v('true') };
+  const tables = () => ({ incident: [inc, unassigned], sc_task: [sct], sn_customerservice_case: [cs], u_facilities: [fac], sys_user_grmember: [member] });
+
+  const deps = instance(tables());
+  const out = await read(deps, { profiles: ['it', 'csm'] });
+  const fields = (table) => rowsOf(deps, table)[0].fields;
+  assert.ok(['reassignment_count', 'reopen_count', 'caller_id.vip'].every((c) => fields('incident').includes(c)), fields('incident').join());
+  assert.ok(['reassignment_count', 'request_item.requested_for.vip'].every((c) => fields('sc_task').includes(c)));
+  assert.ok(!fields('sc_task').includes('reopen_count'), 'reopen_count is read on incidents only');
+  assert.ok(['reassignment_count', 'contact.vip'].every((c) => fields('sn_customerservice_case').includes(c)));
+  assert.ok(!fields('sn_customerservice_case').includes('account'), 'no account unless the organisation names priority accounts');
+  assert.ok(!fields('u_facilities').includes('reassignment_count'), 'a custom class: only the common columns');
+  // The group queue (somebody else's work, not mine) reads none of it.
+  const groupRead = rowsOf(deps, 'incident').find((c) => c.query.includes('assigned_toISEMPTY'));
+  assert.ok(groupRead && !groupRead.fields.some((f) => /reassignment_count|reopen_count|\.vip$/.test(f)), groupRead?.fields.join());
+
+  const by = (number) => out.queue.items.find((i) => i.number === number);
+  assert.deepEqual([by('INC0000001').reassignments, by('INC0000001').reopens, by('INC0000001').vip, by('INC0000001').account], [3, 1, true, '']);
+  assert.deepEqual([by('SCTASK0000001').reassignments, by('SCTASK0000001').reopens, by('SCTASK0000001').vip], [2, null, false]);
+  assert.deepEqual([by('CS0000001').reassignments, by('CS0000001').vip, by('CS0000001').account], [0, true, '']);
+  assert.deepEqual([by('FAC0000001').reassignments, by('FAC0000001').vip], [null, null], 'not asked: not used, even if a fake returns it');
+  assert.deepEqual([out.groups.items[0].reassignments, out.groups.items[0].vip], [null, null]);
+  assert.ok(!JSON.stringify(out).includes('abel.tuter'), 'still no customer login in the answer');
+
+  // The organisation names priority accounts: the case's account is read, by its display name.
+  const withAccounts = instance(tables());
+  const got = await read(withAccounts, { profiles: ['it', 'csm'], accounts: true });
+  assert.ok(rowsOf(withAccounts, 'sn_customerservice_case')[0].fields.includes('account'));
+  assert.ok(!rowsOf(withAccounts, 'incident')[0].fields.includes('account'), 'only where the kind has an account');
+  assert.equal(got.queue.items.find((i) => i.number === 'CS0000001').account, 'Boxeo');
+});
+
+test('at risk: an instance that returns none of the columns (an older release, a field ACL) leaves them unknown, never zero', async () => {
+  const deps = instance({ incident: [ticket('incident', 1, { reassignment_count: v(''), 'caller_id.vip': v('') })] });
+  const out = await read(deps);
+  const [item] = out.queue.items;
+  assert.deepEqual([item.reassignments, item.reopens, item.vip, item.account], [null, null, null, '']);
+  const odd = instance({ incident: [ticket('incident', 1, { reassignment_count: v('lots'), reopen_count: v('-1'), 'caller_id.vip': v('maybe') })] });
+  const [strange] = (await read(odd)).queue.items;
+  assert.deepEqual([strange.reassignments, strange.reopens, strange.vip], [null, null, null], 'anything but a whole number or true/false is unknown');
 });
