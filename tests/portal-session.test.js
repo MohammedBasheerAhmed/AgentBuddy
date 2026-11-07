@@ -46,8 +46,8 @@ test('the answer from the page is reduced to id, user name, name and roles, and 
   assert.equal(cleanSessionInfo({ firstName: 'A', displayName: 'Ignored' }).name, 'A');
   assert.equal(cleanSessionInfo({ userId: 'not-an-id' }).userId, '');
   assert.equal(cleanSessionInfo({ userId: 42, roles: 'itil' }).userId, '');
-  assert.deepEqual(cleanSessionInfo({ roles: 'itil' }).roles, []);
-  for (const bad of [null, undefined, 'x', 7, []]) assert.deepEqual(cleanSessionInfo(bad), { userId: '', userName: '', name: '', roles: [] });
+  assert.equal(cleanSessionInfo({ roles: 'itil' }).roles, null); // not a list: unknown, never 'none'
+  for (const bad of [null, undefined, 'x', 7, []]) assert.deepEqual(cleanSessionInfo(bad), { userId: '', userName: '', name: '', roles: null });
 });
 
 test('when the page knows the user no read is made', async () => {
@@ -122,13 +122,13 @@ test('a denied or failing read leaves the user unknown instead of throwing', asy
   pageAnswers(null);
   const denied = Object.assign(new Error('403'), { code: 'ACCESS_DENIED' });
   const user = await getSessionUser({ queryTable: async () => { throw denied; } });
-  assert.deepEqual(user, { userId: '', userName: '', name: '', roles: [] });
+  assert.deepEqual(user, { userId: '', userName: '', name: '', roles: null });
 });
 
 test('without a way to read, the page answer is all there is', async () => {
   resetSessionUser();
   pageAnswers({ firstName: 'Only', lastName: 'Name' });
-  assert.deepEqual(await getSessionUser(), { userId: '', userName: '', name: 'Only Name', roles: [] });
+  assert.deepEqual(await getSessionUser(), { userId: '', userName: '', name: 'Only Name', roles: null });
 });
 
 test('the panel only accepts a well-formed portal description, and only on a portal page', () => {

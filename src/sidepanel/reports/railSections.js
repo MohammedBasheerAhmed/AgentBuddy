@@ -8,6 +8,7 @@ import { shown } from '../../reports/shown.js';
 // The full-page dashboard has no rail: there the widgets register nowhere (useRailSection does nothing outside a screen's half).
 // tests/screens-rail.test.js checks that every section has an entry, the icons can be drawn and every label has its Arabic.
 export const DASHBOARD_SECTIONS = Object.freeze({
+  attention: { icon: 'alert', label: () => t('Needs attention now') },
   overview: { icon: 'monitor', label: () => t('Overview') },
   workload: { icon: 'inbox', label: () => t('Workload and ageing') },
   sla: { icon: 'clock', label: () => t('SLA risk radar') },

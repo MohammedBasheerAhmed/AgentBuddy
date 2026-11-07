@@ -18,6 +18,7 @@ import { authorRole, identities } from '../context/identity.js';
 import { clipText } from '../context/util.js';
 import { daysSinceSnTime, isFinishedState, isOpenItem } from './states.js';
 import { isolate, t, tm, tn } from '../i18n/index.js';
+import { answerWords } from '../insights/personWords.js';
 
 const text = (v) => String(v ?? '').trim();
 
@@ -27,8 +28,21 @@ export const DEFAULT_WAIT_DAYS = 3;
 export const MIN_NOTE_CHARS = 40;
 export const MIN_NOTE_WORDS = 6;
 
-// The code field a kind uses (other kinds have none: a request item is simply closed).
-const CODE_FIELD = { incident: 'close_code', problem: 'resolution_code', case: 'resolution_code' };
+// The code field a kind uses (other kinds have none: a request item is simply closed). A change has a close code too (W-10).
+const CODE_FIELD = { incident: 'close_code', problem: 'resolution_code', case: 'resolution_code', change: 'close_code' };
+
+// The words of the kind (audit of 2026-11-07, F4, F8, F12: "Ready to resolve?" was an incident's). A kind that FULFILS something (a request,
+// a requested item, a catalog task) has no cause to explain: it says what was delivered. Kinds whose form calls the box "Close notes"
+// (everything but an incident and a customer service case) say "close notes".
+const FULFILMENT = new Set(['request', 'requested_item', 'catalog_task']);
+const RESOLUTION_NOTES = new Set(['incident', 'case', 'problem', 'other']);
+const closeNotes = (kind) => Boolean(kind) && !RESOLUTION_NOTES.has(kind);
+// The kinds whose comments the person it is for does not read, or that have nobody to answer: a catalog task (the requester reads the
+// requested item), a change, a problem and the tasks of a ticket. There is no conversation with a customer to check on them.
+const NO_CUSTOMER_CONVERSATION = new Set(['catalog_task', 'change', 'problem', 'task']);
+// What the person is called in "has not confirmed" (the same words the Ticket screen uses: src/sidepanel/ticket/cards/Glance.jsx).
+const confirmer = (kind) =>
+  ({ request: t('the requester has not confirmed'), requested_item: t('the requester has not confirmed'), hr_case: t('the employee has not confirmed'), case: t('the customer has not confirmed') })[kind] || t('the caller has not confirmed');
 // Kinds where a linked problem or article is worth a nudge.
 const LINK_KINDS = new Set(['incident', 'problem', 'case', 'task']);
 // The pack list that holds the open work under each kind, and what to call one.
@@ -103,6 +117,9 @@ function unreadableNotes(pack) {
   return (Array.isArray(pack?.access) ? pack.access : []).find((e) => e?.source === 'journal' && NOT_READ.has(e.status)) || null;
 }
 
+/** The notes' entry when the read worked but the customer's comments may be hidden (their column did not come back and none were found). */
+const hiddenComments = (pack) => (Array.isArray(pack?.access) ? pack.access : []).find((e) => e?.source === 'journal' && e.commentsHidden === true) || null;
+
 const sentence = (s) => text(s).replace(/([^.!?])$/, '$1.');
 
 // ---- the effective value of a field: the form if it has it, else the saved record -----------------------------------
@@ -135,23 +152,52 @@ export function isFillerNote(note) {
   return words.length > 0 && words.length <= 8 && words.every((w) => FILLER.has(w));
 }
 
+// The saved value of a column that did not come back with the ticket (a field this user may not read): "none yet" is not known (R-14).
+const savedUnreadable = (pack, name) => Array.isArray(pack?.unreadable) && pack.unreadable.includes(name);
+
+// The record was read without its free text on purpose (an HR case, or a policy family, when sensitive data is not allowed): an empty
+// close_notes there is not "no notes yet". The entry the reader left says why, in a fixed sentence.
+function minimisedEntry(pack) {
+  return (Array.isArray(pack?.access) ? pack.access : []).find((e) => e?.source === pack?.table && e.status === 'skipped' && text(e.note)) || null;
+}
+
+// What to say when there are no notes at all, by kind: the incident's cause and fix, a delivery, a change's outcome.
+function noNotes(kind) {
+  if (FULFILMENT.has(kind)) return [t('No close notes yet'), t('Say what was delivered or done, and anything the requester still has to do. These notes are what the next person finds when the same request comes in again.')];
+  if (kind === 'change') return [t('No close notes yet'), t('Say whether the change worked, what was done and how it was checked. These notes are what the next person finds when a similar change comes up.')];
+  if (kind === 'hr_case') return [t('No close notes yet'), t('Say what was done and how it ended.')];
+  if (kind === 'task') return [t('No close notes yet'), t('Say what was done and what it produced.')];
+  return [t('No resolution notes yet'), t('Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.')];
+}
+
 function notesCheck(pack, form, source) {
   const { value, fromForm } = effective(pack, form, 'close_notes');
   const body = text(value);
+  const kind = pack?.kind;
+  if (!body && !fromForm && savedUnreadable(pack, 'close_notes')) {
+    return check('notes', 'info', closeNotes(kind) ? t('Could not read the saved close notes') : t('Could not read the saved resolution notes'), t('ServiceNow did not send them to you. Check on the form whether they are filled in.'));
+  }
+  const minimised = !body && !fromForm ? minimisedEntry(pack) : null;
+  if (minimised) {
+    return check('notes', 'info', closeNotes(kind) ? t('Could not read the saved close notes') : t('Could not read the saved resolution notes'), `${sentence(minimised.note)} ${t('Check on the form whether they are filled in.')}`);
+  }
   if (!body) {
     // A work note typed on the form is not a substitute: it stays internal and is not what the next person searches.
     const workNote = form && text(form.work_notes) ? ` ${t('The work note you have typed is separate from these notes.')}` : '';
     // With no readable form (or, on a Workspace, no notes box found) the notes being empty is only what is SAVED: say that the
     // typed ones could not be seen.
     const unseen = notCounted(form, source, fromForm, noNotesBox());
-    return check('notes', 'warn', t('No resolution notes yet'), `${t('Say what the cause was and what fixed it. These notes are what the next person finds when the same thing happens again.')}${workNote}${unseen}`);
+    const [title, hint] = noNotes(kind);
+    return check('notes', 'warn', title, `${hint}${workNote}${unseen}`);
   }
   if (isFillerNote(body)) return check('notes', 'warn', t('The notes only say "resolved"'), t('Add what was wrong and what you did, in a sentence or two. "Resolved" does not help anyone later.'));
   const words = body.split(/\s+/).filter(Boolean).length;
   if (body.length < MIN_NOTE_CHARS || words < MIN_NOTE_WORDS) {
+    if (FULFILMENT.has(kind)) return check('notes', 'warn', t('The close notes are very short'), t('A sentence on what was delivered and one on anything left for the requester makes them far more useful to the next person.'));
+    if (closeNotes(kind)) return check('notes', 'warn', t('The close notes are very short'), t('A sentence on what was done and one on how it ended makes them far more useful to the next person.'));
     return check('notes', 'warn', t('The resolution notes are very short'), t('A sentence on the cause and one on the fix makes them far more useful to the next person.'));
   }
-  return check('notes', 'ok', t('Resolution notes are filled in'));
+  return check('notes', 'ok', closeNotes(kind) ? t('Close notes are filled in') : t('Resolution notes are filled in'));
 }
 
 // ---- close code ----------------------------------------------------------------------------------------------------
@@ -161,7 +207,13 @@ function codeCheck(pack, form, source) {
   if (!field) return null;
   // (On a Workspace the code is never read from the page: the form object has no such field, so this is the saved code.)
   const { value, fromForm } = effective(pack, form, field);
-  if (!text(value)) return check('code', 'warn', t('No close code chosen'), `${t('Pick the code that best describes the fix. Reports and trends use it.')}${notCounted(form, source, fromForm, codeNotRead())}`);
+  if (!text(value) && !fromForm && savedUnreadable(pack, field)) {
+    return check('code', 'info', t('Could not read the saved close code'), t('ServiceNow did not send it to you. Check on the form whether one is chosen.'));
+  }
+  if (!text(value)) {
+    const hint = pack?.kind === 'change' ? t('Pick the code that says how the change went. Reports and trends use it.') : t('Pick the code that best describes the fix. Reports and trends use it.');
+    return check('code', 'warn', t('No close code chosen'), `${hint}${notCounted(form, source, fromForm, codeNotRead())}`);
+  }
   return check('code', 'ok', t('A close code is chosen'));
 }
 
@@ -169,27 +221,34 @@ function codeCheck(pack, form, source) {
 
 // Who the customer is, and whether they wrote a note, is src/context/identity.js: names in any script, logins and email addresses.
 function customerCheck(pack, now, waitDays) {
-  const unreadable = unreadableNotes(pack);
+  // No conversation with a customer on this kind of ticket (its comments are not the requester's, or there is nobody to answer): there
+  // is nothing to check, and the Close row can say "Looks ready" (F4). The notes being unreadable still shows, in the personal data check.
+  if (NO_CUSTOMER_CONVERSATION.has(pack?.kind)) return null;
+  // (the person is the requester of a request or a requested item and the employee of an HR case; an incident and a case keep "the customer", F11)
+  const who = answerWords(pack);
+  const unreadable = unreadableNotes(pack) || hiddenComments(pack);
   if (unreadable) {
-    const why = sentence(unreadable.note) || t('Your user may not be able to read them.');
-    return check('customer', 'info', t('Could not read the notes and comments'), `${why} ${t('Check by eye whether the customer confirmed the fix or has had a chance to answer.')}`);
+    const why = sentence(unreadable.note) || t('You may not be able to see them.');
+    return check('customer', 'info', t('Could not read the notes and comments'), `${why} ${who.unreadableHint()}`);
   }
   const visible = (Array.isArray(pack?.journal) ? pack.journal : []).filter((e) => e?.type === 'comment' && text(e.text));
+  // A request is fulfilled without a word: nothing written is not a finding for the requester (an incident with no messages is).
+  if (!visible.length && FULFILMENT.has(pack?.kind)) return null;
   if (!visible.length) {
-    return check('customer', 'info', t('No messages to or from the customer on this ticket'), t('If you confirmed the fix by phone or in person, say so in the resolution notes.'));
+    return check('customer', 'info', who.noMessages(), t('If you confirmed the fix by phone or in person, say so in the resolution notes.'));
   }
   const ids = identities(pack);
   if (!ids.known) {
-    return check('customer', 'info', t("Could not tell which messages are the customer's"), t('Check by eye that the customer confirmed the fix or had a chance to answer.'));
+    return check('customer', 'info', who.cannotTell(), who.cannotTellHint());
   }
   const last = visible[visible.length - 1];
   const role = authorRole(last.by, ids);
   if (role === 'customer') {
-    return check('customer', 'ok', t('The customer wrote the last message'), t('Read it once more and make sure it confirms the fix.'));
+    return check('customer', 'ok', who.wroteLast(), t('Read it once more and make sure it confirms the fix.'));
   }
   // A login (or address) that matches no customer may still be theirs; an author with no name at all cannot be placed either.
   if (role === 'unknown') {
-    return check('customer', 'info', t('Could not tell who wrote the last message'), t('Its author is shown only as a user name. Read it and check whether the customer confirmed the fix.'));
+    return check('customer', 'info', t('Could not tell who wrote the last message'), who.authorUnknownHint());
   }
   const days = daysSinceSnTime(last.when, now);
   if (Number.isFinite(days) && days >= waitDays) {
@@ -200,7 +259,7 @@ function customerCheck(pack, now, waitDays) {
     return check(
       'customer',
       'warn',
-      t('The customer has not replied to your last message ({age})', { age }),
+      who.notReplied(age),
       tn(waitDays, 'Wait for an answer (about {n} day is usual) or confirm the fix another way before you resolve.', 'Wait for an answer (about {n} days is usual) or confirm the fix another way before you resolve.')
     );
   }
@@ -220,14 +279,15 @@ function childCheck(pack) {
       entry?.status === 'blocked'
         ? t('Your organisation does not allow Agent Buddy to read {things}.', { things: nounPlural(noun) })
         : entry?.status === 'denied'
-          ? t('You cannot read {things} on this instance.', { things: nounPlural(noun) })
+          ? t('You cannot see {things} with your role.', { things: nounPlural(noun) })
           : entry?.status
             ? t('The {things} could not be read.', { things: nounPlural(noun) })
             : '';
     return check('children', 'info', t('Could not check for open {things}', { things: nounPlural(noun) }), why || t('Look at the related list on the form.'));
   }
   const open = list.filter(isOpenItem);
-  if (!open.length) return check('children', 'ok', list.length ? t('All {count} closed', { count: nounCount(noun, list.length) }) : t('No {things} under this ticket', { things: nounPlural(noun) }));
+  // (none under it that this user can see: a task of another class or group may be hidden by a row rule, which cannot be told: R-05)
+  if (!open.length) return check('children', 'ok', list.length ? t('All {count} closed', { count: nounCount(noun, list.length) }) : t('No {things} that you can see under this ticket', { things: nounPlural(noun) }));
   const named = open.slice(0, 4).map((row) => [isolate(text(row.number)), text(row.state) && `(${isolate(text(row.state))})`].filter(Boolean).join(' ')).filter(Boolean);
   const names = open.length > named.length ? t('{names} and {extra} more', { names: named.join(t(', ')), extra: open.length - named.length }) : named.join(t(', '));
   return check('children', 'warn', t('{count} still open', { count: nounCount(noun, open.length) }), t('Close or hand over {names} first, or leave a note saying why they stay open.', { names }));
@@ -318,7 +378,7 @@ function piiCheck(pack, form, source) {
     const checked = scanned
       ? t('No personal data or secrets were spotted in the text you can see, but the comments already on the ticket were not checked.')
       : t('The comments already on the ticket were not checked for personal data.');
-    return check('pii', 'info', t('Could not read the notes and comments'), `${sentence(unreadable.note) || t('Your user may not be able to read them.')} ${checked}`);
+    return check('pii', 'info', t('Could not read the notes and comments'), `${sentence(unreadable.note) || t('You may not be able to see them.')} ${checked}`);
   }
   // On a Workspace the boxes that were found were checked; a box that was not found may hold text that was not.
   const missedBox = source === 'boxes' && ['close_notes', 'comments'].some((name) => typeof form[name] !== 'string');
@@ -338,7 +398,7 @@ function holdCheck(pack, form) {
 
 function finishedCheck(pack) {
   const state = text(pack?.fields?.state);
-  if (!isFinishedState(state)) return null;
+  if (!isFinishedState({ table: pack?.table || pack?.kind, label: state })) return null;
   return check('state', 'info', t('This ticket is already {state}', { state: isolate(state.toLowerCase()) }), t('The checks below look at what is saved on it.'));
 }
 
@@ -410,7 +470,7 @@ export function summarizeChecks(checks) {
 export function buildCheckView(pack, facts, options) {
   const checks = resolutionCheck(pack, facts, options);
   const { source } = formOf(facts);
-  return { checks: orderChecks(checks), summary: summarizeChecks(checks), usedForm: Boolean(source), formSource: source };
+  return { checks: orderChecks(checks), summary: summarizeChecks(checks), usedForm: Boolean(source), formSource: source, kind: text(pack?.kind) };
 }
 
 // ---- The Close well row and "Prepare to close" (round 4, docs/round4.md) --------------------------------------------------
@@ -418,9 +478,9 @@ export function buildCheckView(pack, facts, options) {
 // What each check is about, in a few words, for the row's line ("Not yet: the caller has not confirmed"). A check without one is
 // named by its title.
 const SHORT = {
-  notes: () => t('the resolution notes need work'),
+  notes: (kind) => (closeNotes(kind) ? t('the close notes need work') : t('the resolution notes need work')),
   code: () => t('no close code chosen'),
-  customer: () => t('the caller has not confirmed'),
+  customer: (kind) => confirmer(kind),
   children: () => t('work under it is still open'),
   pii: () => t('personal data in the text'),
   hold: () => t('a hold reason is filled in'),
@@ -434,7 +494,7 @@ export function readyLine(view) {
   if (!Array.isArray(view?.checks)) return '';
   const warns = view.checks.filter((c) => c.status === 'warn');
   if (warns.length) {
-    const reason = SHORT[warns[0].id]?.() || warns[0].title;
+    const reason = SHORT[warns[0].id]?.(view.kind) || warns[0].title;
     return warns.length > 1 ? t('Not yet: {reason}, and {n} more', { reason, n: warns.length - 1 }) : t('Not yet: {reason}', { reason });
   }
   return view.checks.some((c) => c.status === 'info') ? t('Nothing wrong, a few notes') : t('Looks ready');

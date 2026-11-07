@@ -31,9 +31,9 @@ const hostOf = (url) => {
 // `baseUrl` is an optional Anthropic-compatible proxy (validated); blank = the real API. `name` is how messages name the provider;
 // `signal` cancels.
 export async function sendAnthropic({ apiKey, model, messages, maxTokens = MAX_OUTPUT_TOKENS, effort = 'medium', baseUrl = '', name = '', signal, timeoutMs, fetchFn, sleep }) {
-  if (!apiKey) throw new AiError(t('Missing Anthropic API key. Add it in the Agent Buddy settings.'), 'NO_KEY');
+  if (!apiKey) throw new AiError(t('Add your AI key in Settings to use AI.'), 'NO_KEY');
   const url = baseUrl ? anthropicMessagesUrl(baseUrl) : ANTHROPIC_API_URL;
-  const who = name || (baseUrl ? t('The endpoint {host}', { host: isolate(hostOf(baseUrl)) }) : 'Anthropic');
+  const who = name || (baseUrl ? t('The AI service at {host}', { host: isolate(hostOf(baseUrl)) }) : 'Anthropic');
 
   const { system, messages: wire } = toAnthropicRequest(messages);
   let body = {

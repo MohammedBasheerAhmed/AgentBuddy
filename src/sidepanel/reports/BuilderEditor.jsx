@@ -49,7 +49,7 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
       <div className="ab-widget-head">
         <h2 className="ab-widget-title">{initial ? t('Edit custom report') : t('New custom report')}</h2>
       </div>
-      <p className="ab-widget-help">{t('Pick a table, filter it, group it and choose how to draw it. Nothing is typed into a query.')}</p>
+      <p className="ab-widget-help">{t('Pick a ticket type, filter it, group it and choose a chart.')}</p>
 
       <div className="ab-field">
         <label className="ab-label" htmlFor="ab-b-title">{t('Title (optional)')}</label>
@@ -57,13 +57,13 @@ export default function BuilderEditor({ initial, env, usableTables, onSave, onCa
       </div>
 
       <div className="ab-field">
-        <label className="ab-label" htmlFor="ab-b-table">{t('Table')}</label>
+        <label className="ab-label" htmlFor="ab-b-table">{t('Ticket type')}</label>
         <select id="ab-b-table" className="ab-select" value={draft.table} onChange={(e) => change({ table: e.target.value })}>
           {tableChoices.map((id) => (
             <option key={id} value={id}>{REPORT_TABLES[id] ? shown(REPORT_TABLES[id].label) : id}</option>
           ))}
         </select>
-        {!usableTables.length && <span className="ab-hint">{t('No ticket table is available to you.')}</span>}
+        {!usableTables.length && <span className="ab-hint">{t('No ticket type is available to you.')}</span>}
       </div>
 
       <fieldset className="ab-field ab-fieldset">

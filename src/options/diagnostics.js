@@ -71,7 +71,7 @@ export function diagnosticsText({ manifest = {}, userAgent = '', eff = {}, keyMo
   add(`  Where to keep the key: ${word(v.keyStorage) || 'local'}`);
   add(`  Privacy: ${word(v.piiMode) || 'standard'}; check what is sent: ${word(v.previewMode) || 'first'}`);
   add(`  AI skipped for now: ${yesNo(v.aiSkipped)}`);
-  add(`  Work profiles: ${list(v.profiles).map((id) => word(id)).filter(Boolean).join(', ') || 'none chosen'}${v.profilesConfirmed ? '' : ' (not confirmed)'}; show everything: ${yesNo(v.showEverything)}`);
+  add(`  Work profiles: ${list(v.profiles).map((id) => word(id)).filter(Boolean).join(', ') || 'none chosen'}${v.profilesConfirmed ? '' : ' (not confirmed)'}; show everything: ${yesNo(v.showEverything)}${v.profilesConfirmed ? `; who chose them is recorded (a one-way code, not shown): ${yesNo(Boolean(v.profilesFor))}` : ''}`);
   add(`  Bar on ServiceNow pages: ${yesNo(v.pageBar !== false)}; quick actions pinned for ${Object.keys(v.quickPins || {}).length} kind(s)`);
   add(`  Side rail: ${yesNo(v.railShow === true)}; names shown: ${yesNo(v.railNames === true)}`);
   add(`  Follow-ups due after: ${Number.isFinite(Number(v.followUpDays)) ? Math.floor(Number(v.followUpDays)) : 3} days`);

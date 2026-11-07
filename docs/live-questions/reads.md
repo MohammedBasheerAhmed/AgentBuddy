@@ -31,10 +31,14 @@ or a security analyst role where the question says so). For each: what was assum
 
 4. **Which words a 403 carries.** `deniedReason` (`src/context/access.js`) reads ServiceNow's JSON error ("message - detail"):
    words that name an ACL or read permission ("ACL", "security constraints", "Insufficient rights to query records", "do not have
-   permission to be read", "Not permitted to read") make it an access rule ("<thing>: not available to you with your role"); words
-   that name an access policy, the REST API, web services, the role `snc_platform_rest_api_access`, or "User Not Authorized" without
-   ACL words make it the organisation's restriction ("your organisation blocks this kind of read for your role. Ask your ServiceNow
-   admin."); a 403 with neither is an access rule.
+   permission to be read", "Not permitted to read", "User Not Authorized", "unauthorized to access table") make it an access rule
+   ("<thing>: not available to you with your role"); only words that name an access policy, the REST API, web services or the role
+   `snc_platform_rest_api_access` make it the organisation's restriction ("your organisation blocks this kind of read for your role.
+   Ask your ServiceNow admin."); a 403 with neither is an access rule.
+   **Answered live 2026-11-07** (`docs/live-checks-2026-11-07.md`, as a plain ITIL User and as a user with no role): a table the role
+   cannot read answers 403 `User Not Authorized` / `User is unauthorized to access table: <table>`; a query that names a column the role
+   cannot read answers 403 `Insufficient rights to query records` / `Field(s) present in the query do not have permission to be read`.
+   Both are access rules. The wording of a REST API access policy refusal is still unverified.
    Check (no admin needed): while signed in as the agent, open these addresses in a tab of the instance and read the JSON the browser
    shows: `/api/now/table/sys_audit?sysparm_limit=1` (often closed to non-admins by an ACL), `/api/now/table/sys_user_has_role?sysparm_limit=1`,
    and `/api/now/stats/incident?sysparm_count=true`. Note the status (the browser's developer tools, Network tab) and the exact

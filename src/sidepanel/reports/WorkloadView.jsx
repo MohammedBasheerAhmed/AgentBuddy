@@ -1,6 +1,7 @@
 import { Tile, StackedBar, HeatStrip } from '../charts/index.js';
 import TicketList from './TicketList.jsx';
 import SectionShell from './SectionShell.jsx';
+import Foldable from './Foldable.jsx';
 import { useSection } from './useSection.js';
 import { shownElsewhere } from './onDashboard.js';
 import { t, tn } from '../../i18n/index.js';
@@ -57,60 +58,70 @@ export function WorkloadBody({ d, env }) {
     return row && !row.others ? biggest(row.byTable, row.queries) : null;
   };
   const links = Boolean(env.listHref);
-  const pingTile = d.pingPong.available && <Tile label={t('Reassigned {n}+ times', { n: d.pingPong.threshold })} value={d.pingPong.count} tone={d.pingPong.count > 0 ? 'warn' : 'neutral'} hint={t('Handed from group to group')} />;
+  // (a ticket type that could not be counted makes the number "at least")
+  const pingTile = d.pingPong.available && (
+    <Tile label={t('Reassigned {n}+ times', { n: d.pingPong.threshold })} value={d.pingPong.partial ? `${d.pingPong.count}+` : d.pingPong.count} tone={d.pingPong.count > 0 ? 'warn' : 'neutral'} hint={d.pingPong.partial ? t('Some ticket types could not be counted') : t('Handed from group to group')} />
+  );
 
   return (
     <>
-      {inOverview ? (
-        pingTile && <div className="ab-tiles">{pingTile}</div>
-      ) : (
+      {!inOverview && (
         <div className="ab-tiles">
-          <Tile label={shown('Open')} value={d.totals.open} unavailable={d.totals.open === null} hint={d.totals.openPartial ? t('Some tables could not be counted') : t('Active tickets')} />
+          <Tile label={shown('Open')} value={d.totals.open} unavailable={d.totals.open === null} hint={d.totals.openPartial ? t('Some ticket types could not be counted') : t('Active tickets')} />
           {d.totals.unassigned !== null && <Tile label={t('Unassigned')} value={d.totals.unassigned} tone={d.totals.unassigned > 0 ? 'warn' : 'neutral'} hint={t('Nobody owns them')} />}
           <Tile label={t('No update in {days}+ days', { days: d.staleDays })} value={d.totals.stale} unavailable={d.totals.stale === null} tone={d.totals.stale > 0 ? 'warn' : 'neutral'} hint={t('Open and untouched')} />
-          {pingTile}
           {d.totals.resolvedActive > 0 && <Tile label={t('Resolved, not closed')} value={d.totals.resolvedActive} hint={t('Waiting to close. Not counted as open.')} />}
         </div>
       )}
 
-      {age.open > 0 ? (
-        <HeatStrip title={t('How long tickets have been open')} cells={age.buckets.map((b) => ({ key: b.key, label: shown(b.label), value: b.count }))} total={age.open} unit={t('tickets')} onDrill={ageDrill} hrefFor={links ? (cell) => hrefTo(env, ageTarget(cell)) : undefined} labelHeader={t('Age')} valueHeader={t('Open tickets')} />
-      ) : (
-        <p className="ab-hint">{t('No open tickets to age.')}</p>
-      )}
+      <Foldable id="workload" title={t('Open work by person and group')}>
+        {d.byAssignee.length > 0 && (
+          <StackedBar
+            title={d.assigneeCount > named(d.byAssignee) ? t('Open work by person (top {n} of {total})', { n: named(d.byAssignee), total: d.assigneeCount }) : t('Open work by person')}
+            rows={rowsOf(d.byAssignee)}
+            maxRows={d.byAssignee.length}
+            series={series}
+            labelHeader={t('Person')}
+            totalHeader={shown('Open')}
+            hrefFor={links ? (rowKey) => hrefTo(env, rowTarget(d.byAssignee, rowKey)) : undefined}
+            onDrill={(rowKey) => {
+              const row = find(d.byAssignee, rowKey);
+              if (row && !row.others) openBiggest(env, row.byTable, row.queries);
+            }}
+          />
+        )}
+        {d.byGroup.length > 0 && (
+          <StackedBar
+            title={t('Open work by group')}
+            rows={rowsOf(d.byGroup)}
+            maxRows={d.byGroup.length}
+            series={series}
+            labelHeader={t('Group')}
+            totalHeader={shown('Open')}
+            hrefFor={links ? (rowKey) => hrefTo(env, rowTarget(d.byGroup, rowKey)) : undefined}
+            onDrill={(rowKey) => {
+              const row = find(d.byGroup, rowKey);
+              if (row && !row.others) openBiggest(env, row.byTable, row.queries);
+            }}
+          />
+        )}
+      </Foldable>
 
-      {d.byAssignee.length > 0 && (
-        <StackedBar
-          title={d.assigneeCount > named(d.byAssignee) ? t('Open work by person (top {n} of {total})', { n: named(d.byAssignee), total: d.assigneeCount }) : t('Open work by person')}
-          rows={rowsOf(d.byAssignee)}
-          maxRows={d.byAssignee.length}
-          series={series}
-          labelHeader={t('Person')}
-          totalHeader={shown('Open')}
-          hrefFor={links ? (rowKey) => hrefTo(env, rowTarget(d.byAssignee, rowKey)) : undefined}
-          onDrill={(rowKey) => {
-            const row = find(d.byAssignee, rowKey);
-            if (row && !row.others) openBiggest(env, row.byTable, row.queries);
-          }}
-        />
-      )}
-      {d.byGroup.length > 0 && (
-        <StackedBar
-          title={t('Open work by group')}
-          rows={rowsOf(d.byGroup)}
-          maxRows={d.byGroup.length}
-          series={series}
-          labelHeader={t('Group')}
-          totalHeader={shown('Open')}
-          hrefFor={links ? (rowKey) => hrefTo(env, rowTarget(d.byGroup, rowKey)) : undefined}
-          onDrill={(rowKey) => {
-            const row = find(d.byGroup, rowKey);
-            if (row && !row.others) openBiggest(env, row.byTable, row.queries);
-          }}
-        />
-      )}
+      <Foldable id="ageing" title={t('Ageing of open work')}>
+        {age.open > 0 ? (
+          <HeatStrip title={t('How long tickets have been open')} cells={age.buckets.map((b) => ({ key: b.key, label: shown(b.label), value: b.count }))} total={age.open} unit={t('tickets')} onDrill={ageDrill} hrefFor={links ? (cell) => hrefTo(env, ageTarget(cell)) : undefined} labelHeader={t('Age')} valueHeader={t('Open tickets')} />
+        ) : (
+          <p className="ab-hint">{t('No open tickets to age.')}</p>
+        )}
+        {age.left > 0 && <p className="ab-hint">{tn(age.left, '{n} ticket type could not be aged and is left out of this count.', '{n} ticket types could not be aged and are left out of this count.')}</p>}
+      </Foldable>
 
-      {d.pingPong.items.length > 0 && <TicketList caption={t('Tickets reassigned {n}+ times', { n: d.pingPong.threshold })} items={d.pingPong.items} env={env} meta={(item) => [tn(item.reassignments, '{n} move', '{n} moves'), item.owner || t('Unassigned'), item.group]} />}
+      {(pingTile || d.pingPong.items.length > 0) && (
+        <Foldable id="reassigned" title={t('Tickets reassigned {n}+ times', { n: d.pingPong.threshold })}>
+          {pingTile && <div className="ab-tiles">{pingTile}</div>}
+          {d.pingPong.items.length > 0 && <TicketList label={t('Tickets reassigned {n}+ times', { n: d.pingPong.threshold })} items={d.pingPong.items} env={env} meta={(item) => [tn(item.reassignments, '{n} move', '{n} moves'), placeholderName(item.owner) || t('Unassigned'), item.group]} />}
+        </Foldable>
+      )}
     </>
   );
 }

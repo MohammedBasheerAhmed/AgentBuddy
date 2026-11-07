@@ -95,7 +95,8 @@ export async function handleFillField(message, { callPage, currentRecord, curren
     if (answer?.ok === true) {
       const matched = cleanLabel(answer.label);
       const undo = undoOf(answer);
-      return { ok: true, method: answer.method === 'gform' ? 'gform' : 'dom', ...(matched ? { label: matched } : {}), ...(undo ? { undo } : {}) };
+      // (modeUnread: a Workspace composer whose Work notes / customer comments switch the page could not read; a flag, nothing else)
+      return { ok: true, method: answer.method === 'gform' ? 'gform' : 'dom', ...(matched ? { label: matched } : {}), ...(answer.modeUnread === true ? { modeUnread: true } : {}), ...(undo ? { undo } : {}) };
     }
     return { ok: false, reason: reasonOf(answer) };
   } catch {
@@ -135,6 +136,8 @@ export async function handleUndo(message, { callPage, currentRecord, currentNewR
 // insertTargets { fields: [{ name, label? }], expect?: { table, sysId } }
 //   -> { form: 'gform' | 'workspace' | 'portal' | 'none', match: boolean, fields: { <name>: { state, label? } } }
 //   state: 'editable' | 'read-only' | 'missing' | 'unknown'
+//   gap (Workspace, portal; with state 'unknown'): 'absent' | 'ambiguous' | 'too-big', why the box was not found
+//   mode (Workspace journal boxes, with state 'editable'): 'match' | 'other' | 'unread', what the composer is set to
 //
 // The answer only decides whether the panel offers an Insert button (or says why not); it never writes and never replaces the
 // checks FILL_FIELD makes at the click. A classic form answers from g_form (getEditableFields): 'missing' and 'read-only' are
@@ -144,6 +147,8 @@ export async function handleUndo(message, { callPage, currentRecord, currentNewR
 const MAX_CHECK_FIELDS = 8;
 const STATES = new Set(['editable', 'read-only', 'missing', 'unknown']);
 const FORMS = new Set(['gform', 'workspace', 'portal']);
+const GAPS = new Set(['absent', 'ambiguous', 'too-big']);
+const MODES = new Set(['match', 'other', 'unread']);
 
 /**
  * @param {{ fields?: { name: string, label?: string }[], expect?: object }} args from the side panel
@@ -184,12 +189,17 @@ export async function checkInsertTargets(args, { callPage, currentRecord = null 
   const fields = {};
   const given = answer.fields && typeof answer.fields === 'object' ? answer.fields : {};
   const boxes = answer.boxes && typeof answer.boxes === 'object' ? answer.boxes : {};
+  const gaps = answer.gaps && typeof answer.gaps === 'object' ? answer.gaps : {};
+  const modes = answer.modes && typeof answer.modes === 'object' ? answer.modes : {};
   for (const name of names) {
     let state = Object.prototype.hasOwnProperty.call(given, name) && STATES.has(given[name]) ? given[name] : 'unknown';
     // Only g_form can say a field is not on the form; a page searched by its boxes cannot.
     if (state === 'missing' && form !== 'gform') state = 'unknown';
     const label = form === 'gform' ? '' : cleanLabel(Object.prototype.hasOwnProperty.call(boxes, name) ? boxes[name] : '');
-    fields[name] = label ? { state, label } : { state };
+    // (what the page said about a box that is not there, and about the composer's switch: one of a few words, or nothing)
+    const gap = form !== 'gform' && state === 'unknown' && Object.prototype.hasOwnProperty.call(gaps, name) && GAPS.has(gaps[name]) ? gaps[name] : '';
+    const mode = form === 'workspace' && state === 'editable' && Object.prototype.hasOwnProperty.call(modes, name) && MODES.has(modes[name]) ? modes[name] : '';
+    fields[name] = { state, ...(label ? { label } : {}), ...(gap ? { gap } : {}), ...(mode ? { mode } : {}) };
   }
   return { form, match, fields };
 }

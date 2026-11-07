@@ -3,6 +3,7 @@
 // request is never sent without one.
 
 import { callPage, tryCallPage } from './pageBridge.js';
+import { tm } from '../context/access.js';
 import { SYS_ID_RE } from '../context/util.js';
 
 const TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -63,13 +64,15 @@ export async function getSessionToken() {
  */
 export function forgetSessionToken() {
   cached = { token: null, at: 0 };
+  // The session ended, and whoever signs in next may be someone else: "Me" is looked up again for them (R-16).
+  resetSessionUser();
 }
 
 /** Headers for a JSON request to the current instance. Throws rather than risk a login popup. */
 export async function sessionHeaders(extra = {}) {
   const token = await getSessionToken();
   if (!token) {
-    const err = new Error('Could not read your ServiceNow session. Reload the ServiceNow page (sign in again if it asks), then try again.');
+    const err = new Error(tm('Agent Buddy could not read from this ServiceNow page. Reload the page (sign in again if it asks), then try again.'));
     err.code = 'NO_SESSION_TOKEN';
     throw err;
   }
@@ -83,12 +86,12 @@ const text = (value, max = 120) => (typeof value === 'string' ? value.trim().sli
 /**
  * What the page bridge says about the signed-in person, reduced to the four things Agent Buddy uses (user id, user name,
  * display name, roles) and checked: the answer comes from the page, so it is data, not authority.
- * @returns {{ userId: string, userName: string, name: string, roles: string[] }}
+ * @returns {{ userId: string, userName: string, name: string, roles: string[] | null }} roles: null when the page did not say (unknown is not the same as none)
  */
 export function cleanSessionInfo(info) {
   const o = info && typeof info === 'object' ? info : {};
   const id = text(o.userId, 40);
-  const roles = Array.isArray(o.roles) ? o.roles.filter((r) => typeof r === 'string' && r).slice(0, 200).map((r) => r.slice(0, 80)) : [];
+  const roles = Array.isArray(o.roles) ? o.roles.filter((r) => typeof r === 'string' && r).slice(0, 200).map((r) => r.slice(0, 80)) : null;
   return {
     userId: SYS_ID_RE.test(id) ? id.toLowerCase() : '',
     userName: text(o.userName),
@@ -102,7 +105,7 @@ export function cleanSessionInfo(info) {
 const ME_FILTER = 'sys_idDYNAMIC90d1921e5f510100a9ad2572f2b477fe';
 const USER_TTL_MS = 10 * 60 * 1000;
 const USER_RETRY_MS = 60 * 1000;
-let lookedUp = null; // { at, user } from the last successful read
+let lookedUp = null; // { at, user, token } from the last successful read (token: the session it was asked in)
 let lookupFailedAt = 0;
 let lookingUp = null; // the read in flight, so overlapping requests share one
 
@@ -115,7 +118,16 @@ async function lookUpMe(queryTable, knownUserName) {
   if (!SYS_ID_RE.test(id)) return null;
   // The page named the user already (just not the id): the two must agree.
   if (knownUserName && userName && knownUserName.toLowerCase() !== userName.toLowerCase()) return null;
-  return { userId: id.toLowerCase(), userName, name: text(rows[0].name), roles: [] };
+  return { userId: id.toLowerCase(), userName, name: text(rows[0].name), roles: null };
+}
+
+// Is the kept answer to "who is Me" still about the person at the screen? Not when the page names a user and it is not the one that was
+// looked up, nor when the session it was asked in is not the one now (another sign-in has another token). The answer is kept ten minutes
+// only to save a read; it must never be a previous person's id for My work or the reports (R-16).
+function lookupStillMine(found, fromPage) {
+  if (fromPage.userName && found.user.userName && fromPage.userName.toLowerCase() !== found.user.userName.toLowerCase()) return false;
+  if (found.token && cached.token && found.token !== cached.token) return false;
+  return true;
 }
 
 /**
@@ -129,12 +141,13 @@ export async function getSessionUser({ queryTable } = {}) {
   const fromPage = cleanSessionInfo(await tryCallPage('getSessionInfo'));
   if (fromPage.userId || typeof queryTable !== 'function') return fromPage;
   const now = Date.now();
+  if (lookedUp && !lookupStillMine(lookedUp, fromPage)) resetSessionUser();
   if (lookedUp && now - lookedUp.at < USER_TTL_MS) return { ...fromPage, userId: lookedUp.user.userId, userName: fromPage.userName || lookedUp.user.userName, name: fromPage.name || lookedUp.user.name };
   if (now - lookupFailedAt < USER_RETRY_MS) return fromPage;
   if (!lookingUp) {
     lookingUp = lookUpMe(queryTable, fromPage.userName)
       .then((user) => {
-        if (user) lookedUp = { at: Date.now(), user };
+        if (user) lookedUp = { at: Date.now(), user, token: cached.token };
         else lookupFailedAt = Date.now();
         return user;
       })

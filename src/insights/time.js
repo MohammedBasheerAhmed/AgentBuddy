@@ -31,6 +31,18 @@ export function shortSpan(ms) {
   return tn(Math.floor(hours / 24), '{n} d', '{n} d');
 }
 
+/**
+ * A time taken or waited, in words a person says: "under a minute", "12 minutes", "5 hours", "2 days". The next unit starts when a whole one
+ * is reached (47 hours is "1 day"), so "waiting 3 days" is never more than was waited. '' when it is not a number or is negative.
+ */
+export function spanWords(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  if (ms < MIN) return t('under a minute');
+  if (ms < HOUR) return tn(Math.floor(ms / MIN), '{n} minute', '{n} minutes');
+  if (ms < DAY) return tn(Math.floor(ms / HOUR), '{n} hour', '{n} hours');
+  return tn(Math.floor(ms / DAY), '{n} day', '{n} days');
+}
+
 /** "just now", "12 min ago", "3 h ago", "2 d ago". '' when not a number. A time in the future is "just now". */
 export function agoText(ms) {
   if (!Number.isFinite(ms)) return '';

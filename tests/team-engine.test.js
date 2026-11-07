@@ -145,14 +145,14 @@ test('chosen groups that do not exist on this instance are left out and said so;
   const scope = await resolveScope({ kind: 'chosen', groupIds: [GROUP_A, GROUP_B], groupNames: { [GROUP_A]: 'Desk', [GROUP_B]: 'Old' } }, { reader: reader(some), userId: USER });
   assert.deepEqual(scope.groups, [{ id: GROUP_A, name: 'Service Desk' }], 'the name as this instance has it');
   assert.equal(scope.query, `assignment_groupIN${GROUP_A}`);
-  assert.match(scope.note, /^1 of the chosen groups does not exist on this instance, so it is left out\./);
+  assert.match(scope.note, /^1 of the chosen groups does not exist on this ServiceNow site, so it is left out\./);
   assert.match(some.callsTo('sys_user_group')[0].query, new RegExp(`^sys_idIN${GROUP_A},${GROUP_B}$`));
 
   // None exists (the table is readable and answers nothing): an empty scope, so no section runs and nothing shows a fake 0.
   const none = fakeInstance({ rules: [groupRows([])] });
   const result = await run({ section: 'overview', scope: { kind: 'chosen', groupIds: [GROUP_B] }, tables: ['incident'] }, none);
   assert.equal(result.data.available, false);
-  assert.match(result.data.reason, /None of the chosen groups exists on this instance/);
+  assert.match(result.data.reason, /None of the chosen groups exists on this ServiceNow site/);
   assert.equal(none.callsTo('incident', 'active').length, 0);
 });
 

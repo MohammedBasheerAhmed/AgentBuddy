@@ -65,7 +65,7 @@ export default [
     // from the look-alikes, never from the AI's text, and it is added by the answer card (insertCloseAndNotes) where the form has it.
     insert: [
       { field: 'close_notes', kinds: ['incident', 'case'], get label() { return t('Insert'); }, fieldLabel: tm('Resolution notes'), mode: 'replace', pick: pickResolutionNotes },
-      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], get label() { return t('Insert'); }, fieldLabel: tm('Close notes'), mode: 'replace', pick: pickResolutionNotes },
+      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task', 'change', 'hr_case'], get label() { return t('Insert'); }, fieldLabel: tm('Close notes'), mode: 'replace', pick: pickResolutionNotes },
       { field: 'fix_notes', kinds: ['problem'], get label() { return t('Insert'); }, fieldLabel: tm('Fix notes'), mode: 'replace', pick: pickFixNotes },
       { field: 'cause_notes', kinds: ['problem'], get label() { return t('Insert the cause into cause notes'); }, fieldLabel: tm('Cause notes'), mode: 'replace', pick: pickCauseNotes },
     ],

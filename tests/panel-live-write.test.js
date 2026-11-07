@@ -109,7 +109,7 @@ test('"Check my comment" checks what was typed in the form: a password, an inter
   assert.deepEqual(fake.readsOf('formValues')[0], { names: ['comments'], expect: { table: 'incident', sysId: A } }, 'only the comment field of this record');
   const text = ui.text();
   assert.match(text, /Your customer comment: check before sending\./);
-  assert.match(text, /password, key or token/);
+  assert.match(text, /password or a secret key/);
   assert.match(text, /meant to stay internal/, 'the organisation\'s phrase is flagged');
   assert.match(text, /also in an internal work note/);
   assert.ok(!text.includes('Winter2026!x'), 'the finding never shows the value');
@@ -243,7 +243,7 @@ test('snippets are added from a file: checked, merged, and every skipped entry n
     await settle(4);
   };
   await pick({ name: 'notes.txt', size: 10, type: 'text/plain', text: async () => json });
-  assert.match(ui.text(), /Choose a \.json file saved by Agent Buddy/);
+  assert.match(ui.text(), /Choose a snippet file saved by Agent Buddy/);
   await pick({ name: 'agent-buddy-snippets.json', size: json.length + 1, type: 'application/json', text: async () => `${String.fromCharCode(0xfeff)}${json}` });
   assert.match(ui.text(), /Added 1, skipped 1\./);
   assert.match(ui.text(), /Snippet 2: A title is needed\./);
@@ -314,7 +314,8 @@ test('Notes to ticket on a saved ticket opens a blank incident form in the same 
   const { fake } = setup();
   const ui = await mount(<WriteAssist page={pageOf(A, 'INC0010001')} eff={eff()} active />);
   await click(ui.button('Open a blank incident'));
-  assert.deepEqual(fake.updates, [{ tabId: 7, props: { url: `${ORIGIN}/nav_to.do?uri=${encodeURIComponent('incident.do?sys_id=-1')}` } }]);
+  // (in front: a tab changed in the background would look like nothing happened, audit 9 S12)
+  assert.deepEqual(fake.updates, [{ tabId: 7, props: { url: `${ORIGIN}/nav_to.do?uri=${encodeURIComponent('incident.do?sys_id=-1')}`, active: true } }]);
   assert.match(ui.text(), /The blank form opens in this tab/);
   await ui.unmount();
 });

@@ -342,7 +342,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
             {feature.previewNote && <p className="ab-sheet-sub">{feature.previewNote}</p>}
           </div>
           <div className="ab-dialog-body">
-            <p className="ab-confirm-short" id={ids.short}>{t('Uses {others} from other records. You checked the rest of what this action sends before.', { others })}</p>
+            <p className="ab-confirm-short" id={ids.short}>{t('Uses {others} from other tickets. You checked the rest of what this action sends before.', { others })}</p>
             <HiddenSummary stats={prepared.stats} />
             <div className="ab-disclosure">
               <button

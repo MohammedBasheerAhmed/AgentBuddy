@@ -163,7 +163,7 @@ module.exports = {
     await closeAnswers(p);
     const two = await runFeature(p, /^Suggest next steps/);
     // (round 3: a repeat run may ask with the short check, "Uses N ... from other records", instead of the full text: still asked)
-    t.check('...and again the second time (having seen it once does not cover it: the reference changes from run to run)', (two.preview !== null || /Uses .* from other records/.test(two.confirm || '')) && Boolean(two.result), `${two.preview !== null} / ${two.confirm || ''}`);
+    t.check('...and again the second time (having seen it once does not cover it: the reference changes from run to run)', (two.preview !== null || /Uses .* from other tickets/.test(two.confirm || '')) && Boolean(two.result), `${two.preview !== null} / ${two.confirm || ''}`);
     await closeAnswers(p);
     await ctx.configure({ previewMode: 'always', previewSeen: [] });
 

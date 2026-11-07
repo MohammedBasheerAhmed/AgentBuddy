@@ -1,7 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { buildGlance } from '../../../insights/glance.js';
+import { changeLine } from '../../../insights/changeLine.js';
+import { linkedLine } from '../../../insights/linkedIncidents.js';
+import RecordLink from '../../RecordLink.jsx';
 import { agoText, storedTime } from '../../../insights/time.js';
 import { PRIORITY_ACCOUNT_MARK, isPriorityAccount } from '../../../insights/priorityAccount.js';
+import { personWords } from '../../../insights/personWords.js';
 import { Icon } from '../../ui/icons.jsx';
 import { useTicketFacts } from './data.js';
 import { isolate, t } from '../../../i18n/index.js';
@@ -34,6 +38,8 @@ const CALLERS = [
   ['requested_for', () => t('Requested for')],
   ['contact', () => t('Contact')],
   ['consumer', () => t('Contact')],
+  // (the person who asked for a change, F6)
+  ['requested_by', () => t('Requested by')],
 ];
 
 /**
@@ -44,11 +50,19 @@ export function glanceDetails(pack, now) {
   if (!pack || typeof pack !== 'object') return [];
   const f = pack.fields || {};
   const rows = [];
+  // A column that did not come back (or whose name is hidden from this user) is "not shown to you", never "nobody yet" (R-14, D1).
+  const hidden = new Set(Array.isArray(pack.unreadable) ? pack.unreadable : []);
   if (!pack.sensitive) {
-    rows.push({ key: 'assigned', label: t('Assigned to'), value: text(f.assigned_to) || t('Nobody yet') });
+    rows.push({ key: 'assigned', label: t('Assigned to'), value: text(f.assigned_to) || (hidden.has('assigned_to') ? t('Not shown to you') : t('Nobody yet')) });
     if (text(f.assignment_group)) rows.push({ key: 'group', label: t('Group'), value: text(f.assignment_group) });
+    else if (hidden.has('assignment_group')) rows.push({ key: 'group', label: t('Group'), value: t('Not shown to you') });
     const caller = CALLERS.find(([name]) => text(f[name]));
     if (caller) rows.push({ key: 'caller', label: caller[1](), value: text(f[caller[0]]) });
+  }
+  // A task is a part of a larger ticket (a customer service case, a change, an incident): say which, and offer to open it (F15).
+  const parent = pack.related?.parent;
+  if (parent && typeof parent === 'object' && text(parent.number) && /^[0-9a-f]{32}$/i.test(text(parent.sysId))) {
+    rows.push({ key: 'parent', label: t('Part of'), value: text(parent.number), link: { table: 'task', sysId: text(parent.sysId).toLowerCase(), number: text(parent.number) } });
   }
   const opened = storedTime(pack, 'opened_at');
   if (Number.isFinite(opened)) rows.push({ key: 'opened', label: t('Opened'), value: agoText(Math.max(0, now - opened)) });
@@ -65,12 +79,13 @@ export function glanceDetails(pack, now) {
  * @param {{ g: object, state: string, pack: object|null, priorityAccount?: boolean }} input   g: buildGlance's answer
  */
 export function glanceChips({ g, state = '', pack = null, priorityAccount = false }) {
-  const unassigned = Boolean(pack && !pack.sensitive && !text(pack.fields?.assigned_to));
+  // (an owner whose name is hidden from this user is not "unassigned")
+  const unassigned = Boolean(pack && !pack.sensitive && !text(pack.fields?.assigned_to) && !(Array.isArray(pack.unreadable) && pack.unreadable.includes('assigned_to')));
   return [
     state && { key: 'state', text: state, tone: 'neutral' },
     g?.sla?.text && { key: 'sla', text: g.sla.text, tone: g.sla.tone || 'neutral', icon: 'clock' },
     unassigned && { key: 'unassigned', text: t('Unassigned'), tone: 'warn' },
-    g?.vip && { key: 'vip', text: t('VIP'), tone: 'warn', title: t('The caller is marked VIP in ServiceNow.'), vip: true },
+    g?.vip && { key: 'vip', text: t('VIP'), tone: 'warn', title: personWords(pack).vipNote(), vip: true },
     priorityAccount && { key: 'account', text: PRIORITY_ACCOUNT_MARK.text, tone: 'warn', title: PRIORITY_ACCOUNT_MARK.title, vip: true },
   ].filter(Boolean);
 }
@@ -126,6 +141,9 @@ export default function Glance({ page, eff, record, header, headPhase, active = 
   const priorityAccount = isPriorityAccount(fields.account, eff?.policy?.priorityAccounts);
   const chips = glanceChips({ g, state, pack, priorityAccount });
   const details = glanceDetails(pack, now);
+  const change = changeLine(pack);
+  // A problem: how many incidents are linked to it that the person can see (F14); nothing when the count could not be read.
+  const linked = linkedLine(facts.data?.linked, pack?.kind);
   const titleClass = `ab-glance-title${g.titleKind === 'text' ? '' : ' ab-muted'}`;
   const toggle = () => {
     detailsOpen = !open;
@@ -158,12 +176,30 @@ export default function Glance({ page, eff, record, header, headPhase, active = 
           ))}
         </p>
       )}
+      {change && (
+        <p className="ab-glance-line ab-glance-change" data-line="change">
+          {change}
+        </p>
+      )}
+      {linked && (
+        <p className="ab-glance-line ab-glance-change" data-line="linked">
+          {linked}
+        </p>
+      )}
       {details.length > 0 && (
         <dl id={detailsId} className="ab-glance-details" hidden={!open}>
           {details.map((d) => (
             <div key={d.key} className="ab-glance-fact" data-fact={d.key}>
               <dt>{d.label}</dt>
-              <dd>{d.value}</dd>
+              <dd>
+                {d.link ? (
+                  <RecordLink page={page} item={d.link} className="ab-record-number">
+                    {d.value}
+                  </RecordLink>
+                ) : (
+                  d.value
+                )}
+              </dd>
             </div>
           ))}
         </dl>

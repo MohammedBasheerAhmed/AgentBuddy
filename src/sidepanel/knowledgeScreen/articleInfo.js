@@ -1,8 +1,8 @@
-// Small pure helpers for the Knowledge screen: how fresh an article is, in words; the link to share an article with a customer; and
-// the rows the duplicate groups and the knowledge-gap topics are exported as (CSV, through src/lib/export.js toCsv). The CSV files keep
-// their English column names and values: they are data for a spreadsheet, not text of the panel.
+// Small pure helpers for the Knowledge screen: how fresh an article is, in words; and the rows the duplicate groups and the
+// knowledge-gap topics are exported as (CSV, through src/lib/export.js toCsv). The CSV files keep their English column names and
+// values: they are data for a spreadsheet, not text of the panel. (The address of an article, to open or to copy for a customer, is
+// src/lib/snLinks.js.)
 import { t, tn } from '../../i18n/index.js';
-import { SYS_ID_RE } from '../../context/util.js';
 
 /** "3 days", "5 weeks", "8 months", "2 years" for an age in days (>= 1). */
 export function ageText(days) {
@@ -27,35 +27,6 @@ export function freshnessOf({ ageDays = null, expiresInDays = null } = {}) {
   if (ageDays < 1) return { level: 'fresh', text: t('Updated today') };
   if (ageDays > 365) return { level: 'stale', text: t('Not updated for {age}', { age: ageText(ageDays) }) };
   return { level: ageDays > 180 ? 'aging' : 'fresh', text: t('Updated {age} ago', { age: ageText(ageDays) }) };
-}
-
-const PORTAL_SEGMENT_RE = /^\/[a-z][a-z0-9_-]{0,30}$/i;
-const NUMBER_RE = /^[A-Za-z]{2,8}\d{4,12}$/;
-
-/**
- * The address to share an article with a customer: by its number, which stays the same when a new version is published (a sys_id
- * does not). On a portal page, the portal's article page; elsewhere the instance's article viewer (kb_view.do), which also shows the
- * article to people who only use the portal. Only the instance the panel works on; '' when no address can be built safely.
- * @param {{ href: string, surface?: string, portal?: { base?: string } | null }} page
- * @param {{ number?: string, sysId?: string }} article
- */
-export function articleShareUrl(page, { number = '', sysId = '' } = {}) {
-  let origin;
-  try {
-    origin = new URL(page?.href || '').origin;
-  } catch {
-    return '';
-  }
-  if (!/^https:\/\//.test(origin)) return '';
-  const byNumber = NUMBER_RE.test(number) ? `sysparm_article=${number.toUpperCase()}` : '';
-  const id = SYS_ID_RE.test(sysId) ? sysId.toLowerCase() : '';
-  if (page?.surface === 'portal') {
-    const base = PORTAL_SEGMENT_RE.test(page?.portal?.base || '') ? page.portal.base.toLowerCase() : '/sp';
-    if (byNumber) return `${origin}${base}?id=kb_article&${byNumber}`;
-    return id ? `${origin}${base}?id=kb_article&sys_id=${id}` : '';
-  }
-  if (byNumber) return `${origin}/kb_view.do?${byNumber}`;
-  return id ? `${origin}/kb_view.do?sys_kb_id=${id}` : '';
 }
 
 // ---- Exports ------------------------------------------------------------------------------------------------------------------

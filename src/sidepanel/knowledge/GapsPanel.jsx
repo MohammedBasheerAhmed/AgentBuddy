@@ -10,7 +10,10 @@ import ErrorNote from '../ErrorNote.jsx';
 import { TOPIC_COLUMNS, exportFileName, topicRows } from '../knowledgeScreen/articleInfo.js';
 import { placeOf } from '../knowledgeScreen/shared.js';
 import { shown as shownText } from '../../reports/shown.js';
+import { lookedAtText, topicBacking } from './coverage.js';
 import { formatNumber, isolate, t, tn } from '../../i18n/index.js';
+
+export { lookedAtText };
 
 // N19 Knowledge-gap radar (Insights, no AI): "articles to write". Recently resolved incidents (and cases) are grouped by what they
 // are about, the ones that already have a knowledge article are left out when that can be read, and the groups are ranked by how
@@ -20,21 +23,6 @@ import { formatNumber, isolate, t, tn } from '../../i18n/index.js';
 
 const DAYS = [30, 60, 90];
 const n = (v) => formatNumber(Number(v || 0));
-
-/** "Looked at 500 of 12,400 tickets resolved in the last 60 days in your groups." */
-export function lookedAtText(data, scopePhrase = '') {
-  const scanned = Number(data?.scanned) || 0;
-  const total = Number.isFinite(data?.total) ? data.total : null;
-  const days = data?.days || 60;
-  if (total !== null && total > scanned) {
-    const params = { scanned: n(scanned), total: n(total), days, scope: scopePhrase };
-    return scopePhrase ? t('Looked at {scanned} of {total} tickets resolved in the last {days} days {scope}.', params) : t('Looked at {scanned} of {total} tickets resolved in the last {days} days.', params);
-  }
-  const params = { n: n(scanned), days, scope: scopePhrase };
-  return scopePhrase
-    ? tn(scanned, 'Looked at {n} ticket resolved in the last {days} days {scope}.', 'Looked at {n} tickets resolved in the last {days} days {scope}.', params)
-    : tn(scanned, 'Looked at {n} ticket resolved in the last {days} days.', 'Looked at {n} tickets resolved in the last {days} days.', params);
-}
 
 /** The scope as words, for the summary line ("in your 3 groups", "in category Network"). */
 export function scopeWords(scope, categories = []) {
@@ -186,11 +174,11 @@ function GapsRadar({ page, active = true, onFound = () => {} }) {
                 <div className="ab-row-main">
                   <div className="ab-kb-cluster-head">
                     <span className="ab-row-title">{shownText(c.label)}</span>
-                    <span className="ab-row-sub ab-kb-count">{tn(c.count, '{n} ticket', '{n} tickets')}</span>
                   </div>
-                  {(c.withFix > 0 || c.category || c.ci) && (
+                  {/* how many tickets stand behind the topic, and how many of them already hold a fix an author can borrow */}
+                  <p className="ab-row-sub ab-kb-count">{topicBacking(c)}</p>
+                  {(c.category || c.ci) && (
                     <div className="ab-chips">
-                      {c.withFix > 0 && <span className="ab-chip ab-chip-neutral">{t('{withFix} with a written fix', { withFix: c.withFix })}</span>}
                       {c.category && <span className="ab-chip ab-chip-neutral">{c.category}</span>}
                       {c.ci && <span className="ab-chip ab-chip-neutral">{c.ci}</span>}
                     </div>

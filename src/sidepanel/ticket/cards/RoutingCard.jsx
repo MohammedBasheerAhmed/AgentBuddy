@@ -13,7 +13,8 @@ export default function RoutingCard({ page, eff, record, active, setSummary, set
   const look = useLookalikes({ page, record, eff, active });
   const fields = ticket.data?.pack?.fields || {};
   const hits = Array.isArray(look.data?.hits) ? look.data.hits : [];
-  const vote = routingVote(hits, { group: fields.assignment_group, category: fields.category });
+  const unreadable = Array.isArray(ticket.data?.pack?.unreadable) ? ticket.data.pack.unreadable : [];
+  const vote = routingVote(hits, { group: fields.assignment_group, category: fields.category, groupUnreadable: unreadable.includes('assignment_group') });
   useReport(setSummary, look.data && !look.error ? (vote.enough ? vote.line : t('Too few solved look-alikes to tell')) : '');
   useReport(setAttention, look.data && !look.error && !vote.enough && readFully(look.data.access) ? 'clear' : '');
 
@@ -21,7 +22,7 @@ export default function RoutingCard({ page, eff, record, active, setSummary, set
   if (!vote.enough) {
     return (
       <>
-        <p className="ab-hint">{hits.length ? t('The solved look-alikes found do not say which group solved them.') : t('No solved look-alikes were found, so there is nothing to count.')}</p>
+        <p className="ab-hint">{hits.length ? (vote.inactive ? t('Groups that are no longer in use were left out, and too few look-alikes are left to tell.') : t('The solved look-alikes found do not say which group solved them.')) : readFully(look.data.access) ? t('No solved look-alikes were found, so there is nothing to count.') : t('No solved look-alikes were found, but some could not be checked.')}</p>
         <Notes access={look.data.access} />
       </>
     );

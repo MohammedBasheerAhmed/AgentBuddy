@@ -473,9 +473,19 @@ test('nothing on the page is ever clicked or submitted', () => {
 
 test('a classic form (g_form) still wins over the portal path', () => {
   const calls = [];
+  const values = {};
   const dom = makeDom({
     window: {
-      g_form: { hasField: () => true, getValue: () => '', getEditableFields: () => ['comments'], isReadOnly: () => true, setValue: (n, v) => calls.push([n, v]) },
+      g_form: {
+        hasField: () => true,
+        getValue: (n) => values[n] || '',
+        getEditableFields: () => ['comments'],
+        isReadOnly: () => true,
+        setValue: (n, v) => {
+          calls.push([n, v]);
+          values[n] = v;
+        },
+      },
     },
   });
   dom.add('textarea', COMMENT, { value: '' });
@@ -486,7 +496,8 @@ test('a classic form (g_form) still wins over the portal path', () => {
 test('off a portal page (a workspace, no g_form) an exact label still finds the box, and the box is named in the answer', () => {
   const dom = makeDom({ url: 'https://x.service-now.com/now/sow/record/incident/' + 'a'.repeat(32) });
   const box = dom.add('textarea', { 'aria-label': 'Work notes' }, { value: 'typed' });
-  assert.deepEqual(dom.call('fillField', ['work_notes', 'more', 'Work notes', true]), { ok: true, method: 'dom', label: 'Work notes' });
+  // (a Workspace box whose composer switch cannot be read says so: modeUnread, workspace-honesty audit 2026-11-07, W-12)
+  assert.deepEqual(dom.call('fillField', ['work_notes', 'more', 'Work notes', true]), { ok: true, method: 'dom', label: 'Work notes', modeUnread: true });
   assert.equal(box.value, 'typed\n\nmore');
   // CHANGED on purpose (AB-SEC-06): two equally good boxes used to mean "take the first". Now nothing is written.
   const other = dom.add('textarea', { 'aria-label': 'Work notes' }, { value: '' });
@@ -519,7 +530,7 @@ test('workspace: a hidden box is never written (another record tab, a collapsed 
   dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', hidden: true });
   dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', visibility: 'hidden' });
   dom.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', rect: { width: 300, height: 60, right: -9000 } });
-  assert.deepEqual(dom.call('fillField', ['comments', 'for the open record', 'Additional comments', true]), { ok: true, method: 'dom', label: 'Additional comments' });
+  assert.deepEqual(dom.call('fillField', ['comments', 'for the open record', 'Additional comments', true]), { ok: true, method: 'dom', label: 'Additional comments', modeUnread: true });
   assert.equal(visible.value, 'for the open record');
   const onlyHidden = makeDom({ url: WORKSPACE });
   const ghost = onlyHidden.add('textarea', { 'aria-label': 'Additional comments' }, { value: '', display: 'none' });
@@ -584,14 +595,20 @@ test('workspace: a locked box is read-only, a password or secret-named box is ne
 
 // ---- Insert into an HTML field with g_form (AB-SEC-01) --------------------------------------------------------------------
 
+// A g_form as ServiceNow's is: setValue changes what getValue answers. (The bridge reads the value back after a write, so a form whose
+// setValue changes nothing looks like a locked field to it: audit of 2026-11-07, W-01.)
 function gformWindow(type, initial = '') {
   const calls = [];
+  const values = {};
   const g_form = {
     hasField: () => true,
-    getValue: () => initial,
+    getValue: (n) => (n in values ? values[n] : initial),
     getEditableFields: () => ['text', 'short_description', 'comments'],
     isReadOnly: () => true,
-    setValue: (n, v) => calls.push([n, v]),
+    setValue: (n, v) => {
+      calls.push([n, v]);
+      values[n] = v;
+    },
   };
   if (type !== undefined) g_form.getGlideUIElement = () => ({ type });
   return { calls, window: { g_form } };
@@ -656,10 +673,22 @@ test('portal and workspace: the earlier insert is swapped for the new one when t
 
 test('a g_form field swaps the earlier insert too; with HTML or without append the earlier text is ignored', () => {
   const calls = [];
-  const g_form = { hasField: () => true, getValue: () => 'Mine\n\nOld answer', getEditableFields: () => ['work_notes', 'text'], isReadOnly: () => true, setValue: (n, v) => calls.push([n, v]) };
-  const dom = makeDom({ window: { g_form } });
-  assert.equal(dom.call('fillField', ['work_notes', 'New answer', '', true, '', 'Old answer']).ok, true);
-  assert.equal(dom.call('fillField', ['work_notes', 'Replaced', '', false, '', 'Old answer']).ok, true);
+  // (one form per insert: each starts from the same box, as the person's form would after a reload)
+  const formHolding = () => {
+    let held = 'Mine\n\nOld answer';
+    return {
+      hasField: () => true,
+      getValue: () => held,
+      getEditableFields: () => ['work_notes', 'text'],
+      isReadOnly: () => true,
+      setValue: (n, v) => {
+        calls.push([n, v]);
+        held = v;
+      },
+    };
+  };
+  assert.equal(makeDom({ window: { g_form: formHolding() } }).call('fillField', ['work_notes', 'New answer', '', true, '', 'Old answer']).ok, true);
+  assert.equal(makeDom({ window: { g_form: formHolding() } }).call('fillField', ['work_notes', 'Replaced', '', false, '', 'Old answer']).ok, true);
   assert.deepEqual(calls, [['work_notes', 'Mine\n\nNew answer'], ['work_notes', 'Replaced']]);
 });
 
@@ -668,13 +697,14 @@ test('getFieldStates reads and never writes: a portal names the box an insert wo
   const box = dom.add('textarea', COMMENT, { value: 'typed' });
   dom.add('textarea', { name: 'work_notes', 'aria-label': 'Work notes' }, { value: '', readOnly: true });
   const out = dom.call('getFieldStates', [['comments', 'work_notes', 'close_notes'], ['Additional comments', 'Work notes', 'Resolution notes']]);
-  assert.deepEqual(out, { form: 'portal', fields: { comments: 'editable', work_notes: 'read-only', close_notes: 'unknown' }, boxes: { comments: 'Additional comments' } });
+  // (a box that is not there says why: gaps; audit 2026-11-07, S4)
+  assert.deepEqual(out, { form: 'portal', fields: { comments: 'editable', work_notes: 'read-only', close_notes: 'unknown' }, boxes: { comments: 'Additional comments' }, gaps: { close_notes: 'absent' }, modes: {} });
   assert.equal(box.value, 'typed');
   assert.deepEqual(box.events, []);
   assert.equal(box.focused, false);
   const ws = makeDom({ url: WORKSPACE });
   ws.add('textarea', { 'aria-label': 'Resolution notes' }, { value: '' });
-  assert.deepEqual(ws.call('getFieldStates', [['close_notes'], ['Resolution notes']]), { form: 'workspace', fields: { close_notes: 'editable' }, boxes: { close_notes: 'Resolution notes' } });
+  assert.deepEqual(ws.call('getFieldStates', [['close_notes'], ['Resolution notes']]), { form: 'workspace', fields: { close_notes: 'editable' }, boxes: { close_notes: 'Resolution notes' }, gaps: {}, modes: {} });
   assert.equal(ws.call('getFieldStates', ['comments']), null, 'names must be a list');
 });
 

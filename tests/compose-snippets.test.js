@@ -140,7 +140,7 @@ test('export, then import into another library through the clipboard text', asyn
     return { list: r.list, added: r.added, skipped: r.skipped, errors: r.errors };
   });
   assert.equal(junk.added, 0);
-  assert.match(junk.errors[0], /not a valid JSON/);
+  assert.match(junk.errors[0], /not a snippet file/);
 });
 
 test('the starter snippets are valid, use known variables only, and fill without missing values on example data', () => {

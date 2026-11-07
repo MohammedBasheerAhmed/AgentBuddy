@@ -12,12 +12,14 @@
 
 import { checkProviderAllowed, isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { partsFor, isFeatureAvailable } from '../features/registry.js';
+import { kindNote } from '../features/kindWords.js';
 import { NOT_AVAILABLE_FIELD, isJournalPart, journalCut, madeWithout, notAvailablePart, peopleFor, unavailable } from '../features/parts.js';
 import { NEVER_REHYDRATE, RULES_PREAMBLE, placesOf } from '../pii/firewall.js';
 import { alignedLower } from '../pii/dictionary.js';
 import { truncationNote } from '../providers/messages.js';
-import { LOCAL_CONTEXT, estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
+import { estimateMessages, estimateParts, estimateTokens, fitParts, promptBudget } from './tokens.js';
 import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
+import { tableLabel } from './tableLabels.js';
 import { answerLanguageRule } from '../prompts/rules.js';
 import { withFormat } from '../formats/formats.js';
 
@@ -118,7 +120,7 @@ export function assertRunnable({ feature, pack, values, policy, config, pageTabl
   }
   const page = String(pageTable || '').trim();
   for (const table of [pack.table, page]) {
-    if (table && !isTableAllowed(table, policy)) throw new RunBlocked(t('Your organisation does not allow Agent Buddy to use {table} records.', { table }), 'TABLE_BLOCKED');
+    if (table && !isTableAllowed(table, policy)) throw new RunBlocked(t('Your organisation does not allow Agent Buddy to use {type}.', { type: tableLabel(table, { plural: true }) }), 'TABLE_BLOCKED');
   }
   if (isSensitivePack(pack, policy) || (page && isSensitiveByPolicy(page, policy))) {
     if (!policy?.allowHrContent) {
@@ -128,7 +130,7 @@ export function assertRunnable({ feature, pack, values, policy, config, pageTabl
     // the policy pins the AI provider or address, or the model runs on this computer.
     if (!(policy?.aiProvider || policy?.aiBaseUrl || config?.local)) {
       throw new RunBlocked(
-        t('HR case content can only be sent to an AI endpoint your organisation has approved. Ask your administrator to set the AI provider in the policy, or use a model that runs on this computer.'),
+        t('HR case content can only go to an AI service your organisation has approved. Ask your administrator.'),
         'HR_BLOCKED'
       );
     }
@@ -136,7 +138,7 @@ export function assertRunnable({ feature, pack, values, policy, config, pageTabl
     // cue in front of them and refuses sensitive fields (src/pii/firewall.js). Keyed on the table (isSensitivePack), not on the record
     // kind, so an HR child table (sn_hr_core_case_payroll...) or a policy prefix is covered whatever kind it is mapped to.
     if ((MODE_RANK[values?.piiMode] ?? 0) < MODE_RANK.strict) {
-      throw new RunBlocked(t('HR records need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.'), 'MODE_TOO_LOW');
+      throw new RunBlocked(t('HR tickets need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.'), 'MODE_TOO_LOW');
     }
   }
   // The organisation's rules before the address: an AI address in the policy that is not valid (policy.aiBlocked) must say "ask
@@ -177,8 +179,8 @@ export function prepareRun({ feature: action, pack, values, policy, config, crea
   let fit = fitToModel({ feature, pack, parts: built, budget: budget.prompt, source: budget.source });
   // Settings > Language of AI answers: with "The language of the panel" one fixed sentence is added to the task; nothing from the ticket.
   const languageRule = answerLanguageRule(values.answerLanguage, getLanguage());
-  const system = languageRule ? `${feature.system}
-${languageRule}` : feature.system;
+  // A fixed sentence about what kind of ticket this is (a laptop order is not an outage): chosen from a lookup by kind, never from the ticket.
+  const system = [feature.system, kindNote(feature.id, pack?.kind), languageRule].filter(Boolean).join('\n');
   const make = (parts) =>
     Object.freeze({ feature: feature.id, table: pack.table, system, userInstruction: feature.instruction, parts: Object.freeze(parts) });
   let input = make(fit.parts);
@@ -230,11 +232,11 @@ const NOT_AVAILABLE_SLACK = 40;
 
 // `tokens` is kept on the error (a number only), so a caller that fitted to a lowered target can say it in the model's terms.
 function tooLong(tokens, budget) {
-  const head = t('This is too long for the chosen AI model, even with only the newest note: about {tokens} tokens, and the model reads about {budget}.', { tokens: tokens.toLocaleString('en-US'), budget: budget.prompt.toLocaleString('en-US') });
+  const head = t('This ticket is too long to send to the AI in one go, even with only the newest note.');
   // A model on this computer is always given the default context of a local server (src/lib/tokens.js), whichever model and however its
   // server is set up: another local model, or a server set up for more, changes nothing here. Only a model elsewhere reads more.
   const next = budget.source === 'local-default'
-    ? t('For a model on this computer Agent Buddy always counts on {window} tokens, whatever its server is set up for. Only an AI model that is not on this computer, chosen in Settings, reads more.', { window: LOCAL_CONTEXT.toLocaleString('en-US') })
+    ? t('A model on this computer reads a limited amount. Choose an AI model that is not on this computer in Settings.')
     : t('Choose a model that reads more in Settings.');
   // (whole sentences, joined by a space)
   const err = new RunBlocked(`${head} ${next}`, 'TOO_LONG');
@@ -368,7 +370,7 @@ export async function assertWithinPolicyBudget({ policy, tokensUsedToday, featur
     used = 0;
   }
   if (used < cap) return;
-  const err = new RunBlocked(t("Your organisation's daily limit of {cap} AI tokens has been reached. It starts again tomorrow.", { cap: cap.toLocaleString('en-US') }), 'BUDGET');
+  const err = new RunBlocked(t("Your organisation's daily AI limit has been reached. It resets tomorrow."), 'BUDGET');
   await auditBlocked({ feature, pack, config, values, err, logAudit });
   throw err;
 }
@@ -376,9 +378,9 @@ export async function assertWithinPolicyBudget({ policy, tokensUsedToday, featur
 /** Machine-readable reason for the audit log (never the message, which could echo content). */
 export function errorReason(err) {
   if (err?.code && /^[A-Z_]{2,30}$/.test(err.code)) return err.code;
-  if (/rejected the API key/i.test(String(err?.message))) return 'BAD_KEY';
+  if (/did not accept the AI key/i.test(String(err?.message))) return 'BAD_KEY';
   if (/rate limit/i.test(String(err?.message))) return 'RATE_LIMIT';
-  if (/cap reached/i.test(String(err?.message))) return 'BUDGET';
+  if (/limit is reached/i.test(String(err?.message))) return 'BUDGET';
   return 'PROVIDER_ERROR';
 }
 

@@ -9,13 +9,13 @@
 
 import { isSensitiveTable } from '../context/kinds.js';
 import { resolveRealClass } from '../context/pack.js';
-import { SYS_ID_RE, TABLE_RE, disp } from '../context/util.js';
+import { SYS_ID_RE, TABLE_RE, disp, raw } from '../context/util.js';
 
 /**
  * @param {{ table: string, sysId: string, allowSensitive?: boolean }} args from the panel (validated here)
  * @param {{ guard: { deps: Function, allowSensitive: Function }, deps: { queryTable: Function }, policy?: object }} context
  *   policy: the panel's normalised policy, merged with the managed one by the guard (it can only make the read stricter)
- * @returns {Promise<{ number: string, short_description: string, state: string, priority: string, major_incident_state?: string }>}
+ * @returns {Promise<{ number: string, short_description: string, state: string, stateValue: string, priority: string, major_incident_state?: string }>}
  */
 export async function readHeader(args, { guard, deps, policy = null }) {
   const table = args?.table;
@@ -36,7 +36,11 @@ export async function readHeader(args, { guard, deps, policy = null }) {
     number: disp(row.number),
     short_description: withheld ? '' : disp(row.short_description),
     state: disp(row.state),
+    // The state as ServiceNow stores it ('3'): the same row, no new read. A renamed or translated state is still understood by it (src/domain/states.js).
+    stateValue: raw(row.state),
     priority: disp(row.priority),
     ...(row.major_incident_state !== undefined ? { major_incident_state: disp(row.major_incident_state) } : {}),
+    // The title was not asked for (a sensitive ticket) or did not come back (a column the person cannot read): that is not an empty title.
+    ...(withheld || !Object.hasOwn(row, 'short_description') ? { titleHidden: true } : {}),
   };
 }

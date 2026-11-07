@@ -8,6 +8,7 @@ import { FORM_FIELD_NAMES, MAX_FORM_TEXT } from './formFields.js';
 import { isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { TABLE_RE } from '../context/util.js';
 import { isolate, t, tm } from '../i18n/index.js';
+import { tableLabel } from '../lib/tableLabels.js';
 
 export { MAX_FORM_TEXT };
 
@@ -134,9 +135,11 @@ export function buildComposePack({ text, people = [], label = 'Text to rewrite',
 /**
  * Why text may not be read from the open form into a rewrite ('' when it may): the organisation blocks the table, or it is an
  * HR table and HR content is not allowed, or the field itself is blocked. The same rules the run would hit later, said up front.
+ * `instanceLabel`: what the instance calls this kind of record, when the caller has read it (the display value of sys_class_name).
  */
-export function formReadRefusal(table, field, policy) {
-  if (table && !isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {table} records.', { table: isolate(table) });
+export function formReadRefusal(table, field, policy, instanceLabel = '') {
+  // (the table is said as a plain noun in the plural: 'HR cases', 'requested items', never its name)
+  if (table && !isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {type}.', { type: tableLabel(table, { plural: true, instanceLabel }) });
   // (the policy's own sensitive prefixes count too, as they do when the run is prepared: src/lib/pipeline.js)
   if (table && isSensitiveByPolicy(table, policy) && !policy?.allowHrContent) return t('HR case content is not sent to an AI model unless your organisation allows it. Ask your administrator.');
   if (field && (policy?.blockedFields || []).includes(String(field).toLowerCase())) return t('Your organisation does not allow the {field} field to be sent to an AI model.', { field: isolate(field) });

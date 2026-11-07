@@ -39,7 +39,7 @@ const failureText = (read, texts) => texts[read.status] || read.note;
  */
 export async function readCoachingSample(request, { deps, userId, blocked = [], isBlocked = null, now = Date.now() }) {
   if (!SYS_ID_RE.test(userId || '')) throw new Error(tm('Agent Buddy could not tell who is signed in. Reload the page and try again.'));
-  if (request.tables.some(isSensitiveTable)) throw new Error(tm('HR case tables are never used for coaching.'));
+  if (request.tables.some(isSensitiveTable)) throw new Error(tm('HR cases are never used for coaching.'));
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LIMITS.sectionTimeoutMs);
@@ -85,7 +85,7 @@ export async function readCoachingSample(request, { deps, userId, blocked = [], 
     // 3. The tickets this group resolved in the chosen days.
     const probed = await probeTables(reader, normalizeTables(request.tables));
     const usable = probed.filter((t) => t.usable);
-    if (!usable.length) return fail('NO_TABLE', tm('None of the ticket tables can be read with your access.'));
+    if (!usable.length) return fail('NO_TABLE', tm('None of the ticket types can be read with your access.'));
     const found = await Promise.all(
       usable.map(async (t) => {
         const col = resolvedColumn(t);

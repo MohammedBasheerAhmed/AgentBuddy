@@ -236,7 +236,8 @@ test('routingLookalikes returns solved look-alikes with their assignment group a
   const calls = deps.calls.filter((c) => c.table === 'incident');
   assert.equal(calls.length, 2);
   assert.match(calls[1].query, /^sys_idIN[0-9a-f,]+$/);
-  assert.deepEqual(calls[1].fields, ['sys_id', 'assignment_group', 'priority', 'subcategory']);
+  // (assignment_group.active, W-15: whether the group is still in use, walked from the group in this same read; tests/finish-routing.test.js)
+  assert.deepEqual(calls[1].fields, ['sys_id', 'assignment_group', 'assignment_group.active', 'priority', 'subcategory']);
   assert.ok(deps.calls.every((c) => c.fn === 'queryTable'), 'the read functions are the GET-only client\'s');
 });
 

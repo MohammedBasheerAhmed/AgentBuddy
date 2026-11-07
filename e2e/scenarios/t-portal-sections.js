@@ -118,7 +118,7 @@ module.exports = {
     await runAfter(p, () => clickButton(p, /^Write the ticket/));
     await waitForText(p, 'Review, then fill the form', { timeout: 8000 });
     const plan = await p.evaluate(() => ({ off: window.__vis(document.querySelectorAll('button')).find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled, reason: document.querySelector('[aria-label="Review before filling the form"] .ab-note[role="status"]')?.innerText || '' }));
-    t.check('Notes to ticket on a portal: the form cannot be filled (no blank classic form): the button is off and says why; Copy is there', plan.off === true && /only offered on a blank ticket form/.test(plan.reason), JSON.stringify(plan));
+    t.check('Notes to ticket on a portal: the form cannot be filled (no blank classic form): the button is off and says why; Copy is there', plan.off === true && /works on a new, empty incident or case form/.test(plan.reason), JSON.stringify(plan));
 
     t.check('the Write screen has no email tools on a portal either (they moved to the Ticket screen)', !/Which email fits|Suggested emails/.test(await p.evaluate(() => document.body.innerText)));
     // ---- Ticket screen on the portal: "Ready to resolve?" has no form to read --------------------------------------------------------

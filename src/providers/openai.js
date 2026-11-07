@@ -56,9 +56,9 @@ export async function fetchModelsBody({ apiKey, baseUrl = '', fetchFn, signal, s
     });
     return { host, body };
   } catch (err) {
-    if (err?.code === 'BAD_KEY' || err?.code === 'NO_ACCESS') throw new AiError(t('{host} rejected the API key. Check it and try again.', { host: isolate(host) }), err.code);
+    if (err?.code === 'BAD_KEY' || err?.code === 'NO_ACCESS') throw new AiError(t('{host} did not accept the AI key. Check it and try again.', { host: isolate(host) }), err.code);
     if (err?.code === 'BAD_ANSWER') return { host, body: null }; // not JSON (a sign-in page): "answered, but with no models"
-    if (err?.status && err.status !== 429 && err.status < 500) throw new AiError(t('{host} does not give a list of its models (answer {status}). Type the model name instead.', { host: isolate(host), status: err.status }), 'NO_LIST');
+    if (err?.status && err.status !== 429 && err.status < 500) throw new AiError(t('{host} does not give a list of its models. Type the model name instead.', { host: isolate(host) }), 'NO_LIST');
     throw err;
   }
 }
@@ -70,10 +70,8 @@ export async function fetchModelsBody({ apiKey, baseUrl = '', fetchFn, signal, s
  * provider's name for messages. `signal` cancels; `timeoutMs`, `fetchFn` and `sleep` are passed to http.js.
  */
 export async function sendOpenAI({ apiKey, model = OPENAI_MODEL, messages, baseUrl = '', azure = null, keyOptional = false, name = '', signal, timeoutMs, fetchFn, sleep }) {
-  const who = name || (baseUrl ? t('The endpoint {host}', { host: isolate(hostOf(baseUrl)) }) : 'OpenAI');
-  if (!apiKey && !keyOptional) {
-    throw new AiError(!baseUrl && !name ? t('Missing OpenAI API key. Configure it in the Agent Buddy settings.') : t('Missing API key for {who}. Configure it in the Agent Buddy settings.', { who }), 'NO_KEY');
-  }
+  const who = name || (baseUrl ? t('The AI service at {host}', { host: isolate(hostOf(baseUrl)) }) : 'OpenAI');
+  if (!apiKey && !keyOptional) throw new AiError(t('Add your AI key in Settings to use AI.'), 'NO_KEY');
   const wire = toOpenAIMessages(messages);
   const body = { model, messages: wire };
   if (!FIXED_TEMPERATURE.test(model)) body.temperature = 0.2;

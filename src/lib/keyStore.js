@@ -99,7 +99,7 @@ const PROVIDER_RE = /^[a-z0-9_-]{1,40}$/;
 const slot = (provider) => `${KEY_SLOT_PREFIX}${provider}`;
 const encSlot = (provider) => `${ENC_SLOT_PREFIX}${provider}`;
 const checkProvider = (provider) => {
-  if (!PROVIDER_RE.test(String(provider || ''))) throw new Error('Unknown AI provider.');
+  if (!PROVIDER_RE.test(String(provider || ''))) throw new Error('Unknown AI service.');
 };
 
 const noVault = () => t('This browser does not let Agent Buddy keep the key in its own storage. Choose "Memory only" under "Where to keep the key".');

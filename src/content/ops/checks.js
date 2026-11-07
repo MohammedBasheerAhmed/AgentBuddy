@@ -8,7 +8,7 @@
 // Both are GET-only (the context deps) plus the page bridge's reads of what is typed on the page (getFormValues on a form with
 // g_form, getBoxValues on a Workspace page). Arguments are validated; whatever the page world answers is treated as untrusted
 // data and cut down to the fixed lists below.
-import { STATUS, confirmEmptyIsReallyEmpty, softRead } from '../../context/access.js';
+import { NOTE_TEXT, STATUS, confirmEmptyIsReallyEmpty, softRead, tm } from '../../context/access.js';
 import { LINK_SOURCES, detectLinkColumn } from '../../context/knowledge.js';
 import { kindForTable } from '../../context/kinds.js';
 import { SYS_ID_RE, raw, sameId } from '../../context/util.js';
@@ -111,16 +111,40 @@ async function readBoxValues({ table, sysId }, callPage, currentRecord) {
 
 const link = (status, note = '') => ({ status, note });
 
+// What the link checks say when they cannot be sure (fixed sentences that name no table; the Check tab puts them in a line).
+const LINK_NOTE = Object.freeze({
+  problemDenied: tm('You cannot see whether a problem is linked to this ticket.'),
+  problemUnread: tm('The problem link could not be read.'),
+  problemAgain: tm('The problem link could not be checked just now.'),
+  problemUnchecked: tm('The problem link could not be checked.'),
+  articleDenied: tm('You cannot see which articles are linked to this ticket.'),
+  articleHidden: tm('Agent Buddy cannot tell whether an article is linked: you can see none of the links at all.'),
+  articleBlocked: tm('Your organisation does not let Agent Buddy read the article links.'),
+  articleUnread: tm('The article links could not be checked just now.'),
+  articleUnchecked: tm('The article link could not be checked.'),
+  noRequest: tm('This ticket is not part of a catalog request.'),
+  taskAlone: tm('You cannot see the requested item this task belongs to. Showing the task on its own.'),
+  taskAloneUnread: tm('The requested item this task belongs to could not be read just now. Showing the task on its own.'),
+  taskNoItem: tm('This task has no requested item you can see. Showing the task on its own.'),
+});
+
+// One sentence for what an article-link read could not do, whichever table it was (a closed set: no name of a table reaches a person).
+function articleNote(status, note) {
+  if (status === STATUS.DENIED) return LINK_NOTE.articleDenied;
+  if (status === STATUS.EMPTY_OR_HIDDEN) return LINK_NOTE.articleHidden;
+  if (status === STATUS.BLOCKED) return LINK_NOTE.articleBlocked;
+  return note === NOTE_TEXT.ignoredFilter ? NOTE_TEXT.ignoredFilter : LINK_NOTE.articleUnread;
+}
 // A linked problem: only an incident has `problem_id`. 'yes' | 'no' | 'unknown' | 'na'.
 async function problemLink({ table, sysId }, deps) {
   if (table !== 'incident') return link('na');
   const { rows, failure } = await softRead(deps, 'incident', `sys_id=${sysId}`, ['sys_id', 'problem_id'], { limit: 1, displayValue: false });
   if (failure) {
-    const why = failure.status === STATUS.DENIED ? 'You cannot read the problem link on this incident.' : failure.status === STATUS.BLOCKED ? failure.note : 'The problem link could not be read.';
+    const why = failure.status === STATUS.DENIED ? LINK_NOTE.problemDenied : failure.status === STATUS.BLOCKED ? failure.note : LINK_NOTE.problemUnread;
     return link('unknown', why);
   }
   const row = rows.find((r) => sameId(raw(r.sys_id), sysId));
-  if (!row) return link('unknown', 'The incident could not be read again to check its problem link.');
+  if (!row) return link('unknown', LINK_NOTE.problemAgain);
   return SYS_ID_RE.test(raw(row.problem_id)) ? link('yes') : link('no');
 }
 
@@ -132,26 +156,26 @@ const KB_ARTICLE_COLUMN = { m2m_kb_task: 'kb_knowledge', kb_use: 'article' };
 
 async function knowledgeLink({ sysId }, deps) {
   const memo = new Map();
-  const unsure = [];
+  const unsure = new Set(); // (the sentences are a closed set: two tables that fail the same way say it once)
   let sawTable = false;
   for (const source of LINK_SOURCES) {
     // eslint-disable-next-line no-await-in-loop -- two or three small reads, kept in order.
     const detected = await detectLinkColumn(source.table, source.columns, deps, memo);
     if (detected.failure) {
       const f = detected.failure;
-      unsure.push(f.status === STATUS.DENIED ? `You cannot read ${source.table}.` : f.status === STATUS.EMPTY_OR_HIDDEN ? `Your user sees no rows of ${source.table}, so "none" cannot be confirmed.` : f.note);
+      unsure.add(articleNote(f.status, f.note));
       continue;
     }
     const column = detected.column;
     // eslint-disable-next-line no-await-in-loop
     const { rows, failure } = await softRead(deps, source.table, `${column}=${sysId}`, [column, KB_ARTICLE_COLUMN[source.table]], { limit: 5, displayValue: false });
     if (failure) {
-      unsure.push(failure.status === STATUS.DENIED ? `You cannot read ${source.table}.` : failure.note);
+      unsure.add(articleNote(failure.status, failure.note));
       continue;
     }
     if (rows.length) {
       if (rows.some((r) => !sameId(raw(r[column]), sysId))) {
-        unsure.push(`${source.table} did not apply the filter on this ticket, so it was not used.`);
+        unsure.add(NOTE_TEXT.ignoredFilter);
         continue;
       }
       return link('yes');
@@ -164,9 +188,9 @@ async function knowledgeLink({ sysId }, deps) {
     // eslint-disable-next-line no-await-in-loop
     const seen = await confirmEmptyIsReallyEmpty(source.table, deps, memo);
     if (seen.status === STATUS.EMPTY) sawTable = true;
-    else unsure.push(seen.status === STATUS.EMPTY_OR_HIDDEN ? `Your user sees no rows of ${source.table}, so "none" cannot be confirmed.` : seen.note || `${source.table} could not be checked.`);
+    else unsure.add(articleNote(seen.status, seen.note));
   }
-  return sawTable ? link('no') : link('unknown', unsure.join(' ').slice(0, 300));
+  return sawTable ? link('no') : link('unknown', [...unsure].join(' ').slice(0, 300));
 }
 
 // The form and the links do not depend on each other, and neither may fail the whole answer. A lost session (or a cancelled
@@ -189,8 +213,8 @@ async function resolutionFacts(args, { deps, checkRecord, currentRecord = null }
   const record = { table: args.table, sysId: args.sysId.toLowerCase() };
   const [typed, problem, knowledge] = await Promise.all([
     settle(readFormValues(record, callPage, { currentRecord }), null),
-    settle(problemLink(record, deps), link('unknown', 'The problem link could not be checked.')),
-    settle(knowledgeLink(record, deps), link('unknown', 'The article link could not be checked.')),
+    settle(problemLink(record, deps), link('unknown', LINK_NOTE.problemUnchecked)),
+    settle(knowledgeLink(record, deps), link('unknown', LINK_NOTE.articleUnchecked)),
   ]);
   return { form: typed ? typed.values : null, formSource: typed ? typed.source : null, links: { problem, knowledge } };
 }
@@ -201,13 +225,14 @@ async function requestTarget(args, { deps, checkRecord }) {
   checkRecord(args);
   const { table, sysId } = args;
   if (table === 'sc_req_item' || table === 'sc_request') return { table, sysId: sysId.toLowerCase(), note: '' };
-  if (table !== 'sc_task') throw new Error('This record is not part of a catalog request.');
+  if (table !== 'sc_task') throw new Error(LINK_NOTE.noRequest);
   const { rows, failure } = await softRead(deps, 'sc_task', `sys_id=${sysId}`, ['sys_id', 'request_item'], { limit: 1, displayValue: false });
   const found = rows.find((r) => sameId(raw(r.sys_id), sysId));
   const itemId = found ? raw(found.request_item) : '';
   if (SYS_ID_RE.test(itemId)) return { table: 'sc_req_item', sysId: itemId.toLowerCase(), note: '' };
-  const why = failure ? failure.note : 'This task has no requested item you can see.';
-  return { table: 'sc_task', sysId: sysId.toLowerCase(), note: `${why} Showing the task on its own.` };
+  // (the task is shown on its own, and the reason is one of three fixed sentences)
+  const note = failure ? (failure.status === STATUS.DENIED ? LINK_NOTE.taskAlone : LINK_NOTE.taskAloneUnread) : LINK_NOTE.taskNoItem;
+  return { table: 'sc_task', sysId: sysId.toLowerCase(), note };
 }
 
 /** The operations, with the page bridge swappable (tests pass a fake). */

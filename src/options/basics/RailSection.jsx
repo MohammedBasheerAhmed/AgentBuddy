@@ -123,7 +123,7 @@ export function RailSection({ eff, reload }) {
       </div>
       {v.pageBar !== false && picks.items.length > 0 && (
         <div className="ab-set-rail-page">
-          <ChoiceTabs label={t('Kind of record')} idBase="rail-kind" items={kinds} value={kind.id} onChange={setKind} />
+          <ChoiceTabs label={t('Kind of ticket')} idBase="rail-kind" items={kinds} value={kind.id} onChange={setKind} />
           <div id={PANEL_ID} role="tabpanel" aria-labelledby={`rail-kind-tab-${kind.id}`}>
             <div className="ab-set-rail-head">
               <span className="ab-set-rail-subhead" id={PAGE_TITLE_ID}>{t('Its actions for {kinds} (up to {max})', { kinds: kind.many, max: MAX_QUICK })}</span>

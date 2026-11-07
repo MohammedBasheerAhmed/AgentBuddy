@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Tile, DataTable } from '../charts/index.js';
 import DrillLink from '../charts/DrillLink.jsx';
 import SectionShell from './SectionShell.jsx';
-import Summary from './Summary.jsx';
+import Foldable from './Foldable.jsx';
 import { useSection } from './useSection.js';
 import { t } from '../../i18n/index.js';
 import { shown } from '../../reports/shown.js';
@@ -25,44 +25,46 @@ export function OverviewBody({ d, env }) {
 
   return (
     <>
-      <div className="ab-tiles">
-        {tiles.map((x) => (
-          <Tile
-            key={x.key}
-            label={shown(x.label)}
-            value={x.value}
-            hint={shown(x.unavailable && x.note ? x.note : x.hint)}
-            unavailable={x.unavailable}
-            tone={x.value > 0 && TONE[x.key] ? TONE[x.key] : 'neutral'}
-            onOpen={x.drills?.length ? () => open(x) : undefined}
-            href={x.drills?.length === 1 ? hrefOf(x.drills[0]) : ''}
-            expanded={x.drills?.length > 1 ? picked?.key === x.key : undefined}
-          />
-        ))}
-      </div>
-      {picked && (
-        <div className="ab-pick" role="group" aria-label={t('Open {name} in ServiceNow', { name: shown(picked.label) })}>
-          <span className="ab-hint">{t('Open in ServiceNow:')}</span>
-          {picked.drills.map((dr) =>
-            hrefOf(dr) ? (
-              <DrillLink key={dr.table} className="ab-btn ab-btn-sm ab-pick-link" href={hrefOf(dr)} onOpen={() => env.openList(dr.table, dr.query)} label={t('{name}. Open the list.', { name: `${shown(dr.label)}: ${dr.count}` })}>
-                {shown(dr.label)} ({dr.count})
-              </DrillLink>
-            ) : (
-              <button key={dr.table} type="button" className="ab-btn ab-btn-sm" onClick={() => env.openList(dr.table, dr.query)}>
-                {shown(dr.label)} ({dr.count})
-              </button>
-            )
-          )}
+      <Foldable id="overview" title={t('Overview')}>
+        <div className="ab-tiles">
+          {tiles.map((x) => (
+            <Tile
+              key={x.key}
+              label={shown(x.label)}
+              // an SLA count from a read that stopped early is "at least": 12+, with the reason in the hint
+              value={x.atLeast && Number.isFinite(x.value) ? `${x.value}+` : x.value}
+              hint={shown(x.unavailable && x.note ? x.note : x.hint)}
+              unavailable={x.unavailable}
+              tone={x.value > 0 && TONE[x.key] ? TONE[x.key] : 'neutral'}
+              onOpen={x.drills?.length ? () => open(x) : undefined}
+              href={x.drills?.length === 1 ? hrefOf(x.drills[0]) : ''}
+              expanded={x.drills?.length > 1 ? picked?.key === x.key : undefined}
+            />
+          ))}
         </div>
-      )}
+        {picked && (
+          <div className="ab-pick" role="group" aria-label={t('Open {name} in ServiceNow', { name: shown(picked.label) })}>
+            <span className="ab-hint">{t('Open in ServiceNow:')}</span>
+            {picked.drills.map((dr) =>
+              hrefOf(dr) ? (
+                <DrillLink key={dr.table} className="ab-btn ab-btn-sm ab-pick-link" href={hrefOf(dr)} onOpen={() => env.openList(dr.table, dr.query)} label={t('{name}. Open the list.', { name: `${shown(dr.label)}: ${dr.count}` })}>
+                  {shown(dr.label)} ({dr.count})
+                </DrillLink>
+              ) : (
+                <button key={dr.table} type="button" className="ab-btn ab-btn-sm" onClick={() => env.openList(dr.table, dr.query)}>
+                  {shown(dr.label)} ({dr.count})
+                </button>
+              )
+            )}
+          </div>
+        )}
+      </Foldable>
       {d.perTable?.length > 1 && (
-        <details className="ab-details">
-          <Summary>{t('By table')}</Summary>
+        <Foldable id="overview-by-type" title={t('By ticket type')}>
           <DataTable
-            caption={t('Overview by table')}
+            caption={t('Overview by ticket type')}
             columns={[
-              { key: 'label', label: t('Table') },
+              { key: 'label', label: t('Ticket type') },
               { key: 'open', label: shown('Open'), align: 'right' },
               ...(env.scopeKind === 'mine' ? [] : [{ key: 'unassigned', label: t('Unassigned'), align: 'right' }]),
               { key: 'stale', label: t('Stale'), align: 'right' },
@@ -73,7 +75,7 @@ export function OverviewBody({ d, env }) {
             ]}
             rows={d.perTable.map((r) => ({ ...r, label: shown(r.label) }))}
           />
-        </details>
+        </Foldable>
       )}
     </>
   );

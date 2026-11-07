@@ -45,8 +45,8 @@ test('a snippet file: only a .json file of a sane size is read; the name has the
   assert.equal(fileProblem({ name: 'agent-buddy-snippets.json', size: 120, type: 'application/json' }), '');
   assert.equal(fileProblem({ name: 'snippets.JSON', size: 120, type: '' }), '', 'Windows often gives no type');
   assert.equal(fileProblem({ name: 'snippets.json', size: 120, type: 'text/plain' }), '');
-  assert.match(fileProblem({ name: 'snippets.txt', size: 120, type: 'text/plain' }), /\.json file/);
-  assert.match(fileProblem({ name: 'snippets.json', size: 120, type: 'application/x-msdownload' }), /\.json file/);
+  assert.match(fileProblem({ name: 'snippets.txt', size: 120, type: 'text/plain' }), /snippet file/);
+  assert.match(fileProblem({ name: 'snippets.json', size: 120, type: 'application/x-msdownload' }), /snippet file/);
   assert.match(fileProblem({ name: 'snippets.json', size: 0, type: 'application/json' }), /empty/);
   assert.match(fileProblem({ name: 'snippets.json', size: MAX_FILE_BYTES + 1, type: 'application/json' }), /too large/);
   assert.match(fileProblem(null), /Choose a file/);
@@ -64,7 +64,7 @@ test('a file saved with a byte-order mark imports like the export it came from; 
   assert.equal(result.skipped, 1);
   assert.match(result.errors[0], /the search word "hi" is already used|already in your library/);
   assert.deepEqual(result.list.map((s) => s.title), ['Greeting', 'Closing']);
-  assert.equal(importSnippets(text, own).errors[0], 'This is not a valid JSON file.', 'with the mark left in, the JSON does not parse');
+  assert.equal(importSnippets(text, own).errors[0], 'This is not a snippet file from Agent Buddy.', 'with the mark left in, the JSON does not parse');
 });
 
 // Audit P3.10: whatever "Save to a file" writes, "Add from a file" reads back: a full library of the longest snippets, written in a

@@ -7,10 +7,13 @@
 //               N days (or ever, on a ticket opened N days ago): send a status update. Only for tickets that have a customer (an
 //               incident, a request, a case...).
 //
+// Never on a catalog task, a problem or the task of another ticket (src/mywork/tables.js reachesCustomer): the requester reads the requested item
+// and not its tasks, so a word to "the customer" on the task would reach nobody (audit of 2026-11-07, F5).
+//
 // "N days" needs the comments: when they could not be read (marker.known false), nothing is claimed. When the read of comments was
 // capped (marker.since > 0) a ticket with no comment in the window has had none since `since`; that proves "N days" only when
 // `since` is itself N days ago.
-import { hasCustomer } from './tables.js';
+import { hasCustomer, reachesCustomer } from './tables.js';
 import { DAY, wholeDaysSince } from './time.js';
 import { groupOf } from './rank.js';
 import { t, tn } from '../i18n/index.js';
@@ -61,6 +64,7 @@ export function followUps(items, { now, days = DEFAULT_FOLLOW_UP_DAYS }) {
   const out = [];
   for (const item of items || []) {
     if (!item?.marker?.known || item.work === 'resolved') continue;
+    if (!reachesCustomer(item.type || item.table)) continue;
     const m = item.marker;
     if (item.work === 'waiting-customer') {
       if (m.replied === 'customer' || m.replied === 'other') {

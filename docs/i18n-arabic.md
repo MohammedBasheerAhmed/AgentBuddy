@@ -69,7 +69,7 @@ no Arabic entry.
 | masked (personal details hidden) | مُخفاة |
 | personal data | البيانات الشخصية |
 | your organisation | مؤسستك |
-| administrator | مسؤول النظام |
+| administrator (Agent Buddy settings) / ServiceNow admin (access to ServiceNow) | مسؤول النظام / مسؤول ServiceNow |
 | policy | سياسة |
 | draft | مسودة |
 | reply | رد |
@@ -90,7 +90,7 @@ no Arabic entry.
 | breached / due / overdue | متجاوز / مستحق / متأخر |
 | today / yesterday / ago | اليوم / أمس / منذ |
 | passphrase / token / call (a request to the AI) | عبارة المرور / رمز / استدعاء |
-| instance (a ServiceNow site) / deployment / endpoint | مثيل / النشر / نقطة النهاية |
+| ServiceNow site (never "instance") / AI service / AI address / deployment | موقع ServiceNow / خدمة الذكاء الاصطناعي / عنوان الذكاء الاصطناعي / النشر |
 
 When a term is not here, use the word ServiceNow itself uses in its Arabic interface if you know it, otherwise the plainest Arabic word.
 Add the term to this table so the next text uses the same one.

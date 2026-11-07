@@ -4,10 +4,10 @@
 // text that belongs on the form) and `when(record, header)` (state rules, src/features/stages.js). An insert may name the `kinds`
 // it is for (the problem form has no resolution-notes box) and a `mode` ('replace' for notes that are rewritten as a whole).
 import { packToParts } from '../parts.js';
-import { ALL_TASKS, WORKABLE } from './kinds.js';
+import { ALL_TASKS, CLOSE_NOTES_KINDS, CUSTOMER_COMMENT_KINDS, HANDOFF_KINDS, NOTE_FIRST_KINDS, WORKABLE, requesterCommentLabel } from './kinds.js';
 import { relatedParts } from '../../itsm/parts.js';
 import { pickCauseNotes, pickFixNotes, pickRequesterQuestions, pickResolutionNotes } from '../picks.js';
-import { hasCustomer, notClosed, notNew } from '../stages.js';
+import { notNew, notClosed, replyable } from '../stages.js';
 import { rulesFor } from '../../prompts/rules.js';
 import { t, tm } from '../../i18n/index.js';
 
@@ -56,10 +56,16 @@ const CORE = [
     kinds: WORKABLE,
     group: 'reply',
     primary: 'insert',
-    // Not on a closed ticket (nobody is waiting for a reply), nor on a task of a problem or a change (there is no customer).
-    when: (record, header) => notClosed(record, header) && hasCustomer(record),
+    // Not on a closed ticket (nobody is waiting for a reply), nor on a problem or a task of a problem or a change (there is no customer).
+    when: replyable,
     journal: 10,
-    insert: { field: 'comments', get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments') },
+    // The channel follows the kind (audit of 2026-11-07, W-02): a customer comment where the customer reads it; on a catalog task or
+    // another task the requester may not see comments, so the work notes come first and the comment is the second, warned choice.
+    insert: [
+      { field: 'comments', kinds: CUSTOMER_COMMENT_KINDS, get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments') },
+      { field: 'work_notes', kinds: NOTE_FIRST_KINDS, get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes') },
+      { field: 'comments', kinds: NOTE_FIRST_KINDS, get label() { return requesterCommentLabel(); }, labelFor: requesterCommentLabel, fieldLabel: tm('Additional comments') },
+    ],
     system:
       'You help a service desk agent reply to the person who raised a ticket.\n' +
       'Write the next customer-visible reply to the most recent customer message, using the rest of the ticket for context.\n' +
@@ -80,7 +86,7 @@ const CORE = [
       return t('Cause, fix and how it was checked, from the notes and comments.');
     },
     wave: 1,
-    kinds: ['incident', 'problem', 'requested_item', 'catalog_task', 'case', 'task'], // not 'request': its ceiling has no close_notes
+    kinds: CLOSE_NOTES_KINDS, // not 'request': its ceiling has no close_notes. A change and an HR case have it (W-09, W-10); what the lines say for each kind: src/features/kindWords.js
     group: 'resolve',
     primary: 'insert',
     when: notNew, // a ticket that has just come in has nothing to write up yet
@@ -92,7 +98,7 @@ const CORE = [
     // notes", the request and task forms "Close notes", and a problem has "Cause notes" and "Fix notes" instead (no close_notes).
     insert: [
       { field: 'close_notes', kinds: ['incident', 'case'], get label() { return t('Insert into resolution notes'); }, fieldLabel: tm('Resolution notes'), mode: 'replace', pick: pickResolutionNotes },
-      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], get label() { return t('Insert into close notes'); }, fieldLabel: tm('Close notes'), mode: 'replace', pick: pickResolutionNotes },
+      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task', 'change', 'hr_case'], get label() { return t('Insert into close notes'); }, fieldLabel: tm('Close notes'), mode: 'replace', pick: pickResolutionNotes },
       { field: 'fix_notes', kinds: ['problem'], get label() { return t('Insert into fix notes'); }, fieldLabel: tm('Fix notes'), mode: 'replace', pick: pickFixNotes },
       { field: 'cause_notes', kinds: ['problem'], get label() { return t('Insert the cause into cause notes'); }, fieldLabel: tm('Cause notes'), mode: 'replace', pick: pickCauseNotes },
     ],
@@ -119,7 +125,7 @@ const CORE = [
       return t('A structured note so the next person does not re-ask the customer.');
     },
     wave: 1,
-    kinds: WORKABLE,
+    kinds: HANDOFF_KINDS,
     group: 'work',
     primary: 'insert', // it is written for the work notes, where the next person looks
     when: notClosed,
@@ -146,11 +152,16 @@ const CORE = [
     kinds: WORKABLE,
     group: 'reply',
     primary: 'insert',
-    when: (record, header) => notClosed(record, header) && hasCustomer(record),
+    when: replyable,
     journal: 8,
     parts: withRelated('missing-info', 8),
-    // The "Missing:" line is the agent's checklist: only the questions go into the customer comment (src/features/picks.js).
-    insert: { field: 'comments', get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments'), pick: pickRequesterQuestions },
+    // The "Missing:" line is the agent's checklist: only the questions go into the customer comment (src/features/picks.js). The channel
+    // follows the kind, as for "Draft a reply to the customer" above.
+    insert: [
+      { field: 'comments', kinds: CUSTOMER_COMMENT_KINDS, get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments'), pick: pickRequesterQuestions },
+      { field: 'work_notes', kinds: NOTE_FIRST_KINDS, get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes'), pick: pickRequesterQuestions },
+      { field: 'comments', kinds: NOTE_FIRST_KINDS, get label() { return requesterCommentLabel(); }, labelFor: requesterCommentLabel, fieldLabel: tm('Additional comments'), pick: pickRequesterQuestions },
+    ],
     system:
       'You help a service desk agent get the information needed to resolve a ticket.\n' +
       'First write one line starting "Missing:" that lists, for the agent, the key details not yet in the ticket (for example affected user or device, exact error text, when it started, steps to reproduce, business impact).\n' +

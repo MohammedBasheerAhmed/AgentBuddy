@@ -211,13 +211,13 @@ test('the message the panel sends: the one-line rule, the default expectation an
 
 test('what the person reads', () => {
   assert.equal(wrongRecordText({ expect: { table: 'incident', sysId: A }, number: 'INC0010001' }), 'This was written for INC0010001. Open that ticket again, or use Copy.');
-  assert.match(wrongRecordText({ expect: { table: 'incident', sysId: A } }), /^This was written for another incident record\. Open that ticket again, or use Copy\.$/);
-  assert.match(wrongRecordText({ expect: { table: 'kb_knowledge', newRecord: true } }), /a new kb_knowledge form/);
+  assert.match(wrongRecordText({ expect: { table: 'incident', sysId: A } }), /^This was written for another incident\. Open that ticket again, or use Copy\.$/);
+  assert.match(wrongRecordText({ expect: { table: 'kb_knowledge', newRecord: true } }), /a new knowledge article form/);
   assert.match(wrongRecordText({ expect: { email: true, table: 'incident', sysId: A }, number: 'INC1' }), /email form of INC1/);
-  assert.match(wrongRecordText(null), /another record/);
-  assert.equal(insertedNote({ ok: true, method: 'gform' }), 'Inserted into the form. Review it, then save the record yourself.');
+  assert.match(wrongRecordText(null), /another ticket/);
+  assert.equal(insertedNote({ ok: true, method: 'gform' }), 'Inserted into the form. Review it, then save the ticket yourself.');
   assert.match(insertedNote({ ok: true, method: 'dom', label: 'Additional comments' }), /box labelled "Additional comments"/);
-  assert.equal(insertedNote({ ok: true, method: 'dom' }), 'Inserted into the form. Review it, then save the record yourself.');
+  assert.equal(insertedNote({ ok: true, method: 'dom' }), 'Inserted into the form. Review it, then save the ticket yourself.');
   for (const reason of FILL_REASONS) assert.ok(FILL_REASON_TEXT[reason].length > 10, reason);
   assert.ok(FILL_REASONS.includes('wrong-record'));
 });

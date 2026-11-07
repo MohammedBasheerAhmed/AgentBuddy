@@ -7,6 +7,7 @@
 
 import { isolate, t } from '../i18n/index.js';
 import { similarKeywords } from '../lib/similar.js';
+import { personWords } from './personWords.js';
 import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -68,9 +69,11 @@ const fold = (v) => text(v).toLowerCase();
  * configuration item. No AI; nothing is read for it (the `history` read the "Same caller" card makes, and the ticket's own fields).
  * @param {{ short_description?: string, category?: string, cmdb_ci?: string }} ticket  this ticket's fields (display values)
  * @param {{ items?: object[] } | null} history  the history read (the caller's OTHER tickets, oldest first)
+ * @param {{ kind?: string, table?: string } | null} [subject]  the ticket (its pack): the person is named as the kind names them, "from the
+ *   same requester" on a requested item (F11); without it the incident's "caller"
  * @returns {{ number: string, table: string, sysId: string, line: string } | null}  table and sysId '' when they cannot be linked
  */
-export function repeatOfCaller(ticket, history) {
+export function repeatOfCaller(ticket, history, subject = null) {
   const wanted = new Set(similarKeywords(text(ticket?.short_description), 4));
   if (!wanted.size) return null;
   const category = fold(ticket?.category);
@@ -89,7 +92,7 @@ export function repeatOfCaller(ticket, history) {
       number: number.toUpperCase(),
       table: linkable ? text(item.table) : '',
       sysId: linkable ? text(item.sysId).toLowerCase() : '',
-      line: t('{number} from the same caller is the same issue: link it, or raise a problem if it comes back.', { number: isolate(number.toUpperCase()) }),
+      line: personWords(subject).sameIssue(isolate(number.toUpperCase())),
     };
   }
   return null;

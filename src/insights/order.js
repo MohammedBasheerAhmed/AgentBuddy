@@ -1,19 +1,18 @@
 // The order of the Ticket screen's Insights cards: what matters for the ticket's state comes first (TRACKER.md 2.4, "only what your
 // work needs"). A New ticket wants missing details and routing; one In progress wants fixes; one waiting wants the right email; a
-// resolved one wants "Ready to resolve?". Pure: the state is read from the header (display text, so any language of the state names
-// that uses these words works; anything else falls back to the in-progress order).
+// resolved one wants "Ready to resolve?". Pure: what the state MEANS is read in one place (src/domain/states.js, docs/states.md): the
+// stored value of the header's state by table first, then the words of its label in any of the languages it knows; a state it does not
+// know falls back to the in-progress order.
 
-const text = (v) => (typeof v === 'string' ? v.trim() : '');
+import { bucketFor } from '../domain/states.js';
 
-/** 'new' | 'progress' | 'hold' | 'resolved' | 'closed' from a state's display text. */
-export function stateBucket(state) {
-  const s = text(state).toLowerCase();
-  if (!s) return 'progress';
-  if (/\b(closed|cancel+ed|complete[d]?|skipped|incomplete)\b/.test(s)) return 'closed';
-  if (/\b(resolved|fulfil+ed|solved)\b/.test(s)) return 'resolved';
-  if (/\b(on hold|hold|pending|awaiting|waiting)\b/.test(s)) return 'hold';
-  if (/\b(new|open|draft|submitted|requested)\b/.test(s)) return 'new';
-  return 'progress';
+/**
+ * 'new' | 'progress' | 'hold' | 'resolved' | 'closed' for a ticket.
+ * @param {{ state?: string, stateValue?: string, stage?: string }|null} header the panel's header read (the state as shown and as stored)
+ * @param {{ table?: string, kind?: string }|null} [record] the open record (the table decides how a stored value is read)
+ */
+export function stateBucket(header, record = null) {
+  return bucketFor({ table: record?.table || record?.kind || '', value: header?.stateValue, label: header?.state, stage: header?.stage });
 }
 
 // Rank per card and bucket (lower is earlier). A card that is not listed for a bucket uses its `base`.
@@ -21,6 +20,7 @@ const RANKS = {
   outage: { base: 50, new: 40 }, // the Glance banner says it first when it matters
   request: { base: 8 },
   checklist: { base: 9 },
+  fulfilled: { base: 12 }, // (right after the checklist: how the last ones went, before the look-alikes' fixes)
   chat: { base: 9 },
   article: { base: 9 },
   account: { base: 12 },
@@ -38,9 +38,9 @@ const RANKS = {
 };
 
 /** The rank of one card for a record and its header (the `order` function of a card entry). */
-export function rankFor(id, header) {
+export function rankFor(id, header, record = null) {
   const r = RANKS[id] || { base: 100 };
-  const bucket = stateBucket(header?.state);
+  const bucket = stateBucket(header, record);
   return r[bucket] ?? r.base;
 }
 
@@ -54,4 +54,4 @@ const OPEN = {
 };
 
 /** Should this card start open for a record in this state? */
-export const openFor = (id, header) => (OPEN[stateBucket(header?.state)] || []).includes(id);
+export const openFor = (id, header, record = null) => (OPEN[stateBucket(header, record)] || []).includes(id);

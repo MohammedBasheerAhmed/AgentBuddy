@@ -15,7 +15,7 @@ const CALM = new Set([READ_REASON.RATE_LIMITED, READ_REASON.UNAVAILABLE, READ_RE
  *   readReasonOf) is calm on its own.
  */
 export default function ErrorNote({ error, onRetry, retryLabel = t('Try again'), tone }) {
-  const text = plainError(error, t('Something went wrong.'));
+  const text = plainError(error, t('Something went wrong. Try again; if it keeps happening, tell your administrator.'));
   const calm = tone ? tone === 'calm' : CALM.has(readReasonOf(error));
   return (
     <div className={calm ? 'ab-note ab-note-warn ab-errnote ab-reads-calm' : 'ab-note ab-note-danger ab-errnote'} role={calm ? 'status' : 'alert'}>

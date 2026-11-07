@@ -126,7 +126,7 @@ test('an instance that ignores the problem_id condition returns other problems\'
   assert.ok(!('linkedIncidents' in pack.related));
   const entry = accessOf(pack, 'incident')[0];
   assert.equal(entry.status, 'error');
-  assert.match(entry.note, /did not apply the filter/);
+  assert.match(entry.note, /did not narrow the results as asked/);
 });
 
 test('if the count cannot be read the list says "more than 20" instead of a made-up number', async () => {
@@ -265,7 +265,7 @@ test('conflicts: an instance that ignores the CI condition cannot pass other CIs
   });
   const { pack } = await packFor(change, 'change-cab-brief', domainTables(), undefined, wrap);
   assert.ok(!('conflicts' in pack.related));
-  assert.ok(accessOf(pack, 'change_request').some((e) => e.status === 'error' && /did not apply the filter/.test(e.note)));
+  assert.ok(accessOf(pack, 'change_request').some((e) => e.status === 'error' && /did not narrow the results as asked/.test(e.note)));
 });
 
 test('conflicts: no rows is "none" (the change\'s own table is visible), with an empty list', async () => {

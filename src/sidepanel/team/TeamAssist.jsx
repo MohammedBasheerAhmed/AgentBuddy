@@ -24,7 +24,7 @@ import { shown } from '../../reports/shown.js';
 // Results this half read itself carry ids starting with this, so they never take the place of what the Insights half loaded.
 const ASSIST = 'assist:';
 const HANDOVER_ID = `${ASSIST}handover`;
-const sessionText = () => t('Your ServiceNow session has ended. Sign in again in the ServiceNow tab, then press Try again.');
+const sessionText = () => t('You are signed out of ServiceNow. Sign in again, then try again.');
 const AS_OF_REUSE_MS = 9 * 60 * 1000; // the engine ignores an "as of" older than ten minutes
 
 /**
@@ -128,7 +128,8 @@ export default function TeamAssist({ page, eff, active }) {
   if (!ready || !dash) return <p className="ab-sub" role="status">{t('Loading your dashboards…')}</p>;
 
   // The dashboard's sections, read here only while no Insights dashboard is on screen for this tab (otherwise those widgets load them).
-  const headless = woke && share.live === 0 ? dash.widgets.filter((w) => w.type === 'section' && sectionById(w.section) && !sectionById(w.section).ai) : [];
+  // "Needs attention now" is not one of them: it is composed from the others, and nothing here explains it.
+  const headless = woke && share.live === 0 ? dash.widgets.filter((w) => w.type === 'section' && w.section !== 'attention' && sectionById(w.section) && !sectionById(w.section).ai) : [];
   const handoverOn = featureState('shift-handover', policy).available;
   const gate = coachingGate(eff);
   const scopeText = scopeChipText(dash.scope, context.data);
@@ -163,7 +164,7 @@ export default function TeamAssist({ page, eff, active }) {
         ) : !sessionLost && woke && tables.length ? (
           <p className="ab-note" role="status">{t('Reading the hand-over numbers…')}</p>
         ) : context.data && !tables.length ? (
-          <p className="ab-note">{t('No ticket table is available, so there is nothing to hand over.')}</p>
+          <p className="ab-note">{t('No ticket type is available, so there is nothing to hand over.')}</p>
         ) : null}
         <HandoverAi result={handover?.data?.available === false ? null : handover} page={page} eff={eff} hours={hours} primary={handoverOn} />
       </RailCard>

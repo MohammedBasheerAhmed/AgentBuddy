@@ -6,18 +6,18 @@ import { attempt } from './reader.js';
 import { say, tm } from './say.js';
 import { t } from '../../i18n/core.js';
 import { shown } from '../shown.js';
-import { andQuery, clampInt, sectionResult, stateClass, sumResults, usableTables, resolvedColumn, notResolved, onlyResolved, readOpenStates, openOf } from './common.js';
+import { andQuery, clampInt, sectionResult, stateClass, stateName, sumResults, usableTables, resolvedColumn, notResolved, onlyResolved, readOpenStates, openOf } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { DAY, HOUR, startOfLocalDay } from './time.js';
 import { readSlaSnapshot } from './sla.js';
 
-/** Waiting state values and labels out of a state breakdown. Pure. */
-export function waitingStates(groups) {
-  const waiting = (groups || []).filter((g) => stateClass(g.keys[0]?.display) === 'waiting');
+/** Waiting state values and labels out of a state breakdown of one table (`table` makes the stored values count). Pure. */
+export function waitingStates(groups, table = '') {
+  const waiting = (groups || []).filter((g) => stateClass(g.keys[0]?.display, { table, value: g.keys[0]?.value }) === 'waiting');
   return {
     count: waiting.reduce((n, g) => n + g.count, 0),
     values: waiting.map((g) => g.keys[0].value).filter((v) => v !== ''),
-    labels: [...new Set(waiting.map((g) => g.keys[0].display).filter(Boolean))],
+    labels: [...new Set(waiting.map((g) => stateName(g.keys[0], table).name).filter(Boolean))],
   };
 }
 
@@ -45,12 +45,12 @@ async function readTable(ctx, tableInfo, { staleDays, dayStart }) {
     open: openOf(openN, done),
     unassigned,
     stale,
-    waiting: states.ok ? { ok: true, value: waitingStates(states.value).count, detail: waitingStates(states.value) } : states,
+    waiting: states.ok ? { ok: true, value: waitingStates(states.value, tableInfo.table).count, detail: waitingStates(states.value, tableInfo.table) } : states,
     resolvedActive: states.ok ? { ok: true, value: done.count } : states,
     doneValues: done.values,
     doneLabels: done.labels,
     openedToday,
-    resolvedToday: resolvedToday || { ok: false, status: 'error', note: tm('No resolved date column on this table.') },
+    resolvedToday: resolvedToday || { ok: false, status: 'error', note: tm('This ticket type has no resolved date to work from.') },
   };
 }
 
@@ -72,7 +72,7 @@ export async function overviewSection(ctx) {
   const dayStart = startOfLocalDay(ctx.now, ctx.offsetMin);
   const tables = usableTables(ctx);
 
-  const [rows, sla] = await Promise.all([Promise.all(tables.map((tableInfo) => readTable(ctx, tableInfo, { staleDays, dayStart }))), tables.length ? readSlaSnapshot(ctx) : { ok: false, status: 'error', note: tm('No ticket table can be read.') }]);
+  const [rows, sla] = await Promise.all([Promise.all(tables.map((tableInfo) => readTable(ctx, tableInfo, { staleDays, dayStart }))), tables.length ? readSlaSnapshot(ctx) : { ok: false, status: 'error', note: tm('No ticket type can be read.') }]);
   if (sla.ok && sla.cap) ctx.caps.push(sla.cap);
 
   const waitLabels = [...new Set(rows.flatMap((r) => (r.waiting.ok ? r.waiting.detail.labels : [])))];
@@ -107,14 +107,17 @@ export async function overviewSection(ctx) {
     dueSoon: andQuery(slaBase, 'has_breached=false', 'stage!=paused', buildQuery([{ op: 'until', field: 'planned_end_time', ms: ctx.now + LIMITS.dueSoonHours * HOUR }])),
     breached: andQuery(slaBase, 'has_breached=true'),
   };
+  // The SLA read stopped early (more worrying SLAs than rows read): the count is "at least", and the tile says so.
+  const slaAtLeast = sla.ok && sla.atLeast === true;
   const slaTile = (key, label, n, hint) => ({
     key,
     label,
     value: sla.ok ? n : null,
     unavailable: slaUnavailable,
     note: slaUnavailable ? sla.note : '',
-    hint,
+    hint: slaAtLeast ? say(tm('{hint}. At least this many: not every SLA could be read.'), { hint }) : hint,
     partial: false,
+    ...(slaAtLeast ? { atLeast: true } : {}),
     drills: sla.ok && n > 0 ? [{ table: 'task_sla', label: tm('SLAs'), count: n, query: slaDrills[key] }] : [],
   });
 
@@ -137,7 +140,7 @@ export async function overviewSection(ctx) {
     tiles.splice(1, 0, { ...tile('resolvedActive', tm('Resolved, not closed'), resolvedActive), drills: drill('resolvedActive'), hint: doneLabels.length ? say(tm('Waiting to close ({labels}). Not counted as open.'), { labels: doneLabels.join(', ') }) : tm('Waiting to close. Not counted as open.') });
   }
   tiles.forEach((entry) => {
-    if (entry.partial) entry.hint = say(tm('{hint}. Some tables could not be counted.'), { hint: entry.hint });
+    if (entry.partial) entry.hint = say(tm('{hint}. Some ticket types could not be counted.'), { hint: entry.hint });
     entry.drills = entry.drills || [];
   });
 
@@ -180,9 +183,9 @@ export function overviewTables(result) {
       rows: d.tiles.map((measure) => ({ label: shown(measure.label), value: measure.unavailable ? t('Not available to you') : measure.value, note: shown(measure.hint || '') })),
     },
     {
-      title: t('Overview by table'),
+      title: t('Overview by ticket type'),
       columns: [
-        { key: 'label', label: t('Table') },
+        { key: 'label', label: t('Ticket type') },
         { key: 'open', label: shown('Open') },
         { key: 'unassigned', label: t('Unassigned') },
         { key: 'stale', label: t('No update in {days}+ days', { days: d.staleDays }) },

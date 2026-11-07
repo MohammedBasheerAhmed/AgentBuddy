@@ -83,11 +83,11 @@ test('a first-time full check on ticket A, met again after B\'s short one, is th
     await click(ui.button('Next best'));
     await settle(6);
     assert.match(ui.text(), /Send to the AI\?/, 'B: the short check');
-    assert.match(ui.text(), /Uses 3 solved tickets from other records/);
+    assert.match(ui.text(), /Uses 3 solved tickets from other tickets/);
     // back on A
     await ui.rerender(<Screen page={pageOf(INC)} eff={eff} />);
     assert.match(ui.text(), /Check before sending/, 'A: still the full check');
-    assert.ok(!/Send to the AI\?|from other records/.test(ui.text()), 'not B\'s one-liner');
+    assert.ok(!/Send to the AI\?|from other tickets/.test(ui.text()), 'not B\'s one-liner');
     assert.match(sentView(ui).textContent, /INC0010001/, 'A\'s data');
     await click(ui.button('Send to AI'));
     await settle(6);
@@ -97,7 +97,7 @@ test('a first-time full check on ticket A, met again after B\'s short one, is th
     assert.equal(sent[0].preview, 'shown', 'the person saw the full text');
     // and B: its own short check, still waiting
     await ui.rerender(<Screen page={pageOf(INC_B)} eff={eff} />);
-    assert.match(ui.text(), /Uses 3 solved tickets from other records/);
+    assert.match(ui.text(), /Uses 3 solved tickets from other tickets/);
   } finally {
     await ui.unmount();
   }

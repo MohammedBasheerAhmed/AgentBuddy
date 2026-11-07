@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MSG, pageStateMessage } from '../lib/messages.js';
-import { initialPageState, reducePage } from './pageState.js';
+import { initialPageState, reducePage, vetRecord } from './pageState.js';
 import { hostLooksLikeServiceNow, siteVerdict } from './firstRun.js';
 
 const POLL_MS = 2500;
@@ -42,7 +42,9 @@ async function observeActivePage(policy) {
   try {
     const state = await chrome.tabs.sendMessage(tab.id, pageStateMessage(policy));
     if (!state || state.error) throw new Error(state?.error?.message || 'No answer.');
-    return { type: 'answer', page: { ...state, portal: cleanPortal(state.portal, state.surface), status: state.record ? 'record' : 'no-record', tabId: tab.id } };
+    // (a record that is not a ticket's is no record: vetRecord)
+    const record = vetRecord(state.record, policy?.sensitiveTablePrefixes);
+    return { type: 'answer', page: { ...state, record, portal: cleanPortal(state.portal, state.surface), status: record ? 'record' : 'no-record', tabId: tab.id } };
   } catch {
     // The URL is only visible when the browser granted access to the site (or the toolbar button was just used on it).
     return { type: 'silent', tabId: tab.id, origin: originOf(tab.url) };

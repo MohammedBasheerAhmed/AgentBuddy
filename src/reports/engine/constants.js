@@ -4,6 +4,19 @@
 // back). This is the whole list of columns they ever ask for; nothing here is sent anywhere.
 import { AT_RISK_PERCENT } from '../myDay.js';
 import { tm } from './say.js';
+import { tableLabel } from '../../lib/tableLabels.js';
+
+// The words of a table the reports added later (audit of 2026-11-07, F20): the shared label, in English, as everywhere else in the engine.
+const words = (table, options = {}) => tableLabel(table, { english: true, ...options });
+// What a task table offers: the closing time and the reassignment count (columns of every task), nothing for the Quality section.
+const taskTable = (table, extra = {}) => ({
+  label: words(table, { plural: true, sentenceCase: true }),
+  singular: words(table),
+  resolvedFields: ['closed_at'],
+  quality: {},
+  optional: ['closed_at', 'reassignment_count'],
+  ...extra,
+});
 
 /**
  * The ticket tables a report can cover. `resolvedFields` are tried in order: the first one that exists on the instance is
@@ -60,6 +73,12 @@ export const REPORT_TABLES = Object.freeze({
     quality: {},
     optional: ['closed_at', 'reassignment_count'],
   },
+  // The requests that hold requested items, and the tasks of an incident, a problem, a case and an HR case: what a lead of a group that works
+  // them day to day sees nothing of otherwise. (Other task classes, a custom one for instance, are counted by the fulfilment section.)
+  sc_request: taskTable('sc_request'),
+  incident_task: taskTable('incident_task'),
+  problem_task: taskTable('problem_task'),
+  sn_customerservice_task: taskTable('sn_customerservice_task'),
   // HR cases (sn_hr_core_case and its child tables, which the Aggregate API counts with it). SENSITIVE: offered only when the
   // person works with the HR profile and the organisation's policy allows HR content (the panel asks with allowSensitive, the
   // content script lowers that unless the managed policy agrees). Never offered to coaching.
@@ -71,9 +90,18 @@ export const REPORT_TABLES = Object.freeze({
     optional: ['closed_at', 'reassignment_count'],
     sensitive: true,
   },
+  // The tasks of an HR case: SENSITIVE like the case.
+  sn_hr_core_task: taskTable('sn_hr_core_task', { sensitive: true }),
 });
 
 export const REPORT_TABLE_IDS = Object.freeze(Object.keys(REPORT_TABLES));
+
+/**
+ * A table in the middle of a report sentence, in English, plural and lower case ('incidents', 'SLAs', 'catalog tasks'): the report's
+ * own word for the eight report tables, the shared label (src/lib/tableLabels.js) for any other. The engine writes English and the
+ * panel shows it in its language (src/reports/shown.js), so a raw table name must never be put into a sentence.
+ */
+export const tableWords = (table) => REPORT_TABLES[String(table)]?.label.toLowerCase() || tableLabel(table, { plural: true, english: true });
 
 /** Is this report table sensitive (HR family)? Its own flag, the `sn_hr_` prefix, or a prefix the organisation's policy adds. */
 export function isSensitiveReportTable(table, prefixes = []) {
@@ -134,7 +162,8 @@ export const SCOPE_KINDS = Object.freeze(['mine', 'groups', 'chosen']);
 
 /**
  * Section ids the panel's registry (src/sidepanel/reports/sections.js) and a saved dashboard can hold. The engine runs the first
- * six (SECTIONS in ./index.js). 'coaching' and 'insights' have no engine section: they are panel sections that build their own
- * input (a separate read operation for coaching, the widgets' loaded results for insights), so runReport refuses those two ids.
+ * seven (SECTIONS in ./index.js; 'attention' is composed from what the others read). 'coaching' and 'insights' have no engine section:
+ * they are panel sections that build their own input (a separate read operation for coaching, the widgets' loaded results for
+ * insights), so runReport refuses those two ids.
  */
-export const SECTION_IDS = Object.freeze(['overview', 'workload', 'sla', 'quality', 'fulfilment', 'handover', 'coaching', 'insights']);
+export const SECTION_IDS = Object.freeze(['attention', 'overview', 'workload', 'sla', 'quality', 'fulfilment', 'handover', 'coaching', 'insights']);

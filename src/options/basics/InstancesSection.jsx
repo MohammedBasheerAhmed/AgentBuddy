@@ -8,7 +8,7 @@ import { FieldError, Locked, SectionHead, onEnter } from '../fields.jsx';
 import { t, tm, isolate, t as tr } from '../../i18n/index.js';
 
 // What Settings says when the browser did not turn a site on: the next step, for a refused question and for one that never appeared.
-export const SITE_REFUSED_TEXT = tm('The browser did not turn Agent Buddy on for this site. Press Turn on again and choose Allow. If no question appears, your IT team may block it: ask them.');
+export const SITE_REFUSED_TEXT = tm('The browser did not turn Agent Buddy on for this site. Press Turn on again and choose Allow. If no question appears, your organisation may block it: ask your administrator.');
 
 /** 'granted' in a build whose hosts were granted at install (enterprise), 'prompt' when the browser asks site by site. */
 function hostAccess() {
@@ -51,14 +51,14 @@ export function InstancesSection({ eff, reload }) {
     const origin = normalizeInstance(address);
     setBusy(true);
     try {
-      if (!origin) throw new Error(t('Enter the https address of your ServiceNow instance, for example https://acme.service-now.com'));
-      if (!isInstanceAllowed(origin, eff.policy)) throw new Error(t('Your organisation has not approved this instance.'));
+      if (!origin) throw new Error(t('Enter the https address of your ServiceNow site, for example https://acme.service-now.com'));
+      if (!isInstanceAllowed(origin, eff.policy)) throw new Error(t('Your organisation has not approved this site.'));
       let granted = false;
       try {
         granted = await chrome.permissions.request({ origins: [instancePattern(origin)] });
       } catch {
         // A build with fixed host access (enterprise) cannot ask for a site it was not built for.
-        throw new Error(t('This build of Agent Buddy cannot be turned on for that site. Your organisation decides which instances it works on.'));
+        throw new Error(t('This build of Agent Buddy cannot be turned on for that site. Your organisation decides which ServiceNow sites it works on.'));
       }
       if (!granted) throw new Error(tr(SITE_REFUSED_TEXT));
       const answer = await chrome.runtime.sendMessage({ type: MSG.ENABLE_INSTANCE, origin });
@@ -85,12 +85,12 @@ export function InstancesSection({ eff, reload }) {
 
   return (
     <section className="ab-section ab-set-section" aria-labelledby="h-instances">
-      <SectionHead id="h-instances" title={t('ServiceNow instances')}>
+      <SectionHead id="h-instances" title={t('ServiceNow sites')}>
         {hostAccess() === 'granted'
-          ? t('Agent Buddy only runs on instances you turn on. This build was given access to the instances your organisation approved when it was installed, so the browser does not ask.')
-          : t('Agent Buddy only runs on instances you turn on. The browser asks you to confirm each one the first time.')}
+          ? t('Agent Buddy only runs on ServiceNow sites you turn on. This build was given access to the sites your organisation approved when it was installed, so the browser does not ask.')
+          : t('Agent Buddy only runs on ServiceNow sites you turn on. The browser asks you to confirm each one the first time.')}
       </SectionHead>
-      {instances.length === 0 && managed.length === 0 && <p className="ab-note ab-set-empty">{t('No instance is turned on yet.')}</p>}
+      {instances.length === 0 && managed.length === 0 && <p className="ab-note ab-set-empty">{t('No ServiceNow site is turned on yet.')}</p>}
       {instances.length + managed.length > 0 && (
         <ul className="ab-set-list">
           {instances.map((o) => (
@@ -110,7 +110,7 @@ export function InstancesSection({ eff, reload }) {
         </ul>
       )}
       <div className="ab-field">
-        <label className="ab-label" htmlFor="instance">{t('Instance address')}</label>
+        <label className="ab-label" htmlFor="instance">{t('Site address')}</label>
         <div className="ab-set-inputrow">
           <input
             id="instance"

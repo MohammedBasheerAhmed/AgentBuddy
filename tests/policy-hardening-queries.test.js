@@ -63,7 +63,8 @@ test('SEC-13: findOpenDuplicates puts no name and none of the refused values int
   }
   // A STORED value that is not a sys_id (a bad import, a forged answer) is refused the same way: no query is built from it.
   for (const stored of ['javascript:gs.getUserID()', 'a^ORactive=true', 'gw-eu-1']) {
-    const deps = fakeDeps({ incident: [{ sys_id: v(ID), number: v('INC1'), cmdb_ci: v(stored, 'x'), opened_at: v('2026-10-26 08:00:00') }] });
+    // (the service column comes back empty, as an empty column does: one that is missing altogether is "could not read", see tests/honest-reads.test.js)
+    const deps = fakeDeps({ incident: [{ sys_id: v(ID), number: v('INC1'), cmdb_ci: v(stored, 'x'), business_service: v(''), opened_at: v('2026-10-26 08:00:00') }] });
     const { hits, access } = await findOpenDuplicates({ table: 'incident', sysId: ID, fields: { cmdb_ci: 'x' } }, deps, {});
     assert.deepEqual(hits, []);
     assert.equal(access[0].status, 'skipped');

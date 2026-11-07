@@ -33,13 +33,15 @@ const RENDER = {
     `- ${present(r.number)}: ${present(r.short_description)} (${join([r.state, r.priority && `priority ${r.priority}`, r.opened_at && `opened ${r.opened_at}`, r.resolved_at ? `resolved ${r.resolved_at}` : 'not resolved'])})`,
 };
 
-// What to say when the read worked and the list is empty. Only used for a key that is on the pack, i.e. a confirmed "none".
+// What to say when the read worked and the list is empty. Only used for a key that is on the pack, i.e. a confirmed "none" of what the
+// person's user can see: a row rule can hide this record's rows from a user who sees others (the probe cannot tell), so every line says
+// so (audit of 2026-11-07, R-02, R-05, R-07).
 const NONE = {
-  slas: 'No SLAs are attached to this record.',
-  approvals: 'No approval requests were found.',
-  childTasks: 'No child tasks.',
-  changeTasks: 'No change tasks.',
-  linkedIncidents: 'No incidents are linked to this problem.',
+  slas: 'No SLAs that your user can see are attached to this record.',
+  approvals: 'No approval requests that your user can see were found.',
+  childTasks: 'No child tasks that your user can see.',
+  changeTasks: 'No change tasks that your user can see.',
+  linkedIncidents: 'No incidents that your user can see are linked to this problem.',
   conflicts: 'Checked: no other active change that your user can see, on the same configuration item or business service, overlaps the planned window.',
   recentChanges: "Checked: no change on this case's configuration item was made in the last 14 days or is planned in the next 7.",
   accountCases: 'No other cases that your user can see for this account.',

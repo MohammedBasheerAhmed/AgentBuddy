@@ -18,5 +18,21 @@ import { AR_UNDERSTAND } from './understand.js';
 import { AR_CLOSE } from './close.js';
 import { AR_MYWORK } from './mywork.js';
 import { AR_REPLY } from './reply.js';
+import { AR_GATE } from './gate.js';
+import { AR_LABELS } from './labels.js';
+import { AR_LINKS } from './links.js';
+import { AR_NOTES } from './notes.js';
+import { AR_HONEST } from './honest.js';
+import { AR_ROLES } from './roles.js';
+import { AR_FIT } from './fit.js';
+import { AR_WORKSPACE } from './workspace.js';
+import { AR_STATES } from './states.js';
+import { AR_FINISH } from './finish.js';
+import { AR_CATALOG } from './catalog.js';
+import { AR_LEAD } from './lead.js';
+import { withKm } from './km.js';
+import { withFinish2 } from './finish2.js';
+import { withWords } from './words.js';
 
-export const AR = Object.freeze({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_FORMATS, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS, ...AR_FOCUS, ...AR_CALLER, ...AR_LANGRULES, ...AR_READS, ...AR_FIX, ...AR_UNDERSTAND, ...AR_CLOSE, ...AR_MYWORK, ...AR_REPLY });
+// withWords adds the plain-words texts (words.js) and drops the English texts they replaced.
+export const AR = withKm(withFinish2(withWords({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_FORMATS, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS, ...AR_FOCUS, ...AR_CALLER, ...AR_LANGRULES, ...AR_READS, ...AR_FIX, ...AR_UNDERSTAND, ...AR_CLOSE, ...AR_MYWORK, ...AR_REPLY, ...AR_GATE, ...AR_LABELS, ...AR_LINKS, ...AR_NOTES, ...AR_HONEST, ...AR_ROLES, ...AR_FIT, ...AR_WORKSPACE, ...AR_STATES, ...AR_FINISH, ...AR_CATALOG, ...AR_LEAD })));

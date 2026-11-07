@@ -209,7 +209,7 @@ export function providerName(config = {}) {
   const def = PROVIDERS[config.provider] || {};
   const host = endpointHost(config);
   if (host === null) return def.short;
-  return host ? t('The endpoint {host}', { host: isolate(host) }) : t('The AI endpoint');
+  return host ? t('The AI service at {host}', { host: isolate(host) }) : t('The AI service');
 }
 
 /**

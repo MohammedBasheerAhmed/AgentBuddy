@@ -16,16 +16,22 @@ const ticketFeatures = () => FEATURES.filter((f) => (f.kinds || []).length);
 
 test('the states of the base system map to four stages', () => {
   const cases = {
-    new: ['New', 'Draft', 'Pending', 'Requested', 'Awaiting Approval', 'Awaiting Acceptance', 'Assess', '1 - New', 'Ready'],
-    working: ['In Progress', 'Work in Progress', 'On Hold', 'Awaiting Info', 'Awaiting User Info', 'Open', 'Root Cause Analysis', 'Fix in Progress', 'Scheduled', 'Implement', 'Authorize', 'Suspended'],
-    resolve: ['Resolved', 'Review', 'resolved'],
+    // (the one reader of a state, src/domain/states.js, docs/states.md: waiting for something and being assessed or reviewed are live work,
+    // so Pending, Awaiting Approval, Awaiting Acceptance, Assess and Review are "working", not "new" or "resolve" as the old regexes said)
+    new: ['New', 'Draft', 'Requested', '1 - New', 'Ready'],
+    working: ['In Progress', 'Work in Progress', 'On Hold', 'Awaiting Info', 'Awaiting User Info', 'Open', 'Root Cause Analysis', 'Fix in Progress', 'Scheduled', 'Implement', 'Authorize', 'Suspended', 'Pending', 'Awaiting Approval', 'Awaiting Acceptance', 'Assess', 'Review'],
+    resolve: ['Resolved', 'resolved'],
     closed: ['Closed', 'Closed Complete', 'Closed Incomplete', 'Closed Skipped', 'Canceled', 'Cancelled', '7 - Closed', 'Closed - Resolved by caller'],
   };
   for (const [stage, states] of Object.entries(cases)) for (const s of states) assert.equal(stageOfState(s), stage, s);
 });
 
 test('an empty or unknown state is no stage (it never hides anything); the header wins over the record', () => {
-  for (const s of ['', null, undefined, 'Banana', 'Erledigt']) assert.equal(stageOfState(s), null, String(s));
+  for (const s of ['', null, undefined, 'Banana']) assert.equal(stageOfState(s), null, String(s));
+  // a translated state is understood now (English, German and Arabic label words; the stored value decides when the table is known)
+  assert.equal(stageOfState('Erledigt'), 'closed');
+  assert.equal(stageOfState('Wartend'), 'working');
+  assert.equal(stageOf({ kind: 'incident', table: 'incident' }, head('Zurückgestellt', { stateValue: '3' })), 'working');
   assert.equal(stageOf(rec('incident'), null), null, 'header still loading');
   assert.equal(stageOf(rec('incident', 'incident', { state: 'Closed' }), head('In Progress')), 'working');
   assert.equal(stageOf(rec('incident', 'incident', { state: 'Closed' }), null), 'closed');
@@ -102,8 +108,8 @@ test('AI7: no draft reply on a closed ticket, nor on a task of a problem or a ch
   assert.equal(whenAllows(featureById('missing-info'), rec('incident'), head('Closed')), false);
 });
 
-test('AI7: a catalog task warns that the requester does not see its comments; an incident does not', () => {
-  for (const id of ['reply-draft', 'missing-info', 'request-explain']) assert.match(cautionFor(featureById(id), rec('catalog_task', 'sc_task')), /requester does not see/, id);
+test('AI7: a catalog task warns that the requester may not see its comments; an incident does not', () => {
+  for (const id of ['reply-draft', 'missing-info', 'request-explain']) assert.match(cautionFor(featureById(id), rec('catalog_task', 'sc_task')), /requester may not see/, id);
   assert.equal(cautionFor(featureById('reply-draft'), rec('incident')), '');
   assert.equal(cautionFor(featureById('record-summary'), rec('catalog_task', 'sc_task')), '', 'only text for the customer gets the caution');
 });

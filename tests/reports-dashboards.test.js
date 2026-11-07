@@ -21,7 +21,7 @@ test('a first run gets the ready-made dashboards, hand-over and the explainer in
   assert.equal(state.activeId, state.dashboards[0].id);
   assert.deepEqual(state.dashboards[0].scope.kind, 'mine');
   assert.deepEqual(state.dashboards[1].scope.kind, 'groups');
-  assert.deepEqual(state.dashboards[1].widgets.map((w) => w.section), ['overview', 'workload', 'sla', 'quality', 'fulfilment']);
+  assert.deepEqual(state.dashboards[1].widgets.map((w) => w.section), ['attention', 'overview', 'workload', 'sla', 'quality', 'fulfilment'], 'Needs attention now comes first on the Team overview');
   assert.deepEqual(state.dashboards[2].scope.kind, 'groups');
   assert.deepEqual(state.dashboards[2].widgets.map((w) => w.section), ['handover']);
 });
@@ -29,7 +29,7 @@ test('a first run gets the ready-made dashboards, hand-over and the explainer in
 test('what is stored is configuration only: no key outside the allowed list', () => {
   const { state } = sanitizeState(undefined, makeId);
   const allowed = {
-    state: ['version', 'activeId', 'dashboards'],
+    state: ['version', 'activeId', 'dashboards', 'offered'], // offered: ids of sections a later version added to a ready-made dashboard
     dashboard: ['id', 'name', 'scope', 'tables', 'widgets'],
     scope: ['kind', 'groupIds', 'groupNames'],
     widget: ['id', 'type', 'section', 'params', 'builder'],

@@ -1,8 +1,9 @@
 import { ShowMore } from '../../ui/primitives.jsx';
 import { callerSummary, historyLine } from '../../../insights/related.js';
+import { personWords } from '../../../insights/personWords.js';
 import { firstSentences } from '../../../insights/steps.js';
 import { useHistory } from './data.js';
-import { readFully, useReport } from './useInsight.js';
+import { useReport } from './useInsight.js';
 import { ItemLink, Notes, QuietButton, ReadState } from './bits.jsx';
 import { t, isolate } from '../../../i18n/index.js';
 
@@ -13,16 +14,28 @@ import { t, isolate } from '../../../i18n/index.js';
 
 const list = (v) => (Array.isArray(v) ? v : []);
 
+// What the body says when no earlier ticket is listed: only what the read can stand behind. "Nobody is named" and "no earlier tickets" are
+// facts only when the caller column was read and every table was checked; otherwise the line says the panel could not check.
+// (the person is named as the kind names them: the requester of a requested item, the employee of an HR case; F11)
+function emptyLine(sum, words) {
+  if (sum.unreadableCaller) return words.bodyUnreadable();
+  if (sum.noCaller) return words.bodyNobody();
+  if (sum.complete) return t('No earlier tickets from this person.');
+  return t('No earlier tickets found, but some could not be checked.');
+}
+
 export default function CallerCard({ page, eff, record, active, setSummary, setAttention }) {
   const history = useHistory({ page, record, eff, active });
   const read = history.data && !history.error ? history.data : null;
-  const sum = callerSummary({ history: read });
+  const sum = callerSummary({ history: read, kind: record?.kind, table: record?.table });
+  const words = personWords({ kind: record?.kind, table: record?.table });
   // (The list keeps the last good answer while a new read fails, as every card does; the line and the status wait for a whole one.)
   const earlier = list(history.data?.items);
   useReport(setSummary, sum.line);
   // A repeat needs a look. Nothing earlier (or nobody named as the caller) is nothing to report, but only when the read saw everything:
-  // a history that could not be read in full is not "no earlier tickets".
-  const none = Boolean(read) && readFully(read.access) && (sum.noCaller || (sum.earlier === 0 && !sum.repeat));
+  // a history that could not be read in full is not "no earlier tickets", and a caller column that could not be read is not "nobody"
+  // (sum.complete is false then; the line and the body say so too, R-09).
+  const none = Boolean(read) && sum.complete && (sum.noCaller || (sum.earlier === 0 && !sum.repeat));
   useReport(setAttention, sum.repeat ? 'warn' : none ? 'clear' : '');
 
   const sig = history.data?.signals;
@@ -32,7 +45,7 @@ export default function CallerCard({ page, eff, record, active, setSummary, setA
       {sum.repeat && <p className="ab-note ab-note-warn">{sum.repeat}</p>}
       <p className="ab-ins-line ab-ins-caller-head">
         {name ? t('Earlier tickets from {name}', { name: isolate(name) }) : t('Earlier tickets from this person')}
-        {history.data && !history.data.noCaller && <span className="ab-chip ab-chip-neutral ab-ins-count">{earlier.length}</span>}
+        {history.data && !history.data.noCaller && (earlier.length > 0 || sum.complete) && <span className="ab-chip ab-chip-neutral ab-ins-count">{history.data.truncated === true ? `${earlier.length}+` : earlier.length}</span>}
       </p>
       <ReadState state={history} what={t('earlier tickets')} onRetry={history.reload} />
       {sig?.lastResolved && (
@@ -41,7 +54,7 @@ export default function CallerCard({ page, eff, record, active, setSummary, setA
         </p>
       )}
       {earlier.length > 0 && <ShowMore items={[...earlier].reverse()} render={(item) => <ItemLink key={item.sysId} page={page} item={item} line={historyLine(item)} />} />}
-      {history.data && !earlier.length && <p className="ab-hint">{history.data.noCaller ? t('Nobody is named as the caller on this ticket.') : t('No earlier tickets from this person.')}</p>}
+      {read && !earlier.length && <p className="ab-hint">{emptyLine(sum, words)}</p>}
       <Notes access={history.data?.access} />
       <div className="ab-ins-foot">
         <QuietButton onClick={history.reload} disabled={history.phase === 'loading'}>

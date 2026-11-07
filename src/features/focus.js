@@ -26,7 +26,7 @@ const point = (id, title, cards, actions) =>
 // gets the account briefing); an action fills one slot at most.
 export const PAIN_POINTS = Object.freeze([
   point('understand', () => t('Understand the ticket'), ['request', 'chat', 'article', 'journey'], ['record-summary', 'hr-case-brief', 'request-explain']),
-  point('fix', () => t('Find the fix'), ['checklist', 'steps', 'knowledge'], ['next-best-action', 'problem-rca', 'fulfilment-checklist']),
+  point('fix', () => t('Find the fix'), ['checklist', 'fulfilled', 'steps', 'knowledge'], ['next-best-action', 'problem-rca', 'fulfilment-checklist']),
   point('caller', () => t('Same caller'), ['caller', 'account'], ['caller-briefing', 'account-briefing']),
   point('reply', () => t('Reply'), ['email'], ['reply-draft', 'chat-reply']),
   // (round 4: "Prepare to close" first; "Write resolution notes" fills the slot only where it is not offered, and is in All tools)
@@ -70,4 +70,14 @@ export function focusActions(items = []) {
   }
   const rest = list.filter((it) => !used.has(it.feature.id));
   return { five, rest };
+}
+
+/**
+ * One quiet line for a kind of ticket the product knows little about, shown under the five rows, or '' (audit of 2026-11-07, W-11).
+ * A ticket of a table Agent Buddy has no name for (a customer's own, or a task table it does not list) gets two actions and no
+ * Insights cards; without a word, that reads as "broken". The line says it is not.
+ * @param {string} kind  the record's kind (src/context/kinds.js)
+ */
+export function limitedKindNote(kind) {
+  return kind === 'other' ? t('Agent Buddy does not know this kind of ticket, so only the basics are shown.') : '';
 }

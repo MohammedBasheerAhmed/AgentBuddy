@@ -9,12 +9,38 @@
 // approvals of this ticket".
 
 import { FEATURE_RELATED, FIELDS_BY_KIND, LIMITS } from './allowlists.js';
-import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, isSessionExpired, softRead } from './access.js';
+import { NOTE_TEXT, STATUS, absentColumns, confirmEmptyIsReallyEmpty, entry as accessEntry, hiddenFieldEntry, isSessionExpired, softRead, tm } from './access.js';
 import { kindForTable } from './kinds.js';
+import { personRefs } from './people.js';
+import { PARENT_PERSON } from './specs/fit.js';
 import { SYS_ID_RE, TABLE_RE, disp, formatSnTime, mapLimit, oneLine, parseSnTime, raw, sameId } from './util.js';
 
 const CONCURRENCY = 3;
 
+// What the extras say about themselves (fixed sentences without a table, a column or "your user"; marked for the Arabic catalogue, and the
+// ones with a number have a {name} the panel fills: src/reports/shown.js finds the Arabic by the pattern).
+const RELATED_NOTE = Object.freeze({
+  firstN: tm('Showing the first {n}.'),
+  firstOf: tm('Showing the first {n} of {total}.'),
+  oldestOf: tm('Showing the oldest {n} of {total}.'),
+  oldestOfMore: tm('Showing the oldest {n} of more than {total}.'),
+  oldestNewest: tm('Showing the oldest {n} and the newest {m} of {total}.'),
+  oldestNewestMore: tm('Showing the oldest {n} and the newest {m} of more than {total}.'),
+  noQuestions: tm('You cannot read the questions of this request, so the answers could not be labelled.'),
+  answersBlocked: tm('Some answers could not be shown because their lists are blocked by your organisation.'),
+  answersNotRead: tm('Some answers could not be shown because their lists are not ones Agent Buddy reads.'),
+  answersFailed: tm('Some answers could not be shown because their lists could not be read.'),
+  answersSome: tm('Some answers could not be shown.'),
+  noPlannedWindow: tm('The change has no planned start and end, so schedule conflicts were not checked.'),
+  noCiOrServiceChange: tm('The change has no configuration item or business service, so schedule conflicts were not checked.'),
+  oneCheckFailed: tm('One of the two checks (configuration item or business service) could not be read.'),
+  longList: tm('ServiceNow returned a very long list for this window, so some changes may not be listed.'),
+  noCiCase: tm('The case has no configuration item, so recent changes were not looked up.'),
+  noCiOrServiceKind: tm('This kind of ticket has no configuration item or service.'),
+  noCiOrServiceTicket: tm('This ticket has no configuration item or service, so changes on it were not looked up.'),
+  noItem: tm('This task has no requested item that you can see, so the answers to its request questions are not included.'),
+});
+const fillN = (text, values) => Object.entries(values).reduce((out, [name, value]) => out.replace(`{${name}}`, String(value)), text);
 // What a kind of record can have. The feature narrows this (FEATURE_RELATED) and a sensitive table narrows it to SLAs.
 export const RELATED_BY_KIND = Object.freeze({
   incident: ['slas', 'childTasks'],
@@ -22,7 +48,8 @@ export const RELATED_BY_KIND = Object.freeze({
   change: ['approvals', 'changeTasks', 'conflicts'],
   request: ['items', 'approvals'],
   requested_item: ['variables', 'approvals', 'catalogTasks', 'slas'],
-  catalog_task: ['slas'],
+  // The answers are the REQUESTED ITEM's: a catalog task carries them under its own pack (F2), read from the item its link names.
+  catalog_task: ['slas', 'variables'],
   case: ['slas', 'childTasks', 'recentChanges'],
   hr_case: ['slas', 'childTasks'],
   task: ['slas', 'childTasks'],
@@ -65,9 +92,18 @@ const SOURCES = {
   approvals: {
     table: 'sysapproval_approver',
     query: (id) => `sysapproval=${id}^ORDERBYDESCsys_created_on`,
-    fields: ['approver', 'group', 'state', 'sys_updated_on', 'sysapproval'],
+    // sys_created_on (wave 6, "Waiting on Dana Lee for 3 days"): when the approval was asked for. sys_updated_on moves when anyone touches the
+    // row, so it cannot say how long an approver has been waited on. Its stored (UTC) value is kept for the panel only: the parts formatters
+    // name the fields they send (src/features/partColumns.js APPROVAL_ROW), so the date never reaches an AI.
+    fields: ['approver', 'group', 'state', 'sys_updated_on', 'sys_created_on', 'sysapproval'],
     link: 'sysapproval',
-    shape: (row) => ({ approver: text(row.approver, 100), group: text(row.group, 100), state: text(row.state, 40), updated: text(row.sys_updated_on, 40) }),
+    shape: (row) => ({
+      approver: text(row.approver, 100),
+      group: text(row.group, 100),
+      state: text(row.state, 40),
+      updated: text(row.sys_updated_on, 40),
+      createdUtc: oneLine(raw(row.sys_created_on), 40),
+    }),
     refs: (row) => [{ role: 'approver', sysId: raw(row.approver), name: text(row.approver, 100) }],
   },
   childTasks: {
@@ -145,13 +181,13 @@ async function readListSource(key, { sysId, table: ownTable }, deps, memo) {
 
   const own = rows.filter((row) => sameId(raw(row[spec.link]), sysId));
   if (own.length < rows.length) {
-    return { access: accessEntry(spec.table, STATUS.ERROR, `Could not check ${spec.table}: the instance did not apply the filter on this record, so its rows were not used.`) };
+    return { access: accessEntry(spec.table, STATUS.ERROR, NOTE_TEXT.ignoredFilter) };
   }
   if (!rows.length) return emptyResult(spec.table, ownTable, deps, memo, []);
 
   const kept = own.slice(0, LIMITS.relatedRows);
   const refs = kept.flatMap((row) => (spec.refs ? spec.refs(row) : [])).filter((ref) => SYS_ID_RE.test(ref.sysId));
-  const note = own.length > kept.length ? `Showing the first ${kept.length}.` : '';
+  const note = own.length > kept.length ? fillN(RELATED_NOTE.firstN, { n: kept.length }) : '';
   return { items: kept.map(spec.shape), refs, access: accessEntry(spec.table, STATUS.OK, note) };
 }
 
@@ -224,12 +260,14 @@ async function resolveReferences(wanted, deps) {
   return { names, failed, blocked: [...blocked] };
 }
 
+const answerText = (cell) => (cell && typeof cell === 'object' ? String(cell.display_value || cell.value || '') : String(cell ?? '')).trim();
+
 async function readVariables({ sysId }, deps, memo) {
   const source = 'sc_item_option_mtom';
   const { rows, failure } = await softRead(deps, source, `request_item=${sysId}`, VARIABLE_FIELDS, { limit: 120, displayValue: true });
   if (failure) return { access: accessEntry(source, failure.status, failure.note) };
   if (rows.some((row) => !sameId(raw(row.request_item), sysId))) {
-    return { access: accessEntry(source, STATUS.ERROR, `Could not check ${source}: the instance did not apply the filter on this record, so its rows were not used.`) };
+    return { access: accessEntry(source, STATUS.ERROR, NOTE_TEXT.ignoredFilter) };
   }
   if (!rows.length) return emptyResult(source, '', deps, memo, []);
 
@@ -237,23 +275,24 @@ async function readVariables({ sysId }, deps, memo) {
   let labelled = 0;
   const candidates = [];
   for (const row of rows) {
-    const question = oneLine(disp(row['sc_item_option.item_option_new.question_text']) || raw(row['sc_item_option.item_option_new.name']), LIMITS.variableQuestion);
+    // The question as the form shows it. The variable's technical name is never a label for a person (it is still read below, to spot secrets).
+    const question = oneLine(disp(row['sc_item_option.item_option_new.question_text']), LIMITS.variableQuestion);
     const typeLabel = disp(row['sc_item_option.item_option_new.type']);
     const typeCode = raw(row['sc_item_option.item_option_new.type']);
     const name = raw(row['sc_item_option.item_option_new.name']);
-    const value = disp(row['sc_item_option.value']).trim();
+    // (the answer as stored: a reference answer IS an id, which is resolved to a name below and never shown as it is)
+    const value = answerText(row['sc_item_option.value']);
     if (question) labelled += 1;
     if (LAYOUT_CODES.has(typeCode) || LAYOUT_TYPE.test(typeLabel) || !value) continue;
     if (SECRET_TYPE.test(typeLabel) || SECRET_NAME.test(name) || SECRET_NAME.test(question)) {
       left += 1;
       continue;
     }
-    if (!question) continue;
     candidates.push({ question, value, order: Number.parseFloat(raw(row['sc_item_option.order'])) || 0, refTable: raw(row['sc_item_option.item_option_new.reference']) });
   }
 
   if (!labelled) {
-    return { access: accessEntry(source, STATUS.DENIED, 'Your user cannot read the variable definitions, so the answers could not be labelled with their questions.') };
+    return { access: accessEntry(source, STATUS.DENIED, RELATED_NOTE.noQuestions) };
   }
 
   // Reference answers are sys_ids: show the name, or leave the answer out. Never a raw id. A table that is not on the allow-list is
@@ -291,10 +330,10 @@ async function readVariables({ sysId }, deps, memo) {
   const notes = [];
   if (left) notes.push(`${left} masked or secret answer${left === 1 ? ' was' : 's were'} left out.`);
   if (unresolved) {
-    const why = blocked.length ? ` (your organisation does not allow reading ${blocked.join(', ')})` : notAllowed ? ' (a referenced table is not one Agent Buddy reads)' : failed ? ' (the referenced table could not be read)' : '';
-    notes.push(`${unresolved} reference answer${unresolved === 1 ? '' : 's'} could not be shown${why}.`);
+    // (which lists, and how many answers, stay out of the words: a list is a table to the engine and a name nobody at a desk knows)
+    notes.push(blocked.length ? RELATED_NOTE.answersBlocked : notAllowed ? RELATED_NOTE.answersNotRead : failed ? RELATED_NOTE.answersFailed : RELATED_NOTE.answersSome);
   }
-  if (items.length > shownItems.length) notes.push(`Showing the first ${shownItems.length}.`);
+  if (items.length > shownItems.length) notes.push(fillN(RELATED_NOTE.firstN, { n: shownItems.length }));
   // A person named in an answer ("Manager: ...") is a person on this record: add them so the firewall masks the name wherever it appears.
   const refs = [];
   for (const c of candidates) {
@@ -323,7 +362,7 @@ const nowOf = (deps) => (typeof deps.now === 'function' ? Number(deps.now()) : D
  * A few columns of the record itself, needed to know what to look for (its configuration item, its planned window).
  * Only columns on the kind's display ceiling are asked for, and the values are not copied into the pack. One read per record
  * and column set, shared by every extra that needs it (memo).
- * @returns {Promise<{ row?: object, failure?: { status: string, note: string } }>}
+ * @returns {Promise<{ row?: object, failure?: { status: string, note: string }, hidden?: string[] }>} hidden: columns the row did not carry
  */
 function recordColumns({ table, sysId }, columns, deps, memo) {
   const key = `record:${sysId}:${columns.join(',')}`;
@@ -331,10 +370,14 @@ function recordColumns({ table, sysId }, columns, deps, memo) {
   const promise = (async () => {
     const ceiling = FIELDS_BY_KIND[kindForTable(table)] || [];
     const outside = columns.filter((name) => !ceiling.includes(name));
-    if (outside.length) return { failure: { status: STATUS.ERROR, note: `Could not check ${table}: ${outside.join(', ')} may not be read for this kind of record.` } };
+    if (outside.length) return { failure: { status: STATUS.ERROR, note: NOTE_TEXT.error } };
     const { rows, failure } = await softRead(deps, table, `sys_id=${sysId}`, columns, { limit: 1, displayValue: false });
     if (failure) return { failure };
-    if (!rows.length) return { failure: { status: STATUS.ERROR, note: `Could not read ${table} again to find what to look for.` } };
+    if (!rows.length) return { failure: { status: STATUS.ERROR, note: NOTE_TEXT.error } };
+    // A column that did not come back at all (not even empty) is one the user may not read: what depends on it cannot be looked up, and
+    // "the ticket has none" must not be said of it (R-14).
+    const hidden = absentColumns(rows[0], columns);
+    if (hidden.length) return { hidden };
     return { row: rows[0] };
   })();
   memo?.set(key, promise);
@@ -386,7 +429,7 @@ async function readLinkedIncidents({ sysId, table: ownTable }, deps, memo) {
   const first = await read('ORDERBYopened_at', cap + 1);
   if (first.failure) return { access: accessEntry(source, first.failure.status, first.failure.note) };
   if (wrongRows(first.rows)) {
-    return { access: accessEntry(source, STATUS.ERROR, `Could not check ${source}: the instance did not apply the filter on this problem, so its rows were not used.`) };
+    return { access: accessEntry(source, STATUS.ERROR, NOTE_TEXT.ignoredFilter) };
   }
   if (!first.rows.length) return emptyResult(source, ownTable, deps, memo, []);
 
@@ -405,16 +448,17 @@ async function readLinkedIncidents({ sysId, table: ownTable }, deps, memo) {
   } catch (err) {
     if (isSessionExpired(err) || err?.name === 'AbortError') throw err;
   }
-  const outOf = total ?? `more than ${cap}`;
+  const outOf = total ?? cap;
+  const more = total === null; // (the count could not be read: "more than 20")
   const oldest = shaped(first.rows.slice(0, half));
   const newest = await read('ORDERBYDESCopened_at', cap - half);
   if (newest.failure || wrongRows(newest.rows)) {
     const kept = shaped(first.rows.slice(0, cap));
-    return finish(kept, total, `Showing the oldest ${kept.length} of ${outOf}.`);
+    return finish(kept, total, fillN(more ? RELATED_NOTE.oldestOfMore : RELATED_NOTE.oldestOf, { n: kept.length, total: outOf }));
   }
   const seen = new Set(oldest.map((e) => e.id));
   const tail = shaped(newest.rows).filter((e) => !seen.has(e.id));
-  return finish([...oldest, ...tail], total, `Showing the oldest ${oldest.length} and the newest ${tail.length} of ${outOf}.`);
+  return finish([...oldest, ...tail], total, fillN(more ? RELATED_NOTE.oldestNewestMore : RELATED_NOTE.oldestNewest, { n: oldest.length, m: tail.length, total: outOf }));
 }
 
 // ---- Other changes in a change's window (conflicts) and recent changes on a case's CI
@@ -442,7 +486,7 @@ function shapeChange(row) {
   };
 }
 
-const filterIgnored = (table, field) => ({ status: STATUS.ERROR, note: `Could not check ${table} by ${field}: the instance did not apply the filter, so its rows were not used.` });
+const filterIgnored = () => ({ status: STATUS.ERROR, note: NOTE_TEXT.ignoredFilter });
 
 /**
  * Other active changes on the same CI or business service whose planned window overlaps this change's. The instance is asked
@@ -452,13 +496,14 @@ const filterIgnored = (table, field) => ({ status: STATUS.ERROR, note: `Could no
 async function readConflicts(record, deps, memo) {
   const own = await recordColumns(record, ['cmdb_ci', 'business_service', 'start_date', 'end_date'], deps, memo);
   if (own.failure) return { access: accessEntry(CHANGE_TABLE, own.failure.status, own.failure.note) };
+  if (own.hidden) return { access: hiddenFieldEntry(CHANGE_TABLE) };
   const start = parseSnTime(raw(own.row.start_date));
   const end = parseSnTime(raw(own.row.end_date));
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
-    return skipped(CHANGE_TABLE, 'The change has no planned start and end, so schedule conflicts were not checked.');
+    return skipped(CHANGE_TABLE, RELATED_NOTE.noPlannedWindow);
   }
   const keys = [['cmdb_ci', raw(own.row.cmdb_ci)], ['business_service', raw(own.row.business_service)]].filter(([, id]) => SYS_ID_RE.test(id));
-  if (!keys.length) return skipped(CHANGE_TABLE, 'The change has no configuration item or business service, so schedule conflicts were not checked.');
+  if (!keys.length) return skipped(CHANGE_TABLE, RELATED_NOTE.noCiOrServiceChange);
 
   const found = new Map();
   const failures = [];
@@ -473,7 +518,7 @@ async function readConflicts(record, deps, memo) {
     }
     // A condition the instance ignored returns other CIs' changes: none of them is a conflict of this change.
     if (rows.some((row) => !sameId(raw(row[field]), id))) {
-      failures.push(filterIgnored(CHANGE_TABLE, field));
+      failures.push(filterIgnored());
       continue;
     }
     if (rows.length >= CONFLICT_READ) crowded = true;
@@ -490,13 +535,19 @@ async function readConflicts(record, deps, memo) {
 
   // "None found" is only a fact when every check could be read.
   if (failures.length && !found.size) return { access: accessEntry(CHANGE_TABLE, failures[0].status, failures[0].note) };
+  // No other change in the window: a fact only when the user can see changes at all (as readChangesOnTarget asks). The rows of THIS
+  // change's neighbours can still be hidden by a row rule, which the probe cannot tell (R-06): the panel says "that you can see".
+  if (!found.size) {
+    const seen = await confirmEmptyIsReallyEmpty(CHANGE_TABLE, deps, memo);
+    if (seen.status !== STATUS.EMPTY) return { access: accessEntry(CHANGE_TABLE, seen.status, seen.note) };
+  }
   const all = [...found.values()].sort((a, b) => a.t - b.t);
   const shown = all.slice(0, CONFLICT_ROWS);
   const items = shown.map(({ t, who, ...rest }) => rest);
   const notes = [];
-  if (failures.length) notes.push('One of the two checks (configuration item or business service) could not be read.');
-  if (all.length > items.length) notes.push(`Showing the first ${items.length} of ${all.length}.`);
-  if (crowded) notes.push('The instance returned a very long list for this window, so some changes may not be listed.');
+  if (failures.length) notes.push(RELATED_NOTE.oneCheckFailed);
+  if (all.length > items.length) notes.push(fillN(RELATED_NOTE.firstOf, { n: items.length, total: all.length }));
+  if (crowded) notes.push(RELATED_NOTE.longList);
   return { items, summary: { total: all.length, shown: items.length }, access: accessEntry(CHANGE_TABLE, items.length ? STATUS.OK : STATUS.EMPTY, notes.join(' ')), names: shown.flatMap((h) => h.who), reference: items.length > 0 };
 }
 
@@ -504,8 +555,9 @@ async function readConflicts(record, deps, memo) {
 async function readRecentChanges(record, deps, memo) {
   const own = await recordColumns(record, ['cmdb_ci'], deps, memo);
   if (own.failure) return { access: accessEntry(CHANGE_TABLE, own.failure.status, own.failure.note) };
+  if (own.hidden) return { access: hiddenFieldEntry(CHANGE_TABLE) };
   const ci = raw(own.row.cmdb_ci);
-  if (!SYS_ID_RE.test(ci)) return skipped(CHANGE_TABLE, 'The case has no configuration item, so recent changes were not looked up.');
+  if (!SYS_ID_RE.test(ci)) return skipped(CHANGE_TABLE, RELATED_NOTE.noCiCase);
 
   const now = nowOf(deps);
   const from = now - RECENT_BEFORE;
@@ -514,7 +566,7 @@ async function readRecentChanges(record, deps, memo) {
   const { rows, failure } = await softRead(deps, CHANGE_TABLE, query, CHANGE_FIELDS, { limit: RECENT_READ, displayValue: true });
   if (failure) return { access: accessEntry(CHANGE_TABLE, failure.status, failure.note) };
   if (rows.some((row) => !sameId(raw(row.cmdb_ci), ci))) {
-    const bad = filterIgnored(CHANGE_TABLE, 'cmdb_ci');
+    const bad = filterIgnored();
     return { access: accessEntry(CHANGE_TABLE, bad.status, bad.note) };
   }
   if (!rows.length) return emptyResult(CHANGE_TABLE, record.table, deps, memo, []);
@@ -540,11 +592,14 @@ async function readRecentChanges(record, deps, memo) {
 export async function readChangesOnTarget(record, deps, { beforeDays = 7, afterDays = 3, max = 8, now = nowOf(deps), memo = new Map() } = {}) {
   const ceiling = FIELDS_BY_KIND[kindForTable(record.table)] || [];
   const columns = ['cmdb_ci', 'business_service'].filter((c) => ceiling.includes(c));
-  if (!columns.length) return { items: [], keys: [], access: [accessEntry(CHANGE_TABLE, STATUS.SKIPPED, 'This kind of record has no configuration item or service.')] };
+  if (!columns.length) return { items: [], keys: [], access: [accessEntry(CHANGE_TABLE, STATUS.SKIPPED, RELATED_NOTE.noCiOrServiceKind)] };
   const own = await recordColumns(record, columns, deps, memo);
   if (own.failure) return { items: [], keys: [], access: [accessEntry(CHANGE_TABLE, own.failure.status, own.failure.note)] };
+  // A configuration item or service the user may not read is not "none": the changes on it are not looked up and the panel says so.
+  if (own.hidden) return { items: [], keys: [], access: [hiddenFieldEntry(CHANGE_TABLE)] };
   const keys = columns.map((c) => [c, raw(own.row[c]).toLowerCase()]).filter(([, id]) => SYS_ID_RE.test(id));
-  if (!keys.length) return { items: [], keys: [], access: [accessEntry(CHANGE_TABLE, STATUS.SKIPPED, 'This ticket has no configuration item or service, so changes on it were not looked up.')] };
+  // (noTarget: the ticket really has no configuration item and no service, so there is nothing to compare: a fact about the ticket)
+  if (!keys.length) return { items: [], keys: [], noTarget: true, access: [accessEntry(CHANGE_TABLE, STATUS.SKIPPED, RELATED_NOTE.noCiOrServiceTicket)] };
 
   const from = now - beforeDays * DAY;
   const until = now + afterDays * DAY;
@@ -560,7 +615,7 @@ export async function readChangesOnTarget(record, deps, { beforeDays = 7, afterD
       continue;
     }
     if (rows.some((row) => !sameId(raw(row[field]), id))) {
-      failures.push(filterIgnored(CHANGE_TABLE, field));
+      failures.push(filterIgnored());
       continue;
     }
     read = true;
@@ -575,12 +630,14 @@ export async function readChangesOnTarget(record, deps, { beforeDays = 7, afterD
     }
   }
   if (!read) {
-    const first = failures[0] || { status: STATUS.ERROR, note: 'Could not read changes.' };
+    const first = failures[0] || { status: STATUS.ERROR, note: NOTE_TEXT.error };
     return { items: [], keys: keys.map(([c]) => c), access: [accessEntry(CHANGE_TABLE, first.status, first.note)] };
   }
   const items = [...found.values()].sort((a, b) => parseSnTime(b.startUtc) - parseSnTime(a.startUtc)).slice(0, max);
   let access;
-  if (items.length) access = accessEntry(CHANGE_TABLE, STATUS.OK, failures.length ? 'One of the two checks (configuration item or service) could not be read.' : '');
+  if (items.length) access = accessEntry(CHANGE_TABLE, STATUS.OK, failures.length ? RELATED_NOTE.oneCheckFailed : '');
+  // None found, but one of the two checks could not be made: not "none".
+  else if (failures.length) access = accessEntry(CHANGE_TABLE, failures[0].status, failures[0].note);
   else {
     // None found: a fact only when the user can see changes at all.
     const seen = await confirmEmptyIsReallyEmpty(CHANGE_TABLE, deps, memo);
@@ -589,8 +646,66 @@ export async function readChangesOnTarget(record, deps, { beforeDays = 7, afterD
   return { items, keys: keys.map(([c]) => c), access: [access] };
 }
 
+// ---- The person of a task, from its parent (F15) ---------------------------------------------------------------------------------
+//
+// An incident task is for the caller of its incident, a change task for the person who asked for the change, a customer service task for the
+// case's contact (and account), an HR task for the employee of its case (only when sensitive content is allowed). The columns and the reason
+// for each are in src/context/specs/fit.js (PARENT_PERSON). ONE small read of the parent by the id the task's own parent column holds, the
+// parent's person becoming a person of the pack exactly as a catalog task's requester does. A parent that cannot be read is not "nobody":
+// the columns come back as `unreadable` and the entry says why, so the caller card says "could not read" and does not fall back to the opener.
+const NO_PARENT_PERSON = Object.freeze({ refs: [], fields: {}, unreadable: [], access: [] });
+
+/**
+ * @param {{ table: string, parentId: string, linkHidden?: boolean }} task  the task's table, the value of its parent column, and whether that
+ *   column was missing from the task's row altogether (a field the user may not read)
+ * @param {object} deps the reads; `deps.isBlocked` is the organisation's policy (src/content/policyGuard.js)
+ * @param {{ allowSensitive?: boolean }} [options] allowSensitive: an HR parent's identities are read only when this is true
+ * @returns {Promise<{ refs: object[], fields: Record<string, string>, unreadable: string[], access: object[] }>}
+ *   refs: the people (for resolvePeople); fields: the display names by column (the caller keeps those the feature lists); unreadable: the columns
+ *   that could not be told; access: why, when something could not be read. A task with no person to take (a problem task, a custom class, a
+ *   task with no parent, an HR task without sensitive content) gives nothing.
+ */
+export async function readParentPerson({ table, parentId = '', linkHidden = false }, deps, { allowSensitive = false } = {}) {
+  const walk = Object.hasOwn(PARENT_PERSON, table) ? PARENT_PERSON[table] : null;
+  if (!walk) return NO_PARENT_PERSON;
+  const columns = [...walk.columns];
+  const unread = (access) => ({ ...NO_PARENT_PERSON, unreadable: columns, access: [access] });
+  // An HR case's identities: the task's own entry already says that identities and free text were not read (pack.js policyAccess).
+  if (walk.sensitive && !allowSensitive) return NO_PARENT_PERSON;
+  // The organisation blocks the parent's table: the read is not made, and the person is said to be unread, never "nobody" (as for a catalog task).
+  if (typeof deps.isBlocked === 'function' && deps.isBlocked(walk.table)) return unread(accessEntry(walk.table, STATUS.BLOCKED, NOTE_TEXT.blocked));
+  if (linkHidden) return unread(hiddenFieldEntry(table));
+  if (!SYS_ID_RE.test(parentId)) return NO_PARENT_PERSON;
+
+  const { rows, failure } = await softRead(deps, walk.table, `sys_id=${parentId}`, ['sys_id', ...columns], { limit: 1, displayValue: true });
+  if (failure) return unread(accessEntry(walk.table, failure.status, failure.note));
+  const row = rows.find((r) => sameId(raw(r.sys_id), parentId));
+  // Zero rows: the parent is not one this user can see (or not of the class that was expected): "you can't see it", not "nobody".
+  if (!row) return unread(accessEntry(walk.table, rows.length ? STATUS.ERROR : STATUS.DENIED, rows.length ? NOTE_TEXT.ignoredFilter : NOTE_TEXT.notFound));
+
+  // A column the row did not carry is one the user may not read (or this site does not have): not an empty one (R-14). An id whose name came
+  // back empty is hidden from this user too (D1, R-13).
+  const absent = absentColumns(row, columns);
+  const fields = {};
+  const unreadable = [...absent];
+  for (const column of columns) {
+    if (absent.includes(column)) continue;
+    const shown = oneLine(disp(row[column]), 100);
+    if (shown && !SYS_ID_RE.test(shown)) fields[column] = shown;
+    else if (SYS_ID_RE.test(raw(row[column]))) unreadable.push(column);
+  }
+  return { refs: personRefs(row, columns), fields, unreadable, access: [] };
+}
+
 // Extras that are not a plain list of rows linked to the record.
-const READERS =Object.freeze({ __proto__: null, variables: readVariables, linkedIncidents: readLinkedIncidents, conflicts: readConflicts, recentChanges: readRecentChanges });
+const READERS = Object.freeze({ __proto__: null, variables: readVariables, linkedIncidents: readLinkedIncidents, conflicts: readConflicts, recentChanges: readRecentChanges });
+
+// The answers of the request form for a record that is a STEP of a requested item (a catalog task): they live on the item. `parent` is
+// { table, sysId } of that item, or null when the task names none that could be read.
+async function readParentVariables(parent, deps, memo) {
+  if (!parent || !SYS_ID_RE.test(parent.sysId || '')) return skipped('sc_item_option_mtom', RELATED_NOTE.noItem);
+  return readVariables({ table: parent.table, sysId: parent.sysId }, deps, memo);
+}
 
 // ---- Putting it together -------------------------------------------------------------------------------
 
@@ -602,7 +717,11 @@ const READERS =Object.freeze({ __proto__: null, variables: readVariables, linked
  *   A list that was cut short also gets `related[key + 'Summary'] = { total, shown }` (linked incidents, conflicts).
  */
 export async function readRelated(keys, record, deps, memo) {
-  const results = await mapLimit(keys, CONCURRENCY, (key) => (READERS[key] ? READERS[key](record, deps, memo) : readListSource(key, record, deps, memo)));
+  // `record.parent` (a record that is one step of another: pack.js parentOf) points the answers of the request form at the parent.
+  const results = await mapLimit(keys, CONCURRENCY, (key) => {
+    if (key === 'variables' && record.parent !== undefined) return readParentVariables(record.parent, deps, memo);
+    return READERS[key] ? READERS[key](record, deps, memo) : readListSource(key, record, deps, memo);
+  });
   const related = {};
   keys.forEach((key, i) => {
     if (results[i].items) related[key] = results[i].items;

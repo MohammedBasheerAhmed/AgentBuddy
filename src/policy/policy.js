@@ -17,7 +17,7 @@
 // policy says: the two are combined with mergePolicies(), which keeps the stricter side of every setting.
 import { BAKED_POLICY } from './baked.js';
 import { t, tm } from '../i18n/core.js'; // (the mechanism only: the Arabic texts are registered by the pages that show these messages)
-import { HIDEABLE_SCREENS, PROFILE_IDS } from '../profiles/ids.js';
+import { HIDEABLE_SCREENS, PROFILE_IDS, cleanProfilesFor } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from '../reports/layoutFile.js';
 import { FORMAT_LIMITS, cleanFormats, normalizeFormat, readOrgFormats, specOf } from '../formats/formats.js';
 import { TABLE_RE } from '../context/util.js';
@@ -169,7 +169,7 @@ export function normalizeEndpoint(input) {
   if (url.protocol === 'http:' && url.hostname === '[::1]') return bad('plain http:// is only allowed for localhost or 127.0.0.1, not [::1]: the browser would refuse every call to it');
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return bad('it must start with https:// (http:// only for localhost or 127.0.0.1)');
   if (url.username || url.password) return bad('it must not contain a user name or password');
-  if (url.search || url.hash || /[?#]/.test(text)) return bad('it must not have a ?query or #fragment');
+  if (url.search || url.hash || /[?#]/.test(text)) return bad('it must not have anything after the address (a ? or # part)');
   return { ok: true, url: `${url.origin}${url.pathname.replace(/\/+$/, '')}`, origin: url.origin, local, error: '' };
 }
 
@@ -366,7 +366,7 @@ export function mergePolicies(floorInput, managedInput) {
   const reasons = [a.aiBlocked, b.aiBlocked].filter(Boolean);
   const pinned = (key) => {
     if (a[key] && b[key] && a[key] !== b[key]) {
-      reasons.push(t("Your organisation's policies name two different AI endpoints, so Agent Buddy sends nothing. Ask your administrator."));
+      reasons.push(t("Your organisation's policies name two different AI addresses, so Agent Buddy sends nothing. Ask your administrator."));
       return b[key];
     }
     return b[key] || a[key] || null;
@@ -702,14 +702,14 @@ export function checkProviderAllowed({ provider, model, baseUrl }, policy) {
   if (policy?.aiBlocked) return { ok: false, reason: String(policy.aiBlocked) };
   const pinnedProvider = norm(policy?.aiProvider);
   if (pinnedProvider && norm(provider) !== pinnedProvider) {
-    return { ok: false, reason: t('Your organisation only allows the "{provider}" AI provider.', { provider: pinnedProvider }) };
+    return { ok: false, reason: t('Your organisation only allows the "{name}" AI service.', { name: pinnedProvider }) };
   }
   // Provider ids are compared in lower case, and the list is not checked against the providers this version knows: a provider added
   // later (or one the organisation misspelt) simply matches nothing.
   if (Array.isArray(policy?.allowedProviders)) {
     const allowed = lowerList(policy.allowedProviders);
     if (!allowed.includes(norm(provider))) {
-      return { ok: false, reason: allowed.length ? t('Your organisation allows these AI providers only: {list}.', { list: allowed.join(', ') }) : t('Your organisation allows no AI provider. Ask your administrator.') };
+      return { ok: false, reason: allowed.length ? t('Your organisation allows these AI services only: {list}.', { list: allowed.join(', ') }) : t('Your organisation allows no AI service. Ask your administrator.') };
     }
   }
   if (policy?.aiBaseUrl) {
@@ -717,7 +717,7 @@ export function checkProviderAllowed({ provider, model, baseUrl }, policy) {
     const want = normalizeEndpoint(policy.aiBaseUrl);
     const got = normalizeEndpoint(String(baseUrl || ''));
     if (!want.ok || !got.ok || want.url !== got.url) {
-      return { ok: false, reason: t('Your organisation requires its own AI endpoint. Use the address set by your administrator.') };
+      return { ok: false, reason: t('Your organisation requires its own AI service. Use the address set by your administrator.') };
     }
   }
   if (policy?.allowedModels && policy.allowedModels.length && !policy.allowedModels.includes(String(model ?? '').trim())) {
@@ -748,6 +748,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Work profiles (src/profiles): what the person works on decides which cards and actions show. [] until they confirm the suggestion.
   profiles: [],
   profilesConfirmed: false,
+  // Who confirmed them: one short one-way hash of the site and the signed-in person (src/profiles/ids.js), '' when not known. A different
+  // person on the same browser is asked again; never the user id itself, and cleared with the rest by Settings > Stored data.
+  profilesFor: '',
   showEverything: false, // every card and action, whatever the profiles say
   aiSkipped: false, // "Skip AI for now": AI Assist halves say how to set AI up instead of offering actions
   halves: {}, // per screen: 'insights' | 'assist', the half last chosen
@@ -776,6 +779,7 @@ export function effectiveSettings(user, policyInput) {
   if (!['auto', 'en', 'ar'].includes(values.language)) values.language = DEFAULT_SETTINGS.language;
   if (!['ticket', 'panel'].includes(values.answerLanguage)) values.answerLanguage = DEFAULT_SETTINGS.answerLanguage;
   if (!['system', 'light', 'dark'].includes(values.theme)) values.theme = DEFAULT_SETTINGS.theme;
+  values.profilesFor = values.profilesConfirmed === true ? cleanProfilesFor(values.profilesFor) : ''; // only the 16-character hash, only for a confirmed set
   values.formats = cleanFormats(values.formats); // only known actions, each part in range; a stored value that is not a format is dropped
 
   if (policy.piiMode) {
@@ -816,7 +820,7 @@ export function effectiveSettings(user, policyInput) {
   values.allowedModels = policy.allowedModels?.length ? [...policy.allowedModels] : null;
   if (policy.allowedInstances) {
     values.instances = (Array.isArray(values.instances) ? values.instances : []).filter((o) => isInstanceAllowed(o, policy));
-    lock('instances', t('Only instances approved by your organisation can be enabled.'));
+    lock('instances', t('Only ServiceNow sites approved by your organisation can be turned on.'));
   }
   if (policy.disablePageBar) {
     values.pageBar = false;

@@ -25,9 +25,11 @@ export function groupPath(changes) {
     const n = text(name);
     if (n && path[path.length - 1] !== n) path.push(n);
   };
+  // (a group the user cannot see has no name to give: it is said so, in the panel's language)
+  const group = (name, unlabelled) => (unlabelled ? t('a group you cannot see') : name);
   groups.forEach((c, i) => {
-    if (i === 0) push(c.from);
-    push(c.to);
+    if (i === 0) push(group(c.from, c.fromUnlabelled));
+    push(group(c.to, c.toUnlabelled));
   });
   return path;
 }
@@ -55,8 +57,12 @@ export function buildJourney({ pack, slas = null, audit = null, now }) {
   for (const c of changes) {
     const label = fieldLabel(c?.field);
     if (!label) continue;
-    const to = isolate(text(c.to)) || t('(empty)');
-    add(parseSnTime(c.atUtc), c.field === 'assignment_group' ? t('Assigned to {name}', { name: to }) : t('{field}: {value}', { field: label, value: to }), text(c.from) ? t('was {value}', { value: isolate(text(c.from)) }) : '', c.field);
+    // A value no choice names ("State 10") is never shown as it is: a state that changed to one is "State changed", a group the user cannot
+    // see is said so (audit of 2026-11-07, I7).
+    const to = c.toUnlabelled ? (c.field === 'assignment_group' ? t('a group you cannot see') : '') : isolate(text(c.to)) || t('(empty)');
+    const was = c.fromUnlabelled ? (c.field === 'assignment_group' ? t('a group you cannot see') : '') : text(c.from);
+    const heading = c.field === 'assignment_group' ? t('Assigned to {name}', { name: to }) : !to ? (c.field === 'state' ? t('State changed') : t('Priority changed')) : t('{field}: {value}', { field: label, value: to });
+    add(parseSnTime(c.atUtc), heading, was ? t('was {value}', { value: isolate(was) }) : '', c.field);
   }
 
   // The conversation: the first reply from support, and the customer's last message.
@@ -94,7 +100,7 @@ export function buildJourney({ pack, slas = null, audit = null, now }) {
   const reassignments = countOf(f.reassignment_count);
   const reopens = countOf(f.reopen_count);
   let note = '';
-  if (!audit?.available) note = text(audit?.note) || t('The field history is not readable for your user, so the path between groups is not shown.');
+  if (!audit?.available) note = text(audit?.note) || t('The history of this ticket is not available to you, so the path between groups is not shown.');
   return {
     events: events.filter((e) => e.at <= now + 60000),
     path,

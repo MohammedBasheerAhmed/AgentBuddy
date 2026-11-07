@@ -29,7 +29,7 @@ export function fileProblem(file) {
   if (!file || typeof file !== 'object') return t('Choose a file first.');
   const name = String(file.name || '');
   const type = String(file.type || '').toLowerCase();
-  if (!/\.json$/i.test(name) || !JSON_TYPES.has(type)) return t('Choose a .json file saved by Agent Buddy (Save to a file).');
+  if (!/\.json$/i.test(name) || !JSON_TYPES.has(type)) return t('Choose a snippet file saved by Agent Buddy (Save to a file).');
   const size = Number(file.size);
   if (!Number.isFinite(size) || size <= 0) return t('The file is empty.');
   if (size > MAX_FILE_BYTES) return t('The file is too large to import.');

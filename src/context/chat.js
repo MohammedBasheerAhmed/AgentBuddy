@@ -16,11 +16,21 @@
 // (joined, left, typing) are dropped: they say nothing the summary needs.
 
 import { LIMITS } from './allowlists.js';
-import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
+import { NOTE_TEXT, STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead, tm } from './access.js';
 import { SYS_ID_RE, clipText, disp, journalText, oneLine, raw, uniq } from './util.js';
 
 export const CHAT_SOURCE = 'chat';
 export const CHAT_MAX_MESSAGES = 80;
+
+// What the chat's access entries say (the sentences name no table: the panel words them with the plain label of the source).
+const CHAT_NOTE = Object.freeze({
+  noneYouCanRead: tm('This chat has no messages that you can see.'),
+  noText: tm('The messages found held no text.'),
+  utc: tm('Times are UTC.'),
+  newest: tm('Showing the newest {n} messages.'),
+  // The honest "nothing": chat tables differ by product and a role may not read them, so this does not prove the chat is empty.
+  unreadable: tm('You cannot see the chat messages. Your role may not allow it, so the chat may not be empty.'),
+});
 
 // A record of one of these tables IS the conversation: its messages point straight at it.
 const OWN_MESSAGES = Object.freeze({
@@ -159,11 +169,11 @@ async function findConversations({ table, sysId }, deps, attempts) {
       const mine = rows.filter((row) => raw(row[link]).toLowerCase() === sysId);
       if (rows.length && rows.every((row) => !raw(row[link]))) {
         // No row has the column at all: the instance ignored the condition because this table cannot point at the record that way.
-        attempts.push(accessEntry(holder.table, STATUS.EMPTY_OR_HIDDEN, `${holder.table} has no ${link} column to find this chat by.`));
+        attempts.push(accessEntry(holder.table, STATUS.EMPTY_OR_HIDDEN, NOTE_TEXT.ignoredFilter));
         continue;
       }
       if (mine.length < rows.length) {
-        attempts.push(accessEntry(holder.table, STATUS.ERROR, `Could not tell which ${holder.table} rows belong to this record: the instance did not apply the filter on ${link}.`));
+        attempts.push(accessEntry(holder.table, STATUS.ERROR, NOTE_TEXT.ignoredFilter));
         continue;
       }
       if (mine.length) {
@@ -188,20 +198,20 @@ async function readPlan(plan, deps, max, attempts, memo) {
   }
   const wanted = new Set(plan.ids);
   if (rows.length && rows.every((row) => !raw(row[plan.link]))) {
-    attempts.push(accessEntry(plan.table, STATUS.EMPTY_OR_HIDDEN, `${plan.table} has no ${plan.link} column to find this chat's messages by.`));
+    attempts.push(accessEntry(plan.table, STATUS.EMPTY_OR_HIDDEN, NOTE_TEXT.ignoredFilter));
     return null;
   }
   if (rows.some((row) => !wanted.has(raw(row[plan.link]).toLowerCase()))) {
-    attempts.push(accessEntry(plan.table, STATUS.ERROR, `Could not read the messages from ${plan.table}: the instance answered with messages of other conversations, so none were used.`));
+    attempts.push(accessEntry(plan.table, STATUS.ERROR, NOTE_TEXT.ignoredFilter));
     return null;
   }
   const entries = rows.map(mapChatRow).filter(Boolean);
   if (!entries.length) {
     if (!rows.length) {
       const seen = await confirmEmptyIsReallyEmpty(plan.table, deps, memo);
-      attempts.push(accessEntry(plan.table, seen.status, seen.status === STATUS.EMPTY ? 'This conversation has no messages your user can read.' : seen.note));
+      attempts.push(accessEntry(plan.table, seen.status, seen.status === STATUS.EMPTY ? CHAT_NOTE.noneYouCanRead : seen.note));
     } else {
-      attempts.push(accessEntry(plan.table, STATUS.EMPTY, 'The rows found held no message text.'));
+      attempts.push(accessEntry(plan.table, STATUS.EMPTY, CHAT_NOTE.noText));
     }
     return null;
   }
@@ -246,8 +256,8 @@ export async function readChatMessages({ table, sysId }, deps, { max = CHAT_MAX_
 
   if (!kept.length) return { entries: [], loginNames: [], names: [], access: [noMessages(attempts)] };
 
-  const notes = ['Times are UTC.'];
-  if (truncated || ordered.length > max) notes.push(`Showing the newest ${max} messages.`);
+  const notes = [CHAT_NOTE.utc];
+  if (truncated || ordered.length > max) notes.push(CHAT_NOTE.newest.replace('{n}', String(max)));
   const tried = attempts.filter((a) => a.status === STATUS.DENIED || a.status === STATUS.ERROR).map((a) => `${a.source}: ${a.status}`);
   const entries = kept.map(({ login, ...entry }) => entry);
   return {
@@ -265,11 +275,7 @@ function noMessages(attempts) {
     : attempts.some((a) => a.status === STATUS.ERROR)
       ? STATUS.ERROR
       : STATUS.EMPTY_OR_HIDDEN;
-  const why = attempts.length ? ` ${attempts.map((a) => (a.note ? `${a.source}: ${a.note}` : a.source)).join(' ')}` : '';
-  return accessEntry(
-    CHAT_SOURCE,
-    status,
-    `No chat messages are available to you. Chat tables differ by product and your roles may not allow reading them, so this does not prove the chat is empty.${why}`.slice(0, 700),
-    { strategy: 'none' }
-  );
+  // The note is one fixed sentence; what each place answered stays in `tried` (technical, never drawn) for whoever debugs a product.
+  const tried = attempts.map((a) => `${a.source}: ${a.status}`);
+  return accessEntry(CHAT_SOURCE, status, status === STATUS.ERROR ? NOTE_TEXT.error : CHAT_NOTE.unreadable, { strategy: 'none', tried });
 }

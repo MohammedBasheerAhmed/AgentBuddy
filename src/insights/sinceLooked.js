@@ -19,6 +19,7 @@ import { cleanEmailText } from '../context/journal.js';
 import { parseSnTime } from '../context/util.js';
 import { scriptOf } from '../lib/scriptDetect.js';
 import { agoText, noteInstant, storedTime } from './time.js';
+import { personWords } from './personWords.js';
 import { getLanguage, isRtl, isolate, t, tn } from '../i18n/index.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -45,8 +46,10 @@ export function clockText(ms, now) {
   return `${d.toLocaleDateString(isRtl() ? 'ar-u-nu-latn' : 'en-GB', options)} ${time}`;
 }
 
-// Did the panel's read see the notes and comments (whether or not there are any)?
-const journalRead = (pack) => (Array.isArray(pack?.access) ? pack.access : []).some((a) => a?.source === 'journal' && (a.status === 'ok' || a.status === 'empty'));
+// Did the panel's read see the notes and comments (whether or not there are any)? Not when the customer's comments, or the work notes,
+// may be hidden from this user (their column did not come back: R-18, R-19): "nothing new" is not said of what could not be seen.
+const journalRead = (pack) =>
+  (Array.isArray(pack?.access) ? pack.access : []).some((a) => a?.source === 'journal' && (a.status === 'ok' || a.status === 'empty') && a.commentsHidden !== true && a.workNotesHidden !== true);
 
 /**
  * What changed on the ticket since the agent last opened it in the panel.
@@ -85,13 +88,10 @@ export function sinceLooked({ previous, pack, audit = null, slas = null, now }) 
 
   const bits = [];
   const add = (id, said, line = said, quiet = false) => bits.push(quiet ? { id, text: said, line: '', quiet: true } : { id, text: said, line });
-  if (fromCaller) {
-    let line = t('the caller wrote');
-    if (fromCaller === 2) line = t('the caller wrote twice');
-    else if (fromCaller > 2) line = tn(fromCaller, 'the caller wrote {n} time', 'the caller wrote {n} times');
-    add('caller', tn(fromCaller, '{n} message from the caller', '{n} messages from the caller'), line);
-  }
-  if (replies) add('replies', tn(replies, '{n} reply to the caller', '{n} replies to the caller'));
+  // (the person is named as the kind names them: the requester of a requested item, the employee of an HR case, F11)
+  const words = personWords(pack);
+  if (fromCaller) add('caller', words.messagesFrom(fromCaller), words.wrote(fromCaller));
+  if (replies) add('replies', words.repliesTo(replies));
   if (unknown) add('comments', tn(unknown, '{n} new comment', '{n} new comments'));
   if (workNotes) add('notes', tn(workNotes, '{n} new work note', '{n} new work notes'));
 
@@ -100,14 +100,15 @@ export function sinceLooked({ previous, pack, audit = null, slas = null, now }) 
   let groups = [];
   if (history === 'read') {
     const changes = (Array.isArray(audit.changes) ? audit.changes : []).filter((c) => c && after(parseSnTime(c.atUtc)));
-    const lastOf = (field) => changes.filter((c) => c.field === field && text(c.to)).pop();
+    // (a change to a value no choice names is a change all the same: it is said without the value, never as "State 10")
+    const lastOf = (field) => changes.filter((c) => c.field === field && (text(c.to) || c.toUnlabelled)).pop();
     groups = changes.filter((c) => c.field === 'assignment_group');
     const state = lastOf('state');
-    if (state) add('state', t('moved to {state}', { state: isolate(text(state.to)) }));
+    if (state) add('state', t('moved to {state}', { state: state.toUnlabelled ? t('a state') : isolate(text(state.to)) }));
     const priority = lastOf('priority');
-    if (priority) add('priority', t('priority now {priority}', { priority: isolate(text(priority.to)) }));
+    if (priority) add('priority', priority.toUnlabelled ? t('priority changed') : t('priority now {priority}', { priority: isolate(text(priority.to)) }));
     const group = lastOf('assignment_group');
-    if (group) add('reassigned', t('reassigned to {group}', { group: isolate(text(group.to)) }));
+    if (group) add('reassigned', t('reassigned to {group}', { group: group.toUnlabelled ? t('a group you cannot see') : isolate(text(group.to)) }));
     else if (groups.length) add('reassigned', t('reassigned'));
   }
   // An SLA that breached since.
@@ -157,9 +158,10 @@ export function latestCallerMessage(pack, now) {
   // (cleanEmailText marks a cut thread with a line of its own in English: not the caller's words, and not their script either)
   const message = cleanEmailText(text(entry.text)).replace(QUOTE_CUT, '').trim() || text(entry.text);
   const at = noteInstant(entry, pack);
-  let heading = t('The caller wrote');
-  if (Number.isFinite(at.ms) && at.approx) heading = t('The caller wrote, {when}', { when: t('about {when}', { when: agoText(Math.max(0, now - at.ms)) }) });
-  else if (Number.isFinite(at.ms)) heading = t('The caller wrote, {when}', { when: clockText(at.ms, now) });
+  const words = personWords(pack);
+  let heading = words.heading();
+  if (Number.isFinite(at.ms) && at.approx) heading = words.heading(t('about {when}', { when: agoText(Math.max(0, now - at.ms)) }));
+  else if (Number.isFinite(at.ms)) heading = words.heading(clockText(at.ms, now));
   return { text: message, heading, at: at.ms, approx: at.approx, script: scriptOf(message) };
 }
 

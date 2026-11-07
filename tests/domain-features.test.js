@@ -299,7 +299,7 @@ test('related data that could not be read is named as unavailable, never describ
   const parts = partsFor(featureById('account-briefing'), pack);
   const missing = parts.find((p) => p.field === 'data_not_available').text;
   assert.match(missing, /SLAs: not readable by your user/);
-  assert.match(missing, /Other changes: not readable by your user/);
+  assert.match(missing, /Changes: not readable by your user/);
   assert.match(missing, /do not describe them as empty/);
   assert.ok(!parts.some((p) => p.field === 'slas' || p.field === 'recent_changes'));
   // the wording is fixed: nothing from the instance's error text

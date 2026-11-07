@@ -9,12 +9,13 @@ import { t } from '../../i18n/index.js';
  * Replaces the label/value tables the SLA radar and the hand-over drew, which a lead had to read cell by cell.
  *
  *   caption   the list's name (heading for screen readers and the eye)
+ *   label     the list's name for screen readers only, when it sits under a fold that already shows the title
  *   items     [{ table, sysId, number, title, ... }]
  *   meta      (item) => string[]: the facts on the second line, empty ones dropped
  *   env       the dashboard env: openTicket(ref) and ticketHref(ref)
  *   empty     the line shown when there is nothing (useful, not blank)
  */
-export default function TicketList({ caption, items, meta, env, limit = 3, empty = t('Nothing to show.') }) {
+export default function TicketList({ caption, label, items, meta, env, limit = 3, empty = t('Nothing to show.') }) {
   const [all, setAll] = useState(false);
   const list = (Array.isArray(items) ? items : []).filter((i) => i && i.number);
   if (!list.length) return <p className="ab-tlist-empty">{empty}</p>;
@@ -22,7 +23,7 @@ export default function TicketList({ caption, items, meta, env, limit = 3, empty
   return (
     <div className="ab-tlist-wrap">
       {caption && <h3 className="ab-tlist-caption">{caption}</h3>}
-      <ul className="ab-tlist" aria-label={caption || undefined}>
+      <ul className="ab-tlist" aria-label={caption || label || undefined}>
         {shown.map((item) => {
           const ref = item.table && item.sysId ? { table: item.table, sysId: item.sysId } : null;
           const href = ref && env?.ticketHref ? env.ticketHref(ref) || '' : '';

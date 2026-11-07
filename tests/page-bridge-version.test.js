@@ -177,7 +177,7 @@ test('odd values a page script left on the window do not keep the bridge from st
 
 // The version is only worth something when it changes with the file. This pins it to the file's contents: any change to
 // src/page/bridge.js fails here until BRIDGE_VERSION is raised and the pair below is updated. (Line endings do not count.)
-const PINNED = { version: 4, sha256: 'd68bb4546046dfc7efafb33dc56eaebec478a12851b6f9c6a92d12d6219f2229' };
+const PINNED = { version: 8, sha256: '22c36080f74ae61fd0ac36f99e9794e0f5ca29e863c64e48fd8ac93edc1fced6' };
 
 test('BRIDGE_VERSION was raised with the last change to the bridge', () => {
   const sha256 = crypto.createHash('sha256').update(BRIDGE.replace(/\r\n/g, '\n')).digest('hex');

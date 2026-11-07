@@ -7,14 +7,16 @@ import { EmptyNote } from '../ui/primitives.jsx';
 import { MoreRows, Section } from '../write/Section.jsx';
 import { useTicketHeaderRead } from '../write/TicketLine.jsx';
 import { copyText } from '../reports/download.js';
-import { articleShareUrl, freshnessOf } from './articleInfo.js';
+import { freshnessOf } from './articleInfo.js';
+import { customerArticleLink } from '../../lib/snLinks.js';
 import { placeOf } from './shared.js';
 import { KNOWLEDGE_SECTIONS } from './railSections.js';
 import { isolate, t } from '../../i18n/index.js';
 
 // N23 Knowledge search, for everyone: a search box over the published articles the person can read, ranked like the ticket's
 // "Knowledge that may help" (src/context/knowledge.js searchKnowledgeText). GET only, with their own session; nothing is sent to an
-// AI. Each result opens in the person's own UI (RecordLink) and has "Copy link" for sharing with a customer.
+// AI. Each result opens at the article reader in a new tab (RecordLink: the ticket on screen is not replaced) and has "Copy link" for
+// sharing with a customer: the same address (src/lib/snLinks.js), whichever tab the person has open.
 // With a ticket open, the screen starts with the same search run once on the ticket's title ("Articles for INC0012345"), so there is
 // something useful before anything is typed. Both are keyed by the tab and instance (placeOf) and keep nothing once the panel closes.
 
@@ -29,7 +31,7 @@ function Hit({ page, hit, copied, onCopy }) {
   return (
     <li className="ab-row ab-kbx-hit">
       <div className="ab-row-main">
-        <RecordLink page={page} item={{ table: 'kb_knowledge', sysId: hit.sysId }} className="ab-row-title ab-kbx-hit-title">
+        <RecordLink page={page} item={{ table: 'kb_knowledge', sysId: hit.sysId, number: hit.number }} className="ab-row-title ab-kbx-hit-title">
           <span className="ab-kbx-number">{hit.number}</span> {hit.title}
         </RecordLink>
         {(meta || warn) && (
@@ -40,7 +42,7 @@ function Hit({ page, hit, copied, onCopy }) {
         )}
         {hit.excerpt && <p className="ab-kbx-excerpt">{hit.excerpt}</p>}
       </div>
-      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kbx-copy" disabled={!articleShareUrl(page, hit)} onClick={() => onCopy(hit)}>
+      <button type="button" className="ab-btn ab-btn-quiet ab-btn-sm ab-kbx-copy" disabled={!customerArticleLink(page, hit)} onClick={() => onCopy(hit)}>
         {copied ? t('Link copied') : t('Copy link')}
       </button>
     </li>
@@ -88,7 +90,7 @@ function useKbSearch(page, onReady = () => {}) {
 function useCopyLink(page) {
   const [copied, setCopied] = useState('');
   const copy = async (hit) => {
-    const url = articleShareUrl(page, hit);
+    const url = customerArticleLink(page, hit);
     if (url && (await copyText(url))) setCopied(hit.sysId);
   };
   return [copied, copy, setCopied];

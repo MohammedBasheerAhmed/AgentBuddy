@@ -12,6 +12,7 @@ import { INCIDENT_ID, NOW } from './fixtures/sn-incident.js';
 import { CASE_ID } from './fixtures/sn-case.js';
 import { HR_CASE_ID } from './fixtures/sn-hr-case.js';
 import { ABEL } from './fixtures/sn-users.js';
+import { INCIDENT_META, withMeta } from './live-fixtures.js';
 
 // The Insights reads (src/content/ops/insights.js) against the fake instance: GET only, arguments checked, a refusal or an empty answer
 // from a table the user may not see reported honestly, the CI and service read from the record itself.
@@ -35,10 +36,6 @@ function tables() {
     { sys_id: 'au2', tablename: 'incident', documentkey: INCIDENT_ID, fieldname: 'assignment_group', oldvalue: DESK, newvalue: NETWORK, sys_created_on: utc(3) },
     { sys_id: 'au3', tablename: 'incident', documentkey: INCIDENT_ID, fieldname: 'state', oldvalue: '1', newvalue: '2', sys_created_on: utc(3) },
     { sys_id: 'au4', tablename: 'incident', documentkey: 'ffffffffffffffffffffffffffffffff', fieldname: 'state', oldvalue: '1', newvalue: '7', sys_created_on: utc(2) },
-  ];
-  t.sys_choice = [
-    { name: 'incident', element: 'state', value: '1', label: 'New', language: 'en', inactive: 'false' },
-    { name: 'incident', element: 'state', value: '2', label: 'In Progress', language: 'en', inactive: 'false' },
   ];
   const change = (n, { start, end, ci = CI, service = '', number = `CHG00300${n}` }) => ({
     sys_id: v(id('c0', n)),
@@ -171,7 +168,8 @@ test('lookalikes: solved look-alikes with their group, subcategory and priority 
 });
 
 test('journey: group, state and priority changes from the field history, with names instead of ids; other records ignored', async () => {
-  const deps = fakeDeps(tables());
+  // (the words of the states come from the UI meta service: a plain agent cannot read the choice table, docs/live-checks-2026-11-07.md)
+  const deps = withMeta(fakeDeps(tables()), { incident: INCIDENT_META });
   const answer = await insightOps.journey(incident, ctx(deps));
   assert.equal(answer.available, true);
   assert.deepEqual(
@@ -190,15 +188,18 @@ test('journey: group, state and priority changes from the field history, with na
 test('journey: field history the user may not read is said plainly; HR records are not looked at; a group they cannot see is named so', async () => {
   const denied = await insightOps.journey(incident, ctx(fakeDeps(tables(), { denied: ['sys_audit'] })));
   assert.equal(denied.available, false);
-  assert.match(denied.note, /not readable for your user/);
+  assert.match(denied.note, /history of this ticket is not available to you/);
+  assert.doesNotMatch(denied.note, /your user|field history/i);
   const hidden = await insightOps.journey(incident, ctx(fakeDeps(tables(), { hidden: ['sys_audit'] })));
   assert.equal(hidden.available, false, 'zero rows from a table the user sees nothing of proves nothing');
   const hr = fakeDeps(tables());
   const skipped = await insightOps.journey({ table: 'sn_hr_core_case', sysId: HR_CASE_ID }, ctx(hr));
   assert.equal(skipped.available, false);
   assert.equal(hr.calls.length, 0);
-  const noGroups = await readFieldHistory(incident, fakeDeps(tables(), { denied: ['sys_user_group', 'sys_choice'] }));
-  assert.deepEqual(noGroups.changes.map((c) => c.to), ['a group you cannot see', 'a group you cannot see', 'In Progress']);
+  const noGroups = await readFieldHistory(incident, withMeta(fakeDeps(tables(), { denied: ['sys_user_group'] }), { incident: INCIDENT_META }, { denied: ['incident'] }));
+  // (the name of a group the user cannot see is the panel's to say, in its own language: the read marks it, audit of 2026-11-07, I7)
+  assert.deepEqual(noGroups.changes.map((c) => c.to), ['', '', 'In Progress']);
+  assert.deepEqual(noGroups.changes.map((c) => Boolean(c.toUnlabelled)), [true, true, false]);
   // the instance ignoring the record condition: nothing of it is used
   const leaky = await readFieldHistory(incident, { queryTable: async () => tables().sys_audit.map((r) => ({ ...r })) });
   assert.equal(leaky.available, false);

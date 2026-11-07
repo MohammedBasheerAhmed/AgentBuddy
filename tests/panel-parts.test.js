@@ -73,17 +73,19 @@ test('M5: loading says so; a refused read says the details are not available; ne
 test('M5: a ready header shows its title and tags; a blank title is said, not left as "Loading…"', () => {
   const ready = describeHeader({ phase: 'ready', header: { number: 'INC0010001', short_description: 'VPN fails', state: 'In Progress', priority: '2 - High' } }, record);
   assert.equal(ready.title, 'VPN fails');
-  assert.deepEqual(ready.tags, ['incident', 'In Progress', '2 - High']);
+  // (the table's name is not a tag: no raw table name reaches the screen, audit of 2026-11-07; tests/gate-header.test.js)
+  assert.deepEqual(ready.tags, ['In Progress', '2 - High']);
   const blank = describeHeader({ phase: 'ready', header: { number: 'INC0010001', short_description: '  ', state: '', priority: '' } }, record);
   assert.equal(blank.title, HEADER_NO_TITLE);
   assert.equal(HEADER_NO_TITLE, '(no short description)');
   assert.equal(blank.titleKind, 'missing');
-  assert.deepEqual(blank.tags, ['incident']);
+  assert.deepEqual(blank.tags, []);
 });
 
-test('M5: the number falls back to the header, then the table', () => {
+test('M5: the number falls back to the header, then a plain word for the kind of record (never the table name)', () => {
   assert.equal(describeHeader({ phase: 'ready', header: { number: 'KB0001' } }, { table: 'kb_knowledge', sysId: 'x' }).number, 'KB0001');
-  assert.equal(describeHeader({ phase: 'loading', header: null }, { table: 'kb_knowledge', sysId: 'x' }).number, 'kb_knowledge');
+  const word = describeHeader({ phase: 'loading', header: null }, { table: 'kb_knowledge', sysId: 'x' }).number;
+  assert.ok(word && word !== 'kb_knowledge' && !word.includes('_'), word);
 });
 
 test('M5: what the content script answered decides ready or failed: a row of empty columns is "not available to you"', () => {
@@ -131,10 +133,11 @@ test('L7: sources and notes are put into plain words', () => {
   assert.equal(plainSource('task_sla'), 'SLAs');
   assert.equal(plainSource('journal'), 'Notes and comments');
   assert.equal(plainSource('sn_customerservice_case'), 'Customer service cases');
-  assert.equal(plainSource('x_acme_widget'), 'Some information', 'a table nobody can act on');
+  assert.equal(plainSource('x_acme_widget'), 'Widgets', 'a table nobody knows is called by the words of its name (src/lib/tableLabels.js), never by the name');
+  assert.equal(plainSource(''), 'Some information');
   assert.equal(plainNote('Your user cannot read kb_use.'), 'You cannot read article links.');
   assert.equal(plainNote('kb_use did not apply the filter on this ticket, so it was not used.'), 'Article links did not apply the filter on this ticket, so it was not used.');
-  assert.equal(plainNote('Could not read sc_item_option_mtom: HTTP 500'), 'Could not read request answers: HTTP 500');
+  assert.equal(plainNote('Could not read sc_item_option_mtom: HTTP 500'), 'Could not read request answers.', 'an HTTP code never reaches the screen');
   assert.equal(plainNote('Your user may not be able to read notes.'), 'You may not be able to read notes.');
 });
 
@@ -157,7 +160,7 @@ test('L7: only what could not be read is listed, as text, with no table names', 
   assert.deepEqual(lines, [
     'Article links: You cannot read article links.',
     'Chat messages: <img src=x onerror=alert(1)> No chat messages are available to you.',
-    'Some information: not available to you.',
+    'Widgets: could not be read just now. Try again in a moment.',
     'Notes and comments: Your organisation does not allow reading notes and comments.',
   ]);
   const markup = renderToStaticMarkup(<Notes access={[{ source: 'chat', status: 'empty-or-hidden', note: '<img src=x onerror=alert(1)>' }]} />);

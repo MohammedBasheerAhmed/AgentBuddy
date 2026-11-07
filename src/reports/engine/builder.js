@@ -2,8 +2,8 @@
 // vocabulary (names from fixed lists), so a saved widget or a message from the panel can never carry a query of its own.
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS, REPORT_TABLES, REPORT_TABLE_IDS, isSensitiveReportTable } from './constants.js';
-import { attempt } from './reader.js';
-import { andQuery, capNote, probeTables, raw, disp, resolvedColumn, tableAccess } from './common.js';
+import { attempt, keyName } from './reader.js';
+import { andQuery, capNote, probeTables, raw, disp, resolvedColumn, stateName, tableAccess } from './common.js';
 import { FILTER_PRESETS, buildQuery, normalizePresets, presetConditions, windowDaysOf, QueryError } from './queryBuilder.js';
 import { readMyGroups } from './scope.js';
 import { DAY, bucketCounts, bucketLabels, bucketStarts, localWeeksCovering, mean, timeOf } from './time.js';
@@ -36,7 +36,7 @@ export const CHARTS = Object.freeze([
   { id: 'bar', label: tm('Bars') },
   { id: 'donut', label: tm('Donut') },
   { id: 'line', label: tm('Line over time') },
-  { id: 'table', label: tm('Table only') },
+  { id: 'table', label: tm('Numbers only') },
 ]);
 
 const byId = (list, id) => list.find((x) => x.id === id);
@@ -121,7 +121,7 @@ export async function runBuilder(ctx, rawConfig) {
     caps: ctx.caps,
   };
   const fail = (reason, status = 'error') => ({ ...base, readAt: reader.readAt || ctx.generatedAt, data: { available: false, reason, status, config } });
-  if (!tableInfo.usable) return fail(tableAccess([tableInfo])[0].note || tm('This table is not available to you.'), tableInfo.vis.status);
+  if (!tableInfo.usable) return fail(tableAccess([tableInfo])[0].note || tm('This ticket type is not available to you.'), tableInfo.vis.status);
 
   // Filter -> conditions. Presets that need the person's id or groups read them here.
   let groupIds = [];
@@ -143,7 +143,7 @@ export async function runBuilder(ctx, rawConfig) {
     if (!ids.value.ids.length) {
       // "Nothing breached" is only true when this person can see SLA records at all; otherwise the report would show a made-up 0.
       const vis = await reader.visibility('task_sla');
-      if (vis.status !== 'ok') return fail(vis.status === 'hidden' ? tm('You can see no SLA records at all, so "SLA breached" cannot be worked out.') : tm('SLA information is not available to you.'), vis.status);
+      if (vis.status !== 'ok') return fail(vis.status === 'hidden' ? tm('You can\'t see any SLAs at all, so "SLA breached" cannot be worked out.') : tm('SLA information is not available to you.'), vis.status);
     }
     if (!ids.value.ids.length) conditions.push({ op: 'in', field: 'sys_id', values: ['0'.repeat(32)] }); // nothing breached: match nothing
     else conditions.push({ op: 'in', field: 'sys_id', values: ids.value.ids });
@@ -172,7 +172,12 @@ export async function runBuilder(ctx, rawConfig) {
     const g = await attempt(() => reader.groups(config.table, query, [group.field]), config.table);
     if (!g.ok) return fail(g.status === 'error' ? say(tm('{groupBy} is not available on {table}. {note}'), { groupBy: group.label, table: meta.label.toLowerCase(), note: g.note }) : g.note, g.status);
     const items = g.value
-      .map((x) => ({ key: x.keys[0]?.value || '', label: x.keys[0]?.display || tm('(empty)'), value: x.count, n: x.count }))
+      .map((x) => {
+        // A state with no label of its own is named by what it means (never by its stored number); `plain` says the word is the engine's.
+        const key = x.keys[0];
+        const state = group.field === 'state' && (key?.value || key?.display) ? stateName(key, config.table) : null;
+        return { key: key?.value || '', label: state ? state.name : keyName(key, tm('(empty)')), ...(state?.plain ? { plain: true } : {}), value: x.count, n: x.count };
+      })
       .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
       .map((x) => ({ ...x, query: itemQuery(query, group.field, x.key) }));
     return { ...base, readAt: reader.readAt || ctx.generatedAt, data: { ...out, unit, items: withOthers(items, MAX_ITEMS), total: items.reduce((n, x) => n + x.value, 0), hidden: Math.max(0, items.length - MAX_ITEMS), person: Boolean(group.person) } };
@@ -181,7 +186,7 @@ export async function runBuilder(ctx, rawConfig) {
   // ---- everything else reads a bounded number of rows and works them out here ----
   const rf = resolvedColumn(tableInfo);
   if (group.time?.field === 'resolved' || metric === 'avg_resolve_days') {
-    if (!rf) return fail(tm('This table has no resolved date to work from.'));
+    if (!rf) return fail(tm('This ticket type has no resolved date to work from.'));
   }
   const openOnly = metric === 'avg_age_days' ? andQuery(query, 'active=true') : query;
 
@@ -260,7 +265,7 @@ export function builderTables(result) {
       title: shown(result.title),
       columns: [{ key: 'label', label: d.groupBy === 'none' ? t('Measure') : shown(d.groupLabel), person: Boolean(d.person) }, { key: 'value', label: valueLabel }, ...(d.metric === 'count' ? [] : [{ key: 'n', label: t('Tickets counted') }])],
       // The engine's own words ("Others (3)", "(empty)") in the language of the panel; a value from the instance as it is.
-      rows: d.items.map((i) => ({ ...i, label: i.others ? shown(i.label) : placeholderName(i.label) })),
+      rows: d.items.map((i) => ({ ...i, label: i.others || i.plain ? shown(i.label) : placeholderName(i.label) })),
     },
   ];
 }

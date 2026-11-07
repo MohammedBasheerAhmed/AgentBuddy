@@ -25,7 +25,7 @@ export function AiBadge({ label = 'AI', title = t('Uses AI. Masked text goes to 
 
 /** The shield mark that replaces the footer sentence: the privacy promise, said once, on hover and for screen readers. */
 export function ShieldMark() {
-  const text = t('Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
+  const text = t('Reads from ServiceNow as you. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
   return (
     <span className="ab-shield" title={text} role="img" aria-label={text}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">

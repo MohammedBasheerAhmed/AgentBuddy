@@ -5,7 +5,8 @@ import { relativeText } from '../../../insights/time.js';
 import { useRecordRead, useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ReadState } from './bits.jsx';
-import { t, tn, isolate } from '../../../i18n/index.js';
+import { plainNote } from '../../plainAccess.js';
+import { getLanguage, t, tn, isolate } from '../../../i18n/index.js';
 
 // N24, the ticket journey: opened, assigned and passed between groups, state changes, the conversation's key moments, SLA events,
 // resolved. Newest first, three then "Show all". The path between groups needs the field history, which many users may not read;
@@ -13,7 +14,9 @@ import { t, tn, isolate } from '../../../i18n/index.js';
 
 export default function JourneyCard({ page, eff, record, active, setSummary, setAttention }) {
   const ticket = useTicketFacts({ page, record, eff, active });
-  const audit = useRecordRead({ page, record, eff, active, op: 'journey' });
+  // (the labels of the states and priorities come in the panel's language where the instance has them; the key follows the language)
+  const language = getLanguage();
+  const audit = useRecordRead({ page, record, eff, active, op: 'journey', args: { language }, name: `journey:${language}` });
   const answer = ticket.data;
   const journey = useMemo(() => {
     if (!answer?.pack) return null;
@@ -61,8 +64,8 @@ export default function JourneyCard({ page, eff, record, active, setSummary, set
       ) : (
         <p className="ab-hint">{t('No dated events could be read for this ticket.')}</p>
       )}
-      {audit.phase === 'loading' && !audit.data && <p className="ab-hint" role="status">{t('Reading the field history…')}</p>}
-      {journey.note && audit.data && <p className="ab-hint">{journey.note}</p>}
+      {audit.phase === 'loading' && !audit.data && <p className="ab-hint" role="status">{t('Reading the ticket history…')}</p>}
+      {journey.note && audit.data && <p className="ab-hint">{plainNote(journey.note)}</p>}
     </>
   );
 }

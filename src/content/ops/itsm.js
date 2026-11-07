@@ -6,11 +6,16 @@
 // cannot read comes back empty, and a refused read is reported in `access`, never worked around.
 
 import { findSimilarTickets } from '../../context/index.js';
-import { STATUS, entry as accessEntry, softRead } from '../../context/access.js';
+import { STATUS, entry as accessEntry, softRead, tm } from '../../context/access.js';
 import { SYS_ID_RE, disp, oneLine, raw } from '../../context/util.js';
 
 const LIMIT = 5;
-const EXTRA_COLUMNS = ['sys_id', 'assignment_group', 'priority', 'subcategory'];
+// assignment_group.active (W-15): whether the group a look-alike went to is still in use, walked from the group in this same read (no new
+// request). A key that does not come back is not told, and a group that is not told about stays in the hint as it was.
+const EXTRA_COLUMNS = ['sys_id', 'assignment_group', 'assignment_group.active', 'priority', 'subcategory'];
+
+// 'true' | 'false' | '': a flag that was not told is not 'false'.
+const activeFlag = (cell) => (raw(cell) === 'true' || raw(cell) === 'false' ? raw(cell) : '');
 
 export default {
   /**
@@ -31,7 +36,7 @@ export default {
       const { rows, failure } = await softRead(deps, pack.table, `sys_idIN${ids.join(',')}`, EXTRA_COLUMNS, { limit: ids.length + 1, displayValue: true });
       if (failure) {
         const blocked = failure.status === STATUS.BLOCKED;
-        access.push(accessEntry(pack.table, blocked ? STATUS.BLOCKED : failure.status === STATUS.DENIED ? STATUS.DENIED : STATUS.ERROR, blocked ? failure.note : 'The assignment group and priority of the look-alike tickets could not be read.'));
+        access.push(accessEntry(pack.table, blocked ? STATUS.BLOCKED : failure.status === STATUS.DENIED ? STATUS.DENIED : STATUS.ERROR, blocked ? failure.note : tm('The assignment group and priority of the look-alike tickets could not be read.')));
       } else {
         rows.forEach((row) => extra.set(raw(row.sys_id).toLowerCase(), row));
       }
@@ -42,6 +47,7 @@ export default {
       return {
         ...hit,
         assignment_group: row ? oneLine(disp(row.assignment_group), 100) : '',
+        assignment_group_active: row ? activeFlag(row['assignment_group.active']) : '',
         priority: row ? oneLine(disp(row.priority), 40) : '',
         subcategory: row ? oneLine(disp(row.subcategory), 100) : '',
       };

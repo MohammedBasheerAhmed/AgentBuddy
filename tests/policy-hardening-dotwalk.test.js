@@ -16,7 +16,7 @@ import { RITM_ID } from './fixtures/sn-requested-item.js';
 
 const root = path.join(__dirname, '..');
 const guardFor = (raw) => createPolicyGuard({ getManaged: async () => ({ known: true, raw }) });
-const refused = (table) => (e) => e.code === 'BLOCKED_TABLE' && e.message === `Your organisation does not allow Agent Buddy to read ${table} records.`;
+const refused = (table) => (e) => e.code === 'BLOCKED_TABLE' && e.message === 'Your organisation does not allow Agent Buddy to read this.' && e.table === table;
 
 async function guarded(raw) {
   const fake = fakeDeps(buildInstance());
@@ -67,7 +67,8 @@ test('a dot-walk through a column the map does not know is refused while anythin
   await assert.rejects(() => deps.queryTable('incident', 'location.city=Leeds', ['number'], {}), refused('location'));
   await assert.rejects(() => deps.countByColumn('incident', 'active=true', 'location.city'), refused('location'), 'the column a count groups by');
   const withAggregate = await guardFor({ blockedTables: ['problem'] }).deps({ ...fakeDeps({}), aggregate: async () => ({}) });
-  await assert.rejects(() => withAggregate.aggregate('incident', { groupBy: ['assignment_group.manager'] }), refused('assignment_group'));
+  // (assigned_to is a step Agent Buddy never walks; assignment_group is known since W-15, so the example is the assignee's manager)
+  await assert.rejects(() => withAggregate.aggregate('incident', { groupBy: ['assigned_to.manager'] }), refused('assigned_to'));
   // the same checks for a read made another way (the reports' own Aggregate API call)
   assert.throws(() => withAggregate.checkRead('task_sla', 'active=true^location.city=Leeds', []), refused('location'));
   assert.throws(() => withAggregate.checkRead('problem', '', []), refused('problem'));
@@ -162,4 +163,16 @@ test('the dot-walks built at run time are in the map too: My work\'s customer lo
   }
   const known = new Set(['src/mywork/tables.js: .user_name']);
   assert.deepEqual(dynamic.filter((d) => !known.has(d)), [], 'a column built around a dot: check its steps against DOT_WALK_TABLES and list it here');
+});
+
+// ---- assignment_group.active (the look-alike read of builder Q1, W-15): a walk through the ticket's assignment group ---------------------
+
+test('assignment_group.active reads sys_user_group: refused with sys_user_group blocked, allowed without the block', async () => {
+  const blocked = await guarded({ blockedTables: ['sys_user_group'] });
+  await assert.rejects(() => blocked.deps.queryTable('incident', 'active=false', ['number', 'assignment_group', 'assignment_group.active'], {}), refused('sys_user_group'));
+  assert.equal(blocked.fake.calls.length, 0, 'nothing reached the instance');
+  assert.deepEqual(walkTables('assignment_group.active'), ['sys_user_group']);
+  // a site that blocks something else is not affected: the walk goes through
+  const open = await guarded({ blockedTables: ['sys_audit'] });
+  assert.ok(Array.isArray(await open.deps.queryTable('incident', 'active=false', ['number', 'assignment_group', 'assignment_group.active'], {})));
 });

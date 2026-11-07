@@ -53,7 +53,7 @@ test('the part carries the form field the text came from; unknown names fall bac
 test('Rewrite on a blocked table is refused with the same message as an action on that table', () => {
   const pack = buildComposePack({ text: SICK, table: 'incident', field: 'comments' });
   for (const id of REWRITE_IDS) {
-    assert.throws(() => run(id, pack, { policy: { blockedTables: ['incident'] } }), (e) => e instanceof RunBlocked && e.code === 'TABLE_BLOCKED' && /does not allow Agent Buddy to use incident records/.test(e.message), id);
+    assert.throws(() => run(id, pack, { policy: { blockedTables: ['incident'] } }), (e) => e instanceof RunBlocked && e.code === 'TABLE_BLOCKED' && /does not allow Agent Buddy to use incidents/.test(e.message), id);
   }
   // the same text with no ticket open is not tied to a table
   assert.doesNotThrow(() => run('rewrite-short', buildComposePack({ text: SICK }), { policy: { blockedTables: ['incident'] } }));
@@ -107,7 +107,7 @@ test('the audit label of the run is the real table, not "compose"', () => {
 // ---- Reading the form (the panel checks first) -----------------------------------------------------------------------------------
 
 test('"Use what I typed in the form" is refused on a blocked or HR table, or for a blocked field, before anything is read', () => {
-  assert.match(formReadRefusal('incident', 'comments', normalizePolicy({ blockedTables: ['incident'] })), /does not allow Agent Buddy to use incident records/);
+  assert.match(formReadRefusal('incident', 'comments', normalizePolicy({ blockedTables: ['incident'] })), /^Your organisation does not allow Agent Buddy to use incidents\.$/);
   assert.match(formReadRefusal('sn_hr_core_case', 'description', normalizePolicy({})), /HR case content is not sent/);
   assert.match(formReadRefusal('sn_hr_core_task', 'description', normalizePolicy({})), /HR case content is not sent/, 'any sn_hr_ table');
   assert.equal(formReadRefusal('sn_hr_core_case', 'description', normalizePolicy(HR_OK)), '');

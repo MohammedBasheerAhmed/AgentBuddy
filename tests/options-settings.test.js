@@ -112,10 +112,10 @@ test('Settings lists policy ids that match no feature, so an administrator sees 
   const real = FEATURES[0].id;
   const markup = draw(PolicySection, { eff: eff({}, { disabledFeatures: [real, 'reply-drafts'] }) });
   assert.match(markup, /reply-drafts/);
-  assert.match(markup, /match(es)? no feature/);
+  assert.match(markup, /does not have, so nothing is switched off/);
   assert.match(markup, new RegExp(real));
   assert.equal(draw(PolicySection, { eff: eff({}, {}) }), '', 'nothing to say without a policy');
-  assert.ok(!/match(es)? no feature/.test(draw(PolicySection, { eff: eff({}, { disabledFeatures: [real] }) })));
+  assert.ok(!/does not have, so nothing is switched off/.test(draw(PolicySection, { eff: eff({}, { disabledFeatures: [real] }) })));
 });
 
 // The source of the whole Settings page: every file under src/options/, so a section can move between files without a check below

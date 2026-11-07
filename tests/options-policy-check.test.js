@@ -42,9 +42,9 @@ test('policy {aiBaseUrl, providedApiKey} with provider gemini: Test connection a
     const eff = effFor({ provider: 'gemini' }, { aiBaseUrl: GATEWAY, providedApiKey: ORG_KEY });
     const ui = await mount(<ProviderSection eff={eff} reload={() => {}} />);
     await click(ui.button('Test connection'));
-    assert.match(ui.text(), /Your organisation requires its own AI endpoint/);
+    assert.match(ui.text(), /Your organisation requires its own AI service/);
     await click(ui.button('Load models from the server'));
-    assert.match(ui.text(), /Your organisation requires its own AI endpoint/);
+    assert.match(ui.text(), /Your organisation requires its own AI service/);
     assert.deepEqual(env.calls, [], 'nothing was fetched');
     assert.deepEqual(env.asked, [], 'the browser was not asked for permission to contact the Gemini address');
     assert.ok(!ui.text().includes(ORG_KEY), 'the organisation key is never on the page');

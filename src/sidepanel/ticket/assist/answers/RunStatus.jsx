@@ -25,7 +25,7 @@ export function useTick(on, ms = 1000) {
  *
  * props: run ({ phase, since, attempt, attempts }), onStop, readingText
  */
-export function RunProgress({ run, onStop, readingText = t('Reading the ticket with your session…') }) {
+export function RunProgress({ run, onStop, readingText = t('Reading the ticket as you…') }) {
   const waiting = run.phase === 'sending';
   const now = useTick(run.phase === 'reading' || waiting);
   if (run.phase !== 'reading' && !waiting) return null;

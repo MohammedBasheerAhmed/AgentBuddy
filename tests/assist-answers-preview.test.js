@@ -117,7 +117,7 @@ test('the short check names the other records and offers the full text; Send and
   const prepared = prepare('next-best-action', withReference());
   const markup = dialog({ prepared, short: true, others: '3 solved tickets and 2 articles' });
   assert.match(markup, /Send to the AI\?/);
-  assert.match(markup, /Uses 3 solved tickets and 2 articles from other records\./);
+  assert.match(markup, /Uses 3 solved tickets and 2 articles from other tickets\./);
   assert.match(markup, />Show what is sent<\/button>/);
   assert.match(markup, />Cancel<\/button>/);
   assert.match(markup, />Send to AI<\/button>/);
@@ -146,7 +146,8 @@ test('what an answer was made without: plain words, once each, quiet sources lef
   assert.equal(madeWithoutLine(['a', 'b', 'c', 'd', 'e', 'f', 'g']), 'Made without: a, b, c, d, e and 2 more.');
   assert.equal(madeWithoutLine([]), '');
   assert.deepEqual(madeWithout(undefined), []);
-  assert.deepEqual(madeWithout([{ source: 'u_custom_table', status: 'denied' }]), ['some information']);
+  // (a table nobody listed is called by the words of its name, src/lib/tableLabels.js, never by the name and no longer "some information")
+  assert.deepEqual(madeWithout([{ source: 'u_custom_table', status: 'denied' }]), ['custom tables']);
 });
 
 test('after an error: Try again where it can help, Open Settings where the fix is', () => {

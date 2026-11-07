@@ -64,8 +64,6 @@ export const AR_FORMATS = {
   "Saved. This action uses its standard format, not your organisation's.": 'تم الحفظ. يستخدم هذا الإجراء تنسيقه القياسي لا تنسيق مؤسستك.',
   'This action uses its standard format again.': 'يعود هذا الإجراء إلى تنسيقه القياسي.',
   "Back to your organisation's format.": 'عاد إلى تنسيق مؤسستك.',
-  'Copied. Your administrator can add it to the orgFormats list of the policy, so the whole team gets it.':
-    'تم النسخ. يمكن لمسؤول النظام إضافته إلى قائمة orgFormats في السياسة ليحصل عليه الفريق كله.',
   'The browser did not copy that. Select the text under "Show the instructions this sends" instead.':
     'لم ينسخ المتصفح ذلك. حدّد النص تحت «اعرض التعليمات التي تُرسل» بدلًا من ذلك.',
 };

@@ -57,7 +57,7 @@ test('SEC-02: assertRunnable applies blockedTables to the page table as well as 
       }
       return '';
     })(),
-    /does not allow Agent Buddy to use incident records/
+    /does not allow Agent Buddy to use incidents/
   );
 });
 
@@ -102,7 +102,7 @@ test('SEC-04: allowHrContent alone is not enough: the endpoint must be pinned by
   } catch (e) {
     assert.ok(e instanceof RunBlocked);
     assert.match(e.message, /approved/);
-    assert.match(e.message, /AI endpoint/);
+    assert.match(e.message, /AI service/);
     assert.match(e.message, /administrator/);
   }
   // not allowing HR at all keeps its own, older message
@@ -162,7 +162,7 @@ test('AI0.2: every function on an HR record is refused below Strict mode, with a
     assert.fail('Standard mode must be refused');
   } catch (e) {
     assert.ok(e instanceof RunBlocked);
-    assert.equal(e.message, 'HR records need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.');
+    assert.equal(e.message, 'HR tickets need Strict privacy mode (or Local-only). Change the privacy mode in Settings, then try again.');
   }
   // and nothing is built: prepareRun refuses before the firewall sees a byte
   let built = 0;
@@ -241,7 +241,7 @@ test('SEC-09: at or over the policy budget nothing is sent: BUDGET, a plain mess
   assert.ok(r.err instanceof RunBlocked);
   assert.equal(r.err.code, 'BUDGET');
   assert.match(r.err.message, /Your organisation/);
-  assert.match(r.err.message, /1,000/);
+  assert.match(r.err.message, /daily AI limit/);
   assert.match(r.err.message, /tomorrow/);
   assert.equal(r.sent, 0, 'sendChat was not called');
   assert.equal(r.audit.length, 1);

@@ -30,7 +30,7 @@ module.exports = {
     // ---- 1. The AI rejects the key (HTTP 401) ----------------------------------------------------------------------
     ai.setMode('bad-key');
     const bad = await runFeature(p, /^Summarise this ticket/);
-    t.check('401 from the AI: a plain error is shown, not a stack trace', /rejected the API key/i.test(bad.error || '') && !UGLY.test(bad.error || ''), bad.error || '');
+    t.check('401 from the AI: a plain error is shown, not a stack trace', /did not accept the AI key/i.test(bad.error || '') && !UGLY.test(bad.error || ''), bad.error || '');
     // Round 3 (AI0.4): an error offers the step that can fix it. A rejected key is fixed in Settings; the same key would fail again.
     const badSteps = await p.evaluate(() => { const n = [...document.querySelectorAll('.ab-runerror')].find((e) => e.getClientRects().length > 0); return n ? [...n.querySelectorAll('button')].map((b) => b.innerText.trim()) : null; });
     t.check('401 from the AI: the error offers Open Settings (not Try again: the same key would fail again)', Boolean(badSteps) && badSteps.includes('Open Settings') && !badSteps.includes('Try again'), JSON.stringify(badSteps));
@@ -85,7 +85,7 @@ module.exports = {
     inst.setBehaviour({ denied: ['incident'] });
     ai.requests.length = 0;
     const denied = await runFeature(p, /^Summarise this ticket/);
-    t.check("record table denied (403): a plain 'not allowed' message, no stack trace", /not allowed to read this/i.test(denied.error || '') && !UGLY.test(denied.error || ''), denied.error || '');
+    t.check("record table denied (403): a plain 'not allowed' message, no stack trace", /not available to you/i.test(denied.error || '') && !UGLY.test(denied.error || ''), denied.error || '');
     t.check('record table denied (403): nothing was sent to the AI', ai.requests.length === 0);
     inst.setBehaviour();
 
@@ -93,7 +93,7 @@ module.exports = {
     inst.setBehaviour({ expired: true });
     ai.requests.length = 0;
     const expired = await runFeature(p, /^Summarise this ticket/);
-    t.check('expired ServiceNow session: plain "log in again" message', /session has expired/i.test(expired.error || '') && !UGLY.test(expired.error || ''), expired.error || '');
+    t.check('expired ServiceNow session: plain "log in again" message', /signed out of ServiceNow/i.test(expired.error || '') && !UGLY.test(expired.error || ''), expired.error || '');
     t.check('expired ServiceNow session: nothing was sent to the AI', ai.requests.length === 0);
     inst.setBehaviour();
 

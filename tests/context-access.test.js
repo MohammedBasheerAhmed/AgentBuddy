@@ -1,17 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STATUS, classifyReadError, confirmEmptyIsReallyEmpty, softRead } from '../src/context/access.js';
+import { NOTE_TEXT, STATUS, classifyReadError, confirmEmptyIsReallyEmpty, softRead } from '../src/context/access.js';
 import { accessDeniedError, fakeDeps, sessionExpiredError, v } from './fixtures/sn-fakeDeps.js';
 
 const rows = { task_sla: [{ sys_id: v('s1'), task: v('t1') }], empty_table: [] };
 
 test('classifyReadError: a 403 is denied, a missing table is an error that says so, the rest is an error with the cause', () => {
-  assert.deepEqual(classifyReadError(accessDeniedError('task_sla'), 'task_sla'), { status: 'denied', note: 'Your user cannot read task_sla.' });
+  assert.deepEqual(classifyReadError(accessDeniedError('task_sla'), 'task_sla'), { status: 'denied', note: 'Not available to you with your role.', reason: 'acl' });
   assert.equal(classifyReadError(new Error('Your user is not allowed to read this (403).'), 't').status, 'denied');
-  assert.equal(classifyReadError(new Error('Invalid table foo'), 'foo').note, 'foo is not on this instance.');
+  // (the notes are fixed sentences: no table name, no HTTP code, nothing of ServiceNow's own text)
+  assert.deepEqual(classifyReadError(new Error('Invalid table foo'), 'foo'), { status: 'skipped', note: NOTE_TEXT.missing, reason: 'missing' });
   const other = classifyReadError(new Error('Table API query on "x" failed (500): boom'), 'x');
-  assert.equal(other.status, 'error');
-  assert.match(other.note, /^Could not read x: Table API query on "x" failed \(500\): boom/);
+  assert.deepEqual(other, { status: 'error', note: NOTE_TEXT.error, reason: 'error' });
+  assert.doesNotMatch(JSON.stringify(other), /Table API|500|\bx\b|boom/);
   assert.equal(classifyReadError(undefined, 'x').status, 'error');
 });
 
@@ -37,7 +38,8 @@ test('confirmEmptyIsReallyEmpty: rows visible -> empty is a fact; nothing visibl
 
   const none = await confirmEmptyIsReallyEmpty('empty_table', fakeDeps(rows));
   assert.equal(none.status, 'empty-or-hidden');
-  assert.match(none.note, /Your user sees no rows of empty_table at all/);
+  assert.equal(none.note, NOTE_TEXT.hidden);
+  assert.doesNotMatch(none.note, /empty_table|your user/i);
 
   const hidden = await confirmEmptyIsReallyEmpty('task_sla', fakeDeps(rows, { hidden: ['task_sla'] }));
   assert.equal(hidden.status, 'empty-or-hidden');

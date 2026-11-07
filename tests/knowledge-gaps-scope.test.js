@@ -4,7 +4,7 @@ import knowledgeOps from '../src/content/ops/knowledge.js';
 import { GAP_FIELDS, cleanCategory, readGapCategories, readKnowledgeList, readMyGroups, readResolvedTickets, scopeCondition } from '../src/context/knowledge.js';
 import { FEATURE_FIELDS, FIELDS_BY_KIND } from '../src/context/allowlists.js';
 import { toCsv } from '../src/lib/export.js';
-import { comparedText, mergePages } from '../src/sidepanel/knowledge/DuplicatesPanel.jsx';
+import { mergePages } from '../src/sidepanel/knowledge/DuplicatesPanel.jsx';
 import { lookedAtText, scopeWords } from '../src/sidepanel/knowledge/GapsPanel.jsx';
 import { DUPLICATE_COLUMNS, TOPIC_COLUMNS, duplicateRows, exportFileName, topicRows } from '../src/sidepanel/knowledgeScreen/articleInfo.js';
 import { fakeDeps, v } from './fixtures/sn-fakeDeps.js';
@@ -69,7 +69,7 @@ test('the radar reads only the tickets of the scope, checks every row against it
   ignoring.queryTable = (table, query, fields, options) => queryTable(table, table === 'incident' ? query.replace(/\^assignment_groupIN[^^]+/, '') : query, fields, options);
   const out = await readResolvedTickets({ days: 60, tables: ['incident'], scope: { groups: [NET] } }, ignoring, { now: NOW });
   assert.deepEqual(out.tickets, []);
-  assert.match(out.access[0].note, /did not apply the group filter/);
+  assert.match(out.access[0].note, /did not narrow the results as asked/);
   assert.equal(out.total, null);
 });
 
@@ -170,10 +170,9 @@ test('the duplicate finder pages through titles: an offset, "more follow" from t
   assert.ok(Array.isArray(op.articles) && op.articles.every((a) => !('text' in a)), 'titles only');
 });
 
-test('the summary lines: compared titles, and how many tickets of how many in which scope', () => {
-  assert.equal(comparedText(300, 1240), 'Compared 300 of 1,240 titles.');
-  assert.equal(comparedText(12, 12), 'Compared 12 titles.');
-  assert.equal(comparedText(1, null), 'Compared 1 title.');
+// (Wave 6, knowledge manager: the "Compared N of M titles." line is now "Compared N of M articles in {scope}." with a verdict that is only
+// "No duplicates found." when everything was compared; those lines are tested in tests/km-coverage.test.js.)
+test('the summary line of the radar: how many tickets of how many in which scope', () => {
   assert.equal(lookedAtText({ scanned: 500, total: 12400, days: 60 }, 'in your 3 groups'), 'Looked at 500 of 12,400 tickets resolved in the last 60 days in your 3 groups.');
   assert.equal(lookedAtText({ scanned: 4, total: 4, days: 30 }), 'Looked at 4 tickets resolved in the last 30 days.');
   assert.equal(scopeWords({ kind: 'mine', groups: 1 }), 'in your group');

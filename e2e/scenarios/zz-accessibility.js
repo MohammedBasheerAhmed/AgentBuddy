@@ -131,7 +131,7 @@ module.exports = {
       const dash = await ctx.newPage(`dashboard-a11y-${scheme}`);
       await dash.goto(`${ctx.extUrl('dashboard.html')}?tab=${sourceTabId}`, { waitUntil: 'load' });
       await dash.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: scheme }]);
-      await waitForText(dash, /Reading from localhost:\d+ with your own session/, { timeout: 20000 });
+      await waitForText(dash, /Reading from localhost:\d+ as you/, { timeout: 20000 });
       await dash.waitForFunction(() => !/Loading|Reading…/.test(document.body.innerText) || document.querySelectorAll('.ab-widget').length > 0, { timeout: 15000 }).catch(() => {});
       await settle();
       await look(dash, 'Team full page', scheme);

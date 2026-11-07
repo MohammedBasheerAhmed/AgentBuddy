@@ -13,6 +13,13 @@ import { t, isolate } from '../../../i18n/index.js';
 
 const list = (v) => (Array.isArray(v) ? v : []);
 
+// What the card says when no solved look-alike is listed: "found" is about what the search saw (only the newest matches are read, and a
+// row rule can hide tickets), and a search that could not see everything says so instead of "none".
+function noLookalikes(seen, truncated) {
+  if (!seen) return t('No similar solved tickets found, but some could not be checked.');
+  return truncated ? t('No similar solved ticket found among the newest matches.') : t('No similar solved tickets found.');
+}
+
 export default function RelatedCard({ page, eff, record, active, setSummary, setAttention }) {
   const ticket = useTicketFacts({ page, record, eff, active });
   const look = useLookalikes({ page, record, eff, active });
@@ -20,11 +27,14 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
   const pack = ticket.data?.pack || null;
   const outage = pack && ticket.data?.outage ? outageSignal(ticket.data.outage, pack) : null;
   const hits = list(look.data?.hits);
-  const sum = relatedSummary({ lookalikes: look.data && !look.error ? hits : null, open: outage?.readable ? outage.hits : null });
+  const lookRead = Boolean(look.data && !look.error);
+  // A search that could not see everything (denied, failed, blocked, or hidden rows) is not "none" (R-03, R-09).
+  const lookSeen = lookRead && readFully(look.data?.access);
+  const sum = relatedSummary({ lookalikes: lookRead ? hits : null, open: outage?.readable ? outage.hits : null, lookalikesSeen: lookSeen });
   useReport(setSummary, sum.line);
-  // No solved look-alike and nothing else open on the item: nothing to report. Only when the look-alikes came back whole: a search
-  // that could not see everything is not "none".
-  const none = Boolean(look.data && !look.error) && readFully(look.data?.access) && sum.solved === 0 && (!outage?.readable || !outage.hits.length);
+  // No solved look-alike and nothing else open on the item: nothing to report. Only when the look-alikes came back whole, and the
+  // check of the item (when it could be made) did not fail either.
+  const none = lookSeen && sum.solved === 0 && (!outage || outage.checked || !outage.failed) && (!outage?.readable || !outage.hits.length);
   useReport(setAttention, none ? 'clear' : '');
 
   const refresh = () => {
@@ -34,7 +44,7 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
 
   return (
     <>
-      <Group title={t('Solved look-alikes')} count={look.data ? hits.length : undefined}>
+      <Group title={t('Solved look-alikes')} count={look.data && (hits.length > 0 || lookSeen) ? hits.length : undefined}>
         <ReadState state={look} what={t('solved tickets like this one')} onRetry={look.reload} />
         {hits.length > 0 && (
           <ShowMore
@@ -42,7 +52,7 @@ export default function RelatedCard({ page, eff, record, active, setSummary, set
             render={(h) => <ItemLink key={h.sysId} page={page} item={h} line={list(h.why).slice(0, 2).join('; ')} extra={h.close_notes ? t('Fix: {text}', { text: isolate(firstSentences(h.close_notes, 160)) }) : ''} />}
           />
         )}
-        {look.data && !hits.length && <p className="ab-hint">{t('No similar solved tickets found.')}</p>}
+        {lookRead && !hits.length && <p className="ab-hint">{noLookalikes(lookSeen, look.data?.truncated)}</p>}
         <Notes access={look.data?.access} />
       </Group>
 

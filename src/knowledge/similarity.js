@@ -1,7 +1,8 @@
 // Near-duplicate knowledge articles. Pure and deterministic: no AI, no network.
 //
-// Stage 1 compares TITLES of the articles in one scope (one knowledge base or category, at most ~300 articles): the words of a
-// title and its pairs of neighbouring words ("shingles"), compared with Jaccard similarity. Stage 2 compares the TEXT of the
+// Stage 1 compares TITLES of the articles in one scope (one knowledge base or category, read 300 at a time, at most 1,500): the
+// words of a title and its pairs of neighbouring words ("shingles"), compared with Jaccard similarity. The grouping uses nothing but
+// the titles (not the category, not the text), so that is all a group can say about why it is one. Stage 2 compares the TEXT of the
 // few articles of one cluster the person picked: overlapping 3-word shingles. Titles decide what is shown; the text figure
 // only helps the person judge, and says how much of the shorter article also appears in the other.
 
@@ -54,16 +55,25 @@ const changedAt = (a) => {
 const newerFirst = (x, y) => (Number.isFinite(x) ? (Number.isFinite(y) ? y - x : -1) : Number.isFinite(y) ? 1 : 0);
 const cmpRank = (a, b) => b.views - a.views || newerFirst(changedAt(a), changedAt(b)) || String(a.number).localeCompare(String(b.number));
 
+// Do two titles share at least `need` words? Stops counting at `need`. Cheap, so the dearer score is worked out only for titles that
+// can pass the "enough shared words" test at all (every pair of a 1,500-title scan goes through here).
+function sharesAtLeast(a, b, need) {
+  if (need <= 0) return true;
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+  let count = 0;
+  for (const word of small) {
+    if (large.has(word) && (count += 1) >= need) return true;
+  }
+  return false;
+}
+
 /**
- * Groups of articles whose titles read alike. Greedy and star-shaped: articles are taken most-viewed first (then newest);
- * each one that is not already in a group becomes the centre of a new group made of every still-free article whose title is
- * alike enough. Nothing chains (A~B and B~C never puts A and C together), so a group can always be explained by its centre.
- * @param {{ sysId: string, number: string, title: string, views?: number, updated?: string, updatedUtc?: string }[]} articles
- * @param {{ threshold?: number, minShared?: number, maxClusters?: number }} [options]
- * @returns {{ id: string, keep: object, articles: object[], score: number, sharedWords: string[], exactTitle: boolean }[]}
- *   `keep` is the centre (the most-viewed article) as a suggestion; `articles` lists it first. Biggest groups first.
+ * Groups of articles whose titles read alike, and how many such groups there are in all. The same as findDuplicateClusters, which
+ * returns only the groups that are kept (`maxClusters`): `total` is what was found before that cut, so a screen can say "the 25 biggest
+ * of 61" instead of looking complete.
+ * @returns {{ clusters: object[], total: number }}
  */
-export function findDuplicateClusters(articles, { threshold = DUPLICATE_THRESHOLD, minShared = MIN_SHARED_WORDS, maxClusters = MAX_CLUSTERS } = {}) {
+export function findDuplicateGroups(articles, { threshold = DUPLICATE_THRESHOLD, minShared = MIN_SHARED_WORDS, maxClusters = MAX_CLUSTERS } = {}) {
   const items = (Array.isArray(articles) ? articles : [])
     .filter((a) => a && a.sysId && String(a.title || '').trim())
     .map((a) => ({ ...a, views: Number(a.views) || 0, updated: a.updated || '', profile: titleProfile(a.title) }))
@@ -77,8 +87,10 @@ export function findDuplicateClusters(articles, { threshold = DUPLICATE_THRESHOL
     const members = [];
     for (const other of items) {
       if (other.sysId === centre.sysId || taken.has(other.sysId)) continue;
+      const need = Math.min(minShared, centre.profile.unigrams.size, other.profile.unigrams.size);
+      if (!sharesAtLeast(centre.profile.unigrams, other.profile.unigrams, need)) continue;
       const { score, shared } = titleSimilarity(centre.profile, other.profile);
-      if (score >= threshold && shared.length >= Math.min(minShared, centre.profile.unigrams.size, other.profile.unigrams.size)) members.push({ other, score, shared });
+      if (score >= threshold && shared.length >= need) members.push({ other, score, shared });
     }
     if (!members.length) continue;
     taken.add(centre.sysId);
@@ -94,10 +106,26 @@ export function findDuplicateClusters(articles, { threshold = DUPLICATE_THRESHOL
       exactTitle: members.every((m) => m.score >= 0.999),
     });
   }
-  return clusters
+  const kept = clusters
     .sort((a, b) => b.articles.length - a.articles.length || b.score - a.score || cmpRank(a.keep, b.keep))
     .slice(0, maxClusters)
     .map((c, i) => ({ id: `d${i + 1}`, ...c }));
+  return { clusters: kept, total: clusters.length };
+}
+
+/**
+ * Groups of articles whose titles read alike. Greedy and star-shaped: articles are taken most-viewed first (then newest);
+ * each one that is not already in a group becomes the centre of a new group made of every still-free article whose title is
+ * alike enough. Nothing chains (A~B and B~C never puts A and C together), so a group can always be explained by its centre.
+ * @param {{ sysId: string, number: string, title: string, views?: number, updated?: string, updatedUtc?: string }[]} articles
+ * @param {{ threshold?: number, minShared?: number, maxClusters?: number }} [options]
+ * @returns {{ id: string, keep: object, articles: object[], score: number, sharedWords: string[], exactTitle: boolean }[]}
+ *   `keep` is the centre (the most-viewed article) as a suggestion; `articles` lists it first. Biggest groups first.
+ *   `score` is how alike the titles are (the average over the group of titleSimilarity to the centre), `sharedWords` the words
+ *   every title has, `exactTitle` that every title has exactly the centre's words: what a screen says about WHY they were grouped.
+ */
+export function findDuplicateClusters(articles, options) {
+  return findDuplicateGroups(articles, options).clusters;
 }
 
 // ---- Text -------------------------------------------------------------------------------------------

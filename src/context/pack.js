@@ -4,14 +4,15 @@
 // instance returns anyway never reaches the pack. Reads run with the signed-in user's own session; whatever is refused or
 // ambiguous is reported in `access` and the pack carries the rest.
 
-import { FEATURES, FEATURE_JOURNAL, FEATURE_TIMES, HR_HIDDEN, allowedFields, fieldLimit, maskOnlyFields, withheldFields } from './allowlists.js';
-import { STATUS, entry as accessEntry, isBlockedTable } from './access.js';
+import { FEATURES, FEATURE_JOURNAL, FEATURE_TIMES, HR_HIDDEN, allowedFields, featureListsColumn, fieldLimit, maskOnlyFields } from './allowlists.js';
+import { NOTE_TEXT, STATUS, absentColumns, entry as accessEntry, isBlockedTable, tm } from './access.js';
 import { assignSides, readChatMessages } from './chat.js';
 import { JOURNAL_RECORD_FIELDS, applyAuthorNames, readJournal } from './journal.js';
 import { articleHtmlStats, statsToStrings } from './knowledge.js';
-import { isSensitiveTable, kindForTable } from './kinds.js';
+import { isSensitiveTable, kindForTable, rememberTaskClass, taskRowEvidence } from './kinds.js';
 import { personRefs, resolvePeople, splitName } from './people.js';
-import { readRelated, relatedPlan } from './related.js';
+import { readParentPerson, readRelated, relatedPlan } from './related.js';
+import { PARENT_LINK, PARENT_PERSON_LINK, PARENT_TABLE, PARENT_WALK } from './specs/fit.js';
 import { SYS_ID_RE, TABLE_RE, cleanText, disp, oneLine, raw, uniq } from './util.js';
 
 export { stripHtml } from './util.js';
@@ -65,9 +66,13 @@ function chatPeople(people, entries) {
   });
 }
 
+// (the message is what a person reads: no table name; the technical words stay in `detail`)
+const TICKET_NOT_FOUND = tm('This ticket was not found, or it is not available to you.');
+
 function notFound(table, what) {
-  const err = new Error(`${what} was not found in ${table}, or your user cannot see it.`);
+  const err = new Error(TICKET_NOT_FOUND);
   err.code = 'NOT_FOUND';
+  err.detail = `${what} was not found in ${table}`;
   return err;
 }
 
@@ -93,7 +98,11 @@ export async function resolveRealClass({ table, sysId }, deps) {
     const rows = await deps.queryTable('task', `sys_id=${sysId}`, ['sys_id', 'sys_class_name'], { limit: 1, displayValue: false });
     const found = Array.isArray(rows) ? rows[0] : null;
     const actual = found ? raw(found.sys_class_name).trim().toLowerCase() : '';
-    if (TABLE_RE.test(actual)) return { table: actual, unresolved: false };
+    // The class a record reports through `task` IS a kind of task: a custom one (u_*, x_*) is remembered as such (F7, src/context/kinds.js).
+    if (TABLE_RE.test(actual)) {
+      rememberTaskClass(actual);
+      return { table: actual, unresolved: false };
+    }
   } catch (err) {
     if (err?.code === 'SESSION_EXPIRED' || err?.name === 'AbortError' || isBlockedTable(err)) throw err;
   }
@@ -139,13 +148,18 @@ export async function readContextPack(ref, deps, options = {}) {
   const asked = await resolveRecordRef(ref);
   const { table, unresolved } = await resolveRealClass(asked, deps);
   const sysId = asked.sysId;
-  const kind = kindForTable(table);
+  let kind = kindForTable(table);
   const isChat = kind === 'chat';
   // An HR-family table, or a record whose class could not be told, keeps its free text and identities unread unless allowed.
   const sensitive = isSensitiveTable(table, prefixes) || unresolved;
   const minimised = sensitive && !allowSensitive;
   const readNames = allowedFields(table, feature, { allowSensitive, sensitivePrefixes: prefixes });
-  const names = unresolved && !allowSensitive ? readNames.filter((name) => !HR_HIDDEN.has(name)) : readNames;
+  // The organisation blocks the table a task's requester and item are walked from: the walk would make the whole read fail (the policy
+  // guard refuses a dot-walk through a blocked table), so the walked columns and the link are left out and the pack says so.
+  const parentTable = PARENT_TABLE[kind];
+  const parentBlocked = Boolean(parentTable) && typeof deps.isBlocked === 'function' && deps.isBlocked(parentTable);
+  const walkedOut = parentBlocked ? new Set([...Object.keys(PARENT_WALK[kind] || {}), PARENT_LINK[kind]]) : new Set();
+  const names = (unresolved && !allowSensitive ? readNames.filter((name) => !HR_HIDDEN.has(name)) : readNames).filter((name) => !walkedOut.has(name));
   // Person columns that are not part of the feature's own spec are read only to mask those people; they are not fields of the pack.
   const maskOnly = new Set(maskOnlyFields(table, feature));
   const wantJournal = (options.includeJournal ?? FEATURE_JOURNAL[feature]) === true;
@@ -153,33 +167,69 @@ export async function readContextPack(ref, deps, options = {}) {
   // When the organisation blocks the journal table, the record's own notes columns are not a way round it.
   const journalBlocked = typeof deps.isBlocked === 'function' && deps.isBlocked('sys_journal_field');
   const memo = new Map(); // one "can this user see the table at all" read per table
-  const withheld = !minimised ? [] : unresolved ? readNames.filter((name) => !names.includes(name)) : withheldFields(table, feature, { allowSensitive, sensitivePrefixes: prefixes });
 
   // 1. The record: allowlisted columns only, plus the two note columns when notes are wanted (a chat's messages are elsewhere).
   const row = await deps.fetchRecord(table, sysId, readJournalNow && !isChat && !journalBlocked ? [...names, ...JOURNAL_RECORD_FIELDS] : names, { displayValue: true });
   if (!row) throw notFound(table, 'The record');
+  // A table the product does not know whose row carries the columns only a task has is a custom kind of task (F7): it is read and
+  // described as a task from here on (its SLAs, its child tasks, the task's notes), and remembered as one (src/context/kinds.js). Nothing
+  // is read to find out: these columns are on the generic ceiling and came back with the row.
+  if (kind === 'other' && taskRowEvidence(row)) {
+    rememberTaskClass(table);
+    kind = 'task';
+  }
+  // A catalog task's requester and item come from the requested item it is a step of (F1, F2): the walked columns are read with the
+  // task (names below), and the item's own id says where its answers are.
+  const walked = PARENT_WALK[kind] || {};
+  const aliasOf = (name) => walked[name] || name;
 
+  // Columns the instance did not send at all (not even empty): a field the user may not read (R-14). They are not "empty" and the panel
+  // must not say "No description" of them; pack.unreadable names them. (An empty column comes back as an empty value and is dropped below.)
+  // A reference whose stored value is an id but whose name came back empty is listed too: the thing is there and its name is hidden
+  // from this user (D1, R-13), which is not "unassigned" or "no group".
+  const unreadable = absentColumns(row, names).map(aliasOf);
   const fields = {};
   for (const name of names) {
     if (maskOnly.has(name)) continue;
+    const key = aliasOf(name);
     // An article's body is an HTML column; any other column is read as HTML only when it carries markup (cleanText's 'auto'), so a
     // title such as "List<String> is empty" keeps its words.
-    const value = cleanText(disp(row[name]), fieldLimit(name), { html: kind === 'knowledge' && name === 'text' ? true : 'auto' });
-    if (value) fields[name] = value;
+    const value = cleanText(disp(row[name]), fieldLimit(key), { html: kind === 'knowledge' && key === 'text' ? true : 'auto' });
+    if (value) fields[key] = value;
+    else if (SYS_ID_RE.test(raw(row[name])) && !unreadable.includes(key)) unreadable.push(key);
+  }
+  // The task names its requested item but the requester or the item came back empty: the item is there and hidden from this user (a
+  // task of an item you cannot read), which is not "nobody" and not "no item" (R-14).
+  const link = PARENT_LINK[kind];
+  const parentId = link && names.includes(link) ? raw(row[link]) : '';
+  if (SYS_ID_RE.test(parentId)) {
+    for (const [dotted, alias] of Object.entries(walked)) if (names.includes(dotted) && !disp(row[dotted]) && !unreadable.includes(alias)) unreadable.push(alias);
   }
 
   // 2. Notes (or the messages of a chat) and the per-kind extras (they do not depend on each other).
   const recordText = readJournalNow && !isChat && !journalBlocked ? { comments: disp(row.comments), work_notes: disp(row.work_notes) } : null;
   const noJournal = { entries: [], loginNames: [], access: [] };
-  const [journalResult, relatedResult] = await Promise.all([
-    !readJournalNow ? Promise.resolve(noJournal) : isChat ? readChatMessages({ table, sysId }, deps, { memo }) : readJournal({ table, sysId, recordText }, deps, { memo }),
-    readRelated(relatedPlan({ kind, feature, minimised }), { table, sysId }, deps, memo),
+  // A task of an incident, a change or a case is for the person of that parent (F15): ONE small read of the parent, with the others.
+  const parentPersonRead =
+    kind === 'task' && names.includes(PARENT_PERSON_LINK)
+      ? readParentPerson({ table, parentId: raw(row[PARENT_PERSON_LINK]), linkHidden: !Object.hasOwn(row, PARENT_PERSON_LINK) }, deps, { allowSensitive })
+      : Promise.resolve(null);
+  const [journalResult, relatedResult, parentPerson] = await Promise.all([
+    !readJournalNow ? Promise.resolve(noJournal) : isChat ? readChatMessages({ table, sysId }, deps, { memo }) : readJournal({ table, sysId, recordText, hiddenColumns: recordText ? absentColumns(row, JOURNAL_RECORD_FIELDS) : [] }, deps, { memo }),
+    readRelated(relatedPlan({ kind, feature, minimised }), { table, sysId, ...(link ? { parent: SYS_ID_RE.test(parentId) ? { table: PARENT_TABLE[kind], sysId: parentId.toLowerCase() } : null } : {}) }, deps, memo),
+    parentPersonRead,
   ]);
+  // The parent's person: a person of the pack (masked, with a role, so the caller card, the greeting and the briefing find them); a field of the
+  // pack only for a feature whose own spec lists the column, as for a catalog task's requester; a column that could not be told is unreadable.
+  if (parentPerson) {
+    for (const [column, name] of Object.entries(parentPerson.fields)) if (featureListsColumn(feature, column)) fields[column] = name;
+    for (const column of parentPerson.unreadable) if (!unreadable.includes(column)) unreadable.push(column);
+  }
 
   // 3. People: from the record, the extras and the note authors, with emails where sys_user allows.
   const displayNames = isChat ? journalResult.names || [] : uniq(journalResult.entries.map((e) => e.by).filter((by) => /\s/.test(by)));
   const { people, access: peopleAccess, namesByLogin } = await resolvePeople(
-    { refs: [...personRefs(row, names), ...kindPersonRefs(kind, row, names), ...relatedResult.refs], logins: journalResult.loginNames, names: displayNames },
+    { refs: [...personRefs(row, names), ...kindPersonRefs(kind, row, names), ...relatedResult.refs, ...(parentPerson ? parentPerson.refs : [])], logins: journalResult.loginNames, names: displayNames },
     deps
   );
 
@@ -195,10 +245,14 @@ export async function readContextPack(ref, deps, options = {}) {
   // The people named in rows of other tickets (linked incidents, overlapping changes...): their names are masked exactly too.
   finalPeople = [...finalPeople, ...referencePeople(relatedResult.referenceNames, finalPeople)];
 
+  // (the walked columns that were left out are said to be: not "nobody", not "no item")
+  if (parentBlocked) for (const alias of Object.values(PARENT_WALK[kind] || {})) if (!unreadable.includes(alias)) unreadable.push(alias);
   const access = [
-    ...policyAccess(table, { minimised, wantJournal, unresolved, withheld }),
+    ...(parentBlocked ? [accessEntry(parentTable, STATUS.BLOCKED, NOTE_TEXT.blocked)] : []),
+    ...policyAccess(table, { minimised, wantJournal, unresolved }),
     ...journalResult.access,
     ...relatedResult.access,
+    ...(parentPerson ? parentPerson.access : []),
     ...peopleAccess,
   ];
   return {
@@ -208,9 +262,10 @@ export async function readContextPack(ref, deps, options = {}) {
     number: fields.number || '',
     kind,
     fields,
+    ...(unreadable.length ? { unreadable } : {}),
     people: finalPeople,
     journal,
-    related: { ...relatedResult.related, ...kindExtras(kind, row, names, feature) },
+    related: { ...relatedResult.related, ...kindExtras(kind, row, names, feature), ...parentExtra(row, names, fields) },
     access,
     // The class of a record opened through `task` could not be looked up: the run is gated like an HR case (src/lib/pipeline.js).
     ...(unresolved ? { sensitive: true } : {}),
@@ -219,13 +274,24 @@ export async function readContextPack(ref, deps, options = {}) {
   };
 }
 
+// A task that is part of another ticket (parent): its number and the id to open it by, for "Part of CS0001234" (F15). Not text for any
+// prompt: the parts name the related lists they send, and this is not one of them.
+function parentExtra(row, names, fields) {
+  const id = names.includes('parent') ? raw(row.parent) : '';
+  return SYS_ID_RE.test(id) && fields.parent ? { parent: { sysId: id.toLowerCase(), number: fields.parent } } : {};
+}
+
 // What was left out on purpose, so the pack never looks more complete than it is.
-function policyAccess(table, { minimised, wantJournal, unresolved, withheld }) {
+// (fixed sentences: they name no table and no column; the pack's `fields` show what was read)
+const MINIMISED_NOTE = Object.freeze({
+  unresolved: tm('This ticket was opened as a general task and its real type could not be looked up, so it is treated as sensitive: free text and identities were not read.'),
+  sensitive: tm('This kind of ticket holds sensitive data, so free text and identities were not read.'),
+  journal: tm('Notes and comments on sensitive tickets are not read unless sensitive data is allowed.'),
+});
+
+function policyAccess(table, { minimised, wantJournal, unresolved }) {
   if (!minimised) return [];
-  const why = unresolved
-    ? `This record was opened as a general task and its real type could not be looked up, so it is treated as a sensitive record: free text and identities were not read`
-    : `${table} holds sensitive data, so free text and identities were not read`;
-  const out = [accessEntry(table, STATUS.SKIPPED, `${why}${withheld.length ? ` (${withheld.join(', ')})` : ''}.`)];
-  if (wantJournal) out.push(accessEntry('journal', STATUS.SKIPPED, 'Notes and comments on sensitive records are not read unless sensitive data is allowed.'));
+  const out = [accessEntry(table, STATUS.SKIPPED, unresolved ? MINIMISED_NOTE.unresolved : MINIMISED_NOTE.sensitive)];
+  if (wantJournal) out.push(accessEntry('journal', STATUS.SKIPPED, MINIMISED_NOTE.journal));
   return out;
 }

@@ -23,6 +23,20 @@ export function firstSentences(value, max = MAX_FIX) {
   return out.length > max ? `${out.slice(0, max - 1).trimEnd()}…` : out;
 }
 
+/**
+ * What a problem already says about getting by (audit of 2026-11-07, F14): the workaround written on it and whether it is marked a known
+ * error. From the Glance's read (no new read). null when the ticket is not a problem or has neither. `hidden`: the workaround is a column
+ * this user may not read (pack.unreadable), which is not "no workaround".
+ */
+export function problemFacts(pack) {
+  if (!pack || pack.kind !== 'problem') return null;
+  const workaround = text(pack.fields?.workaround);
+  const knownError = /^(?:true|yes|1)$/i.test(text(pack.fields?.known_error));
+  if (!workaround && !knownError) return null;
+  const hidden = !workaround && Array.isArray(pack.unreadable) && pack.unreadable.includes('workaround');
+  return { workaround: firstSentences(workaround, 360), knownError, hidden };
+}
+
 /** The steps of an article excerpt: its list lines when it has some ("- Check the client version"), else its first sentences. */
 export function articleSteps(excerpt, max = MAX_FIX) {
   const lines = text(excerpt)

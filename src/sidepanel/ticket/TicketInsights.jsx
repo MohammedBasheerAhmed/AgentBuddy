@@ -382,7 +382,7 @@ export default function TicketInsights({ page, eff, record, header, active, need
     );
   };
 
-  if (!groups.length && !rest.length) return <EmptyNote>{t('Nothing to show for this kind of record yet.')}</EmptyNote>;
+  if (!groups.length && !rest.length) return <EmptyNote>{t('Nothing to show for this kind of ticket yet.')}</EmptyNote>;
   return (
     <div className={`ab-ins${focusId ? ' is-focus' : ''}`} ref={root}>
       {focusId && (

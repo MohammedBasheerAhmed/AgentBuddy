@@ -65,8 +65,8 @@ test("Anthropic: stop_reason max_tokens (or a full context window) means the ans
 });
 
 test('Anthropic: a refusal is a plain message with its category, and an odd category is not repeated', () => {
-  assert.throws(() => fromAnthropicResponse({ content: [], stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'cyber' } }), (err) => err.code === 'REFUSED' && /declined this request \(cyber\)/.test(err.message));
-  assert.throws(() => fromAnthropicResponse({ content: [], stop_reason: 'refusal', stop_details: { category: '<b>ticket text</b>' } }), (err) => !/ticket text/.test(err.message));
+  assert.throws(() => fromAnthropicResponse({ content: [], stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'cyber' } }), (err) => err.code === 'REFUSED' && err.category === 'cyber' && /declined this request/.test(err.message) && !/cyber/.test(err.message));
+  assert.throws(() => fromAnthropicResponse({ content: [], stop_reason: 'refusal', stop_details: { category: '<b>ticket text</b>' } }), (err) => !/ticket text/.test(err.message) && err.category === undefined);
 });
 
 test('Anthropic: overloaded (529) is retried, then "busy"; an older model behind a proxy that refuses effort gets one try without it', async () => {
@@ -92,7 +92,7 @@ test('Anthropic: an account out of credit (400 "credit balance is too low") says
   const broke = recorder({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } } });
   await assert.rejects(
     () => sendChat(resolveProviderConfig({ provider: 'anthropic' }, 'k-1234567'), sealed(), { skipBudget: true, fetchFn: broke }),
-    (err) => err.code === 'NO_CREDIT' && /^Anthropic says the account has no balance left/.test(err.message)
+    (err) => err.code === 'NO_CREDIT' && /^Anthropic says the account has no credit left/.test(err.message)
   );
   assert.equal(broke.calls.length, 1);
 });

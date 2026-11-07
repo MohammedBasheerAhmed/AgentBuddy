@@ -36,9 +36,9 @@ export function accessNotes(access, only = SOURCES) {
     const label = sourceLabel(entry.source);
     // 'blocked' is the organisation's rule (managed policy blockedTables), not the person's access: say whose it is.
     if (entry.status === 'blocked') notes.push(t('Your organisation does not allow Agent Buddy to read {label}, so they are left out.', { label }));
-    else if (entry.status === 'denied') notes.push(t('You cannot see {label} on this instance, so they are left out.', { label }));
+    else if (entry.status === 'denied') notes.push(t('You cannot see {label} with your role, so they are left out.', { label }));
     else if (entry.status === 'error') notes.push(t('{label} could not be read just now, so they are left out.', { label: `${label[0].toUpperCase()}${label.slice(1)}` }));
-    else if (entry.status === 'empty-or-hidden') notes.push(t('Your user sees no {label} at all, so there may be some that an access rule hides.', { label }));
+    else if (entry.status === 'empty-or-hidden') notes.push(t("You can't see any {label} at all, so there may be some that your role does not let you see.", { label }));
   }
   return notes;
 }
@@ -119,6 +119,7 @@ export const taskLine = (task) => {
  *   state: 'done' | 'ended' | 'rejected' | 'approval' | 'hold' | 'task' | 'progress',
  *   line: string,          the one plain sentence
  *   owner: string,         who to chase ('' when nobody is named)
+ *   ownerHidden: boolean,  no owner is shown because the owner's name could not be read (not the same as nobody)
  *   blockers: string[],    the individual things it waits for, one short phrase each
  *   due: { text: string, overdue: boolean | null } | null,
  *   sla: { text: string, breached: boolean } | null,
@@ -131,7 +132,10 @@ export function requestStatus(pack, { now = Date.now() } = {}) {
   const due = dueInfo(pack, now);
   const sla = slaInfo(pack);
   const caveats = accessNotes(access);
-  const out = (state, line, owner = '', blockers = []) => ({ state, line, owner, blockers, due, sla, caveats });
+  // The owner's name, or its group, did not come back (a field this user may not read): "nobody is named" is not said then (R-14, D1).
+  const hiddenColumns = Array.isArray(pack?.unreadable) ? pack.unreadable : [];
+  const ownerHidden = hiddenColumns.includes('assigned_to') || hiddenColumns.includes('assignment_group');
+  const out = (state, line, owner = '', blockers = []) => ({ state, line, owner, ownerHidden: !owner && ownerHidden, blockers, due, sla, caveats });
 
   const kind = pack?.kind || '';
   const stateText = FIELD(pack, 'state');
@@ -139,7 +143,8 @@ export function requestStatus(pack, { now = Date.now() } = {}) {
   const approvalField = FIELD(pack, 'approval');
 
   // 1. Finished.
-  const finished = finishedKind(stateText) || finishedKind(requestState);
+  const table = pack?.table || kind;
+  const finished = finishedKind({ table, label: stateText, stage: FIELD(pack, 'stage') }) || finishedKind({ table: 'sc_request', label: requestState });
   if (finished === 'done') return out('done', t('Finished ({state}). Nothing is left to wait for.', { state: isolate(stateText || requestState) }));
   if (finished === 'ended') return out('ended', t('Closed without being completed ({state}).', { state: isolate(stateText || requestState) }));
 
@@ -162,20 +167,20 @@ export function requestStatus(pack, { now = Date.now() } = {}) {
   }
   if (approvalKind(approvalField) === 'pending') {
     // The approval column says "requested" but no pending row is visible (hidden, or the rows are on the request).
-    const why = approvalsKnown ? t('the approval record is not visible to you') : unreadable(access, 'sysapproval_approver') ? t('you cannot see the approvals') : t('who has to approve could not be read');
+    const why = approvalsKnown ? t('the approval is not visible to you') : unreadable(access, 'sysapproval_approver') ? t('you cannot see the approvals') : t('who has to approve could not be read');
     return out('approval', t('Waiting for approval ({why}).', { why }), '', [t('approval')]);
   }
 
   // 3. On hold or pending.
-  if (isHoldState(stateText)) {
+  if (isHoldState({ table, label: stateText, stage: FIELD(pack, 'stage') })) {
     const reason = FIELD(pack, 'hold_reason');
-    return out('hold', reason ? t('On hold: {reason}.', { reason: isolate(reason) }) : t('{state}. No reason is given on the record.', { state: isolate(stateText) }), ownerOf({ assignedTo: FIELD(pack, 'assigned_to'), assignmentGroup: FIELD(pack, 'assignment_group') }), reason ? [reason] : []);
+    return out('hold', reason ? t('On hold: {reason}.', { reason: isolate(reason) }) : t('{state}. No reason is given on the ticket.', { state: isolate(stateText) }), ownerOf({ assignedTo: FIELD(pack, 'assigned_to'), assignmentGroup: FIELD(pack, 'assignment_group') }), reason ? [reason] : []);
   }
 
   // 4. A catalog task seen on its own (its request item could not be read): the task is the work.
   if (kind === 'catalog_task') {
     const owner = ownerOf({ assignedTo: FIELD(pack, 'assigned_to'), assignmentGroup: FIELD(pack, 'assignment_group') });
-    return out('task', owner ? t('This task is open and with {owner}.', { owner: isolate(owner) }) : t('This task is open and not assigned to anyone yet.'), owner, [taskLine({ number: FIELD(pack, 'number'), short_description: FIELD(pack, 'short_description') })]);
+    return out('task', owner ? t('This task is open and with {owner}.', { owner: isolate(owner) }) : ownerHidden ? t('This task is open. Who has it is not shown to you.') : t('This task is open and not assigned to anyone yet.'), owner, [taskLine({ number: FIELD(pack, 'number'), short_description: FIELD(pack, 'short_description') })]);
   }
 
   // 5. Open catalog tasks (requested item) or open requested items (request).
@@ -215,6 +220,8 @@ export function requestStatus(pack, { now = Date.now() } = {}) {
   }
   const progress = owner
     ? t('In progress. Nothing is blocking it; it is with {owner}{caution}.', { owner: isolate(owner), caution })
-    : t('In progress. Nothing is blocking it and nobody is named as owner yet{caution}.', { caution });
+    : ownerHidden
+      ? t('In progress. Nothing is blocking it; who has it is not shown to you{caution}.', { caution })
+      : t('In progress. Nothing is blocking it and nobody is named as owner yet{caution}.', { caution });
   return out('progress', progress, owner);
 }

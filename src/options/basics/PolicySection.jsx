@@ -27,8 +27,8 @@ export function PolicySection({ eff }) {
       {unknown.length > 0 && (
         <p className="ab-note ab-note-warn" id="policy-unknown-features">
           {unknown.length === 1
-            ? tx("The policy's disabledFeatures names an id that matches no feature, so nothing is switched off by it: {ids}. Check the spelling against the list in the deployment guide.", { ids: <span className="ab-mono">{unknown.join(', ')}</span> })
-            : tx("The policy's disabledFeatures names ids that match no feature, so nothing is switched off by them: {ids}. Check the spelling against the list in the deployment guide.", { ids: <span className="ab-mono">{unknown.join(', ')}</span> })}
+            ? tx("Your organisation's settings name a feature this version does not have, so nothing is switched off by it: {ids}. Tell your administrator.", { ids: <span className="ab-mono">{unknown.join(', ')}</span> })
+            : tx("Your organisation's settings name features this version does not have, so nothing is switched off by them: {ids}. Tell your administrator.", { ids: <span className="ab-mono">{unknown.join(', ')}</span> })}
         </p>
       )}
     </section>

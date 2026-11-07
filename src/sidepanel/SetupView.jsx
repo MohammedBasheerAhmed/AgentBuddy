@@ -11,7 +11,7 @@ import { tx } from '../i18n/jsx.jsx';
 // What the browser said when it did not turn the site on, and the next step. A refused prompt and a prompt that never appeared (an
 // organisation's browser policy can block site access) look the same from here, so both are named.
 export const REFUSED_TEXT = tm(
-  'The browser did not turn Agent Buddy on for this site. Press the button again and choose Allow. If no question appears, your IT team may block it: ask them, or add the address in Settings.',
+  'The browser did not turn Agent Buddy on for this site. Press the button again and choose Allow. If no question appears, your organisation may block it: ask your administrator, or add the address in Settings.',
 );
 
 /**
@@ -53,7 +53,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
   }
 
   if (!page?.origin) {
-    return <p className="ab-sub">{t('Open your ServiceNow instance in this tab, then click the Agent Buddy button in the browser toolbar. You can also add its address in Settings.')}</p>;
+    return <p className="ab-sub">{t('Open your ServiceNow site in this tab, then click the Agent Buddy button in the browser toolbar. You can also add its address in Settings.')}</p>;
   }
   if (!isInstanceAllowed(page.origin, eff?.policy)) return <p className="ab-note ab-note-warn">{t('Your organisation has not approved this site for Agent Buddy.')}</p>;
 
@@ -84,7 +84,7 @@ export function TurnOnSite({ page, eff, onChanged = () => {}, primary = true }) 
     <div className="ab-turnon">
       <p className="ab-sub">
         {verdict === 'other' ? t('This does not look like ServiceNow.') : t('Agent Buddy could not check this page.')}{' '}
-        {t('Open your ServiceNow instance in this tab, then click the Agent Buddy button in the browser toolbar.')}
+        {t('Open your ServiceNow site in this tab, then click the Agent Buddy button in the browser toolbar.')}
       </p>
       <p className="ab-hint ab-turnon-anyway">
         {tx('Is {host} your ServiceNow on its own web address?', { host: <span className="ab-mono">{host}</span> })}{' '}
@@ -115,8 +115,8 @@ export default function SetupView({ page, eff, lastSeen = null, onChanged = () =
         <h2 className="ab-h">{t('Open a ticket')}</h2>
         <p className="ab-sub">
           {page.surface === 'portal'
-            ? t('Open a ticket, request or case on this portal and Agent Buddy offers help for it here.')
-            : t('Open an incident, request, catalog task or case and Agent Buddy offers help for it here.')}
+            ? t('Open a ticket on this portal and Agent Buddy offers help for it here.')
+            : t('Open a ticket and Agent Buddy offers help for it here.')}
         </p>
         {onOpenScreen && (
           <div className="ab-row">

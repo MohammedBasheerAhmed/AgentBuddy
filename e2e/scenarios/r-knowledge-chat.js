@@ -151,14 +151,14 @@ module.exports = {
     ticket = await ctx.openInstancePage(`/interaction.do?sys_id=${data.INTERACTION_3_ID}`, 'ticket-chat3');
     await waitForText(p, 'INT0000103', { timeout: 20000 });
     await openCard(p, 'Chat facts');
-    await waitForText(p, /No chat messages are available to you/, { timeout: 20000 });
+    await waitForText(p, /(You cannot see the chat messages|This chat has no messages that you can see|No chat messages are available to you)/, { timeout: 20000 });
     t.check('a chat with no readable messages: "No chat messages are available to you" (not "an empty chat")', /No messages available/.test(await summaryIn(p, 'chat')), await summaryIn(p, 'chat'));
     await ticket.close();
     inst.setBehaviour({ denied: ['sys_cs_message'] });
     ticket = await ctx.openInstancePage(`/interaction.do?sys_id=${data.INTERACTION_ID}`, 'ticket-chat-denied');
     await waitForText(p, 'INT0000101', { timeout: 20000 });
     await openCard(p, 'Chat facts');
-    await waitForText(p, /No chat messages are available to you/, { timeout: 20000 });
+    await waitForText(p, /(You cannot see the chat messages|This chat has no messages that you can see|No chat messages are available to you)/, { timeout: 20000 });
     t.check('the messages table denied: the same plain sentence, no error banner', (await p.$('.ab-note-danger')) === null && /cannot read|do not allow|may not allow|denied|roles/i.test(await text(p)));
     inst.setBehaviour();
     await ticket.close();
@@ -195,9 +195,14 @@ module.exports = {
     await p.evaluate(() => [...document.querySelectorAll('.ab-kbx-hit')].find((h) => h.getClientRects().length > 0).querySelector('button').click());
     await ctx.waitUntil('copy link', async () => (await clipboardLog(p)).length >= 1, { timeout: 5000 });
     t.check('"Copy link" copies the article\'s share address, by its number, on this instance', (await clipboardLog(p)).slice(-1)[0] === `${inst.origin}/kb_view.do?sysparm_article=KB0020001`, (await clipboardLog(p)).slice(-1)[0]);
+    // A search result is a "look at this" link (audit 2026-11-07, links): the article reader opens in a NEW tab, by its number; the ticket tab stays.
+    const ticketUrlBeforeHit = ticket.url();
+    const targetsBeforeHit = new Set(ctx.browser.targets());
     await p.evaluate(() => [...document.querySelectorAll('a.ab-kbx-hit-title')].find((a) => a.getClientRects().length > 0).click());
-    await ctx.waitUntil('the tab to open the article', async () => decodeURIComponent(ticket.url()).includes(`kb_knowledge.do?sys_id=${data.kbArticleId(1)}`), { timeout: 10000 });
-    t.check('a search result opens in the SAME tab, on the same instance', ticket.url().startsWith(inst.origin), ticket.url());
+    const hitTab = await ctx.browser.waitForTarget((x) => !targetsBeforeHit.has(x) && x.url() === `${inst.origin}/kb_view.do?sysparm_article=KB0020001`, { timeout: 10000 }).catch(() => null);
+    t.check('a search result opens the article reader in a NEW tab, on the same instance, by its number', Boolean(hitTab), hitTab?.url() || 'no new tab');
+    t.check('...and the ticket tab stayed where it was', ticket.url() === ticketUrlBeforeHit, ticket.url());
+    await (await hitTab?.page?.().catch(() => null))?.close().catch(() => {});
     await ticket.close();
 
     // ============================== DUPLICATES (knowledge managers) ===================================================================
@@ -212,13 +217,30 @@ module.exports = {
     t.check('...choosing a base lists its categories', (await p.$$eval('#ab-kb-category option', (os) => os.map((o) => o.innerText.trim()))).some((c) => /^Remote access \(5\)$/.test(c)));
     const dupBase = ai.requests.length;
     await clickButton(p, /^Find duplicates/);
-    await waitForText(p, /Compared 5 titles/, { timeout: 15000 });
+    await waitForText(p, /Compared 5 of 5 articles in IT Knowledge Base/, { timeout: 15000 });
     const cluster = await p.$eval('.ab-kb-cluster', (el) => el.innerText.replace(/\s+/g, ' ').trim());
     t.check('Duplicates: one group of three that read alike (the three password-reset articles), the others left out', /3 articles that read alike/.test(cluster) && ['KB0020001', 'KB0020002', 'KB0020003'].every((n) => cluster.includes(n)) && !/KB0020004|KB0020006/.test(cluster), cluster.slice(0, 200));
     t.check('...with the most-read one suggested to keep', /Most read: KB0020001/.test(cluster));
-    t.check('...no "Compare more" button: all 5 titles were compared at once', !(await buttonShown(p, /^Compare \d+ more/)));
+    t.check('...no "Compare the next" button: all 5 articles were compared at once', !(await buttonShown(p, /^Compare the next \d+/)));
     t.check('Duplicates: finding them made no AI request', ai.requests.length === dupBase);
     t.check('...and the groups can be exported (CSV)', await buttonShown(p, /^Export groups \(CSV\)/));
+    // Wave 6 (knowledge manager): a base larger than one scan says how much it compared, never claims it looked at everything, and lets
+    // the manager go on; the next 40 complete the scan and find the group the first 300 could not.
+    await p.select('#ab-kb-base', data.KB_BASE_3_ID);
+    await waitPanel(ctx, p, 'the categories of the large base', async () => (await p.$$('#ab-kb-category option')).length >= 2, { timeout: 10000 });
+    await clickButton(p, /^Find duplicates/);
+    await waitForText(p, /Compared 300 of 340 articles in Field Service Knowledge Base/, { timeout: 20000 });
+    const firstPage = await text(p);
+    t.check('Duplicates: a base of 340 articles says it compared 300 of 340, and does not say "No duplicates found"', /No duplicates among the 300 compared/.test(firstPage) && !/No duplicates found\./.test(firstPage));
+    t.check('...and offers the next 40', await buttonShown(p, /^Compare the next 40/));
+    await clickButton(p, /^Compare the next 40/);
+    await waitForText(p, /Compared 340 of 340/, { timeout: 20000 });
+    t.check('...the next 40 complete the scan and find the pair the first 300 could not (1 group read alike)', /1 group read alike|2 articles that read alike/.test(await text(p)));
+    // back to the IT base for the rest of the scenario
+    await p.select('#ab-kb-base', data.KB_BASE_ID);
+    await waitPanel(ctx, p, 'the IT base categories', async () => (await p.$$eval('#ab-kb-category option', (os) => os.map((o) => o.innerText.trim()))).some((c) => /^Remote access \(5\)$/.test(c)), { timeout: 10000 });
+    await clickButton(p, /^Find duplicates/);
+    await waitForText(p, /Compared 5 of 5 articles in IT Knowledge Base/, { timeout: 15000 });
     await clickButton(p, /^Compare$/);
     await waitForText(p, 'Compare the text', { timeout: 8000 });
     await clickButton(p, /^Compare their text/);
@@ -243,13 +265,18 @@ module.exports = {
     // Opening an article moves the tab (same instance) and the panel keeps what it found
     // (an article in the list is a real link: a click opens it in this tab, Ctrl+click or the right-click menu in a new one)
     await openHalf(p, 'insights');
+    // (Duplicates is the authoring screen: an article opens its form, in a NEW tab, so the groups on screen and the ticket tab stay)
+    const ticketUrlBeforeDup = ticket.url();
+    const targetsBeforeDup = new Set(ctx.browser.targets());
     await p.evaluate(() => window.__vis(document.querySelectorAll('a.ab-kb-open')).find((a) => /KB0020002/.test(a.innerText)).click());
-    await ctx.waitUntil('the tab to open the article', async () => decodeURIComponent(ticket.url()).includes(`kb_knowledge.do?sys_id=${data.kbArticleId(2)}`), { timeout: 10000 });
-    t.check('clicking an article opens it in the SAME tab, on the same instance', ticket.url().startsWith(inst.origin), ticket.url());
+    const dupTab = await ctx.browser.waitForTarget((x) => !targetsBeforeDup.has(x) && decodeURIComponent(x.url()).includes(`kb_knowledge.do?sys_id=${data.kbArticleId(2)}`), { timeout: 10000 }).catch(() => null);
+    t.check('clicking an article in Duplicates opens its form in a NEW tab, on the same instance', Boolean(dupTab) && dupTab.url().startsWith(inst.origin), dupTab?.url() || 'no new tab');
+    t.check('...and the ticket tab stayed where it was', ticket.url() === ticketUrlBeforeDup, ticket.url());
+    await (await dupTab?.page?.().catch(() => null))?.close().catch(() => {});
     await ctx.sleep(800);
     await openScreen(p, 'Knowledge');
-    await waitForText(p, 'Compared 5 titles', { timeout: 5000 }).catch(() => {});
-    t.check('...and the groups the panel found are still on screen after the tab moved', (await p.$$('.ab-kb-cluster')).length >= 1, '');
+    await waitForText(p, 'Compared 5 of 5 articles in IT Knowledge Base', { timeout: 5000 }).catch(() => {});
+    t.check('...and the groups the panel found are still on screen', (await p.$$('.ab-kb-cluster')).length >= 1, '');
     await ticket.close();
 
     // ============================== GAPS (knowledge managers) =========================================================================

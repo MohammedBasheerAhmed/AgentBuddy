@@ -7,8 +7,9 @@
 
 import { similarKeywords } from '../lib/similar.js';
 import { LIMITS } from './allowlists.js';
-import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
+import { NOTE_TEXT, STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead, tm } from './access.js';
 import { SYS_ID_RE, cleanText, disp, oneLine, parseSnTime, raw } from './util.js';
+import { isFinishedState } from '../domain/states.js';
 
 const DAY = 86400000;
 
@@ -27,8 +28,6 @@ const FIELDS = [
   'resolution_code', 'close_notes', 'category', 'cat_item', 'cmdb_ci', 'assignment_group',
 ];
 
-const CLOSED_STATE = /closed|resolved|cancel|complete|solved/i;
-
 // ---- Rows to items -------------------------------------------------------------------------------------
 
 /** One history item from a Table API row (display values). Times: *_at are as the user sees them, *Utc are stored UTC. */
@@ -40,6 +39,7 @@ export function normaliseHistoryRow(row, table) {
     number: oneLine(disp(row.number), 40),
     short_description: cleanText(disp(row.short_description), LIMITS.shortDescription),
     state: oneLine(disp(row.state), 40),
+    stateValue: raw(row.state), // as stored ('3'): a renamed or translated state is still understood by it (src/domain/states.js)
     active: raw(row.active) === 'true' || raw(row.active) === 'false' ? raw(row.active) : '',
     category: oneLine(disp(row.category) || disp(row.cat_item), 100),
     cmdb_ci: oneLine(disp(row.cmdb_ci), 100),
@@ -56,7 +56,7 @@ export function normaliseHistoryRow(row, table) {
 // ---- Signals (pure) -------------------------------------------------------------------------------------
 
 const keywordsOf = (item) => similarKeywords(item.short_description, 4);
-const resolvedLike = (item) => Boolean(item.resolvedUtc) || item.active === 'false' || CLOSED_STATE.test(item.state);
+const resolvedLike = (item) => Boolean(item.resolvedUtc) || item.active === 'false' || isFinishedState({ table: item.table, value: item.stateValue, label: item.state });
 
 function sharedKeywords(a, b) {
   const other = new Set(keywordsOf(b));
@@ -172,13 +172,14 @@ async function readSource(source, callerSysId, excludeSysId, deps, { limit, memo
     }
     // Every row must name the caller in one of the asked columns: an ignored condition answers with everyone's rows.
     if (rows.every((row) => columns.some((column) => raw(row[column]).toLowerCase() === callerSysId))) {
-      return { items: rows.map((row) => normaliseHistoryRow(row, source.table)), access: accessEntry(source.table, STATUS.OK) };
+      // (a full page: the caller may have more tickets in this table than were read, so a count is "at least")
+      return { items: rows.map((row) => normaliseHistoryRow(row, source.table)), full: rows.length >= limit, access: accessEntry(source.table, STATUS.OK) };
     }
     ignoredFilter = true;
   }
   return {
     items: [],
-    access: accessEntry(source.table, STATUS.ERROR, `Could not check ${source.table}${ignoredFilter ? ': the instance did not apply the filter on this person, so its rows were not used' : ''}.`),
+    access: accessEntry(source.table, STATUS.ERROR, ignoredFilter ? NOTE_TEXT.ignoredFilter : NOTE_TEXT.error),
   };
 }
 
@@ -188,32 +189,33 @@ async function readSource(source, callerSysId, excludeSysId, deps, { limit, memo
  * @param {{ queryTable: Function }} deps
  * @param {{ limit?: number, tables?: string[], allowSensitive?: boolean, now?: number, current?: object,
  *   knownVisible?: string[], memo?: Map }} [options] tables: restrict to these table names
- * @returns {Promise<{ items: object[], signals: object, access: object[] }>} items are oldest first (newest last),
+ * @returns {Promise<{ items: object[], signals: object, truncated: boolean, access: object[] }>} items are oldest first (newest last),
  *   at most `limit` of the newest across all tables. Items carry sysId/table for local links; they are not ContextPack data.
  */
 export async function readCallerHistory({ callerSysId, excludeSysId = '' }, deps, options = {}) {
   const { limit = LIMITS.historyRows, tables, allowSensitive = false, now = Date.now(), current, knownVisible = [], memo = new Map() } = options;
-  if (!SYS_ID_RE.test(callerSysId || '')) return { items: [], signals: historySignals([], { now, current }), access: [accessEntry('caller-history', STATUS.SKIPPED, 'No caller was found on this record.')] };
+  if (!SYS_ID_RE.test(callerSysId || '')) return { items: [], signals: historySignals([], { now, current }), access: [accessEntry('caller-history', STATUS.SKIPPED, tm('No caller was found on this ticket.'))] };
   const caller = callerSysId.toLowerCase();
 
   const wanted = HISTORY_SOURCES.filter((source) => !tables || tables.includes(source.table));
   const access = [];
   const items = [];
+  let full = false;
   const visible = new Set(knownVisible);
   for (const source of wanted) {
     if (source.sensitive && !allowSensitive) {
-      access.push(accessEntry(source.table, STATUS.SKIPPED, 'HR cases are only included when sensitive data is allowed.'));
+      access.push(accessEntry(source.table, STATUS.SKIPPED, tm('HR cases are only included when sensitive data is allowed.')));
       continue;
     }
     // eslint-disable-next-line no-await-in-loop -- one table at a time keeps the load on the instance low.
     const result = await readSource(source, caller, excludeSysId, deps, { limit, memo, knownVisible: visible });
     items.push(...result.items);
     access.push(result.access);
+    if (result.full) full = true;
   }
 
-  const newest = items
-    .sort((a, b) => (parseSnTime(b.openedUtc) || 0) - (parseSnTime(a.openedUtc) || 0))
-    .slice(0, limit)
-    .reverse();
-  return { items: newest, signals: historySignals(newest, { now, current }), access };
+  const ordered = items.sort((a, b) => (parseSnTime(b.openedUtc) || 0) - (parseSnTime(a.openedUtc) || 0));
+  const newest = ordered.slice(0, limit).reverse();
+  // `truncated`: more tickets exist than the list holds (older ones cut, or a table's page was full), so a count of them is "at least".
+  return { items: newest, signals: historySignals(newest, { now, current }), truncated: ordered.length > limit || full, access };
 }

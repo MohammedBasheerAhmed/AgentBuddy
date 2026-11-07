@@ -25,7 +25,7 @@ const NO_TEXTS = [];
  *
  * props: run (from useRun), eff, page, readingText? (what to say while the data is being read)
  */
-export default function RunPanel({ run, eff, page, readingText = t('Reading the ticket with your session…') }) {
+export default function RunPanel({ run, eff, page, readingText = t('Reading the ticket as you…') }) {
   const { phase, prepared, active, result, error, people, scan, lastPack } = run;
   const config = resolveProviderConfig(eff.values, eff.apiKey);
   // The record that was open when the run started (its number is for the message when another one is open later): the run takes it

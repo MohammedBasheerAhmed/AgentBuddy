@@ -9,10 +9,11 @@ import { t } from '../i18n/index.js';
  * organisation's policy: only `allowedProfiles`, HR only where it approved HR work, nothing at all when it set `lockedProfiles`.
  *
  * props:
- *   eff         the effective settings
+ *   eff         the effective settings (in the panel: withProfiles' result, which carries who is signed in)
  *   roles       the person's ServiceNow roles (from the page), for the suggestion
  *   hints       { managesGroup, hasCatalogWork } (the profileHints read), for the suggestion
- *   onSave(patch) -> Promise   saves { profiles, profilesConfirmed: true }; rejects when it was not saved
+ *   onSave(patch) -> Promise   saves { profiles, profilesConfirmed: true } and, in the panel, profilesFor (who confirmed them: eff.signedIn,
+ *               src/profiles/profiles.js); rejects when it was not saved
  *   instant     true: a tick saves at once and the boxes then show what was saved; the last one cannot be unticked (Settings).
  *               false: one Confirm button (first run)
  *   primary     the Confirm button is the screen's one filled button
@@ -38,7 +39,7 @@ export default function ProfilePicker({ eff, roles = [], hints = {}, onSave, ins
   // `before`: what the boxes showed before this change (instant mode), shown again when the browser does not save it.
   async function save(list, before) {
     setStatus(null);
-    const patch = confirmedProfiles(list, choices);
+    const patch = confirmedProfiles(list, choices, eff);
     try {
       await onSave(patch);
       if (!instant) return;

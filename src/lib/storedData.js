@@ -18,28 +18,30 @@ export const KEY_PREFIX = 'agentbuddy_';
  * title and detail are English texts marked with tm(); the Settings page shows them in the language of the page.
  */
 export const STORED_DATA = Object.freeze([
-  { id: 'settings', title: tm('Settings'), detail: tm('Your choices: AI provider and model, privacy mode, which ServiceNow sites you turned on.'), area: 'local', keys: ['agentbuddy_settings'] },
+  // (the setting `profilesFor` is in here: a scrambled code for who chose what you work on, so a second person on the same browser is asked
+  // again; src/profiles/profiles.js profilesConfirmedFor. Never the user id itself.)
+  { id: 'settings', title: tm('Settings'), detail: tm('Your choices: AI service and model, privacy mode, which ServiceNow sites you turned on, what you work on, and a scrambled code for who chose it.'), area: 'local', keys: ['agentbuddy_settings'] },
   {
     id: 'key',
     title: tm('AI key'),
     detail: tm(
-      "The key you saved, one per provider, the way you chose: in Agent Buddy's own storage in this browser, in memory only, or encrypted with your passphrase. ServiceNow pages cannot read it. Also a time stamp of the last change, which holds nothing about the key."
+      "The key you saved, one per AI service, the way you chose: in Agent Buddy's own storage in this browser, in memory only, or encrypted with your passphrase. ServiceNow pages cannot read it. Also a time stamp of the last change, which holds nothing about the key."
     ),
     area: 'vault and session',
     keys: ['agentbuddy_keyvault_stamp', 'agentbuddy_vault'],
     prefixes: ['agentbuddy_key_', 'agentbuddy_keyenc_'],
   },
   { id: 'snippets', title: tm('Snippets'), detail: tm('The reply templates you wrote.'), area: 'local', keys: ['agentbuddy_snippets'] },
-  { id: 'usage', title: tm('AI usage log'), detail: tm('How many calls and tokens each AI request used, and the prices and limits you entered. No text.'), area: 'local', keys: ['agentbuddy_ai_usage', 'agentbuddy_ai_prices', 'agentbuddy_ai_caps'] },
-  { id: 'audit', title: tm('Activity log'), detail: tm('What Agent Buddy did: action, table, number of masked items, outcome. A salted code for the record, never its text. Also the random salt itself.'), area: 'local', keys: ['agentbuddy_audit', 'agentbuddy_audit_salt'] },
-  { id: 'checklist', title: tm('Checklist ticks'), detail: tm('Which steps you ticked on a task, under a salted code for the record and encrypted. Memory only: gone when the browser closes.'), area: 'session', keys: ['agentbuddy_checklists'] },
+  { id: 'usage', title: tm('AI usage log'), detail: tm('How many calls each AI request made and how big it was, and the prices and limits you entered. Never the text itself.'), area: 'local', keys: ['agentbuddy_ai_usage', 'agentbuddy_ai_prices', 'agentbuddy_ai_caps'] },
+  { id: 'audit', title: tm('Activity log'), detail: tm('What Agent Buddy did: action, kind of ticket, number of masked items, outcome. A scrambled code for the ticket, never its text. Also the random salt itself.'), area: 'local', keys: ['agentbuddy_audit', 'agentbuddy_audit_salt'] },
+  { id: 'checklist', title: tm('Checklist ticks'), detail: tm('Which steps you ticked on a task, under a scrambled code for the ticket and encrypted. Memory only: gone when the browser closes.'), area: 'session', keys: ['agentbuddy_checklists'] },
   { id: 'dashboards', title: tm('Saved dashboards'), detail: tm('The settings of dashboards you saved (what to count, how to group it). No ticket data.'), area: 'local', keys: ['agentbuddy_dashboards'] },
   // "Since you last looked" (src/lib/lastViewed.js): the one exception to "no ticket content" (docs/build-rules.md rule 7). Settings
   // shows how many (lastViewedCount below); the organisation can turn it off (policy rememberLastViewed).
   {
     id: 'lastViewed',
     title: tm('Tickets you opened'),
-    detail: tm('When you last opened each ticket in the panel, so it can say what is new since then: the record id, its table and the time, never its number, title, text or names. At most 500 tickets, none older than 30 days.'),
+    detail: tm("When you last opened each ticket in the panel, so it can say what is new since then: a code for the ticket, its kind and the time, and a scrambled code for who was signed in. Never your name, the ticket number, title or text, or anyone else's name. At most 500 tickets, none older than 30 days."),
     area: 'local',
     keys: ['agentbuddy_last_viewed'],
   },

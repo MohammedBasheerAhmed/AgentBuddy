@@ -267,7 +267,7 @@ test('import never throws on bad JSON or the wrong shape, and returns errors', (
     assert.ok(r.errors.length >= 1, String(text));
     assert.equal(typeof r.errors[0], 'string');
   }
-  assert.match(importSnippets('{', [], opts()).errors[0], /not a valid JSON/i);
+  assert.match(importSnippets('{', [], opts()).errors[0], /not a snippet file/i);
   assert.match(importSnippets('', [], opts()).errors[0], /empty/i);
   assert.match(importSnippets('{"x":1}', [], opts()).errors[0], /No snippets found/);
 });

@@ -21,6 +21,10 @@
 //  - On a portal page (Service Portal, Employee Center, customer service portal: no g_form, an Angular page) fillField finds the
 //    comment or work-notes box in the page and types into it like a person would. It refuses when it cannot tell which box is
 //    meant, and it never presses a button of the page: the person reads the text and presses the portal's own Send.
+//  - On a Workspace page (audit of 2026-11-07, part 9) the box is found with a TIME budget (findControls), a box that cannot be found
+//    is reported as such BEFORE the person clicks Insert (getFieldStates: gaps), and a composer that serves both Work notes and
+//    customer comments is read (composer mode: never clicked or switched): an insert goes in only when the mode is the kind of text,
+//    or when it cannot be read and the answer says so (modeUnread). watchInsert only LOOKS at the box the last insert wrote to.
 //  - A page script can see these events and could answer them. The content script therefore treats every answer as data to
 //    check, never as authority. Do not add an "eval" style action.
 //
@@ -33,7 +37,7 @@
 (function () {
   // Raise this with every change to this file, or an open page keeps the bridge it had (and answers "Unknown action." to an action
   // added since). tests/page-bridge-version.test.js pins the number to the file's contents.
-  var BRIDGE_VERSION = 4;
+  var BRIDGE_VERSION = 8;
 
   // The first bridge kept only a flag, no handle: it counts as version 1, and its listener cannot be removed (see onRequest).
   var installed;
@@ -57,6 +61,36 @@
   var MAX_FIELD_CHARS = 20000;
 
   // Forms live in the top window (Next Experience) or inside the classic `gsft_main` iframe. Resolve whichever has g_form.
+  // The top window and gsft_main come first and are trusted as they are. Any OTHER child frame is the form only when it plainly is the
+  // one the person is looking at: on screen and form-sized, or holding the very record the address names. A hidden or small frame
+  // (a widget, a preview, a tracking frame) that carries a g_form of its own must not turn a home page into a "record" (audit of
+  // 2026-11-07, S7; the home page of one instance showed a table name).
+  var FORM_FRAME_MIN_WIDTH = 300;
+  var FORM_FRAME_MIN_HEIGHT = 200;
+
+  function frameIsOnScreen(child) {
+    try {
+      var element = child.frameElement; // a same-origin frame can reach its own element; a cross-origin one throws or answers null
+      if (!element || typeof element.getBoundingClientRect !== 'function') return false;
+      var box = element.getBoundingClientRect();
+      if (!box || !(box.width >= FORM_FRAME_MIN_WIDTH) || !(box.height >= FORM_FRAME_MIN_HEIGHT)) return false;
+      var style = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(element) : null;
+      return !(style && (style.display === 'none' || style.visibility === 'hidden'));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function frameHoldsAddressedRecord(child) {
+    try {
+      var id = String(child.g_form.getUniqueValue() || '').toLowerCase();
+      var address = String(window.location.href || '').toLowerCase();
+      return isSysId(id) && address.indexOf(id) !== -1;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function resolveFormWindow() {
     if (typeof window.g_form !== 'undefined' && window.g_form) return window;
     try {
@@ -69,7 +103,7 @@
       for (var i = 0; i < window.frames.length && i < 20; i++) {
         try {
           var child = window.frames[i];
-          if (child && child.g_form && typeof child.g_form.getValue === 'function') return child;
+          if (child && child.g_form && typeof child.g_form.getValue === 'function' && (frameIsOnScreen(child) || frameHoldsAddressedRecord(child))) return child;
         } catch (e) {
           /* cross-origin child */
         }
@@ -80,12 +114,130 @@
     return null;
   }
 
+  // ---- The signed-in person's roles: a list, an empty list, or "not known" ----------------------------------------------
+  // The answer has three shapes and the panel must keep them apart: a LIST of names (the page said), an EMPTY list (the page was asked
+  // and the person holds none of them) and null (the page could not say: no g_user, or none of the ways below exists). Null is never
+  // "no roles" (build-rules.md: roles may only change what is SHOWN, so a guess in either direction must stay a guess).
+  // Roles are read from the page only, never over REST (the roles table is not readable by a fulfiller, rule 9). Three ways, in this order:
+  //   1. g_user.roles, as an array or a comma list (what the bridge always read; not documented)
+  //   2. g_user.getRoles() (the Next Experience client API, every role the person holds including inherited ones)
+  //   3. g_user.hasRoleExactly(name) for a FIXED list of names below. Exactly, because hasRole is true for every name when the person
+  //      is an admin. Only these names are ever asked; a name outside the list is never built from page data.
+  // (the HR family is written in two pieces: a role name with a dot in it is not a dot-walked column, and the scan of src/ for those
+  // reads only whole dotted strings: tests/policy-hardening-dotwalk.test.js)
+  var HR_CORE = 'sn_hr_core';
+  var ROLE_PROBE = [
+    'itil', 'itil_admin', 'sn_incident_write', 'sn_request_write', 'catalog_admin', 'catalog_manager', 'catalog_task_editor',
+    'sn_customerservice_agent', 'sn_customerservice_manager', 'sn_customerservice_admin', 'csm_ws_agent',
+    HR_CORE + '.case_writer', HR_CORE + '.manager', HR_CORE + '.admin', 'approver_user',
+    'knowledge', 'knowledge_manager', 'knowledge_admin',
+    'problem_coordinator', 'problem_manager', 'change_manager', 'major_incident_manager', 'admin',
+  ];
+
+  function cleanRoleList(value) {
+    if (Array.isArray(value)) return value.slice(0, 200).map(function (r) { return String(r).slice(0, 80); }).filter(Boolean);
+    if (typeof value === 'string' && value) return value.split(',').map(function (r) { return r.trim().slice(0, 80); }).filter(Boolean).slice(0, 200);
+    return null;
+  }
+
   function rolesOf(u) {
     try {
-      if (Array.isArray(u.roles)) return u.roles.slice(0, 200).map(function (r) { return String(r).slice(0, 80); });
-      if (typeof u.roles === 'string' && u.roles) return u.roles.split(',').map(function (r) { return r.trim().slice(0, 80); }).filter(Boolean).slice(0, 200);
+      return cleanRoleList(u.roles);
     } catch (e) {
       /* not available */
+    }
+    return null;
+  }
+
+  // The fixed list asked one name at a time. null when the page has no hasRoleExactly (or answered none of them).
+  function probeRoles(u) {
+    if (typeof u.hasRoleExactly !== 'function') return null;
+    var found = [];
+    var answered = false;
+    for (var i = 0; i < ROLE_PROBE.length; i++) {
+      try {
+        var yes = u.hasRoleExactly(ROLE_PROBE[i]);
+        answered = true;
+        if (yes === true) found.push(ROLE_PROBE[i]);
+      } catch (e) {
+        /* this name could not be asked */
+      }
+    }
+    return answered ? found : null;
+  }
+
+  function rolesFromUser(u) {
+    if (!u || typeof u !== 'object') return null;
+    var list = rolesOf(u);
+    // An empty list from an undocumented property is weak: a shim can carry one. Ask the other ways before believing it.
+    if (list && list.length) return list;
+    try {
+      if (typeof u.getRoles === 'function') {
+        var got = cleanRoleList(u.getRoles());
+        if (got && got.length) return got;
+      }
+    } catch (e) {
+      /* the call is not available here */
+    }
+    var probed = probeRoles(u);
+    if (probed !== null) return probed;
+    return list; // [] when the page really said an empty list, else null
+  }
+
+  // ---- g_user in a frame ---------------------------------------------------------------------------------------------------
+  // Measured on dev364920 (2026-11-07, docs/live-checks-2026-11-07.md): the classic home page is a UI page shown in an inner frame
+  // (/ui_page.do): the TOP window has no g_user, the inner frame has one (with getRoles). On Next Experience record pages and on
+  // Workspaces the top window never has one. So when the page has no form window to ask, the same-origin child frames are looked at,
+  // breadth first and only a few levels deep, and the first g_user found is used. window.frames already lists the frames inside shadow
+  // roots (the named ones too), so nothing walks a shadow root. A cross-origin frame throws when asked: it is skipped. Nothing is guessed:
+  // no g_user in any frame leaves the roles unknown (null).
+  var USER_FRAME_DEPTH = 3;
+  var USER_FRAME_LIMIT = 20;
+
+  // The child frames of a window (at most USER_FRAME_LIMIT), or [] when it will not say (a cross-origin frame throws).
+  function childFrames(win) {
+    var list = [];
+    try {
+      var count = Math.min(Number(win.frames.length) || 0, USER_FRAME_LIMIT);
+      for (var i = 0; i < count; i++) {
+        var child = win.frames[i];
+        if (child) list.push(child);
+      }
+    } catch (e) {
+      /* a cross-origin frame does not list its frames */
+    }
+    return list;
+  }
+
+  function userOfFrame(child) {
+    try {
+      var u = child && child.g_user;
+      return u && typeof u === 'object' ? u : null;
+    } catch (e) {
+      return null; /* cross-origin child: its g_user cannot be read */
+    }
+  }
+
+  function userFromFrames() {
+    // The classic frame by name first: on Next Experience it sits inside a shadow root, where the named frames of the window still reach it.
+    try {
+      var main = userOfFrame(window.frames['gsft_main']);
+      if (main) return main;
+    } catch (e) {
+      /* no such frame, or another origin */
+    }
+    var level = [window];
+    for (var depth = 0; depth < USER_FRAME_DEPTH && level.length; depth++) {
+      var next = [];
+      for (var p = 0; p < level.length; p++) {
+        var children = childFrames(level[p]);
+        for (var i = 0; i < children.length; i++) {
+          var u = userOfFrame(children[i]);
+          if (u) return u;
+          next.push(children[i]);
+        }
+      }
+      level = next;
     }
     return null;
   }
@@ -129,7 +281,7 @@
       firstName: rootLevel ? null : firstOf(obj, ['firstName', 'first_name']),
       lastName: rootLevel ? null : firstOf(obj, ['lastName', 'last_name']),
       displayName: firstOf(obj, rootLevel ? ['user_display_name', 'user_full_name'] : ['displayName', 'display_name', 'fullName', 'full_name', 'name']),
-      roles: rootLevel ? null : rolesOf(obj),
+      roles: rootLevel ? null : rolesFromUser(obj),
     };
     return found.userId || found.userName || found.displayName || found.firstName ? found : null;
   }
@@ -236,7 +388,8 @@
   function onPortalPage() {
     try {
       var path = location.pathname.replace(/\/+$/, '');
-      if (/\.do$/i.test(path) || /^\/(now|api|angular)(\/|$)/i.test(path)) return false;
+      // (the same first segments src/context/surface.js never takes for a portal: audit 2026-11-07, S19)
+      if (/\.do$/i.test(path) || /^\/(now|api|angular|images|scripts|styles|assets)(\/|$)/i.test(path)) return false;
       var parts = path.split('/').filter(Boolean);
       if (parts.length !== 1 || !/^[a-z][a-z0-9_-]{0,30}$/i.test(parts[0])) return false;
       if (/(^|[?&#!/])id=/i.test(location.search + location.hash)) return true;
@@ -272,42 +425,85 @@
     return words.indexOf(' ' + phrase + ' ') !== -1;
   }
 
-  // Every shadow root and every same-origin frame we can reach. A frame we cannot read (another origin) is simply skipped.
-  function collectControls(root, out, state, depth, frameEl) {
-    if (!root || depth > 6 || state.nodes > 25000) return;
-    var nodes;
+  // Every open shadow root and every same-origin frame we can reach, searched with a TIME budget, not a count of elements (audit of
+  // 2026-11-07, S5: a big Workspace page holds more elements than the 25,000 the first search stopped at, and its composer is late
+  // in the document). The focused editor comes first, then what is on screen, then the rest; a search that ran out of time says so
+  // (complete: false), so "there is no such box" is never confused with "could not look everywhere". A frame we cannot read (another
+  // origin) is simply skipped. Nothing is clicked, focused or changed.
+  var SEARCH_BUDGET_MS = 900;
+  var SEARCH_MAX_NODES = 2000000; // only a guard against a runaway page: the clock is what ends a search
+  var SEARCH_MAX_DEPTH = 40;
+
+  // The editor the person is typing in right now, also when it sits inside shadow roots of the page.
+  function focusedEditor() {
     try {
-      nodes = root.querySelectorAll('*');
+      var el = document.activeElement;
+      for (var i = 0; el && i < SEARCH_MAX_DEPTH; i++) {
+        var inner = el.shadowRoot ? el.shadowRoot.activeElement : null;
+        if (!inner) break;
+        el = inner;
+      }
+      return el && el.ownerDocument === document && isTextControl(el) ? el : null;
     } catch (e) {
-      return;
+      return null;
     }
-    for (var i = 0; i < nodes.length; i++) {
-      state.nodes++;
-      if (state.nodes > 25000) return;
-      var el = nodes[i];
-      var tag = el.tagName;
-      if (el.shadowRoot) collectControls(el.shadowRoot, out, state, depth + 1, frameEl);
-      if (tag === 'IFRAME' || tag === 'FRAME') {
-        var doc;
-        try {
-          doc = el.contentDocument;
-        } catch (e) {
-          doc = null;
-        }
-        if (doc) {
-          collectControls(doc, out, state, depth + 1, el);
-          // A rich-text editor in a frame: the frame's body is the editable area.
-          try {
-            var bodyEditable = doc.body ? doc.body.getAttribute('contenteditable') : null;
-            if (doc.body && (doc.designMode === 'on' || (bodyEditable !== null && /^(|true|plaintext-only)$/i.test(bodyEditable)))) out.push({ el: doc.body, frame: el });
-          } catch (e) {
-            /* unreadable body */
-          }
-        }
+  }
+
+  // -> { controls: [{ el, frame }], complete: boolean }
+  function findControls(budgetMs) {
+    var found = { controls: [], complete: true, nodes: 0 };
+    var out = found.controls;
+    var deadline = Date.now() + (budgetMs > 0 ? budgetMs : SEARCH_BUDGET_MS);
+    var focused = focusedEditor();
+    if (focused) out.push({ el: focused, frame: null });
+    var hot = [{ root: document, depth: 0, frame: null }]; // parts that are on screen
+    var cold = []; // parts that are not (a hidden tab, a collapsed panel): looked at last
+    var h = 0;
+    var c = 0;
+    while (found.complete && (h < hot.length || c < cold.length)) {
+      var item = h < hot.length ? hot[h++] : cold[c++];
+      var nodes;
+      try {
+        nodes = item.root.querySelectorAll('*');
+      } catch (e) {
         continue;
       }
-      if (isTextControl(el)) out.push({ el: el, frame: frameEl || null });
+      for (var i = 0; i < nodes.length; i++) {
+        if ((i & 255) === 0 && Date.now() > deadline) {
+          found.complete = false;
+          break;
+        }
+        found.nodes++;
+        if (found.nodes > SEARCH_MAX_NODES) {
+          found.complete = false;
+          break;
+        }
+        var el = nodes[i];
+        var tag = el.tagName;
+        if (el.shadowRoot && item.depth < SEARCH_MAX_DEPTH) (isVisible(el) ? hot : cold).push({ root: el.shadowRoot, depth: item.depth + 1, frame: item.frame });
+        if (tag === 'IFRAME' || tag === 'FRAME') {
+          var doc;
+          try {
+            doc = el.contentDocument;
+          } catch (e) {
+            doc = null;
+          }
+          if (doc && item.depth < SEARCH_MAX_DEPTH) {
+            (isVisible(el) ? hot : cold).push({ root: doc, depth: item.depth + 1, frame: el });
+            // A rich-text editor in a frame: the frame's body is the editable area.
+            try {
+              var bodyEditable = doc.body ? doc.body.getAttribute('contenteditable') : null;
+              if (doc.body && (doc.designMode === 'on' || (bodyEditable !== null && /^(|true|plaintext-only)$/i.test(bodyEditable)))) out.push({ el: doc.body, frame: el });
+            } catch (e) {
+              /* unreadable body */
+            }
+          }
+          continue;
+        }
+        if (isTextControl(el)) out.push({ el: el, frame: item.frame });
+      }
     }
+    return found;
   }
 
   function isTextControl(el) {
@@ -425,9 +621,13 @@
     return { is: [wordsOf(name).trim()], isNot: ['search', 'password'] };
   }
 
-  function chooseControl(name, label) {
-    var controls = [];
-    collectControls(document, controls, { nodes: 0 }, 0, null);
+  // The box a field goes into, or why there is none: { c } | { reason, gap }. `found` is a search already made (findControls), so one request
+  // looks through the page once however many fields it asks about. reason 'no-form' (nothing, or two look-alikes), 'read-only', or
+  // 'unreachable' (the search ran out of time before it found anything); `gap` says which of the three it was for the panel:
+  // 'absent' | 'ambiguous' | 'too-big'.
+  function chooseControl(name, label, found) {
+    var search = found || findControls();
+    var controls = search.controls;
     var words = wordsForField(name);
     var extra = label ? [wordsOf(label).trim()].filter(Boolean) : [];
     var editable = [];
@@ -444,10 +644,11 @@
     editable.sort(function (a, b) { return b.score - a.score; });
     if (editable.length) {
       // Several boxes that look the same: do not guess which one the person means.
-      if (editable.length > 1 && editable[0].score - editable[1].score < 15) return { reason: 'no-form' };
+      if (editable.length > 1 && editable[0].score - editable[1].score < 15) return { reason: 'no-form', gap: 'ambiguous' };
       return { c: editable[0].c };
     }
-    return { reason: locked.length ? 'read-only' : 'no-form' };
+    if (locked.length) return { reason: 'read-only' };
+    return search.complete ? { reason: 'no-form', gap: 'absent' } : { reason: 'unreachable', gap: 'too-big' };
   }
 
   function fireEvent(el, type, bubbles) {
@@ -500,6 +701,58 @@
     return squash(el.innerText != null ? el.innerText : el.textContent).indexOf(probe) !== -1;
   }
 
+  // ---- What a classic form says about a field: can it be typed into, and did the write take? --------------------------
+  // getEditableFields() is undocumented and answers [] on forms we have not seen (audit of 2026-11-07, W-01), so an empty list proves
+  // nothing: it is neither "everything is editable" nor "everything is locked". The list decides only when it names fields. Otherwise
+  // the form's own state decides when it clearly says closed, and else nobody knows ('unknown'): the write is then tried and READ BACK.
+  // No write is ever used to find out whether a field is writable before the person asked for one.
+
+  function editableList(f) {
+    try {
+      var list = typeof f.getEditableFields === 'function' ? f.getEditableFields() : null;
+      return Array.isArray(list) ? list : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // A closed or cancelled task: its Active box says false and the form has a State box (so a knowledge article, which also has Active,
+  // never counts). A form that cannot be read this way is simply not "closed".
+  function formIsClosed(f) {
+    try {
+      if (typeof f.hasField !== 'function' || !f.hasField('active') || !f.hasField('state')) return false;
+      return String(f.getValue('active')).toLowerCase() === 'false';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 'editable' | 'read-only' | 'unknown' for one field that is on the form.
+  function editabilityOf(list, closed, name) {
+    if (list && list.length) return list.indexOf(name) === -1 ? 'read-only' : 'editable';
+    return closed ? 'read-only' : 'unknown';
+  }
+
+  // The field's value as a string, or null when the form cannot say.
+  function valueOf(f, name) {
+    try {
+      var v = f.getValue(name);
+      return v == null ? '' : String(v);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // After a write: does the field hold what was put there? 'ok' | 'locked' (it still holds what it held, so the form ignored the
+  // write: a locked field often does that without a word) | 'other' (something else) | 'unread' (the form cannot say).
+  function heldAfter(before, after, wanted) {
+    if (after === null) return 'unread';
+    var now = squash(after);
+    if (now === squash(wanted)) return 'ok';
+    if (now === squash(before)) return 'locked';
+    return 'other';
+  }
+
   // What the box is called, for the panel to show ("Inserted into the box labelled ..."): its label, as plain short text.
   function controlLabel(c) {
     var el = c.el;
@@ -546,6 +799,160 @@
     return out;
   }
 
+  // ---- A Workspace composer that serves both Work notes and customer comments --------------------------------------
+  // Audit of 2026-11-07, W-12 and S14: one composer box can hold either kind, so a work note could be typed into a customer-visible
+  // post. The bridge reads the composer's mode and never changes it (nothing is clicked): the switch next to the box is the selected
+  // tab, radio button, option or pressed button (aria-selected, aria-checked, aria-pressed, aria-current, a chosen <option>), found by
+  // climbing from the box through its ancestors (across shadow roots and frames) and looking at the nearest group that has one, and
+  // named by its own words in English and Arabic. A group that also lists a filter of the activity stream (All, Attachments...) is
+  // not the composer's switch. Two selected choices of different kinds, or none that can be named, mean "cannot tell". Only the
+  // wording is read; a mode that cannot be read is never assumed.
+  var MODE_INTERNAL = [
+    'work note', 'work notes', 'worknotes', 'internal', 'internal note', 'internal notes', 'private', 'private note', 'private notes',
+    '\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0627\u0644\u0639\u0645\u0644', '\u0645\u0644\u0627\u062d\u0638\u0629 \u0627\u0644\u0639\u0645\u0644', '\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0639\u0645\u0644', '\u0645\u0644\u0627\u062d\u0638\u0629 \u0639\u0645\u0644',
+    '\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u062f\u0627\u062e\u0644\u064a\u0629', '\u0645\u0644\u0627\u062d\u0638\u0629 \u062f\u0627\u062e\u0644\u064a\u0629', '\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u062e\u0627\u0635\u0629',
+    '\u062f\u0627\u062e\u0644\u064a', '\u062f\u0627\u062e\u0644\u064a\u0629', '\u062e\u0627\u0635', '\u062e\u0627\u0635\u0629',
+  ];
+  var MODE_CUSTOMER = [
+    'customer', 'customers', 'additional comment', 'additional comments', 'comment', 'comments', 'public', 'reply', 'requester', 'caller',
+    '\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0625\u0636\u0627\u0641\u064a\u0629', '\u062a\u0639\u0644\u064a\u0642 \u0625\u0636\u0627\u0641\u064a', '\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0627\u0644\u0639\u0645\u064a\u0644', '\u062a\u0639\u0644\u064a\u0642 \u0627\u0644\u0639\u0645\u064a\u0644',
+    '\u062a\u0639\u0644\u064a\u0642\u0627\u062a', '\u062a\u0639\u0644\u064a\u0642', '\u0627\u0644\u062a\u0639\u0644\u064a\u0642\u0627\u062a', '\u0627\u0644\u062a\u0639\u0644\u064a\u0642', '\u0627\u0644\u0639\u0645\u064a\u0644', '\u0639\u0645\u064a\u0644', '\u0644\u0644\u0639\u0645\u064a\u0644',
+    '\u0627\u0644\u0631\u062f', '\u0631\u062f', '\u0627\u0644\u0645\u062a\u0635\u0644', '\u0639\u0627\u0645', '\u0639\u0627\u0645\u0629',
+  ];
+  // The filters of the activity stream (not the composer's switch): a group that has one of these is left alone.
+  var MODE_FILTER = ['all', 'attachments', 'history', 'activity', 'email', 'emails', 'approvals', '\u0627\u0644\u0643\u0644', '\u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062a', '\u0627\u0644\u0633\u062c\u0644', '\u0627\u0644\u0646\u0634\u0627\u0637', '\u0627\u0644\u0628\u0631\u064a\u062f', '\u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062a'];
+  var JOURNAL_KIND = { work_notes: 'internal', comments: 'customer' };
+  var MODE_MAX_NODES = 4000;
+  var MODE_BUDGET_MS = 250;
+
+  // Lower case words, Arabic marks and stretching taken out, the forms of alef and of final yeh made one: so a phrase is found as whole words.
+  function modeWords(text) {
+    var t = String(text == null ? '' : text).slice(0, 300).toLowerCase();
+    t = t.replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[\u0622\u0623\u0625]/g, '\u0627').replace(/\u0649/g, '\u064a');
+    t = t.replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim();
+    return t ? ' ' + t + ' ' : '';
+  }
+
+  function hasAnyPhrase(words, list) {
+    for (var i = 0; i < list.length; i++) if (hasPhrase(words, modeWords(list[i]).trim())) return true;
+    return false;
+  }
+
+  // 'internal' | 'customer' | null (neither, or both: "Work notes and comments" names no single kind)
+  function classifyMode(text) {
+    var words = modeWords(text);
+    if (!words) return null;
+    var internal = hasAnyPhrase(words, MODE_INTERNAL);
+    var customer = hasAnyPhrase(words, MODE_CUSTOMER);
+    if (internal === customer) return null;
+    return internal ? 'internal' : 'customer';
+  }
+
+  function attrOf(el, name) {
+    try {
+      return el.getAttribute(name);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  var GROUP_ROLES = ['tablist', 'radiogroup', 'listbox', 'menu', 'group', 'toolbar'];
+
+  // The words of a choice that is selected right now (a tab, a radio, an option, a pressed button), or null when this is not one.
+  function selectedChoiceText(el) {
+    var tag = el.tagName;
+    var chosen;
+    if (tag === 'OPTION') chosen = Boolean(el.selected);
+    else if (tag === 'INPUT') chosen = String(el.type || attrOf(el, 'type') || '').toLowerCase() === 'radio' && Boolean(el.checked);
+    else {
+      var role = String(attrOf(el, 'role') || '').toLowerCase();
+      if (tag !== 'BUTTON' && ['tab', 'radio', 'option', 'menuitemradio', 'menuitemcheckbox', 'switch', 'checkbox', 'button'].indexOf(role) === -1) return null;
+      chosen = attrOf(el, 'aria-selected') === 'true' || attrOf(el, 'aria-checked') === 'true' || attrOf(el, 'aria-pressed') === 'true' || attrOf(el, 'aria-current') === 'true';
+    }
+    if (!chosen) return null;
+    var text = attrOf(el, 'aria-label') || '';
+    if (!squash(text)) labelTexts(el).forEach(function (t) { text = text || t; });
+    if (!squash(text)) text = String(el.textContent || '').slice(0, 120);
+    return squash(text) ? text : null;
+  }
+
+  // The words of the group a choice belongs to (its tab list, radio group, select...), to tell the composer's switch from a filter.
+  function groupWords(el) {
+    var node = el.parentNode;
+    for (var i = 0; node && node.nodeType === 1 && i < 3; i++) {
+      if (GROUP_ROLES.indexOf(String(attrOf(node, 'role') || '').toLowerCase()) !== -1 || node.tagName === 'SELECT') break;
+      node = node.parentNode;
+    }
+    if (!node || node.nodeType !== 1) node = el.parentNode;
+    try {
+      return modeWords(node && node.textContent);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // The next container up: the parent, a shadow root and then its host, the frame element of a frame's document. null at the top.
+  function parentOf(node) {
+    if (node.nodeType === 11) return node.host || null;
+    var next = node.parentNode;
+    if (next && next.nodeType === 9) {
+      try {
+        return next.defaultView && next.defaultView.frameElement ? next.defaultView.frameElement : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return next || null;
+  }
+
+  // 'internal' | 'customer' | null (cannot tell) for the composer the box `c` is in.
+  function readComposerMode(c) {
+    var state = { checked: 0, deadline: Date.now() + MODE_BUDGET_MS, seen: new Set(), stop: false };
+    var node = c.el;
+    for (var level = 0; level < 12 && node && !state.stop; level++) {
+      node = parentOf(node);
+      if (!node || node === document.body || node === document.documentElement || node.nodeType === 9) return null;
+      var kinds = [];
+      var stack = [node];
+      while (stack.length && !state.stop) {
+        var root = stack.pop();
+        var nodes;
+        try {
+          nodes = root.querySelectorAll('*');
+        } catch (e) {
+          continue;
+        }
+        for (var i = 0; i < nodes.length; i++) {
+          if (state.checked++ > MODE_MAX_NODES || Date.now() > state.deadline) {
+            state.stop = true;
+            break;
+          }
+          var el = nodes[i];
+          if (state.seen.has(el)) continue;
+          state.seen.add(el);
+          if (el.shadowRoot) stack.push(el.shadowRoot);
+          var text = selectedChoiceText(el);
+          if (text === null) continue;
+          var kind = classifyMode(text);
+          if (kind && !hasAnyPhrase(groupWords(el), MODE_FILTER)) kinds.push(kind);
+        }
+      }
+      if (kinds.length) return kinds.every(function (k) { return k === kinds[0]; }) ? kinds[0] : null;
+    }
+    return null;
+  }
+
+  // What the composer says about a field: 'match' (set to the kind of this field) | 'other' (set to the other kind) | 'unread'.
+  function modeOfBox(name, c) {
+    var seen = readComposerMode(c);
+    return seen === null ? 'unread' : seen === JOURNAL_KIND[name] ? 'match' : 'other';
+  }
+
+  // The box the last insert wrote to, so a later look can tell that it was emptied or replaced (a Post, a Send, a Save that re-draws
+  // the form): the language-independent sign that an Undo has nothing left to put back. Only the element and a count are kept, no text.
+  var lastInsert = null;
+  var insertCount = 0;
+
   // Put the text into the chosen box the way typing would, then read it back: a box that put its own value back is a failure,
   // never a success. With `wantUndo` the answer also says what the box held before and holds now.
   function writeInto(c, text, append, previous, wantUndo) {
@@ -554,6 +961,7 @@
     var before = wantUndo ? boxValue(el) : '';
     function done() {
       var out = label ? { ok: true, method: 'dom', label: label } : { ok: true, method: 'dom' };
+      lastInsert = { el: el, n: (insertCount += 1) }; // (watchInsert: has this box been emptied since?)
       return wantUndo ? withUndo(out, before, boxValue(el)) : out;
     }
     try {
@@ -600,9 +1008,13 @@
           fireEvent(el, 'blur', false);
           fireEvent(el, 'focusout', true);
         }
-        return squash(el.value) === squash(previous) ? { ok: true, method: 'dom' } : { ok: false, reason: 'set-failed' };
+        if (squash(el.value) !== squash(previous)) return { ok: false, reason: 'set-failed' };
+        lastInsert = null; // (put back: nothing of the insert is left to watch)
+        return { ok: true, method: 'dom' };
       }
-      return writeEditable(el, previous, false) ? { ok: true, method: 'dom' } : { ok: false, reason: 'set-failed' };
+      if (!writeEditable(el, previous, false)) return { ok: false, reason: 'set-failed' };
+      lastInsert = null;
+      return { ok: true, method: 'dom' };
     } catch (e) {
       return { ok: false, reason: 'set-failed' };
     }
@@ -613,8 +1025,40 @@
   // that is the column (or ends in ".column") counts the same as an exact label.
   var NAME_ATTRS = ['name', 'id', 'data-field-name', 'formcontrolname'];
 
+  // The names a Workspace gives these boxes besides the one the panel asks for (audit of 2026-11-07, S4): ServiceNow's own English
+  // wording for the kinds that call a box differently, and the Arabic wording of the same boxes. Always whole labels, never a part of
+  // one, so "Description" is still not "Short description", and no bare "Comments" (a dialog has one too). The Arabic is what ServiceNow's
+  // Arabic language pack is believed to say; docs/live-questions/audit-1107-surfaces.md (L12) asks for a check on a real Arabic Workspace.
+  var LABEL_SETS = {
+    work_notes: ['work notes', 'work note', '\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0627\u0644\u0639\u0645\u0644', '\u0645\u0644\u0627\u062d\u0638\u0629 \u0627\u0644\u0639\u0645\u0644'],
+    comments: ['additional comments', 'customer comments', '\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0625\u0636\u0627\u0641\u064a\u0629', '\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0627\u0644\u0639\u0645\u064a\u0644', '\u0627\u0644\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0627\u0644\u0625\u0636\u0627\u0641\u064a\u0629'],
+    close_notes: ['resolution notes', 'close notes', '\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0627\u0644\u062d\u0644', '\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0627\u0644\u0625\u063a\u0644\u0627\u0642'],
+    short_description: ['short description', '\u0627\u0644\u0648\u0635\u0641 \u0627\u0644\u0645\u062e\u062a\u0635\u0631', '\u0648\u0635\u0641 \u0645\u062e\u062a\u0635\u0631', '\u0627\u0644\u0648\u0635\u0641 \u0627\u0644\u0645\u0648\u062c\u0632', '\u0648\u0635\u0641 \u0645\u0648\u062c\u0632'],
+    description: ['description', '\u0627\u0644\u0648\u0635\u0641'],
+  };
+
+  // A label as it is compared: one line, lower case, no star, Arabic marks and stretching taken out, the forms of alef and yeh made one.
+  function plainLabel(text) {
+    return squash(text)
+      .toLowerCase()
+      .replace(/[\u064b-\u065f\u0670\u0640]/g, '')
+      .replace(/[\u0622\u0623\u0625]/g, '\u0627')
+      .replace(/\u0649/g, '\u064a')
+      .replace(/\s*\*+$/, '');
+  }
+
+  // Every label the box of `name` may carry: the one the panel asked for, then the field's own set.
+  function wantedLabels(name, label) {
+    var out = [];
+    [label].concat(LABEL_SETS[name] || []).forEach(function (l) {
+      var p = plainLabel(l);
+      if (p && out.indexOf(p) === -1) out.push(p);
+    });
+    return out;
+  }
+
   function labelScore(text, wanted) {
-    var t = squash(text).toLowerCase().replace(/\s*\*+$/, '');
+    var t = plainLabel(text);
     if (!t || !wanted) return 0;
     if (t === wanted) return 100;
     // the label followed by a marker: "Work notes (internal)", "Description [required]", "Comments: visible to the customer"
@@ -642,14 +1086,28 @@
     }
     texts.push(textOfIds(el, el.getAttribute && el.getAttribute('aria-labelledby')));
     labelTexts(el).forEach(function (t) { texts.push(t); });
-    texts.forEach(function (t) { best = Math.max(best, labelScore(t, wanted)); });
+    texts.forEach(function (t) {
+      wanted.forEach(function (w) { best = Math.max(best, labelScore(t, w)); });
+    });
+    // A component often carries the field's label on itself and holds a bare box: the label of the nearest two shadow hosts counts a
+    // little less than the box's own (two boxes under one label are still "two look-alikes": nothing is guessed).
+    var node = el;
+    for (var up = 0; up < 2; up++) {
+      var root = node.getRootNode ? node.getRootNode() : null;
+      var host = root && root.host;
+      if (!host) break;
+      [attrOf(host, 'aria-label'), attrOf(host, 'label')].forEach(function (t) {
+        wanted.forEach(function (w) { best = Math.max(best, Math.min(80, labelScore(t, w))); });
+      });
+      node = host;
+    }
     return best;
   }
 
-  function chooseWorkspaceControl(name, label) {
-    var controls = [];
-    collectControls(document, controls, { nodes: 0 }, 0, null);
-    var wanted = squash(label).toLowerCase();
+  function chooseWorkspaceControl(name, label, found) {
+    var search = found || findControls();
+    var controls = search.controls;
+    var wanted = wantedLabels(name, label);
     var scored = [];
     var seen = [];
     controls.forEach(function (c) {
@@ -660,32 +1118,44 @@
       if (!score || !isVisible(c.el)) return; // a hidden box (another record's tab, a collapsed panel) is never the one
       scored.push({ c: c, score: score, locked: isReadOnlyControl(c.el) });
     });
-    if (!scored.length) return { reason: 'no-form' };
+    if (!scored.length) return search.complete ? { reason: 'no-form', gap: 'absent' } : { reason: 'unreachable', gap: 'too-big' };
     scored.sort(function (a, b) { return b.score - a.score; });
     // Two equally good boxes: do not guess (the person copies the text instead).
-    if (scored.length > 1 && scored[0].score === scored[1].score) return { reason: 'no-form' };
+    if (scored.length > 1 && scored[0].score === scored[1].score) return { reason: 'no-form', gap: 'ambiguous' };
     if (scored[0].locked) return { reason: 'read-only' };
     return { c: scored[0].c };
   }
 
+  // The composer decides where a note goes (W-12): Work notes and customer comments only go into a box that is set to their kind. A box
+  // whose mode cannot be read still takes the text, and the answer says so (modeUnread), so the panel can tell the person to check it.
   function fillWorkspaceField(name, text, label, append, previous, wantUndo) {
     var chosen = chooseWorkspaceControl(name, label);
     if (!chosen.c) return { ok: false, reason: chosen.reason };
-    return writeInto(chosen.c, text, append, previous, wantUndo);
+    var mode = JOURNAL_KIND[name] ? modeOfBox(name, chosen.c) : '';
+    if (mode === 'other') return { ok: false, reason: 'wrong-mode' };
+    var out = writeInto(chosen.c, text, append, previous, wantUndo);
+    if (out.ok && mode === 'unread') out.modeUnread = true;
+    return out;
   }
 
   // What getFieldStates says about a field on a page without g_form: the box an insert would choose, found WITHOUT writing.
-  function boxState(name, label, portal) {
-    var chosen = portal ? chooseControl(name, label) : chooseWorkspaceControl(name, label);
-    if (chosen.c) return { state: 'editable', label: controlLabel(chosen.c) };
-    return { state: chosen.reason === 'read-only' ? 'read-only' : 'unknown', label: '' };
+  // `gap` (when the box is not there to fill): 'absent' (looked everywhere, none), 'ambiguous' (two look alike), 'too-big' (the page
+  // was too big to search in time). `mode` (a Workspace journal box): 'match' | 'other' | 'unread', see modeOfBox.
+  function boxState(name, label, portal, search) {
+    var chosen = portal ? chooseControl(name, label, search) : chooseWorkspaceControl(name, label, search);
+    if (chosen.c) {
+      var out = { state: 'editable', label: controlLabel(chosen.c) };
+      if (!portal && JOURNAL_KIND[name]) out.mode = modeOfBox(name, chosen.c);
+      return out;
+    }
+    return { state: chosen.reason === 'read-only' ? 'read-only' : 'unknown', label: '', gap: chosen.gap || '' };
   }
 
   // What getBoxValues says about a field on a Workspace page: the text now in the box an insert would choose (the same chooser),
   // or null when there is no such box, two boxes look the same, or the box is locked. Only the text is read: the box is not
   // focused and no event is fired, so the page cannot tell it was looked at.
-  function boxText(name, label) {
-    var chosen = chooseWorkspaceControl(name, label);
+  function boxText(name, label, search) {
+    var chosen = chooseWorkspaceControl(name, label, search);
     if (!chosen.c) return null;
     var el = chosen.c.el;
     try {
@@ -693,6 +1163,22 @@
       return typeof value === 'string' ? value.slice(0, MAX_FIELD_CHARS) : null;
     } catch (e) {
       return null;
+    }
+  }
+
+  // Choices of a blank incident or case form (Notes to ticket): lists on a page without g_form. The box finder only takes text boxes, so a
+  // list is never typed into; it is picked by hand (audit of 2026-11-07, S15).
+  var PICK_BY_HAND = { impact: true, urgency: true, contact_type: true };
+
+  // The classic shell (nav_to.do) keeps its form in the frame gsft_main. When that frame has moved on to a LIST and the top address has
+  // not followed (audit of 2026-11-07, S8: A until a real UI16 page is checked), the address still names the form before it: the
+  // frame's own address says the person is on a list now. Only the frame's path is read, and only when it has no g_form.
+  function frameIsOnList() {
+    try {
+      var frame = window.frames['gsft_main'];
+      return Boolean(frame && !frame.g_form && frame.location && /_list\.do$/i.test(String(frame.location.pathname || '')));
+    } catch (e) {
+      return false; // another origin, or no frame
     }
   }
 
@@ -718,11 +1204,14 @@
       return null;
     },
 
-    // Who is signed in: names and roles (to hide features the person cannot use). No admin probing.
+    // Who is signed in: names and roles (to hide features the person cannot use). No admin probing. `roles` is a list, an empty list
+    // or null (not known): see rolesFromUser. Portal pages are asked the same way.
     // Classic and Workspace pages have g_user; portal pages may only have NOW / the Angular root scope (see above).
+    // No form window and no g_user in the top window (the classic home page, a Next Experience shell): the same-origin frames are asked
+    // (userFromFrames). On a Workspace there is none anywhere: the id comes from NOW.user (portalSessionInfo) and the roles stay null.
     getSessionInfo: function () {
       var w = resolveFormWindow() || window;
-      var u = w.g_user || window.g_user;
+      var u = w.g_user || window.g_user || userFromFrames();
       var info = u
         ? {
             userName: u.userName || null,
@@ -730,7 +1219,7 @@
             firstName: u.firstName || null,
             lastName: u.lastName || null,
             displayName: null,
-            roles: rolesOf(u),
+            roles: rolesFromUser(u),
           }
         : null;
       if (!info || !info.userId) info = mergeUsers(info, portalSessionInfo());
@@ -740,7 +1229,7 @@
     // Which record the classic form shows (null on Workspace pages: the panel then reads the table and sys_id from the URL).
     getFormMeta: function () {
       var w = resolveFormWindow();
-      if (!w) return null;
+      if (!w) return frameIsOnList() ? { table: null, sysId: null, isNewRecord: null, number: null, loadedAt: null, frameIsList: true } : null;
       var f = w.g_form;
       var number = null;
       try {
@@ -792,6 +1281,8 @@
     // article body). A form with g_form gets that, so the characters of a model answer are shown as text and never parsed as
     // markup; a field the form says holds HTML, with no such text supplied, is refused rather than filled with raw text.
     // Returns { ok, method: 'gform' | 'dom', label?, reason }. `label` is the box that was used (Workspace and portal pages).
+    // On a form with g_form the value is READ BACK after the write (audit of 2026-11-07, W-01): a field that still holds what it held
+    // answers 'read-only' (locked), one that holds something else is put back and answers 'set-failed'. No other write is made.
     // `previous` (append only, never with HTML): the text Agent Buddy put into this box before; when the box still holds it exactly,
     // that copy is replaced by the new text instead of a second copy being added below (see appendOrSwap).
     // `options` (round 4): { choice: true } for a choice list (the close code): `value` is its STORED value, set through g_form only,
@@ -821,11 +1312,8 @@
         }
         if (!exists) return { ok: false, reason: 'no-such-field' };
         try {
-          if (typeof f.isReadOnly === 'function' && typeof f.getEditableFields === 'function') {
-            var editable = f.getEditableFields();
-            // getEditableFields() is trustworthy; isReadOnly() answers true for everything on current releases.
-            if (editable && editable.length && editable.indexOf(name) === -1) return { ok: false, reason: 'read-only' };
-          }
+          // The list names the fields a person can type into when it names any; an empty list proves nothing (see editabilityOf).
+          if (editabilityOf(editableList(f), formIsClosed(f), name) === 'read-only') return { ok: false, reason: 'read-only' };
           var type = fieldType(f, name);
           var isHtmlType = /html/i.test(type);
           if (isHtmlType && !htmlText) return { ok: false, reason: 'bad-field' };
@@ -837,17 +1325,34 @@
           // A choice: only one of the form's own choices, by its stored value (a label or a made-up value is refused).
           if (choice && typeof f.getOption === 'function' && !f.getOption(name, text)) return { ok: false, reason: 'no-such-choice' };
           f.setValue(name, text);
-          if (choice && String(f.getValue(name) == null ? '' : f.getValue(name)) !== text) {
-            // The form did not take it (no such choice after all): what was there goes back, and nothing is claimed.
+          // READ IT BACK. A locked field (a closed ticket, a read-only box) often takes setValue without a word and keeps its old
+          // value, so a call that did not throw proves nothing: only a field that holds the text counts as inserted.
+          var after = valueOf(f, name);
+          var held = heldAfter(before, after, text);
+          if (choice && held === 'unread') return { ok: false, reason: 'set-failed' };
+          if (choice && held !== 'ok') {
+            // The form did not take it. When it still holds what it held and the form does list the choice, the box is locked;
+            // else it was no choice of this form after all. What was there goes back, and nothing is claimed.
             try {
-              f.setValue(name, before == null ? '' : String(before));
+              if (held !== 'locked') f.setValue(name, before == null ? '' : String(before));
             } catch (e2) {
               /* the form refuses that too: it keeps what it has */
             }
-            return { ok: false, reason: 'no-such-choice' };
+            return { ok: false, reason: held === 'locked' && typeof f.getOption === 'function' ? 'read-only' : 'no-such-choice' };
+          }
+          if (held === 'locked') return { ok: false, reason: 'read-only' };
+          // Something else is in the box now (a client script rewrote it). A rich-text field may tidy its markup, so it keeps its
+          // answer; any other box goes back to what it held and nothing is claimed.
+          if (held === 'other' && !isHtmlType) {
+            try {
+              f.setValue(name, before == null ? '' : String(before));
+            } catch (e3) {
+              /* the form refuses that too: it keeps what it has */
+            }
+            return { ok: false, reason: 'set-failed' };
           }
           var out = { ok: true, method: 'gform' };
-          return wantUndo ? withUndo(out, before, f.getValue(name)) : out;
+          return wantUndo ? withUndo(out, before, after) : out;
         } catch (e) {
           return { ok: false, reason: 'set-failed' };
         }
@@ -856,7 +1361,7 @@
       // No g_form: a portal page (an Angular page of boxes found by their names) or a Workspace (components found by aria-label).
       // Both type plain text into the page's own editor, which does its own escaping. A choice list there is a component of the
       // page that cannot be set with certainty without clicking it: the person picks it (the panel says which).
-      if (choice) return { ok: false, reason: 'choice-by-hand' };
+      if (choice || PICK_BY_HAND[name] === true) return { ok: false, reason: 'choice-by-hand' };
       if (onPortalPage()) return fillPortalField(name, text, String(label || '').slice(0, 100), append, earlier, wantUndo);
       return fillWorkspaceField(name, text, String(label || '').slice(0, 100), append, earlier, wantUndo);
     },
@@ -881,13 +1386,13 @@
         }
         if (!exists) return { ok: false, reason: 'no-such-field' };
         try {
-          if (typeof f.isReadOnly === 'function' && typeof f.getEditableFields === 'function') {
-            var editable = f.getEditableFields();
-            if (editable && editable.length && editable.indexOf(name) === -1) return { ok: false, reason: 'read-only' };
-          }
+          if (editabilityOf(editableList(f), formIsClosed(f), name) === 'read-only') return { ok: false, reason: 'read-only' };
           var now = f.getValue(name);
           if ((now == null ? '' : String(now)) !== expected) return { ok: false, reason: 'changed' };
           f.setValue(name, previous);
+          // Read it back, as an insert does: a locked field keeps what the insert left, and Undo must not claim it was put back.
+          var back = valueOf(f, name);
+          if (back !== null && squash(back) !== squash(previous)) return { ok: false, reason: squash(back) === squash(expected) ? 'read-only' : 'set-failed' };
           return { ok: true, method: 'gform' };
         } catch (e) {
           return { ok: false, reason: 'set-failed' };
@@ -904,8 +1409,13 @@
     // A form with g_form answers from the form itself (on the form or not; editable or read-only, by getEditableFields). A page
     // without g_form is searched for the box each field would go into, the same way fillField searches; the box's label is
     // returned so the panel can say where the text will land. Returns
-    //   { form: 'gform', table, sysId, fields: { name: 'editable' | 'read-only' | 'missing' } }
-    //   { form: 'workspace' | 'portal', fields: { name: 'editable' | 'read-only' | 'unknown' }, boxes: { name: label } }
+    //   { form: 'gform', table, sysId, fields: { name: 'editable' | 'read-only' | 'missing' | 'unknown' } }
+    // ('unknown': the form has the field but its list of editable fields is empty or absent and the ticket is not clearly closed:
+    // the insert is tried and read back; see editabilityOf.)
+    //   { form: 'workspace' | 'portal', fields: { name: 'editable' | 'read-only' | 'unknown' }, boxes: { name: label },
+    //     gaps: { name: 'absent' | 'ambiguous' | 'too-big' }, modes: { name: 'match' | 'other' | 'unread' } }
+    // (gaps: why a box is not there to fill; modes: a Workspace journal box and what its composer is set to. One look through the page
+    // serves every name asked about.)
     getFieldStates: function (names, labels) {
       if (!Array.isArray(names)) return null;
       var list = [];
@@ -920,12 +1430,8 @@
       var w = resolveFormWindow();
       if (w) {
         var f = w.g_form;
-        var editable = null;
-        try {
-          editable = typeof f.getEditableFields === 'function' ? f.getEditableFields() : null;
-        } catch (e) {
-          editable = null;
-        }
+        var editable = editableList(f);
+        var closed = formIsClosed(f);
         list.forEach(function (name) {
           var exists;
           try {
@@ -933,9 +1439,8 @@
           } catch (e) {
             exists = false;
           }
-          if (!exists) fields[name] = 'missing';
-          else if (editable && editable.length && editable.indexOf(name) === -1) fields[name] = 'read-only';
-          else fields[name] = 'editable';
+          // 'unknown' = the form has the field but cannot say whether it can be typed into: not a block, and not a promise
+          fields[name] = exists ? editabilityOf(editable, closed, name) : 'missing';
         });
         var table = null;
         var sysId = null;
@@ -949,12 +1454,17 @@
       }
       var portal = onPortalPage();
       var boxes = {};
+      var gaps = {};
+      var modes = {};
+      var search = list.length ? findControls() : { controls: [], complete: true }; // (one look through the page for all the fields asked about)
       list.forEach(function (name, j) {
-        var found = boxState(name, asked[j], portal);
+        var found = boxState(name, asked[j], portal, search);
         fields[name] = found.state;
         if (found.label) boxes[name] = found.label;
+        if (found.gap) gaps[name] = found.gap;
+        if (found.mode) modes[name] = found.mode;
       });
-      return { form: portal ? 'portal' : 'workspace', fields: fields, boxes: boxes };
+      return { form: portal ? 'portal' : 'workspace', fields: fields, boxes: boxes, gaps: gaps, modes: modes };
     },
 
     // READ ONLY: on a Workspace page (no g_form, not a portal) the text now in the box of each NAMED field, so a check can count
@@ -962,13 +1472,29 @@
     // name or exact label, visible, editable, never one of two look-alikes); only its text is read. Nothing is focused, typed or
     // fired. A box that is not found is left out. A page with g_form answers through getFormValues instead, and a portal page has
     // no notes of a ticket the agent works, so both answer null. Returns { name: text } (each cut to MAX_FIELD_CHARS) or null.
+    // READ ONLY: the box the last insert wrote to (Workspace and portal pages): { n, gone } where `n` counts the inserts and `gone` is true once
+    // that box has been emptied or taken off the page, as a Post, a Send or a Save that draws the form again does. Language-independent:
+    // it does not look at any button. null when no insert was made on this page. The content script counts it as a save (Undo is then
+    // withdrawn: there is nothing left for it to put back).
+    watchInsert: function () {
+      if (!lastInsert) return null;
+      var gone;
+      try {
+        gone = lastInsert.el.isConnected === false || !squash(boxValue(lastInsert.el));
+      } catch (e) {
+        gone = true;
+      }
+      return { n: lastInsert.n, gone: gone };
+    },
+
     getBoxValues: function (names, labels) {
       if (!Array.isArray(names) || resolveFormWindow() || onPortalPage()) return null;
       var values = {};
+      var search = findControls();
       for (var i = 0; i < names.length && i < 8; i++) {
         var name = names[i];
         if (typeof name !== 'string' || !FIELD_RE.test(name) || SECRET_NAME_RE.test(name)) continue;
-        var text = boxText(name, Array.isArray(labels) && typeof labels[i] === 'string' ? labels[i].slice(0, 100) : '');
+        var text = boxText(name, Array.isArray(labels) && typeof labels[i] === 'string' ? labels[i].slice(0, 100) : '', search);
         if (text !== null) values[name] = text;
       }
       return values;

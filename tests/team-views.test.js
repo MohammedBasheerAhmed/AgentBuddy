@@ -168,7 +168,7 @@ test('Insights: an ended ServiceNow session is ONE banner with Try again, not a 
   await settleMore();
   const alerts = ui.$$('[role="alert"]');
   assert.equal(alerts.length, 1, alerts.map((a) => a.textContent).join(' | '));
-  assert.match(alerts[0].textContent, /Your ServiceNow session has ended\. Sign in again in the ServiceNow tab, then press Try again\./);
+  assert.match(alerts[0].textContent, /You are signed out of ServiceNow\. Sign in again, then try again\./);
   assert.equal(ui.$$('section.ab-widget[data-state="session"]').length, ui.$$('section.ab-widget').length);
   const before = fake.readsOf('reportRun').length;
   state.session = false;
@@ -275,7 +275,9 @@ test('pure pieces: the scope chip, which hand-over the note uses, relative times
   assert.equal(handoverSource([own, h12], 12), h12, 'what Insights loaded comes first');
   assert.equal(handoverSource([h12], 8), null, 'another period: read again');
   assert.deepEqual(explainEntries([own, h12]), [h12], 'the private hand-over read is not part of "this dashboard"');
-  assert.equal(shareKey(page), '7|https://acme.service-now.com');
+  // (the signed-in person is part of the key: what was read for one is never shown for another, R-16)
+  assert.equal(shareKey(page), '7|https://acme.service-now.com|');
+  assert.equal(shareKey({ ...page, user: { userId: 'ABC123' } }), '7|https://acme.service-now.com|abc123');
 
   const now = Date.UTC(2026, 9, 27, 12);
   assert.equal(span(80 * 60000), '1 h 20 min');

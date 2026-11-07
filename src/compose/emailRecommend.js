@@ -7,12 +7,14 @@
 // Everything here reads the pack defensively: a column that is not on the pack (the spec is intersected with what the
 // kind allows) just means that signal is not available, never an error.
 
-import { SYS_ID_RE, TABLE_RE, parseSnTime } from '../context/util.js';
+import { parseSnTime } from '../context/util.js';
+import { emailFormLink } from '../lib/snLinks.js';
 import { authorRole, identities } from '../context/identity.js';
 import { isLocalTime } from '../context/journal.js';
 import { isolate, t, tm, tn } from '../i18n/index.js';
 import { scriptOf } from '../lib/scriptDetect.js';
 import { looksEnglish } from '../safeSend/replyChecks.js';
+import { classifyState, waitsOn } from '../domain/states.js';
 
 // label and blurb are shown to the person: marked with tm() here, shown with t() on the property.
 export const EMAIL_TYPES = Object.freeze([
@@ -135,13 +137,18 @@ export function readSignals(pack, now = Date.now()) {
 
   // With no readable state, the dates decide.
   const closedByDate = !state && Boolean(text(f.closed_at));
-  const closed = /\b(closed|cancel+ed)\b/i.test(state) || closedByDate;
-  const resolved = !closed && (/\b(resolved|fulfil+ed|complete[d]?)\b/i.test(state) || (!state && Boolean(text(f.resolved_at))));
+  // What the state means is read in one place (src/domain/states.js, docs/states.md): the stored value by table when the pack has it,
+  // else the words of the label in English, German and Arabic.
+  const asked = { table: p.table || p.kind || '', value: f.state_value, label: state, stage: text(f.stage) };
+  const meaning = state ? classifyState(asked) : 'unknown';
+  const closed = meaning === 'closed' || meaning === 'cancelled' || closedByDate;
+  const resolved = !closed && (meaning === 'resolved' || (!state && Boolean(text(f.resolved_at))));
   // The STATE decides whether it is on hold; the hold reason only says for whom (as in src/mywork/states.js). A reason left filled
   // in after the ticket went back to In Progress is stale: it is neither "on hold" nor said. With no state, the reason is all there is.
-  const onHold = !closed && !resolved && (state ? /\bhold\b|pending|awaiting|waiting/i.test(state) : Boolean(reason));
+  const onHold = !closed && !resolved && (state ? meaning === 'waiting' : Boolean(reason));
   const hold = onHold ? reason : '';
-  const waitingOnCustomer = onHold && /(caller|customer|\buser\b|requester|requestor|requested for|\binfo(rmation)?\b)/i.test(`${state} ${hold}`);
+  // For whom it waits: the hold reason says (or the state's own words: "Awaiting Caller"); with no state, the reason alone.
+  const waitingOnCustomer = onHold && waitsOn({ ...asked, label: state || 'on hold', holdReason: reason }) === 'customer';
 
   const resolvedAt = dateOf(p, 'resolved_at') ?? dateOf(p, 'closed_at');
   const openedAt = dateOf(p, 'opened_at');
@@ -406,15 +413,8 @@ export function parseEmailDraft(input) {
 
 /**
  * The classic email client for a record, on the instance the page is on ('' when the table or id is not valid).
- * The panel opens it with openUrl(), which refuses any other origin.
+ * The panel opens it in a new tab with openInNewTab(), which refuses any other origin.
  */
 export function emailFormUrl(pageHref, { table, sysId } = {}) {
-  if (!TABLE_RE.test(table || '') || !SYS_ID_RE.test(sysId || '')) return '';
-  try {
-    const origin = new URL(pageHref).origin;
-    if (!/^https:/i.test(origin)) return '';
-    return `${origin}/email_client.do?sysparm_table=${table}&sysparm_sys_id=${sysId}&sysparm_target=${table}&sysparm_uniqueValue=${sysId}`;
-  } catch {
-    return '';
-  }
+  return emailFormLink({ href: pageHref }, { table, sysId }); // (the address shapes live in src/lib/snLinks.js)
 }

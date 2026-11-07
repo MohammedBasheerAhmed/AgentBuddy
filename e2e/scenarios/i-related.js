@@ -72,6 +72,14 @@ module.exports = {
     await openCard(p, 'Missing details');
     t.check('Missing details (from All tools) opens alone with its content', ((await textOf(p, '[data-card="missing"]')) || '').trim().length > 0);
     await p.evaluate(() => [...document.querySelectorAll('.ab-ins-back')].find((b) => b.getClientRects().length > 0)?.click());
+    // The journey names the state and priority values with the instance's own words, read from the UI meta service (live check of
+    // 2026-11-07: a plain agent cannot read the choice table): "New", "In Progress", never "State 2".
+    await openCard(p, 'Ticket journey');
+    await ctx.waitUntil('the journey names the state changes', async () => /In Progress/.test((await textOf(p, '[data-card="journey"]')) || ''), { timeout: 15000 }).catch(() => {});
+    const journeyText = (await textOf(p, '[data-card="journey"]')) || '';
+    t.check('Ticket journey: the state change is named with the instance\'s words ("New", "In Progress"), not as a number', /New/.test(journeyText) && /In Progress/.test(journeyText) && !/State\s*[12]\b/.test(journeyText), journeyText.replace(/\s+/g, ' ').slice(0, 260));
+    t.check('...the words came from the UI meta service of the instance, and the choice table was not asked', ctx.net.some((n) => n.url.includes('/api/now/ui/meta/incident')) && !ctx.net.some((n) => /\/api\/now\/table\/sys_choice/.test(n.url)));
+    await p.evaluate(() => [...document.querySelectorAll('.ab-ins-back')].find((b) => b.getClientRects().length > 0)?.click());
     t.check('no AI request was made while the Insights cards loaded', ai.requests.length === 0);
     t.check('no error banner', (await textOf(p, '.ab-note-danger')) === null);
 
@@ -84,7 +92,7 @@ module.exports = {
       [...(card?.querySelectorAll('button') || [])].find((b) => /^Refresh/.test(b.innerText.trim()))?.click();
     });
     // (The note's label and its sentence are on separate lines in the card.)
-    await waitForText(p, /Knowledge articles:\s*[^\n]*cannot read/i, { timeout: 15000 });
+    await waitForText(p, /Knowledge articles:\s*[^\n]*not available to you/i, { timeout: 15000 });
     t.check('knowledge table denied (403): a plain note, not an error', (await textOf(p, '[data-card="knowledge"] .ab-note-danger')) === null);
     t.check('the other cards still show', (await p.evaluate(() => document.querySelector('[data-card="caller"]')?.textContent || '')).includes('Earlier tickets from Abel Tuter'));
     inst.setBehaviour();
@@ -120,5 +128,32 @@ module.exports = {
 
     await panel.close();
     await ticket.close();
+
+    // ---- what the person may not read is not "none" (audit of 2026-11-07, R-09 and R-14) ----------------------------------------------
+    // The fake instance answers 403 to the caller's earlier-ticket reads (the query names caller_id) and leaves the configuration item
+    // out of the incident rows, the way an access rule on a field does (a missing key, not an empty value). A fresh panel reads both.
+    inst.setBehaviour({ deniedWhen: ['caller_id='], withheld: { incident: ['cmdb_ci'] } });
+    const hiddenTicket = await ctx.openInstancePage(`/incident.do?sys_id=${data.INCIDENT_ID}`, 'ticket-classic');
+    const hiddenPanel = await ctx.openPanel();
+    const hp = hiddenPanel.page;
+    await waitForRecord(hp);
+    await openScreen(hp, 'Ticket');
+    await openHalf(hp, 'insights');
+    await openCard(hp, "Caller's other tickets");
+    await ctx.waitUntil('the caller card says it could not check', async () => /could not be checked|could not check/i.test((await textOf(hp, '[data-card="caller"]')) || ''), { timeout: 20000 });
+    const callerHidden = (await textOf(hp, '[data-card="caller"]')) || '';
+    const flat = (text) => text.replace(/\s+/g, ' ').slice(0, 240);
+    t.check('Same caller, earlier tickets refused (403): the card says it could not check', /could not be checked|could not check/i.test(callerHidden), flat(callerHidden));
+    t.check('...and never says there are none, nor that nobody is named', !/No earlier tickets from this (caller|person)/.test(callerHidden) && !/Nobody is named/.test(callerHidden), flat(callerHidden));
+    const callerLine = await painLine(hp, 'caller');
+    t.check("...the row's one line agrees (it does not say there are none)", !/^No earlier tickets from this caller/.test(callerLine), callerLine);
+    await openCard(hp, 'Missing details');
+    await ctx.waitUntil('Missing details has answered', async () => ((await textOf(hp, '[data-card="missing"]')) || '').trim().length > 0, { timeout: 15000 });
+    const missingHidden = (await textOf(hp, '[data-card="missing"]')) || '';
+    t.check('Missing details, configuration item not returned: it says it could not check, and does not say the item is missing', /Could not check:[^\n]*\bCI\b/.test(missingHidden) && !/No configuration item/.test(missingHidden), flat(missingHidden));
+    t.check('...and does not call the ticket complete', !/The key details are there/.test(missingHidden), flat(missingHidden));
+    inst.setBehaviour();
+    await hiddenPanel.close();
+    await hiddenTicket.close();
   },
 };

@@ -10,8 +10,21 @@
 //   store.clear(prefix?)                                          drop every entry (or those whose key starts with prefix)
 //
 // Entries are dropped oldest first beyond `max`, and on clear(): Settings' "Clear everything" or a site turned off
-// (src/sidepanel/forgetOnClear.js). clear() tells the subscribers of every key it drops, so a card on screen lets go of what it
-// showed then and there.
+// (src/sidepanel/forgetOnClear.js), and a change of the signed-in person (src/sidepanel/ticket/cards/useInsight.js). clear() tells the
+// subscribers of every key it drops, so a card on screen lets go of what it showed then and there.
+//
+// A read that fails keeps the last good value on screen, with the error next to it (a busy instance should not blank a card) EXCEPT when
+// the failure says the person may not see it any more: signed out, an access rule, the organisation's restriction, a record that is no
+// longer there for them. Then the value is dropped (it was read for someone who could see it), and a lost sign-in drops every value:
+// what was read before it belongs to a person who may no longer be the one at the screen (audit of 2026-11-07, R-16).
+
+import { READ_REASON, readReasonOf } from '../context/access.js';
+
+const FORGETS = new Set([READ_REASON.SESSION, READ_REASON.ACL, READ_REASON.POLICY, READ_REASON.BLOCKED, READ_REASON.NOT_FOUND, READ_REASON.HIDDEN_FIELD]);
+
+/** Does this failure mean the last good value must not stay on screen (see above)? */
+export const forgetsValue = (error) => FORGETS.has(readReasonOf(error));
+const lostSignIn = (error) => readReasonOf(error) === READ_REASON.SESSION;
 
 export function createInsightStore({ now = Date.now, max = 120 } = {}) {
   const entries = new Map(); // key -> { value, error, at, pending }
@@ -49,10 +62,17 @@ export function createInsightStore({ now = Date.now, max = 120 } = {}) {
         },
         (error) => {
           if (entries.get(key)?.pending === pending) {
-            // A failed read keeps the last good value on screen, with the error next to it.
+            // A failed read keeps the last good value on screen, with the error next to it, unless the failure says the person may not
+            // see it (forgetsValue); a lost sign-in takes every other value with it.
             const before = entries.get(key);
-            entries.set(key, { value: before?.value, error, at: before?.at ?? 0, pending: null });
-            notify(key);
+            const forget = forgetsValue(error);
+            entries.set(key, { value: forget ? undefined : before?.value, error, at: forget ? 0 : before?.at ?? 0, pending: null });
+            if (lostSignIn(error)) {
+              const others = [...entries.keys()].filter((other) => other !== key);
+              for (const other of others) entries.delete(other);
+              notify(key);
+              for (const other of others) notify(other);
+            } else notify(key);
           }
           throw error;
         }

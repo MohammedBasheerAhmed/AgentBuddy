@@ -90,7 +90,7 @@ test('one answer with its sections, each saying where it came from; the AI is se
     assert.equal(open.textContent, 'Open INC0010019');
     assert.equal(open.getAttribute('target'), '_blank');
     // the line before Insert, and Insert leads
-    assert.match(ui.text(), /Insert fills Close code and Resolution notes on the open form\. Nothing is saved until you press Save\./);
+    assert.match(ui.text(), /Insert fills Close code and Resolution notes on the open form\. Nothing is saved\. Set State to Resolved, then save\./);
     assert.equal(answer.querySelector('.ab-answer-main').textContent, 'Insert');
     // what the AI was sent: the resolution-notes request, none of the sections
     const body = JSON.stringify(globalThis.fetch.calls[0].body);
@@ -115,7 +115,7 @@ test('Insert: the close code by its value, then the notes; the status names both
       ['close_notes', 'Cause: the VPN profile cache was corrupt.\nFix: cleared the cache and reinstalled the client.\nVerification: the user confirmed the VPN stays up.', 'replace'],
     ]);
     for (const m of fills(fake)) assert.deepEqual(m.expect, { table: 'incident', sysId: SYS });
-    assert.match(ui.text(), /Filled Close code and Resolution notes\. Press Save in ServiceNow to keep them\./);
+    assert.match(ui.text(), /Filled Close code and Resolution notes\. Set State to Resolved, then save\./);
     assert.equal(ui.$('section.ab-answer .ab-answer-main').textContent, 'Inserted');
     await click(ui.button('Undo'));
     await settle(4);
@@ -177,7 +177,7 @@ test('Undo after any Insert: a reply in the customer comment goes back to what w
     await click(ui.$('section.ab-answer .ab-answer-main'));
     await settle(4);
     assert.equal(fills(fake)[0].field, 'comments');
-    assert.match(ui.text(), /Inserted\. Review it\. Then press Save\. Saving sends the comment to the customer\./, 'the single-field line is the one it always was');
+    assert.match(ui.text(), /Inserted\. Review it\. Then press Save\. The customer may be emailed\./, 'the single-field line is the one it always was');
     await click(ui.button('Undo'));
     await settle(4);
     assert.deepEqual(fills(fake).slice(1).map((m) => [m.mode, m.field, m.value]), [['undo', 'comments', 'Hi Abel,']]);
@@ -194,11 +194,11 @@ test('a Workspace: only the notes go in, and the status says which close code to
   try {
     await click(ui.button('Prepare to close'));
     await settle(10);
-    assert.match(ui.text(), /Insert fills Resolution notes on the open form\. Nothing is saved until you press Save\. Choose the close code Solved \(Work Around\) yourself\./);
+    assert.match(ui.text(), /Insert fills Resolution notes on the open form\. Nothing is saved\. Choose the close code Solved \(Work Around\) yourself\. Set State to Resolved, then save\./);
     await click(ui.$('section.ab-answer .ab-answer-main'));
     await settle(4);
     assert.deepEqual(fills(fake).map((m) => m.field), ['close_notes'], 'the code is never tried there');
-    assert.match(ui.text(), /Filled Resolution notes\. Press Save in ServiceNow to keep it\. Choose the close code Solved \(Work Around\) yourself\./);
+    assert.match(ui.text(), /Filled Resolution notes\. Choose the close code Solved \(Work Around\) yourself\. Set State to Resolved, then save\./);
   } finally {
     await ui.unmount();
   }

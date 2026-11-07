@@ -162,13 +162,13 @@ test('nothing mentions the code: said plainly, only when both could be read', as
     await settle(6);
     await click(ui.button('Search articles and solved tickets'));
     await settle(6);
-    assert.match(ui.$('[data-fact="error-code"]').textContent, /No article or solved ticket mentions 0x800CCC0F\./);
+    assert.match(ui.$('[data-fact="error-code"]').textContent, /No article or solved ticket found that mentions 0x800CCC0F\./);
     // Knowledge refused: no "none", the refusal instead.
     fake.onRead('fixCodeSearch', () => ({ codes: ['800CCC0F'], articles: [], tickets: [], access: [{ source: 'kb_knowledge', status: 'denied', note: 'Your user cannot read kb_knowledge.' }, { source: 'incident', status: 'empty', note: '' }] }));
     await click(ui.button('Search articles and solved tickets'));
     await settle(6);
     const text = ui.$('[data-fact="error-code"]').textContent;
-    assert.ok(!/No article or solved ticket mentions/.test(text), text);
+    assert.ok(!/No article or solved ticket found that mentions/.test(text), text);
     assert.ok(!/kb_knowledge/.test(text), 'no table name');
   } finally {
     await ui.unmount();

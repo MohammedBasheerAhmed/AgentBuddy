@@ -1,5 +1,7 @@
 // Which kind of ServiceNow page a tab is showing, from its address alone (the content script adds what the page tells it).
-//   'classic'    the platform UI: /incident.do, /nav_to.do, /now/nav/ui/classic/...
+//   'classic'    the platform UI: /incident.do, /nav_to.do, and the Next Experience shell around it, /now/nav/ui/... (its home,
+//                and /now/nav/ui/classic/... where the classic form sits in a frame). Nothing there behaves like a Workspace: a record
+//                opens through nav_to.do, a form is saved with Save (audit 2026-11-07, S11; tests/gate-surface.test.js)
 //   'workspace'  Next Experience workspaces: /now/<workspace>/record/<table>/<sys_id>
 //   'portal'     Service Portal, Employee Center, customer service portal, HR portal and other portal themes:
 //                /sp?id=ticket&table=..., /esc?id=ticket&..., /csm?id=csm_ticket&..., /hrsp?id=hr_ticket&...
@@ -25,7 +27,7 @@ function parse(href) {
 }
 
 function isClassicOrWorkspace(path) {
-  if (/\.do$/i.test(path) || /\/now\/nav\/ui\/classic\//i.test(path)) return 'classic';
+  if (/\.do$/i.test(path) || /\/now\/nav\/ui(?:\/|$)/i.test(path)) return 'classic';
   if (/^\/now\//i.test(path) || /\/record\/[a-z][a-z0-9_]*\/[0-9a-f]{32}/i.test(path)) return 'workspace';
   return '';
 }

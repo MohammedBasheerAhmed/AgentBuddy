@@ -144,12 +144,21 @@ module.exports = {
     await closeAnswers(panel.page);
     const redraft = await runFeature(panel.page, /^Draft a reply to the customer/);
     t.check('a fresh reply draft for the page that has no comment box any more', Boolean(redraft.result), redraft.error || '');
-    await clickButton(panel.page, /^Insert as customer comment/);
-    await panel.page.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
-    await clickButton(panel.page, /^Insert anyway/);
-    await waitForText(panel.page, /Copied to the clipboard instead|blocked copying/, { timeout: 8000 });
+    // Audit of 2026-11-07, part 9 (S4): the card asks the page BEFORE the click. A page with no box to type into is no place to offer Insert:
+    // Copy leads, Insert is off, one plain line says why, and no click can fail.
+    const lead = await ctx.waitUntil('the card to know the page has no comment box', async () => {
+      const card = await panel.page.evaluate(() => {
+        const answer = window.__vis(document.querySelectorAll('.ab-answer'))[0];
+        const buttons = [...(answer?.querySelectorAll('.ab-answer-actions button') || [])].map((b) => ({ text: b.innerText.trim(), main: b.classList.contains('ab-answer-main'), disabled: b.disabled }));
+        return { buttons, hint: answer?.querySelector('.ab-answer-hint')?.innerText || '' };
+      });
+      return card.hint === "This page's box can't be filled automatically. Copy and paste." ? card : null;
+    }, { timeout: 12000 }).catch(() => null);
+    t.check('with no box to type into, the card leads with Copy, Insert is off, and one plain line says why', Boolean(lead) && lead.buttons[0]?.text === 'Copy' && lead.buttons[0].main && lead.buttons.find((b) => /^Insert as customer comment/.test(b.text))?.disabled === true, JSON.stringify(lead));
+    await clickButton(panel.page, /^Copy$/);
+    await waitForText(panel.page, /Copied to the clipboard|blocked copying/, { timeout: 8000 });
     const note = (await textOf(panel.page, '.ab-note-ok, .ab-note-danger')) || '';
-    t.check('with no box to type into, the panel falls back to Copy and says why', /^Agent Buddy could not reach a form field on this page\. Copied to the clipboard instead\.$|^The browser blocked copying/.test(note), note);
+    t.check('Copy works there: no failure to read, no text about a form field', /^Copied to the clipboard\.$|^The browser blocked copying/.test(note), note);
     t.check("still no press of the page's Send button on any of these", (await boxes(sp)).sends.length === 0);
     await closeAnswers(panel.page);
     await sp.close();

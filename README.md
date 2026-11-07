@@ -46,6 +46,14 @@ change follows), `docs/live-questions/` (what must be checked on a real instance
 How the browsers differ is in one module, `src/lib/platform.js`; the Firefox manifest is made from `manifest.json` by
 `scripts/lib/browsers.js`. Install and policy for Firefox: `docs/deployment.md`, section "Firefox".
 
+## Where the panel appears
+
+In Chrome and Edge the panel is on only for tabs on a site you added in Settings > ServiceNow sites (and the sites your organisation lists).
+On any other page, such as a company web site, it never shows and takes no width. The toolbar icon opens it on an added site; on a
+ServiceNow address you have not added it opens the panel so you can press "Turn on for this site"; on any other page it opens Settings
+at "ServiceNow sites". Firefox cannot close its sidebar by itself, so there you close it yourself on pages that are not ServiceNow. How it
+works, and what to try by hand in the browser: `docs/panel-scope.md`.
+
 ## Build and run
 
 Needs Node.js 22.12 or later (`.nvmrc` says 22; `engines` in `package.json`) and npm.

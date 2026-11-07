@@ -24,7 +24,7 @@ test('a reloaded extension is said differently: the panel itself has to be reope
 
 test('any other message is already ours and passes through; an empty one gets a fallback', () => {
   assert.equal(plainError(new Error('Your organisation has switched this feature off.')), 'Your organisation has switched this feature off.');
-  assert.equal(plainError(new Error('')), 'Something went wrong.');
+  assert.equal(plainError(new Error('')), 'Something went wrong. Try again; if it keeps happening, tell your administrator.');
   assert.equal(plainError(null, 'Nope.'), 'Nope.');
   assert.equal(plainError('plain string'), 'plain string');
 });

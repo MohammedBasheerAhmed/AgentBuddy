@@ -73,19 +73,23 @@ test('insertTargets: the boxes of THIS kind of record, with their mode, the mode
   assert.equal(inc[0].mode, 'replace');
   assert.deepEqual(inc[0].modes, ['replace', 'append']);
   assert.equal(inc[0].where, 'Replaces what is in Resolution notes, which the customer can often read.');
-  assert.equal(inc[0].next, 'Then press Save.');
+  // (F13: the state is the step that closes an incident, so the line names it)
+  assert.equal(inc[0].next, 'Set State to Resolved, then save.');
   const prb = insertTargets(notes, { record: { kind: 'problem' } }).map((t) => t.field);
   assert.deepEqual(prb, ['fix_notes', 'cause_notes'], 'a problem has no resolution-notes box (packs/core.js used to send close_notes)');
   const ritm = insertTargets(notes, { record: { kind: 'requested_item' } });
   assert.equal(ritm[0].fieldLabel, 'Close notes');
-  assert.deepEqual(insertsForKind(notes, 'change'), [], 'not a kind it is for: nothing to insert');
+  assert.deepEqual(insertsForKind(notes, 'request'), [], 'not a kind it is for (its ceiling has no close notes): nothing to insert');
+  assert.equal(insertsForKind(notes, 'change')[0].field, 'close_notes', 'a change has close notes (audit of 2026-11-07, W-10)');
+  assert.equal(insertsForKind(notes, 'hr_case')[0].field, 'close_notes', 'and so does an HR case (W-09)');
 });
 
 test('where the text lands: a comment reaches the customer when saved; a Workspace composer has one box for both; a portal has its own Send', () => {
   const reply = featureById('reply-draft');
   const classic = insertTargets(reply, { record: { kind: 'incident' }, page: { surface: 'classic' } })[0];
   assert.equal(classic.where, 'Goes below what is in Additional comments, which the customer sees.');
-  assert.equal(classic.next, 'Then press Save. Saving sends the comment to the customer.');
+  // (softly, W-13: whether saving emails the caller depends on how the ticket came in and on the site's notifications)
+  assert.equal(classic.next, 'Then press Save. The customer may be emailed.');
   assert.equal(classic.caution, '');
   const ws = insertTargets(reply, { record: { kind: 'incident' }, page: { surface: 'workspace' } })[0];
   assert.equal(ws.next, 'Then press Post.');
@@ -94,14 +98,17 @@ test('where the text lands: a comment reaches the customer when saved; a Workspa
   assert.match(notesWs.caution, /set to Work notes/);
   assert.equal(notesWs.where, 'Goes below what is in Work notes, which only your colleagues see.');
   assert.equal(insertTargets(reply, { record: { kind: 'incident' }, page: { surface: 'portal' } })[0].next, "Then press the page's own Send.");
-  assert.match(insertTargets(reply, { record: { kind: 'catalog_task' }, page: { surface: 'classic' } })[0].caution, /requester does not see comments on a catalog task/);
+  // (a catalog task: the work notes come first; the comment is the second choice and carries the caution)
+  const onTask = insertTargets(reply, { record: { kind: 'catalog_task' }, page: { surface: 'classic' } });
+  assert.deepEqual(onTask.map((x) => x.field), ['work_notes', 'comments']);
+  assert.match(onTask[1].caution, /requester may not see comments on a catalog task/);
   assert.equal(describeInsert({ field: 'text', fieldLabel: 'Article body', mode: 'append', table: 'kb_knowledge' }).next, 'Then save the article.');
   assert.equal(describeInsert({ field: 'short_description', mode: 'append' }).where.startsWith('Replaces'), true, 'a one-line field always replaces');
 });
 
 test('the note after an insert names the next step for that box (and the old note stands for the old callers)', () => {
-  assert.equal(insertedNote({ ok: true, method: 'gform' }), 'Inserted into the form. Review it, then save the record yourself.');
-  assert.equal(insertedNote({ ok: true, method: 'gform' }, { field: 'comments', surface: 'classic' }), 'Inserted. Review it. Then press Save. Saving sends the comment to the customer.');
+  assert.equal(insertedNote({ ok: true, method: 'gform' }), 'Inserted into the form. Review it, then save the ticket yourself.');
+  assert.equal(insertedNote({ ok: true, method: 'gform' }, { field: 'comments', surface: 'classic' }), 'Inserted. Review it. Then press Save. The customer may be emailed.');
   assert.equal(insertedNote({ ok: true, method: 'dom', label: 'Work notes' }, { field: 'work_notes', surface: 'workspace' }), 'Inserted. Review it. Then press Post. It went into the box labelled "Work notes".');
 });
 
@@ -109,7 +116,7 @@ test('primaryOf: copy for notes to self, insert where the text belongs on the fo
   assert.equal(primaryOf(featureById('record-summary'), 'incident'), 'copy');
   assert.equal(primaryOf(featureById('reply-draft'), 'incident'), 'insert');
   assert.equal(primaryOf(featureById('sentiment-risk'), 'incident'), 'copy');
-  assert.equal(primaryOf(featureById('resolution-notes'), 'change'), 'copy', 'no box on this kind');
+  assert.equal(primaryOf(featureById('resolution-notes'), 'request'), 'copy', 'no box on this kind');
   assert.equal(primaryOf(featureById('resolution-notes')), 'insert');
   assert.deepEqual(choicesOf(featureById('reply-draft'), '1. a\n2. b'), [], 'only a feature with choices splits');
   assert.deepEqual(choicesOf({ choices: () => { throw new Error('x'); } }, 'x'), []);

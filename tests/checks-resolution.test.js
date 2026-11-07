@@ -126,7 +126,7 @@ test('children: open tasks warn and are named; closed ones are fine; unreadable 
   assert.equal(find(resolutionCheck(incident({ related: { childTasks: [] } })), 'children').status, 'ok');
   const hidden = find(resolutionCheck(incident({ related: {}, access: [{ source: 'task', status: 'denied', note: '' }] })), 'children');
   assert.equal(hidden.status, 'info');
-  assert.match(hidden.hint, /cannot read tasks/);
+  assert.match(hidden.hint, /cannot see tasks with your role/);
 });
 
 test('children: requested items hold catalog tasks, requests hold items, catalog tasks have none', () => {

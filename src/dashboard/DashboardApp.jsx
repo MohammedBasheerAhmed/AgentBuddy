@@ -57,7 +57,7 @@ export default function DashboardApp() {
     <main className="ab-dashboard-page" key={lang}>
       <div className="ab-dashboard-head">
         <h1>{t('Agent Buddy: team dashboard')}</h1>
-        {origin && <span className="ab-sub">{t('Reading from {origin} with your own session', { origin })}</span>}
+        {origin && <span className="ab-sub">{t('Reading from {origin} as you', { origin })}</span>}
       </div>
       {source.status === 'checking' || !eff.ready ? (
         <p className="ab-sub" role="status">{t('Checking the ServiceNow tab…')}</p>

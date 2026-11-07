@@ -84,10 +84,10 @@ export function ReadState({ state, what = 'ServiceNow', onRetry }) {
   return null;
 }
 
-/** A record row: number, title and up to two short lines. Opens in a new tab next to the ticket (the ticket stays put). */
+/** A record row: number, title and up to two short lines. Opens in a new tab next to the ticket (the ticket stays put): RecordLink's default. */
 export function ItemLink({ page, item, line = '', extra = '' }) {
   return (
-    <RecordLink page={page} item={item} newTab className="ab-ins-item">
+    <RecordLink page={page} item={item} className="ab-ins-item">
       <span className="ab-ins-item-head">
         <span className="ab-record-number">{item.number}</span>
         <span className="ab-ins-item-title">{item.short_description || item.title || ''}</span>

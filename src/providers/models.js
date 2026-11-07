@@ -34,7 +34,7 @@ export const canListModels = (provider) => apiOf(provider) === 'openai' && !PROV
  */
 export async function listModels(config, fetchFn, { signal, sleep } = {}) {
   if (PROVIDERS[config.provider]?.azure) throw new Error(t('Azure OpenAI does not give a key a list of your deployments. Type the deployment name instead.'));
-  if (apiOf(config.provider) !== 'openai') throw new Error(t('This provider has no list to load here. Pick one of the listed models or type its name.'));
+  if (apiOf(config.provider) !== 'openai') throw new Error(t('This AI service has no list to load here. Pick one of the listed models or type its name.'));
   if (config.invalidBaseUrl) throw new Error(t('The AI address is not valid: {reason}', { reason: config.invalidBaseUrl }));
   if (config.provider === 'custom' && !config.baseUrl) throw new Error(t('Enter the address of your AI server in Settings first.'));
   if (!config.apiKey && !config.keyOptional) throw new Error(t('Enter your key first, then load the models.'));

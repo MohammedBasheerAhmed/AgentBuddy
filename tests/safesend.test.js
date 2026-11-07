@@ -103,7 +103,7 @@ test('the record people\'s own emails are fine; any other address is flagged', (
   assert.deepEqual(kinds(r), ['EMAIL']);
   assert.equal(r.findings[0].severity, 'medium');
   assert.equal(r.findings[0].excerpt, 'ja****@corp.example.org');
-  assert.match(r.findings[0].advice, /not one of the people on this record/);
+  assert.match(r.findings[0].advice, /not one of the people on this ticket/);
   // with nobody known, every address is "someone else's"
   assert.deepEqual(kinds(checkOutgoing('write to abel.tuter@example.com')), ['EMAIL']);
 });

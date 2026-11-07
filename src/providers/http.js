@@ -147,37 +147,37 @@ export function statusError(status, who, { reason = '', code = '', type = '', he
     return new AiError(t('{who} turned this request down with its content filter. Change the text, or ask your administrator about the filter.', { who }), 'CONTENT_FILTER', extra);
   }
   if (noCredit || /insufficient_quota|billing/i.test(`${code} ${type}`) || status === 402) {
-    return new AiError(t("{who} says the account has no balance left{why}. Add credit on the provider's site, then try again.", { who, why }), 'NO_CREDIT', extra);
+    return new AiError(t("{who} says the account has no credit left{why}. Add credit on the AI company's site, then try again.", { who, why }), 'NO_CREDIT', extra);
   }
   switch (status) {
     case 400:
       return new AiError(
         dep
-          ? t('{who} could not use this request (answer 400){why}. Check the deployment name in Settings, or try with less text.', { who, why })
-          : t('{who} could not use this request (answer 400){why}. Check the model name in Settings, or try with less text.', { who, why }),
+          ? t('{who} could not use this request{why}. Check the deployment name in Settings, or try with less text.', { who, why })
+          : t('{who} could not use this request{why}. Check the model name in Settings, or try with less text.', { who, why }),
         'BAD_REQUEST',
         extra
       );
     case 401:
-      return new AiError(t('{who} rejected the API key. Check it in Agent Buddy settings.', { who }), 'BAD_KEY', extra);
+      return new AiError(t('{who} did not accept the AI key. Check it in Settings.', { who }), 'BAD_KEY', extra);
     case 403:
       return new AiError(
         dep
-          ? t('{who} refused the request (answer 403){why}. The key may not be allowed to use this deployment, or a network filter blocks the address.', { who, why })
-          : t('{who} refused the request (answer 403){why}. The key may not be allowed to use this model, or a network filter blocks the address.', { who, why }),
+          ? t('{who} refused this request{why}. Check the AI key and the deployment in Settings, or ask your administrator.', { who, why })
+          : t('{who} refused this request{why}. Check the AI key and the model in Settings, or ask your administrator.', { who, why }),
         'NO_ACCESS',
         extra
       );
     case 404:
       return new AiError(
         dep
-          ? t('{who} answered "not found" (404){why}. Check the address and the deployment name in Settings.', { who, why })
-          : t('{who} answered "not found" (404){why}. Check the address and the model name in Settings.', { who, why }),
+          ? t('{who} could not find this deployment{why}. Check the AI address and the deployment name in Settings.', { who, why })
+          : t('{who} could not find this model{why}. Check the AI address and the model name in Settings.', { who, why }),
         'NOT_FOUND',
         extra
       );
     case 408:
-      return new AiError(t('{who} gave up waiting for the request (answer 408). Try again in a minute.', { who }), 'TIMEOUT', extra);
+      return new AiError(t('{who} gave up waiting for the request. Try again in a minute.', { who }), 'TIMEOUT', extra);
     case 413:
       return new AiError(
         dep ? t('The request is too large for {who}. Try with less text, or a deployment that takes more.', { who }) : t('The request is too large for {who}. Try with less text, or a model that takes more.', { who }),
@@ -192,8 +192,8 @@ export function statusError(status, who, { reason = '', code = '', type = '', he
     case 529:
       return new AiError(t('{who} is busy. Try again in a minute.', { who }), 'BUSY', extra);
     default:
-      if (status >= 500) return new AiError(t('{who} had a problem on its side (answer {status}). Try again in a minute.', { who, status }), 'SERVER_ERROR', extra);
-      return new AiError(t('{who} could not handle the request (answer {status}){why}.', { who, status, why }), 'REQUEST_FAILED', extra);
+      if (status >= 500) return new AiError(t('{who} had a problem on its side. Try again in a minute.', { who }), 'SERVER_ERROR', extra);
+      return new AiError(t('{who} could not handle this request{why}. Try again, or ask your administrator if it keeps happening.', { who, why }), 'REQUEST_FAILED', extra);
   }
 }
 
@@ -252,14 +252,14 @@ export async function requestJson({ url, init, who, host, secrets = [], sent = '
       } catch {
         // fetch only throws when nothing came back at all: offline, blocked by a firewall, VPN or proxy, no browser permission, or
         // an answer that redirects elsewhere (never followed).
-        throw stopped() || new AiError(t('Could not reach {host}. Check your internet connection, VPN or proxy, that the browser allowed access to this address, and that the address does not redirect elsewhere.', { host: isolate(host) }), 'UNREACHABLE');
+        throw stopped() || new AiError(t('Could not reach the AI service at {host}. Check your internet connection or VPN, then try again. If it keeps happening, ask your administrator.', { host: isolate(host) }), 'UNREACHABLE');
       }
       if (response.ok) {
         try {
           // eslint-disable-next-line no-await-in-loop -- the answer of this try; the loop ends here
           return await response.json();
         } catch {
-          throw stopped() || new AiError(t('{who} sent an answer Agent Buddy could not read. Check the address in Settings.', { who }), 'BAD_ANSWER');
+          throw stopped() || new AiError(t('{who} sent an answer Agent Buddy could not use. Check the AI address in Settings.', { who }), 'BAD_ANSWER');
         }
       }
       let text = '';

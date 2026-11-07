@@ -181,7 +181,7 @@ test('strategy 2: the journal table is denied, so the record\'s own strings are 
   ]);
   assert.equal(access[0].status, 'ok');
   assert.equal(access[0].strategy, 'record-fields');
-  assert.match(access[0].note, /could not be read by your user/);
+  assert.match(access[0].note, /could not be read the usual way/);
   assert.match(access[0].note, /time zone/);
   assert.deepEqual(loginNames, [], 'display names are already names');
 });
@@ -192,7 +192,7 @@ test('strategy 2 also applies when the journal table answers 200 with zero rows 
     const { entries, access } = await ask(fakeDeps(tables, behaviour));
     assert.equal(entries.length, 3);
     assert.equal(access[0].strategy, 'record-fields');
-    assert.match(access[0].note, /showed no entries/);
+    assert.match(access[0].note, /could not be read the usual way/);
   }
 });
 
@@ -210,7 +210,7 @@ test('nothing anywhere: a table the user can see is a fact, a table they cannot 
   const visible = await ask(fakeDeps({ sys_journal_field: journalRows().filter((r) => r.element_id !== INCIDENT_ID), incident: [] }), empty);
   assert.deepEqual(visible.entries, []);
   assert.equal(visible.access[0].status, 'empty');
-  assert.equal(visible.access[0].note, 'This record has no notes or comments.');
+  assert.equal(visible.access[0].note, 'No notes or comments that you can see.');
   // hidden: no rows at all, filtered or not
   const hidden = await ask(fakeDeps({ sys_journal_field: [], incident: [] }), empty);
   assert.equal(hidden.access[0].status, 'empty-or-hidden');
@@ -221,7 +221,7 @@ test('denied and nothing in the record\'s own fields is ambiguous; denied and fi
   const deps = () => fakeDeps(incidentTables(), { denied: ['sys_journal_field'] });
   const ambiguous = await ask(deps(), { comments: '', work_notes: '' });
   assert.equal(ambiguous.access[0].status, 'empty-or-hidden');
-  assert.match(ambiguous.access[0].note, /cannot read the journal table/);
+  assert.match(ambiguous.access[0].note, /You cannot read the notes and comments, and the ticket itself shows none/);
   const denied = await ask(deps(), null);
   assert.equal(denied.access[0].status, 'denied');
 });
@@ -234,13 +234,13 @@ test('rows that belong to other records mean the filter was ignored: they are no
   const empty = await ask(stubborn, { comments: '', work_notes: '' });
   assert.deepEqual(empty.entries, []);
   assert.equal(empty.access[0].status, 'error');
-  assert.match(empty.access[0].note, /other records/);
+  assert.match(empty.access[0].note, /did not narrow the results as asked/);
 
   // With the record's own strings available they are used instead, and the note says why.
   const fallback = await ask(stubborn, recordText);
   assert.equal(fallback.entries.length, 3);
   assert.ok(!fallback.entries.some((e) => e.text === 'leak'));
-  assert.match(fallback.access[0].note, /answered with other records/);
+  assert.match(fallback.access[0].note, /could not be read the usual way, so they were read from the ticket itself/);
 });
 
 test('only the newest 30 entries are kept, shown oldest to newest, with a note', async () => {

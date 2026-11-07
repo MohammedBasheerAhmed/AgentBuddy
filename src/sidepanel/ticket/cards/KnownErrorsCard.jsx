@@ -1,8 +1,9 @@
 import { ShowMore } from '../../ui/primitives.jsx';
 import { arrangeProblems } from '../../../insights/changes.js';
 import { useRecordRead } from './data.js';
-import { useReport } from './useInsight.js';
+import { readFully, useReport } from './useInsight.js';
 import { CopyButton, ItemLink, Notes, ReadState } from './bits.jsx';
+import { plainNote } from '../../plainAccess.js';
 import { t, tn, isolate } from '../../../i18n/index.js';
 
 // N26, known errors and open problems for this configuration item or service, workaround first: a fix may already exist.
@@ -14,6 +15,9 @@ export default function KnownErrorsCard({ page, eff, record, active, setSummary,
   const data = state.data;
   const status = data?.access?.[0]?.status || '';
   const known = Boolean(data) && (status === 'ok' || status === 'empty');
+  // As the changes card: "no CI or service" only when the ticket has none; a column that could not be read is not "none" (R-08, R-14).
+  const noTarget = Boolean(data?.noTarget);
+  const failed = Boolean(data) && !readFully(data.access);
   const items = arrangeProblems(data?.items);
   const withWorkaround = items.filter((p) => p.workaround).length;
   const knownErrors = items.filter((p) => p.knownError).length;
@@ -31,17 +35,19 @@ export default function KnownErrorsCard({ page, eff, record, active, setSummary,
             .join(' · ')
         : known
           ? t('None on this item')
-          : status === 'skipped'
+          : noTarget
             ? t('No CI or service on this ticket')
-            : ''
+            : failed
+              ? t('Could not check problems')
+              : ''
       : ''
   );
-  useReport(setAttention, withWorkaround ? 'warn' : data && !items.length && (known || status === 'skipped') ? 'clear' : '');
+  useReport(setAttention, withWorkaround ? 'warn' : data && !items.length && (known || noTarget) ? 'clear' : '');
 
   if (!data) return <ReadState state={state} what={t('problems')} onRetry={state.reload} />;
   return (
     <>
-      {status === 'skipped' && <p className="ab-hint">{data.access[0].note}</p>}
+      {status === 'skipped' && <p className="ab-hint">{plainNote(data.access[0].note)}</p>}
       {known && !items.length && <p className="ab-hint">{t("No open problem or known error on this ticket's configuration item or service.")}</p>}
       {items.length > 0 && (
         <ShowMore

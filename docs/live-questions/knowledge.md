@@ -105,10 +105,11 @@ Where to look: `src/context/chat.js` (chat), `src/context/knowledge.js` (article
     restricted base could be listed although the person cannot open it in the portal); (b) `textLIKE` on a large KB is acceptable (it is a
     LIKE on an HTML column; if it is slow, `123TEXTQUERY321=` (Zing) could replace it, ranking would then differ from the ticket card);
     (c) an article number typed alone (`KB0010001`) finds that article.
-26. **The share link** is `https://<instance>/kb_view.do?sysparm_article=KB0010001` on the classic UI and
-    `https://<instance>/<portal>?id=kb_article&sysparm_article=KB0010001` when the agent is on a portal. Check that `kb_view.do` with
-    `sysparm_article` opens the current published version for an end user (it may redirect to the portal), and that the Employee Center
-    `kb_article` page accepts `sysparm_article` (else `sys_id=` is needed, which changes with each version).
+26. **The share link** is ONE address whatever tab the agent has open: `https://<instance>/kb_view.do?sysparm_article=KB0010001`
+    (built in `src/lib/snLinks.js`; Open and Copy give the same address on every surface). It replaced the portal variants that
+    depended on the agent's tab. Check that `kb_view.do` with `sysparm_article` opens the current published version for an end user
+    who has no classic UI, and which portal page ids exist (`kb_article`, `kb_article_view`): the questions are in
+    `audit-1107-links.md`, and the page ids sit in one table in `snLinks.js`.
 27. **Freshness** uses the stored `sys_updated_on` (UTC) and `valid_to`; articles past `valid_to` are left out like on the ticket card.
     A minor edit (a typo fix) makes an article look fresh; `published` or the version could be better. Check what knowledge managers expect.
 28. **Duplicate finder paging** asks for 300 titles at a time with `sysparm_offset` (300, 600, ...; at most 1,500 titles in all) and compares

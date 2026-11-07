@@ -17,9 +17,10 @@ import { rulesFor } from '../../prompts/rules.js';
 import { t, tm } from '../../i18n/index.js';
 
 // Every kind whose record names the person it is for (src/context/people.js PERSON_FIELDS: caller_id, requested_for, contact, consumer,
-// opened_for) or at least who opened it. A chat (the interaction record) names its customer in opened_for, as an HR case does. Not a
-// change (it is requested, not raised by a caller), not an article, not 'other'.
-export const CALLER_KINDS = Object.freeze(['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task', 'chat']);
+// opened_for) or at least who opened it. A chat (the interaction record) names its customer in opened_for, as an HR case does. A change
+// names the person who asked for it (requested_by, F6). Not a problem (it has no customer: whoever opened it is an agent at work, F22),
+// not an article, not 'other'.
+export const CALLER_KINDS = Object.freeze(['incident', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task', 'chat']);
 
 const callerBriefing = {
   id: 'caller-briefing',

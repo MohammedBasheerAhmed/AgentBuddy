@@ -221,9 +221,9 @@ test('access notes say what could not be read, in plain words, for the sources t
     { source: 'sys_user', status: 'denied', note: '' },
   ]);
   assert.deepEqual(notes, [
-    'You cannot see approvals on this instance, so they are left out.',
+    'You cannot see approvals with your role, so they are left out.',
     'Catalog tasks could not be read just now, so they are left out.',
-    'Your user sees no SLAs at all, so there may be some that an access rule hides.',
+    "You can't see any SLAs at all, so there may be some that your role does not let you see.",
   ]);
   assert.deepEqual(accessNotes(undefined), []);
 });

@@ -28,6 +28,7 @@ const CARD_IDS = {
   'Which email fits': 'email',
   'Ticket journey': 'journey',
   'Outage spotter': 'outage',
+  'Fulfilled before': 'fulfilled',
   'Ready to resolve?': 'resolve',
   "Caller's other tickets": 'caller',
 };
@@ -37,6 +38,7 @@ const GROUP_OF = {
   article: 'understand',
   journey: 'understand',
   checklist: 'fix',
+  fulfilled: 'fix',
   steps: 'fix',
   knowledge: 'fix',
   caller: 'caller',

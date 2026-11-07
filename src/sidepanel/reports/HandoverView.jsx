@@ -7,11 +7,12 @@ import { useRun } from '../useRun.js';
 import { HANDOVER_HOURS, HANDOVER_DEFAULT_HOURS } from '../../reports/engine/handover.js';
 import { HANDOVER_MAX_WORDS, NOTABLE_MAX, buildHandoverPack, checkHandoverNote } from '../../reports/ai/handover.js';
 import SectionShell from './SectionShell.jsx';
-import Summary from './Summary.jsx';
+import Foldable from './Foldable.jsx';
+import { shownElsewhere } from './onDashboard.js';
 import { useSection } from './useSection.js';
 import { AiBlocked, AiButton, AiResult, RunProgress, AiKeyLine, featureState, isAiReady } from './aiShared.jsx';
 import { t, tn } from '../../i18n/index.js';
-import { shown as shownText } from '../../reports/shown.js';
+import { shown as shownText, stateShown } from '../../reports/shown.js';
 
 const FEATURE_ID = 'shift-handover';
 
@@ -27,8 +28,8 @@ function Block({ title, children }) {
 // The facts on a ticket's second line in the hand-over lists.
 const who = (item) => item.owner || t('Unassigned');
 const slaLine = (now) => (item) => [dueText({ endMs: item.endMs, breached: item.risk === 'Breached', paused: item.paused, plannedEnd: item.plannedEnd }, now), item.risk === 'Breached' ? '' : t('{percent}% used', { percent: item.percent }), who(item), item.priority];
-const stateLine = (item) => [item.state, ageText(item.ageDays), who(item)];
-const eventLine = (item) => [item.priority, item.state, who(item), item.group];
+const stateLine = (item) => [stateShown(item), ageText(item.ageDays), who(item)];
+const eventLine = (item) => [item.priority, stateShown(item), who(item), item.group];
 
 // One kind of event in the period: how many, the first few, and an honest line when it could not be counted.
 function Events({ title, list, hours, meta, env }) {
@@ -45,7 +46,7 @@ function Events({ title, list, hours, meta, env }) {
       <TicketList items={list.items} env={env} meta={meta} empty={total === null ? t('None could be listed.') : t('None in the last {hours} hours.', { hours })} />
       {(list.capped || list.partial) && (
         <p className="ab-hint">
-          {list.partial ? `${t('Some tables could not be read, so this may be incomplete.')} ` : ''}
+          {list.partial ? `${t('Some ticket types could not be read, so this may be incomplete.')} ` : ''}
           {list.capped ? (total === null ? t('Listing the first {n}.', { n: list.items.length }) : t('Listing the first {n} of {total}.', { n: list.items.length, total })) : ''}
         </p>
       )}
@@ -64,8 +65,10 @@ export function HandoverBody({ d, env, now }) {
   const s = d.snapshot;
   const w = d.waiting;
   const tone = (n, kind) => (n > 0 ? kind : 'neutral');
+  // The Needs attention section (when the dashboard has it) says what this block says: one list, said once.
+  const attentionElsewhere = shownElsewhere(env, 'attention');
   return (
-    <>
+    <Foldable id="handover" title={t('Shift handover')}>
       <div className="ab-tiles">
         <Tile label={shownText('Open')} value={s.open} unavailable={s.open === null} hint={t('Tickets that are still active')} />
         <Tile label={t('Breached')} value={s.breached} unavailable={s.breached === null} tone={tone(s.breached, 'bad')} hint={t('SLA already breached')} />
@@ -75,18 +78,20 @@ export function HandoverBody({ d, env, now }) {
         <Tile label={t('No update in {days}+ days', { days: s.staleDays })} value={s.stale} unavailable={s.stale === null} tone={tone(s.stale, 'warn')} hint={t('Open and untouched')} />
       </div>
 
-      <Block title={t('Needs attention now')}>
-        {!d.sla.available ? (
-          <p className="ab-note">{shownText(d.sla.reason) || t('SLA information is not available to you.')}</p>
-        ) : (
-          <TicketList
-            items={d.sla.top}
-            env={env}
-            meta={slaLine(at)}
-            empty={d.sla.ticketsAtIssue ? t('The tickets at issue are listed when ticket details can be read.') : t('No SLA is breached or at risk right now.')}
-          />
-        )}
-      </Block>
+      {!attentionElsewhere && (
+        <Block title={t('Needs attention now')}>
+          {!d.sla.available ? (
+            <p className="ab-note">{shownText(d.sla.reason) || t('SLA information is not available to you.')}</p>
+          ) : (
+            <TicketList
+              items={d.sla.top}
+              env={env}
+              meta={slaLine(at)}
+              empty={d.sla.ticketsAtIssue ? t('The tickets at issue are listed when ticket details can be read.') : t('No SLA is breached or at risk right now.')}
+            />
+          )}
+        </Block>
+      )}
 
       <Block title={t('Waiting on others')}>
         <div className="ab-tiles">
@@ -96,17 +101,16 @@ export function HandoverBody({ d, env, now }) {
           <Tile label={t('Waiting for you to approve')} value={w.approvals.mine} unavailable={w.approvals.mine === null} hint={t('Approvals assigned to you')} />
           {w.approvals.team !== undefined && <Tile label={t('Approvals holding up requests')} value={w.approvals.team} unavailable={w.approvals.team === null} hint={t('On requested items in this scope')} />}
         </div>
-        {w.partial && <p className="ab-hint">{t('Some tables could not be counted, so these numbers may be low.')}</p>}
+        {w.partial && <p className="ab-hint">{t('Some ticket types could not be counted, so these numbers may be low.')}</p>}
         {w.oldest.length > 0 && <TicketList caption={t('Waiting the longest')} items={w.oldest} env={env} meta={stateLine} />}
         {w.byState.length > 0 && (
-          <details className="ab-details">
-            <Summary>{t('Waiting by state')}</Summary>
+          <Foldable id="handover-waiting" title={t('Waiting by state')}>
             <DataTable
               caption={t('Waiting by state')}
               columns={[{ key: 'label', label: t('State') }, { key: 'kind', label: t('Waiting for'), format: (v) => ({ customer: t('The customer'), approval: t('An approval'), other: t('Other') })[v] || v }, { key: 'count', label: t('Tickets'), align: 'right' }]}
-              rows={w.byState}
+              rows={w.byState.map((row) => ({ ...row, label: row.plain ? shownText(row.label) : row.label }))}
             />
-          </details>
+          </Foldable>
         )}
       </Block>
 
@@ -118,7 +122,7 @@ export function HandoverBody({ d, env, now }) {
       <Block title={t('Oldest open')}>
         <TicketList items={d.oldest} env={env} meta={stateLine} empty={t('Nothing to show.')} />
       </Block>
-    </>
+    </Foldable>
   );
 }
 

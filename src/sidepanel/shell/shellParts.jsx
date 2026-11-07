@@ -3,7 +3,7 @@ import { Icon } from '../ui/icons.jsx';
 import { PROVIDERS, endpointHost, providerName, resolveProviderConfig } from '../../providers/config.js';
 import { modelChoices } from '../../lib/modelChoices.js';
 import { saveSettings } from '../../lib/storage.js';
-import { activeProfiles, aiOffByPolicy, missingProfileFor } from '../../profiles/profiles.js';
+import { activeProfiles, aiOffByPolicy, confirmPatch, missingProfileFor } from '../../profiles/profiles.js';
 import { t, isolate } from '../../i18n/index.js';
 
 // Pieces of the panel frame that more than one screen uses (owner: the lead, docs/round3.md).
@@ -22,7 +22,7 @@ export function destinationOf(eff) {
     host = '';
   }
   const endpoint = endpointHost(config);
-  if (endpoint) return t('the endpoint {host}', { host: isolate(endpoint) });
+  if (endpoint) return t('the AI service at {host}', { host: isolate(endpoint) });
   return host ? `${name} (${isolate(host)})` : name;
 }
 
@@ -89,7 +89,7 @@ export function ProfileHint({ kind, eff }) {
   const [, redraw] = useState(0);
   const hint = missingProfileFor(kind, eff);
   if (!hint || dismissed.has(kind)) return null;
-  const add = () => saveSettings({ profiles: [...new Set([...activeProfiles(eff), hint.profile.id])], profilesConfirmed: true }).catch(() => {});
+  const add = () => saveSettings(confirmPatch([...new Set([...activeProfiles(eff), hint.profile.id])], eff)).catch(() => {});
   return (
     <div className="ab-profilehint" role="note">
       <p>{hint.text}</p>

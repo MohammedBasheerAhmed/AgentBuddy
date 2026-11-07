@@ -191,7 +191,7 @@ test('missing-info on a requested item reads the variables and nothing else extr
 test('a denied extra is reported and the rest of the pack is complete', async () => {
   const { pack } = await read(incident, { denied: ['task_sla'] });
   assert.ok(!('slas' in pack.related));
-  assert.deepEqual(pack.access.find((a) => a.source === 'task_sla'), { source: 'task_sla', status: 'denied', note: 'Your user cannot read task_sla.' });
+  assert.deepEqual(pack.access.find((a) => a.source === 'task_sla'), { source: 'task_sla', status: 'denied', note: 'Not available to you with your role.' });
   assert.equal(pack.related.childTasks.length, 1);
   assert.equal(pack.journal.length, 3);
 });
@@ -200,8 +200,9 @@ test('a table that answers 200 with nothing, even unfiltered, is "empty-or-hidde
   const { pack, deps } = await read(incident, { hidden: ['task_sla'] });
   const entry = pack.access.find((a) => a.source === 'task_sla');
   assert.equal(entry.status, 'empty-or-hidden');
-  assert.match(entry.note, /sees no rows of task_sla at all/);
-  assert.match(entry.note, /proves nothing/);
+  assert.match(entry.note, /You can see none at all/);
+  assert.match(entry.note, /cannot tell whether there are none/);
+  assert.doesNotMatch(entry.note, /task_sla|your user/i);
   assert.ok(!('slas' in pack.related), 'no empty list that would read as "none"');
   // exactly one extra, unfiltered, one-row read
   const unfiltered = deps.callsTo('task_sla').filter((c) => c.query === '');
@@ -242,7 +243,7 @@ test('rows of other records mean the instance ignored the filter: they are not s
   assert.ok(!('slas' in pack.related));
   const entry = pack.access.find((a) => a.source === 'task_sla');
   assert.equal(entry.status, 'error');
-  assert.match(entry.note, /did not apply the filter/);
+  assert.match(entry.note, /did not narrow the results as asked/);
   assert.ok(!JSON.stringify(pack).includes('Some other SLA'));
 });
 
@@ -252,7 +253,7 @@ test('the journal table is denied: notes come from the record\'s own fields, and
   const entry = pack.access.find((a) => a.source === 'journal');
   assert.equal(entry.status, 'ok');
   assert.equal(entry.strategy, 'record-fields');
-  assert.match(entry.note, /could not be read by your user/);
+  assert.match(entry.note, /could not be read the usual way, so they were read from the ticket itself/);
   assert.equal(pack.people.length, 2, 'authors already known are not repeated');
 });
 
@@ -279,7 +280,7 @@ test('sys_user denied: names stay, emails are left out, and the access list says
   assert.deepEqual(pack.access.find((a) => a.source === 'sys_user'), {
     source: 'sys_user',
     status: 'denied',
-    note: 'Your user cannot read sys_user, so email addresses are not included.',
+    note: 'You cannot read the details of the people on this ticket, so email addresses are not included.',
   });
   assert.equal(pack.people[0].firstName, 'Beth', 'first name still comes from the display name');
   assert.equal(pack.journal[0].by, 'abel.tuter', 'a login that cannot be turned into a name stays a login');
@@ -344,7 +345,8 @@ test('a requested item: variables without secrets, references as names, approval
   assert.ok(!text.includes('99999999999999999999999999999999'), 'no unresolved reference id');
   const note = pack.access.find((a) => a.source === 'sc_item_option_mtom').note;
   assert.match(note, /2 masked or secret answers were left out/);
-  assert.match(note, /1 reference answer could not be shown/);
+  assert.match(note, /Some answers could not be shown because their lists are not ones Agent Buddy reads/);
+  assert.doesNotMatch(note, /sys_|cmn_|u_[a-z]/);
 
   assert.deepEqual(pack.related.approvals.map((a) => [a.approver, a.group, a.state]), [
     ['', 'IT Procurement', 'Requested'],
@@ -432,7 +434,8 @@ test('an HR case without allowSensitive carries no free text, no identities, no 
 
   const skipped = pack.access.filter((a) => a.status === 'skipped');
   assert.deepEqual(skipped.map((a) => a.source), ['sn_hr_core_case', 'journal']);
-  assert.match(skipped[0].note, /description/);
+  assert.match(skipped[0].note, /free text and identities were not read/);
+  assert.doesNotMatch(skipped[0].note, /description|sn_hr_core_case|_/, 'no column and no table name in the note');
 });
 
 test('an HR case with allowSensitive reads what the feature lists, notes included', async () => {

@@ -18,13 +18,16 @@ test('isPlainClick: only an unmodified left click is the panel\'s own; the rest 
 });
 
 test('RecordLink: a real link to the record on the same instance, opening a new tab for Ctrl+click and the context menu', () => {
-  const html = renderToStaticMarkup(<RecordLink page={classic} item={{ table: 'incident', sysId: SYS }} className="ab-feature">INC1</RecordLink>);
+  // (audit 6, 2026-11-07) a plain click opens a NEW tab by default; `sameTab` is for a worklist link
+  const html = renderToStaticMarkup(<RecordLink page={classic} item={{ table: 'incident', sysId: SYS }} sameTab className="ab-feature">INC1</RecordLink>);
   assert.match(html, /^<a /);
   assert.ok(html.includes(`href="https://acme.service-now.com/nav_to.do?uri=incident.do%3Fsys_id%3D${SYS}"`), html);
   assert.ok(html.includes('target="_blank"'));
   assert.ok(/rel="noopener noreferrer"/.test(html), 'the new tab gets no handle on the panel');
   assert.ok(html.includes('class="ab-feature"'));
   assert.ok(/Ctrl\+click/.test(html), 'the title says how to open a new tab');
+  const byDefault = renderToStaticMarkup(<RecordLink page={classic} item={{ table: 'incident', sysId: SYS }}>INC1</RecordLink>);
+  assert.match(byDefault, /new tab next to this ticket/, 'no prop: the ticket on screen is never replaced');
 });
 
 test('RecordLink: on a portal the address is the portal ticket page of the same instance', () => {

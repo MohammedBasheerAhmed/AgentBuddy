@@ -4,9 +4,10 @@ import { EmptyNote } from '../ui/primitives.jsx';
 import { RailCard } from '../reports/RailCard.jsx';
 import { MYWORK_SECTIONS as S } from './railSections.js';
 import { groupQueue, filterChips, passes } from '../../mywork/rank.js';
-import { withRisk } from '../../mywork/risk.js';
+import { ticketsWithUnreadFacts, withRisk } from '../../mywork/risk.js';
 import { followUps, followUpReason, followUpText, followUpAction, FOLLOW_UP_DAY_CHOICES } from '../../mywork/followups.js';
 import { fullListUrl } from '../../mywork/links.js';
+import { staysInOwnUi } from '../../lib/snLinks.js';
 import { askedText, dueAgoText, dueInText, spanText, dueToday } from '../../mywork/time.js';
 import { Row, RowList, TicketRow, Fold, FilterChips } from './parts.jsx';
 import { copyText } from '../reports/download.js';
@@ -49,7 +50,7 @@ function FullList({ page, table, query, children = t('Open the full list') }) {
   const url = fullListUrl(page, table, query);
   if (!url) return null;
   return (
-    <RecordLink page={page} url={url} className="ab-mw-more-link" title={t('Opens the list in ServiceNow, in this tab. Ctrl+click for a new tab.')}>
+    <RecordLink page={page} url={url} sameTab className="ab-mw-more-link" title={staysInOwnUi(page, url) ? t('Opens the list in ServiceNow, in this tab. Ctrl+click for a new tab.') : undefined}>
       {children}
     </RecordLink>
   );
@@ -63,6 +64,7 @@ export function QueueCard({ page, data, now, policy, filter, setFilter, onOpen }
   // "At risk" chip and line on their rows, the "At risk" filter, and the order (at risk first, src/mywork/rank.js compareNow).
   const items = useMemo(() => withRisk(queue.items || NO_ITEMS, { now, policy }), [queue.items, now, policy]);
   const shown = useMemo(() => items.filter((i) => passes(i, filter)), [items, filter]);
+  const unreadFacts = useMemo(() => ticketsWithUnreadFacts(items), [items]);
   const g = useMemo(() => groupQueue(shown, now), [shown, now]);
   const chips = useMemo(() => {
     const list = filterChips(items, { classNames: queue.names || {} });
@@ -80,6 +82,11 @@ export function QueueCard({ page, data, now, policy, filter, setFilter, onOpen }
   return (
     <RailCard rail={S.queue} railAttention={breached ? 'warn' : ''} summary={queueSummary(queue, items)}>
       {chips.length > 0 && <FilterChips chips={chips} value={filter} onChange={setFilter} />}
+      {unreadFacts > 0 && (
+        <p className="ab-hint ab-mw-unread">
+          {tn(unreadFacts, '{n} ticket has facts that could not be read, so At risk may be incomplete.', '{n} tickets have facts that could not be read, so At risk may be incomplete.')}
+        </p>
+      )}
       {g.now.length > 0 ? (
         <RowList items={g.now} limit={5} render={row} />
       ) : filter ? (
@@ -215,7 +222,9 @@ export function FollowUpsCard({ page, data, now, days, setDays, onOpen }) {
 
 export function GroupsCard({ page, groups, now, onOpen }) {
   const items = groups.items || [];
-  const oldest = items[0]?.openedAt;
+  // (the list is ordered by SLA, readiness and priority, so the oldest ticket is not the first one)
+  const opened = items.map((i) => i.openedAt).filter((at) => Number.isFinite(at));
+  const oldest = opened.length ? Math.min(...opened) : undefined;
   const summary = items.length ? countLine([t('{count} waiting', { count: groups.total > items.length ? groups.total : items.length }), oldest ? t('oldest {span}', { span: spanText(now - oldest) }) : '']) : '';
   const breached = items.some((i) => i.sla?.risk === 'breached'); // a breached SLA: the row's red dot, and a mark in the rail
   return (

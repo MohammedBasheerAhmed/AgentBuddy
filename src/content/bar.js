@@ -25,6 +25,7 @@ import themeCss from '../ui/theme.css';
 import barCss from './bar.css';
 import { BAR_Z, DOCK_BOTTOM_PX, DOCK_EDGE_PX, KEY_STEP, NOTICE_MS, POLL_MS, PREFS_KEY, clampX, clickNotice, clickVerdict, dockLeft, dragX, isGone, launchNotice, nextSeen, pageHasModal, parsePrefs, serializePrefs, xFor } from './barLogic.js';
 import { createBarSync } from './barSync.js';
+import { DIALOG_SELECTOR, isShown, shadowDialogs } from './dialogs.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -60,17 +61,7 @@ function brandMark(doc, size = 30) {
   return svg;
 }
 
-// Is this element drawn (not display: none, not visibility: hidden, in a tree that is shown)?
-function isShown(el) {
-  try {
-    if (typeof el.checkVisibility === 'function') return el.checkVisibility({ visibilityProperty: true });
-    return el.getClientRects().length > 0;
-  } catch {
-    return true; // when unsure, count it: the dock then stays out of the way
-  }
-}
-
-// Is a modal dialog open, as far as the top document and the classic form's frame can be seen from here (pageHasModal)?
+// Is a modal dialog open, as far as the top document, its shadow roots and the classic form's frame can be seen from here (pageHasModal)?
 function modalShown(doc, win) {
   const look = (d) => {
     if (!d) return {};
@@ -78,7 +69,7 @@ function modalShown(doc, win) {
     try {
       // Only a dialog that is on screen counts: a classic form keeps a hidden light box (display: none, aria-modal="true") in the page
       // all the time, which must not hide the dock.
-      dialogs = [...d.querySelectorAll('[aria-modal="true"], .modal.in, .modal.show, dialog[open], .modal-backdrop')].filter(isShown).length;
+      dialogs = [...d.querySelectorAll(DIALOG_SELECTOR)].filter(isShown).length + shadowDialogs(d);
     } catch {
       dialogs = 0;
     }
@@ -378,7 +369,7 @@ export function startBar({ resolveRecord, send = (message) => chrome.runtime.sen
   // (send() is called before this function first waits: the browser opens the side panel only for a request made while the click is
   // still being handled.)
   async function launch(action) {
-    const message = { type: MSG.BAR_LAUNCH, table: state.record.table, sysId: state.record.sysId, featureId: action.id };
+    const message = { type: MSG.BAR_LAUNCH, table: state.record.table, sysId: state.record.sysId, featureId: action.id, ...(state.record.proven ? { proven: true } : {}) };
     state.busy = true;
     state.notice = '';
     render();

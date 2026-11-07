@@ -111,9 +111,9 @@ module.exports = {
     t.check('a tab that is not a ServiceNow page: the banner says so, the screen bar stays and Write stays selected', JSON.stringify(stay?.labels) === JSON.stringify(SCREENS) && JSON.stringify(stay.selected) === '["Write"]', JSON.stringify(stay));
     t.check('...and the text typed in Write > Rewrite is still there (nothing was thrown away)', (await draftNow()) === DRAFT, await draftNow());
     await openScreen(p, 'Ticket');
-    await waitForText(p, /Not turned on for this page|Open your ServiceNow instance/, { timeout: 15000 });
+    await waitForText(p, /Not turned on for this page|Open your ServiceNow site/, { timeout: 15000 });
     const setup = await panel.text();
-    t.check('the Ticket screen shows the setup help for that tab, and no actions', /Open your ServiceNow instance/.test(setup) && (await p.$('[data-feature]')) === null, setup.replace(/\s+/g, ' ').slice(0, 160));
+    t.check('the Ticket screen shows the setup help for that tab, and no actions', /Open your ServiceNow site/.test(setup) && (await p.$('[data-feature]')) === null, setup.replace(/\s+/g, ' ').slice(0, 160));
     await openScreen(p, 'Write');
     t.check('back in Write the draft is still there', (await draftNow()) === DRAFT);
     await home.bringToFront();

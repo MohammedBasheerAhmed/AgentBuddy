@@ -41,8 +41,6 @@ export const AR_UNDERSTAND = {
 
   // ---- Settings > Stored data (src/lib/storedData.js, src/options/data/StoredDataSection.jsx) ----
   'Tickets you opened': 'التذاكر التي فتحتها',
-  'When you last opened each ticket in the panel, so it can say what is new since then: the record id, its table and the time, never its number, title, text or names. At most 500 tickets, none older than 30 days.':
-    'متى فتحت كل تذكرة في اللوحة آخر مرة، لتقول ما الجديد منذ ذلك الحين: معرّف السجل وجدوله والوقت، ولا يحفظ أبدا رقمها أو عنوانها أو نصها أو الأسماء. 500 تذكرة على الأكثر، ولا شيء أقدم من 30 يوما.',
   'Tickets you opened: {n} (ids and times only)|Tickets you opened: {n} (ids and times only)': pl(
     'التذاكر التي فتحتها: {n} (المعرّفات والأوقات فقط)',
     'التذاكر التي فتحتها: {n} (المعرّفات والأوقات فقط)',

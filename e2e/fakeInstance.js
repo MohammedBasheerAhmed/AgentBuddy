@@ -2,7 +2,12 @@
 //
 //   GET /incident.do?sys_id=<id>              classic form; external script defines g_ck, g_user and a fake g_form
 //   GET /nav_to.do?uri=incident.do?sys_id=..  the classic frame: top window + <iframe id="gsft_main"> that holds the form
-//   GET /now/sow/record/<table>/<sys_id>      Workspace-style page: shadow-DOM components, NO g_form
+//   GET /now/sow/record/<table>/<sys_id>      Workspace-style page: shadow-DOM components, NO g_form. Also under /now/cwf/agent/ and
+//                                             /now/workspace/agent/ (the routes of the CSM and the agent Workspaces). ?variant=... gives
+//                                             the page a composer with a Work notes / customer comments switch, a Save and a Post
+//                                             button, a big DOM, an Arabic page, a Notes tab that opens the composer (e2e/site/workspace.js)
+//   GET /now/nav/ui/classic/params/target/<form>.do%3F..   the Next Experience shell around a classic form: the form is in an
+//                                             <iframe name="gsft_main"> INSIDE a shadow root (e2e/site/shell.js)
 //   GET /sp /esc /csm                         portals: an Angular-style single-page app (NO g_form), moving between tickets and a
 //                                             list with history.pushState (e2e/site/portal.js). How each one tells who is signed in:
 //                                             /sp the NOW object, /esc an Angular root scope, /csm nothing at all (the extension
@@ -14,12 +19,16 @@
 //   GET /home                                 a page that is not a record (My Day)
 //   GET /api/now/table/<table>                Table API, answered from the sn-* fixtures
 //   GET /api/now/stats/<table>                Aggregate API: count, group by one or two columns (also dot-walked ones), average fields
+//   GET /api/now/ui/meta/<table>              UI meta service: label and choices of state and priority (the real instance's values)
 //
 // API rules (they imitate what matters about the real thing):
 //   - X-UserToken must equal the page's g_ck, else 401 with the Basic challenge a real instance sends (a browser would pop
 //     up a login box for it, which is why the extension never sends a read without the token)
 //   - tables listed in behaviour.denied answer 403; tables in behaviour.hidden answer 200 with no rows (an ACL filter)
 //   - behaviour.expired: every API call answers 401 with X-Is-Logged-In: false (a timed-out session)
+//   - behaviour.deniedWhen: Table API reads whose sysparm_query contains one of these texts answer 403 (e.g. 'caller_id=' denies the caller's
+//     earlier tickets without denying the record itself); behaviour.withheld: { table: [columns] } leaves those columns out of every row
+//     (a field the person may not read comes back as a missing key, not as an empty value; audit of 2026-11-07, R-14)
 //   - ANY method other than GET/HEAD answers 405, on every path
 // Every request is recorded ({ method, path, kind, status, tokenOk, headers }) so the test can prove the extension only ever read.
 //
@@ -102,7 +111,7 @@ function startFakeInstance(tls, { tables, makeApi, user, portal }) {
   const gck = crypto.randomBytes(24).toString('hex'); // the session token; also what g_ck holds
   const state = {
     tables,
-    behaviour: { denied: [], hidden: [], expired: false },
+    behaviour: { denied: [], hidden: [], expired: false, deniedWhen: [], withheld: {} },
   };
   /** Every request the browser made, in order. `kind` is 'api' for /api/now/*, else 'page'. */
   const requests = [];
@@ -190,9 +199,30 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
     res.end(text);
   }
 
+  // The choices a real instance answers for state and priority (measured on dev364920, docs/live-checks-2026-11-07.md). The task family
+  // (task, sc_task, sc_req_item, incident_task) shares one list; change_task and problem_task have their own.
+  const PRIORITY = [['1', '1 - Critical'], ['2', '2 - High'], ['3', '3 - Moderate'], ['4', '4 - Low'], ['5', '5 - Planning']];
+  const TASK_STATES = [['-5', 'Pending'], ['1', 'Open'], ['2', 'Work in Progress'], ['3', 'Closed Complete'], ['4', 'Closed Incomplete'], ['7', 'Closed Skipped']];
+  const STATES = {
+    incident: [['1', 'New'], ['2', 'In Progress'], ['3', 'On Hold'], ['6', 'Resolved'], ['7', 'Closed'], ['8', 'Canceled']],
+    problem: [['101', 'New'], ['102', 'Assess'], ['103', 'Root Cause Analysis'], ['104', 'Fix in Progress'], ['106', 'Resolved'], ['107', 'Closed']],
+    change_request: [['-5', 'New'], ['-4', 'Assess'], ['-3', 'Authorize'], ['-2', 'Scheduled'], ['-1', 'Implement'], ['0', 'Review'], ['3', 'Closed'], ['4', 'Canceled']],
+    change_task: [['-5', 'Pending'], ['1', 'Open'], ['2', 'In Progress'], ['3', 'Closed'], ['4', 'Canceled']],
+    problem_task: [['151', 'New'], ['152', 'Assess'], ['154', 'Work in Progress'], ['157', 'Closed']],
+  };
+  const choicesOf = (pairs) => pairs.map(([value, label]) => ({ value, label }));
+  function metaColumns(table) {
+    return {
+      state: { label: 'State', choices: choicesOf(STATES[table] || TASK_STATES) },
+      priority: { label: 'Priority', choices: choicesOf(PRIORITY) },
+      short_description: { label: 'Short description', choices: [] },
+    };
+  }
+
   async function handleApi(req, res, url, entry) {
     const m = /^\/api\/now\/(table|stats)\/([a-z][a-z0-9_]*)$/.exec(url.pathname);
-    if (!m) return sendJson(res, 404, { error: { message: 'Requested URI does not represent any resource', detail: null }, status: 'failure' });
+    const meta = /^\/api\/now\/ui\/meta\/([a-z][a-z0-9_]*)$/.exec(url.pathname);
+    if (!m && !meta) return sendJson(res, 404, { error: { message: 'Requested URI does not represent any resource', detail: null }, status: 'failure' });
     entry.tokenOk = req.headers['x-usertoken'] === gck;
     if (state.behaviour.expired || !entry.tokenOk) {
       entry.note = state.behaviour.expired ? 'session expired (simulated)' : 'no/wrong X-UserToken';
@@ -200,6 +230,11 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
       // a real instance sends, which makes a browser pop up a login box; the extension never sends one without a token.
       const headers = state.behaviour.expired ? { 'x-is-logged-in': 'false' } : { 'WWW-Authenticate': 'Basic realm="Service-Now"' };
       return sendJson(res, 401, { error: { message: 'User Not Authenticated', detail: 'Required to provide Auth information' }, status: 'failure' }, headers);
+    }
+    // The UI meta service: the words of a table's columns and their choices (what a plain agent can read where the choice table is closed).
+    if (meta) {
+      entry.note = `ui meta: ${meta[1]}`;
+      return sendJson(res, 200, { result: { columns: metaColumns(meta[1]) } });
     }
     const [, api, tableName] = m;
     const q = url.searchParams;
@@ -216,9 +251,14 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
     const offset = Math.max(0, Number(q.get('sysparm_offset') || 0));
     const dv = q.get('sysparm_display_value') || 'false';
     const deps = makeApi(state.tables, { denied: state.behaviour.denied, hidden: state.behaviour.hidden });
+    if (api === 'table' && state.behaviour.deniedWhen.some((text) => query.includes(text))) {
+      entry.note = `denied: ${tableName} (query)`;
+      return sendJson(res, 403, { error: { message: 'User Not Authorized', detail: 'Insufficient rights to query records' }, status: 'failure' });
+    }
     try {
       if (api === 'table') {
-        const rows = await deps.queryTable(tableName, query, fields, { limit, offset, displayValue: dv === 'all' || dv === 'true' });
+        const withheld = state.behaviour.withheld[tableName] || [];
+        const rows = (await deps.queryTable(tableName, query, fields, { limit, offset, displayValue: dv === 'all' || dv === 'true' })).map((r) => (withheld.length ? Object.fromEntries(Object.entries(r).filter(([key]) => !withheld.includes(key))) : r));
         // 'true' = display strings only, 'all' = { value, display_value }, 'false' = raw strings
         const out = dv === 'true' ? rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, c]) => [k, dispOf(c)]))) : rows;
         return sendJson(res, 200, { result: out });
@@ -299,10 +339,27 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
       return html(page('ServiceNow (fake) - classic frame', `<div class="banner">Fake ServiceNow - classic frame (nav_to.do)</div><iframe id="gsft_main" name="gsft_main" src="${escapeHtml(src)}" style="width:100%;height:560px;border:0"></iframe><script src="/scripts/session.js"></script>`));
     }
 
-    const workspace = /^\/now\/[a-z-]+\/record\/([a-z][a-z0-9_]*)\/([0-9a-f]{32})/i.exec(p);
+    // The Next Experience shell around a classic form: the target is encoded in the path, the form sits in a frame inside a shadow root.
+    const shell = /^\/now\/nav\/ui\/classic\/params\/target\/([^/]+)$/.exec(p);
+    if (shell) {
+      let target;
+      try {
+        target = decodeURIComponent(shell[1]);
+      } catch {
+        target = '';
+      }
+      if (!/^[a-z][a-z0-9_]*\.do(\?[A-Za-z0-9_=&.%-]*)?$/.test(target)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        return res.end('not found');
+      }
+      return html(page('ServiceNow (fake) - Next Experience shell', `<div class="banner">Fake ServiceNow - Next Experience shell (the form is in a frame inside a shadow root)</div><now-classic-frame src="/${escapeHtml(target)}"></now-classic-frame><script src="/scripts/session.js"></script><script src="/scripts/shell.js"></script>`));
+    }
+
+    const workspace = /^\/now\/(?:[a-z-]+\/)+record\/([a-z][a-z0-9_]*)\/([0-9a-f]{32})/i.exec(p);
     if (workspace) {
       const row = record(workspace[1], workspace[2].toLowerCase()) || {};
-      return html(page(`${dispOf(row.number) || workspace[1]} | Workspace (fake)`, `<div class="banner">Fake ServiceNow - workspace record (no g_form)</div><now-record-form heading="${escapeHtml(dispOf(row.number) || workspace[1])}" close-notes="${escapeHtml(dispOf(row.close_notes))}"></now-record-form><script src="/scripts/session.js"></script><script src="/scripts/workspace.js"></script>`));
+      const variant = /^[a-z-]{1,20}$/.test(url.searchParams.get('variant') || '') ? url.searchParams.get('variant') : '';
+      return html(page(`${dispOf(row.number) || workspace[1]} | Workspace (fake)`, `<div class="banner">Fake ServiceNow - workspace record (no g_form)</div><now-record-form heading="${escapeHtml(dispOf(row.number) || workspace[1])}" close-notes="${escapeHtml(dispOf(row.close_notes))}"${variant ? ` variant="${variant}"` : ''}></now-record-form><script src="/scripts/session.js"></script><script src="/scripts/workspace.js"></script>`));
     }
 
     const portalSuffix = /^\/(sp|esc|csm)$/.exec(p);
@@ -348,8 +405,8 @@ window.g_user = { userName: ${JSON.stringify(user.login)}, userID: ${JSON.string
         requests,
         state,
         /** Change which tables answer 403 / 200-empty, or make every API call answer 401 (expired). No argument = back to normal. */
-        setBehaviour: ({ denied = [], hidden = [], expired = false } = {}) => {
-          state.behaviour = { denied, hidden, expired };
+        setBehaviour: ({ denied = [], hidden = [], expired = false, deniedWhen = [], withheld = {} } = {}) => {
+          state.behaviour = { denied, hidden, expired, deniedWhen, withheld };
         },
         /** Requests the browser made (the harness' own probes excluded). */
         browserRequests: () => requests.filter((r) => !r.probe),

@@ -4,7 +4,8 @@ import knowledgeOps from '../src/content/ops/knowledge.js';
 import { KB_SEARCH_FIELDS, excerptAround, knowledgeSearchQuery, searchKnowledgeText, searchTerms } from '../src/context/knowledge.js';
 import { scoreArticle } from '../src/context/similar.js';
 import { FIELDS_BY_KIND } from '../src/context/allowlists.js';
-import { articleShareUrl, freshnessOf } from '../src/sidepanel/knowledgeScreen/articleInfo.js';
+import { freshnessOf } from '../src/sidepanel/knowledgeScreen/articleInfo.js';
+import { customerArticleLink } from '../src/lib/snLinks.js';
 import { fakeDeps } from './fixtures/sn-fakeDeps.js';
 import { KB_IT, NOW, articleRow, id, knowledgeTables } from './knowledge-fixtures.js';
 
@@ -117,13 +118,15 @@ test('freshness in words: expiring, stale, ageing, fresh', () => {
   assert.deepEqual(freshnessOf({}), { level: 'unknown', text: '' });
 });
 
-test('the share link: by number on the instance only, the portal\'s article page on a portal', () => {
+test('the share link: by number on the instance only, the article reader on every tab (audit 6, 2026-11-07)', () => {
+  // (was: the portal's article page on a portal, /sp when the portal was not named: the address followed the agent's tab)
   const classic = { href: 'https://acme.service-now.com/incident.do', surface: 'classic' };
-  assert.equal(articleShareUrl(classic, { number: 'kb0010001', sysId: 'a'.repeat(32) }), 'https://acme.service-now.com/kb_view.do?sysparm_article=KB0010001');
-  assert.equal(articleShareUrl(classic, { number: 'not a number', sysId: 'A'.repeat(32) }), `https://acme.service-now.com/kb_view.do?sys_kb_id=${'a'.repeat(32)}`);
-  assert.equal(articleShareUrl({ href: 'https://acme.service-now.com/esc?id=ticket', surface: 'portal', portal: { base: '/esc' } }, { number: 'KB0010001' }), 'https://acme.service-now.com/esc?id=kb_article&sysparm_article=KB0010001');
-  assert.equal(articleShareUrl({ href: 'https://acme.service-now.com/x', surface: 'portal', portal: { base: '/../evil' } }, { number: 'KB0010001' }), 'https://acme.service-now.com/sp?id=kb_article&sysparm_article=KB0010001');
-  assert.equal(articleShareUrl(classic, { number: 'KB1^x', sysId: 'nope' }), '');
-  assert.equal(articleShareUrl({ href: 'http://acme.service-now.com/' }, { number: 'KB0010001' }), '', 'https only');
-  assert.equal(articleShareUrl({ href: 'not a url' }, { number: 'KB0010001' }), '');
+  const reader = 'https://acme.service-now.com/kb_view.do?sysparm_article=KB0010001';
+  assert.equal(customerArticleLink(classic, { number: 'kb0010001', sysId: 'a'.repeat(32) }), reader);
+  assert.equal(customerArticleLink(classic, { number: 'not a number', sysId: 'A'.repeat(32) }), `https://acme.service-now.com/kb_view.do?sys_kb_id=${'a'.repeat(32)}`);
+  assert.equal(customerArticleLink({ href: 'https://acme.service-now.com/esc?id=ticket', surface: 'portal', portal: { base: '/esc' } }, { number: 'KB0010001' }), reader);
+  assert.equal(customerArticleLink({ href: 'https://acme.service-now.com/x', surface: 'portal', portal: { base: '/../evil' } }, { number: 'KB0010001' }), reader);
+  assert.equal(customerArticleLink(classic, { number: 'KB1^x', sysId: 'nope' }), '');
+  assert.equal(customerArticleLink({ href: 'http://acme.service-now.com/' }, { number: 'KB0010001' }), '', 'https only');
+  assert.equal(customerArticleLink({ href: 'not a url' }, { number: 'KB0010001' }), '');
 });

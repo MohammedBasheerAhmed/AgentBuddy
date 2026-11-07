@@ -107,7 +107,7 @@ test('coaching: a sample still being read for one group is dropped when another 
   const ui = await show(<CoachingTool env={env} eff={coachEff()} needs="" bare />);
   await click(ui.button('Service Desk'));
   await click(ui.button('Pick the sample'));
-  assert.match(ui.text(), /Reading the sample with your session/);
+  assert.match(ui.text(), /Reading the sample as you/);
   await click(ui.button('Network Team'));
   await during(() => held.resolve(sampleOf({ groupId: GROUP_A, groupName: 'Service Desk' })));
   const text = ui.text();

@@ -7,6 +7,7 @@ import { panelChecklistStore } from '../../checks/panelStore.js';
 import { allowSensitiveOf, read } from './data.js';
 import { readFully, recordKey, useInsight, useReport } from './useInsight.js';
 import { Group, QuietButton, ReadState } from './bits.jsx';
+import { plainNote } from '../../plainAccess.js';
 import { t } from '../../../i18n/index.js';
 
 // N6, the fulfilment checklist of a catalog task or requested item: steps found in the written instructions, ticked off by the agent.
@@ -71,7 +72,7 @@ export default function ChecklistCard({ page, eff, record, active, setSummary, s
   if (!data) return <ReadState state={state} what={t('the instructions')} onRetry={state.reload} />;
   return (
     <>
-      {data.note && <p className="ab-note ab-note-warn">{data.note}</p>}
+      {data.note && <p className="ab-note ab-note-warn">{plainNote(data.note)}</p>}
       {steps.length > 0 ? (
         <>
           <ProgressBar progress={progress} />
@@ -86,7 +87,7 @@ export default function ChecklistCard({ page, eff, record, active, setSummary, s
       {answers?.applicable && answers.available && answers.rows.length > 0 && (
         <Group title={t('Request details')} count={answers.rows.length}>
           <Facts rows={answers.rows.map((r) => ({ label: r.question, value: r.value, hidden: r.hidden }))} />
-          <Hints lines={[answers.note]} />
+          <Hints lines={[plainNote(answers.note)]} />
         </Group>
       )}
       <div className="ab-ins-foot">

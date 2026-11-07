@@ -9,19 +9,49 @@
 // names in src/compose/formFields.js can be asked for; anything else is refused before the page is contacted. The page's answer is
 // treated as untrusted data: only those names, only strings, each cut to the longest length the tools handle. `available: false`
 // means there is no readable form (a Workspace or portal page has no g_form to ask), which the panel shows as "paste the text
-// instead". With `expect: { table, sysId }` the form must be that record first (the bridge answers for whatever form is open now; a
+// instead". On a Workspace page (no g_form) the boxes are read when the record is named in `expect` and the page's address is that record
+// (audit of 2026-11-07, S16): each box is found the way an insert finds it (page bridge getBoxValues: by its exact label, visible, never one
+// of two look-alikes; nothing is focused, typed or fired), and a box that is not found is "not available", never an empty text. With `expect: { table, sysId }` the form must be that record first (the bridge answers for whatever form is open now; a
 // form opened through task.do says 'task', and counts when the content script finds that record on the page: src/content/formRecord.js);
 // another one answers `wrongForm: true` and nothing is read.
 //
 // notesHints is GET-only through the guarded deps (the person's session, the organisation's blocked tables).
 import { tryCallPage } from '../pageBridge.js';
 import { formShowsRecord } from '../formRecord.js';
-import { FORM_FIELD_NAMES, MAX_FORM_TEXT } from '../../compose/formFields.js';
+import { FORM_FIELD_NAMES, MAX_FORM_TEXT, formFieldByName } from '../../compose/formFields.js';
 import { HINT_TABLES, readNotesHints } from '../../compose/notesHints.js';
-import { SYS_ID_RE, TABLE_RE } from '../../context/util.js';
+import { SYS_ID_RE, TABLE_RE, sameId } from '../../context/util.js';
 
 const MAX_NAMES = 20;
 
+const isPlainObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+// A Workspace page: the text typed in the boxes of `names`, for the record `expect` names, or { available: false } (with wrongForm when the
+// address is another record). Only the names asked for, only text, each cut to length; a box the page could not show is left out, and when
+// none of them was found nothing is available.
+async function readBoxes(names, expect, call, currentRecord) {
+  if (typeof currentRecord !== 'function') return { available: false, values: {} };
+  let open;
+  try {
+    open = await currentRecord();
+  } catch {
+    open = null;
+  }
+  if (!isPlainObject(open)) return { available: false, values: {} };
+  if (open.table !== expect.table || !sameId(open.sysId, expect.sysId)) return { available: false, values: {}, wrongForm: true };
+  let answer;
+  try {
+    answer = await call('getBoxValues', [names, names.map((name) => formFieldByName(name)?.fieldLabel || '')]);
+  } catch {
+    answer = null;
+  }
+  if (!isPlainObject(answer)) return { available: false, values: {} };
+  const values = {};
+  for (const name of names) {
+    if (Object.prototype.hasOwnProperty.call(answer, name) && typeof answer[name] === 'string') values[name] = answer[name].slice(0, MAX_FORM_TEXT);
+  }
+  return Object.keys(values).length ? { available: true, values } : { available: false, values: {} };
+}
 /**
  * The operation itself; `call` is the page-bridge caller (replaced in tests), `currentRecord` the record the content script finds on
  * the page (src/content/reads.js), which settles a form of `task`.
@@ -42,8 +72,9 @@ export async function readFormValues(args, call = tryCallPage, { currentRecord =
     } catch {
       meta = null;
     }
-    // No classic form at all (a Workspace or portal page): say so the same way as without `expect`.
-    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return { available: false, values: {} };
+    // No classic form at all (a Workspace or portal page): the Workspace's boxes when the page is this record, else "not available" the
+    // same way as without `expect`.
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return readBoxes(names, expect, call, currentRecord);
     if (!(await formShowsRecord(meta, { table: expect.table, sysId: expect.sysId }, currentRecord))) return { available: false, values: {}, wrongForm: true };
   }
   const answer = await call('getFormValues', [names]);

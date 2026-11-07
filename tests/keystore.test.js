@@ -228,8 +228,8 @@ test('policy keyStorage = encrypted: a plain key on disk is not used; it counts 
 
 test('a provider id that is not a plain name is refused (no odd storage slots)', async () => {
   const { store } = newStore();
-  await assert.rejects(() => store.load('../x'), /Unknown AI provider/);
-  await assert.rejects(() => store.save({ provider: '', key: 'k' }), /Unknown AI provider/);
+  await assert.rejects(() => store.load('../x'), /Unknown AI service/);
+  await assert.rejects(() => store.save({ provider: '', key: 'k' }), /Unknown AI service/);
 });
 
 test('cleanKey: a pasted key loses its quotes, "Bearer " and stray whitespace, and nothing else', () => {

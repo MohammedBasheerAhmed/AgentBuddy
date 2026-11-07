@@ -65,7 +65,7 @@ export function handoverWorld(extra = {}) {
     1: ticketRow(1, 'INC0010001', t[1], { owner: PRIYA, ownerId: 'u-priya' }),
     2: ticketRow(2, 'INC0010002', t[2], { priority: '2', owner: MARCUS, ownerId: 'u-marcus', opener: ['u-dana', DANA] }),
     3: ticketRow(3, 'INC0010003', t[3], { priority: '1', owner: MARCUS, ownerId: 'u-marcus' }),
-    4: ticketRow(4, 'INC0010004', t[4], { priority: '1', owner: '', state: ['6', 'Awaiting Caller'] }),
+    4: ticketRow(4, 'INC0010004', t[4], { priority: '1', owner: '', state: ['90', 'Awaiting Caller'] }),
     5: ticketRow(5, 'INC0010005', t[5], { priority: '3', owner: JOAN, ownerId: 'u-joan', state: ['9', 'Awaiting Approval'], openedAt: '2026-10-20 08:00:00' }),
   };
   const byId = (ids) => ids.map((n) => rows[n]).filter(Boolean);
@@ -83,7 +83,7 @@ export function handoverWorld(extra = {}) {
       // The tickets behind SLAs.
       { when: (c) => c.kind === 'query' && c.table === 'task' && c.query.includes('sys_idIN'), then: (c) => byId(idsIn(c.query)) },
       // Counts per state.
-      { when: (c) => c.kind === 'aggregate' && c.groupBy.join() === 'state', then: [group('state', '2', 'In Progress', 3), group('state', '6', 'Awaiting Caller', 2), group('state', '-5', 'On Hold', 1), group('state', '9', 'Awaiting Approval', 1)] },
+      { when: (c) => c.kind === 'aggregate' && c.groupBy.join() === 'state', then: [group('state', '2', 'In Progress', 3), group('state', '90', 'Awaiting Caller', 2), group('state', '-5', 'On Hold', 1), group('state', '9', 'Awaiting Approval', 1)] },
       { when: (c) => c.kind === 'aggregate' && c.groupBy.length, then: [] },
       { when: (c) => c.kind === 'aggregate' && c.avgFields.length, then: { stats: { count: '5', avg: { reassignment_count: '1.2' } } } },
       { when: (c) => c.kind === 'aggregate', then: count(5) },
@@ -175,9 +175,9 @@ export function dashboardWorld(extra = {}) {
       { when: (c) => c.kind === 'aggregate' && c.table === 'task_sla', then: count(40) },
       { when: (c) => c.kind === 'query' && c.table === 'task_sla', then: [slaRow(id(1), 130, true), slaRow(id(2), 88, false)] },
       { when: (c) => c.kind === 'query' && c.table === 'task' && c.query.includes('sys_idIN'), then: [row(1, 'INC0010001', PRIYA), row(2, 'INC0010002', MARCUS)] },
-      { when: (c) => c.kind === 'aggregate' && c.groupBy.join() === 'assignment_group,state', then: (c) => [group2(c.groupBy[0], GROUP_A, 'Service Desk', c.groupBy[1], '2', 'In Progress', 4), group2(c.groupBy[0], 'g2', 'Network Ops', c.groupBy[1], '3', 'On Hold', 2)] },
-      { when: (c) => c.kind === 'aggregate' && c.groupBy.length === 2, then: (c) => [group2(c.groupBy[0], 'u1', PRIYA, c.groupBy[1], '2', 'In Progress', 4), group2(c.groupBy[0], 'u2', MARCUS, c.groupBy[1], '3', 'On Hold', 2)] },
-      { when: (c) => c.kind === 'aggregate' && c.groupBy.length === 1, then: (c) => [group(c.groupBy[0], '2', c.groupBy[0] === 'state' ? 'In Progress' : c.groupBy[0] === 'cmdb_ci' ? 'mail-server-01' : c.groupBy[0] === 'caller_id' ? DASH_CALLER : 'Hardware', 4), group(c.groupBy[0], '3', c.groupBy[0] === 'state' ? 'On Hold' : 'Network', 2)] },
+      { when: (c) => c.kind === 'aggregate' && c.groupBy.join() === 'assignment_group,state', then: (c) => [group2(c.groupBy[0], GROUP_A, 'Service Desk', c.groupBy[1], '2', 'In Progress', 4), group2(c.groupBy[0], 'g2', 'Network Ops', c.groupBy[1], '-5', 'On Hold', 2)] },
+      { when: (c) => c.kind === 'aggregate' && c.groupBy.length === 2, then: (c) => [group2(c.groupBy[0], 'u1', PRIYA, c.groupBy[1], '2', 'In Progress', 4), group2(c.groupBy[0], 'u2', MARCUS, c.groupBy[1], '-5', 'On Hold', 2)] },
+      { when: (c) => c.kind === 'aggregate' && c.groupBy.length === 1, then: (c) => [group(c.groupBy[0], '2', c.groupBy[0] === 'state' ? 'In Progress' : c.groupBy[0] === 'cmdb_ci' ? 'mail-server-01' : c.groupBy[0] === 'caller_id' ? DASH_CALLER : 'Hardware', 4), group(c.groupBy[0], c.groupBy[0] === 'state' ? '-5' : '3', c.groupBy[0] === 'state' ? 'On Hold' : 'Network', 2)] },
       { when: (c) => c.kind === 'aggregate' && c.avgFields.length, then: { stats: { count: '5', avg: { reassignment_count: '1.2' } } } },
       { when: (c) => c.kind === 'aggregate', then: count(5) },
       { when: (c) => c.kind === 'query' && c.query !== '' && c.fields.join() === 'opened_at', then: [{ opened_at: '2026-10-27 09:00:00' }, { opened_at: '2026-10-26 09:00:00' }] },

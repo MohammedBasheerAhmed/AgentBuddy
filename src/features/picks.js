@@ -17,7 +17,8 @@ const labelLine = (labels) => new RegExp(`^[\\s>#*_-]*(?:${labels.join('|')})[\\
 
 const MISSING = labelLine(['missing', 'missing information', 'missing details']);
 const CLOSE_CODE = labelLine(['suggested close code', 'close code', 'suggested resolution code', 'resolution code']);
-const NOTE_LABELS = labelLine(['cause', 'fix', 'verification']);
+// (a problem's notes also have a Workaround line: src/features/kindWords.js)
+const NOTE_LABELS = labelLine(['cause', 'workaround', 'fix', 'verification']);
 
 const tidy = (lines) => lines.join('\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 
@@ -54,7 +55,7 @@ export function pickResolutionNotes(plain) {
 // A problem has no single resolution-notes box: its form has "Cause notes" and "Fix notes" (close_notes is not on it). The same
 // answer is split: the Cause block goes into cause_notes, the Fix and Verification blocks into fix_notes.
 const CAUSE = labelLine(['cause']);
-const FIX_OR_CHECK = labelLine(['fix', 'verification']);
+const FIX_OR_CHECK = labelLine(['workaround', 'fix', 'verification']);
 
 /** The text after "Cause:" (the line and anything under it, up to the next label), or '' when it is missing or "Not confirmed". */
 export function pickCauseNotes(plain) {

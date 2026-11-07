@@ -93,7 +93,7 @@ test('the reader refuses blocked tables, reports denied ones, and never turns a 
   assert.deepEqual([denied.ok, denied.status], [false, 'denied']);
   const blocked = await attempt(() => reader.count('change_request', ''), 'change_request');
   assert.equal(blocked.status, 'blocked');
-  assert.deepEqual(await reader.visibility('change_request'), { status: 'blocked', note: 'Your organisation does not allow reports to read change_request.' });
+  assert.deepEqual(await reader.visibility('change_request'), { status: 'blocked', note: 'Your organisation does not allow reports to read changes.' });
 });
 
 test('visibility: readable, denied, and 200-with-nothing (hidden) are told apart', async () => {
@@ -204,7 +204,7 @@ test('"mine" needs a real user id', async () => {
 // ---- small pure pieces -----------------------------------------------------------------------------------------------
 
 test('states are classed by what their label says', () => {
-  const cases = { New: 'new', 'In Progress': 'working', 'Work in Progress': 'working', Open: 'working', 'On Hold': 'waiting', 'Awaiting Caller': 'waiting', 'Awaiting Info': 'waiting', Pending: 'waiting', Resolved: 'resolved', Closed: 'resolved', 'Closed Complete': 'resolved', Cancelled: 'resolved', Assess: 'new', Implement: 'working', '': 'other' };
+  const cases = { New: 'new', 'In Progress': 'working', 'Work in Progress': 'working', Open: 'working', 'On Hold': 'waiting', 'Awaiting Caller': 'waiting', 'Awaiting Info': 'waiting', Pending: 'waiting', Resolved: 'resolved', Closed: 'resolved', 'Closed Complete': 'resolved', Cancelled: 'resolved', Assess: 'working', Implement: 'working', '': 'other' };
   Object.entries(cases).forEach(([label, cls]) => assert.equal(stateClass(label), cls, label));
 });
 
@@ -218,7 +218,7 @@ test('waiting states come from the labels the instance shows', () => {
 });
 
 test('workload rows fold several tables into one row per person', () => {
-  const g = (who, whoId, state, n) => ({ count: n, avg: {}, keys: [{ field: 'assigned_to', value: whoId, display: who }, { field: 'state', value: '1', display: state }] });
+  const g = (who, whoId, state, n) => ({ count: n, avg: {}, keys: [{ field: 'assigned_to', value: whoId, display: who }, { field: 'state', value: '', display: state }] });
   const rows = foldByOwner(
     [
       { table: 'incident', groups: [g('Ann Lee', 'a1', 'In Progress', 4), g('Ann Lee', 'a1', 'On Hold', 1), g('Bo Ray', 'b1', 'New', 2), g('', '', 'New', 7)] },
@@ -269,13 +269,17 @@ test('SLA tallies count each ticket once per owner', () => {
 
 test('table lists are cleaned', () => {
   assert.equal(normalizeTables(['incident', 'incident', 'bogus', 'problem']).length, 2);
-  // Every table but the HR one (sensitive): that one only for the HR profile with the organisation's approval (allowSensitive).
-  assert.equal(normalizeTables([]).length, 7);
+  // Every table but the HR ones (sensitive): those only for the HR profile with the organisation's approval (allowSensitive).
+  assert.equal(normalizeTables([]).length, 11);
   assert.equal(normalizeTables(undefined).includes('sn_hr_core_case'), false);
   assert.deepEqual(normalizeTables(['sn_hr_core_case']), normalizeTables([]), 'asked for without approval: dropped');
   assert.deepEqual(normalizeTables(['sn_hr_core_case'], { allowSensitive: true }), ['sn_hr_core_case']);
-  assert.equal(normalizeTables([], { allowSensitive: true }).length, 8);
+  assert.equal(normalizeTables([], { allowSensitive: true }).length, 13);
   assert.ok(normalizeTables([]).includes('change_task'));
+  // (audit of 2026-11-07, F20: the requests and the tasks of a case, an incident and a problem are ticket types too; the HR tasks need approval like the HR cases)
+  for (const table of ['sc_request', 'sn_customerservice_task', 'incident_task', 'problem_task']) assert.ok(normalizeTables([]).includes(table), table);
+  assert.ok(!normalizeTables([]).includes('sn_hr_core_task'));
+  assert.ok(normalizeTables(['sn_hr_core_task'], { allowSensitive: true }).includes('sn_hr_core_task'));
 });
 
 // ---- Overview ------------------------------------------------------------------------------------------------------

@@ -118,7 +118,7 @@ test('no look-alike or duplicate search from a security incident without permiss
   const similar = await findSimilarTickets(pack, deps, { resolvedOnly: true });
   assert.deepEqual(similar.hits, []);
   assert.equal(similar.access[0].status, 'skipped');
-  assert.match(similar.access[0].note, /sensitive table/);
+  assert.match(similar.access[0].note, /holds sensitive data/);
   const duplicates = await findOpenDuplicates(pack, deps, {});
   assert.deepEqual(duplicates.hits, []);
   assert.equal(deps.calls.length, 0, 'nothing was read');
@@ -127,7 +127,10 @@ test('no look-alike or duplicate search from a security incident without permiss
 test('the ticket header of a security incident: number, state and priority; the title only with permission', async () => {
   const guardFor = (raw) => createPolicyGuard({ getManaged: async () => ({ known: true, raw }) });
   const off = await readHeader({ table: 'sn_si_incident', sysId: SI_ID, allowSensitive: true }, { guard: guardFor({}), deps: fakeDeps(instance()) });
-  assert.deepEqual(off, { number: 'SIR0010001', short_description: '', state: 'Analysis', priority: '1 - Critical' });
+  // (titleHidden: the header says "title not shown to you" instead of treating the withheld title as an empty one: audit R-14)
+  // (stateValue: the state as stored, from the same row, so a renamed or translated state is still understood: src/domain/states.js)
+  assert.deepEqual(off, { number: 'SIR0010001', short_description: '', state: 'Analysis', stateValue: '2', priority: '1 - Critical', titleHidden: true });
   const on = await readHeader({ table: 'sn_si_incident', sysId: SI_ID, allowSensitive: true }, { guard: guardFor({ allowHrContent: true }), deps: fakeDeps(instance()) });
   assert.match(on.short_description, /Phishing mail/);
+  assert.equal(on.titleHidden, undefined);
 });

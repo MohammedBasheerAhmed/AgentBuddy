@@ -13,7 +13,7 @@ import { tm } from '../i18n/core.js';
 // Columns every task-derived table has. Nothing here is free text except the title (short_description).
 //   sys_id, number, short_description   the row, its number, the one line a person recognises it by
 //   priority, state                     the chip and the order
-//   sys_updated_on, opened_at           how long it has been quiet; oldest first in the group queue
+//   sys_updated_on, opened_at           how long it has been quiet; how long it has waited in the group queue
 //   sys_class_name                      the real type of the row (a task may be of a child class)
 //   cmdb_ci                             "3 of your tickets are on the same CI" (the outage note)
 export const COMMON_COLUMNS = Object.freeze(['sys_id', 'number', 'short_description', 'priority', 'state', 'sys_updated_on', 'opened_at', 'sys_class_name', 'cmdb_ci']);
@@ -25,6 +25,8 @@ export const COMMON_COLUMNS = Object.freeze(['sys_id', 'number', 'short_descript
  *              content script only and never returned to the panel.
  *   hold       the table has a hold reason (On hold: Awaiting caller / vendor / change...). A column the table does not have is
  *              ignored by the Table API, so asking for it on an older release costs nothing.
+ *   stage      the table has a stage that can say what its state does not (a requested item that still waits for its approval:
+ *              src/domain/states.js). Read the same way.
  */
 // (one and many are shown to the person, in sentences too: marked with tm(), translated where they are drawn)
 export const KNOWN_TABLES = Object.freeze({
@@ -34,7 +36,7 @@ export const KNOWN_TABLES = Object.freeze({
   problem_task: { one: tm('Problem task'), many: tm('Problem tasks') },
   change_request: { one: tm('Change'), many: tm('Changes'), customer: 'requested_by' },
   change_task: { one: tm('Change task'), many: tm('Change tasks') },
-  sc_req_item: { one: tm('Requested item'), many: tm('Requested items'), customer: 'requested_for', hold: true },
+  sc_req_item: { one: tm('Requested item'), many: tm('Requested items'), customer: 'requested_for', hold: true, stage: true },
   sc_task: { one: tm('Catalog task'), many: tm('Catalog tasks'), customer: 'request_item.requested_for', hold: true },
   sn_customerservice_case: { one: tm('Case'), many: tm('Cases'), customer: 'contact', hold: true },
   sn_customerservice_task: { one: tm('Case task'), many: tm('Case tasks') },
@@ -90,6 +92,7 @@ export function columnsFor(table, { group = false, risk = false, accounts = fals
   const known = KNOWN_TABLES[table];
   const cols = [...COMMON_COLUMNS];
   if (known?.hold) cols.push('hold_reason');
+  if (known?.stage) cols.push('stage');
   if (known?.customer) cols.push(`${known.customer}.user_name`);
   if (group) cols.push('assignment_group');
   if (risk) cols.push(...riskColumnsFor(table, { accounts }));
@@ -120,6 +123,17 @@ export const customerColumn = (table) => (KNOWN_TABLES[table]?.customer ? `${KNO
 
 /** Does this kind of ticket have a customer to keep up to date (so "customer not updated" makes sense)? */
 export const hasCustomer = (table) => Boolean(KNOWN_TABLES[table]?.customer);
+
+// Tickets whose comments do not reach a customer. A catalog task is worked for a requester who reads the requested item, not its tasks
+// (src/features/stages.js cautionFor; docs/live-questions/audit-1107-states.md); a problem has no customer; the tasks of an incident, a
+// problem, a change, a case or an HR case are team work. A word owed to a customer is never owed from here (audit of 2026-11-07, F5).
+const TEAM_ONLY = new Set(['sc_task', 'problem', 'problem_task', 'incident_task', 'change_task', 'sn_customerservice_task', 'sn_hr_core_task']);
+
+/**
+ * Can a word to the customer be written on this kind of ticket (so "customer replied" and "no update to the customer" mean something)?
+ * False for a catalog task and the kinds in TEAM_ONLY; true for every other class, a custom one included (as before).
+ */
+export const reachesCustomer = (table) => !TEAM_ONLY.has(String(table || ''));
 
 /**
  * May the rows of this class be read for this person? 'read' | 'blocked' (the organisation's policy) | 'hr-off' (HR or another

@@ -94,7 +94,7 @@ test('the bar launches a card the same way as an action: only one it offered, an
   const sender = { id: d.runtimeId, tab: { id: 7 }, frameId: 0, origin: A, url: `${A}/incident.do` };
   const answer = await handleBarMessage({ type: MSG.BAR_ACTIONS, table: 'incident' }, sender, d);
   assert.deepEqual(answer.actions.map((a) => a.id), ['card:ready', 'card:related']);
-  await assert.rejects(handleBarMessage({ type: MSG.BAR_LAUNCH, table: 'incident', sysId: 'a'.repeat(32), featureId: 'record-summary' }, sender, d), /not available here/, 'no AI action while AI is off');
+  await assert.rejects(handleBarMessage({ type: MSG.BAR_LAUNCH, table: 'incident', sysId: 'a'.repeat(32), featureId: 'record-summary' }, sender, d), /isn't available on this page/, 'no AI action while AI is off');
   assert.deepEqual(await handleBarMessage({ type: MSG.BAR_LAUNCH, table: 'incident', sysId: 'a'.repeat(32), featureId: 'card:ready' }, sender, d), { opened: true });
   assert.equal(saved[0].featureId, 'card:ready');
   assert.equal(makeLaunch({ tabId: 1, table: 'incident', sysId: 'a'.repeat(32), featureId: 'card:Ready', now: 1 }), null);

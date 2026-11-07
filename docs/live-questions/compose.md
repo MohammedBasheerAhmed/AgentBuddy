@@ -68,8 +68,10 @@ instead of Insert" or a less specific email suggestion, never a wrong write.
 
 13. **Blank form detection.** `page.newRecord` comes from `g_form.isNewRecord()` on the classic UI. Check that a new incident
     opened from the navigator (`/incident.do?sys_id=-1`) and from `nav_to.do?uri=incident.do?sys_id=-1` (the "Open a new incident
-    form" button) both set it, and that a new case form (CSM) does. Workspace "new" forms are not detected (Fill is off there; Copy
-    works).
+    form" button) both set it, and that a new case form (CSM) does. Blank forms on a Workspace ARE detected now (from the address and the page, wave 3 of
+    the 2026-11-07 audit), so Fill is offered there; the three lists that have no reliable box on a Workspace (impact, urgency, contact
+    type) are picked by hand, and the panel says so. Check a new incident opened in a Workspace: Fill finds the short description and
+    description, and leaves the three lists alone.
 14. **Choice values.** Assumed base-system values: impact and urgency `1` High, `2` Medium, `3` Low; `contact_type` `phone`,
     `self-service`, `email`, `walk-in`. Instances change these lists. Check the Channel list on the incident form (hover or
     inspect the options) and edit `LEVELS` / `CONTACT_TYPES` in `src/compose/notesToTicket.js` if they differ. The channel is only

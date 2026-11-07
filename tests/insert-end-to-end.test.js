@@ -50,12 +50,17 @@ function startBridge(g_form) {
 
 function system({ openRecord = { table: 'incident', sysId: A }, openNew = null, href = 'https://x.service-now.com/incident.do', fieldType = '', existing = {} } = {}) {
   const writes = [];
+  const held = { ...existing };
   const g_form = {
     hasField: () => true,
-    getValue: (name) => existing[name] || '',
+    getValue: (name) => held[name] || '',
     getEditableFields: () => ['comments', 'work_notes', 'text', 'short_description', 'description', 'body'],
     isReadOnly: () => true,
-    setValue: (name, value) => writes.push([name, value]),
+    // (as ServiceNow's g_form: what was set is what getValue answers next; the bridge reads the value back)
+    setValue: (name, value) => {
+      writes.push([name, value]);
+      held[name] = value;
+    },
     ...(fieldType ? { getGlideUIElement: () => ({ type: fieldType }) } : {}),
   };
   const callPage = startBridge(g_form);

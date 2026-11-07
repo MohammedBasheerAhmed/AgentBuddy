@@ -59,7 +59,12 @@ export function identities(pack) {
     if (isCustomerRole(p.role)) personKeys(p).forEach((k) => customers.add(k));
     else if (p.role === 'assigned_to') personKeys(p).forEach((k) => support.add(k));
   }
-  return { customers, support, known: customers.size > 0 };
+  // A catalog task's requester is known (walked from its requested item, F1), but the requester does not read the comments of a catalog task
+  // (the panel assumes it everywhere: src/features/stages.js cautionFor): they are not a conversation with the customer, so nobody who wrote
+  // there can be told apart, and nothing is claimed about 'the customer replied'. The same for the other tasks, whose person is now their
+  // parent's (the caller of an incident task, the contact of a case task, F15): they do not write on the task either.
+  const conversation = pack?.kind !== 'catalog_task' && pack?.kind !== 'task';
+  return { customers, support, known: conversation && customers.size > 0 };
 }
 
 /**

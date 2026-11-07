@@ -12,7 +12,7 @@ import { placeholderName, shown, shownList } from '../../reports/shown.js';
 export const builderRequest = (config, env) => ({ kind: 'builder', config, blocked: env.blocked, params: env.widgetParams ? env.widgetParams({}) : {}, ...(env.allowSensitive ? { allowSensitive: true } : {}) });
 
 // A bar's name: the engine's own words ("Others (3)", "(empty)") in the language of the panel, a value from the instance as it is.
-const labelOf = (item) => (item.others ? shown(item.label) : placeholderName(item.label));
+const labelOf = (item) => (item.others || item.plain ? shown(item.label) : placeholderName(item.label));
 
 /** The picture for a builder result, in the chart type the person chose. */
 export function BuilderChart({ data, env }) {
@@ -21,7 +21,7 @@ export function BuilderChart({ data, env }) {
   const hasDrill = items.some((i) => i.query);
   const hrefFor = env.listHref ? (item) => (item?.query ? env.listHref(data.table, item.query) : '') : undefined;
   const label = shown(data.groupLabel);
-  const table = shown(data.tableLabel);
+  const tableName = shown(data.tableLabel); // (the report's own word for the ticket type, in the panel's language)
   const unitText = shown(unit);
   // Averages are not parts of a whole: no shares, no total, no donut.
   const counts = data.metric === 'count';
@@ -30,15 +30,15 @@ export function BuilderChart({ data, env }) {
     // An average with no ticket to average has no value (0 would be a made-up number).
     if (!items.length) return <p className="ab-hint">{t('No ticket matches this filter, so there is nothing to average.')}</p>;
     const query = items[0]?.query || data.query;
-    return <Tile label={table} value={items[0]?.value ?? 0} hint={shownList(data.filter)} onOpen={() => env.openList(data.table, query)} href={env.listHref ? env.listHref(data.table, query) || '' : ''} />;
+    return <Tile label={tableName} value={items[0]?.value ?? 0} hint={shownList(data.filter)} onOpen={() => env.openList(data.table, query)} href={env.listHref ? env.listHref(data.table, query) || '' : ''} />;
   }
   if (data.series) {
     const weekly = data.timeUnit === 'week';
     const partialCount = (data.series.partial || []).filter(Boolean).length;
     return (
       <TrendChart
-        title={weekly ? t('{table} per week', { table }) : t('{table} per day', { table })}
-        series={[{ key: 'v', label: table, tone: 'c1', points: data.series.labels.map((l, i) => ({ label: l, value: data.series.values[i] })) }]}
+        title={weekly ? t('{table} per week', { table: tableName }) : t('{table} per day', { table: tableName })}
+        series={[{ key: 'v', label: tableName, tone: 'c1', points: data.series.labels.map((l, i) => ({ label: l, value: data.series.values[i] })) }]}
         area={config.chart !== 'table'}
         unit={unitText}
         labelHeader={label}
@@ -48,7 +48,7 @@ export function BuilderChart({ data, env }) {
     );
   }
   const list = items.map((i) => ({ key: i.key || i.label, label: labelOf(i), value: i.value, hint: counts ? undefined : tn(i.n, '{n} ticket', '{n} tickets'), query: i.query }));
-  const heading = t('{table} by {groupBy}', { table, groupBy: label.toLowerCase() });
+  const heading = t('{table} by {groupBy}', { table: tableName, groupBy: label.toLowerCase() });
   if (config.chart === 'donut' && counts) {
     return <Donut title={heading} items={list} centerLabel={unitText} onDrill={hasDrill ? drill : undefined} hrefFor={hasDrill ? hrefFor : undefined} labelHeader={label} />;
   }

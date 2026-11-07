@@ -104,7 +104,7 @@ export function normalizeCoachingRequest(input, { now = Date.now() } = {}) {
   if (fromMs < now - COACHING_LIMITS.lookBackDaysMax * DAY) throw new Error(tm('Choose days from the last twelve months.'));
   const asked = Array.isArray(input?.tables) ? input.tables.map((table) => String(table || '').toLowerCase()) : [];
   // HR cases are never coached on: not read, not sampled, not an option.
-  if (asked.some(isHrTable)) throw new Error(tm('HR case tables are never used for coaching.'));
+  if (asked.some(isHrTable)) throw new Error(tm('HR cases are never used for coaching.'));
   const tables = asked.filter((table, i) => REPORT_TABLE_IDS.includes(table) && asked.indexOf(table) === i);
   const n = Math.floor(Number(input?.sample));
   const sample = Number.isFinite(n) ? Math.min(COACHING_LIMITS.sampleMax, Math.max(1, n)) : COACHING_LIMITS.sampleDefault;

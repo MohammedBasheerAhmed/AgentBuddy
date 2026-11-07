@@ -15,13 +15,14 @@
 // is enabled here does not fail on the first step for a reason that was known all along. The pipeline still decides: nothing here
 // lets anything through that it would refuse.
 import { FEATURES, isFeatureAvailable } from '../../../../features/registry.js';
-import { profilesOfFeature, shownFor } from '../../../../profiles/profiles.js';
-import { SUGGEST, cautionFor, stageOf, whenAllows } from '../../../../features/stages.js';
-import { focusActions } from '../../../../features/focus.js';
+import { SUGGEST, cautionFor, stageOf } from '../../../../features/stages.js';
+import { featureShown } from '../../../../features/visibility.js';
+import { focusActions, limitedKindNote } from '../../../../features/focus.js';
 import { isFeatureEnabled, isSensitiveByPolicy, isTableAllowed } from '../../../../policy/policy.js';
 import { resolveProviderConfig } from '../../../../providers/config.js';
 import { requiredMode } from '../../../../lib/pipeline.js';
-import { isolate, t } from '../../../../i18n/index.js';
+import { tableLabel } from '../../../../lib/tableLabels.js';
+import { t } from '../../../../i18n/index.js';
 
 const MODE_RANK = { standard: 0, strict: 1, 'local-only': 2 };
 const modeLabel = (mode) => ({ strict: t('Strict'), 'local-only': t('Local-only') })[mode] || mode;
@@ -40,7 +41,7 @@ export function recordBlock({ record, eff }) {
   const table = String(record?.table || '').trim();
   const policy = eff?.policy || {};
   if (!table) return '';
-  if (!isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {table} records with AI. Insights still works.', { table: isolate(table) });
+  if (!isTableAllowed(table, policy)) return t('Your organisation does not allow Agent Buddy to use {type} with AI. Insights still works.', { type: tableLabel(table, { plural: true }) });
   if (record?.sensitive === true || isSensitiveByPolicy(table, policy)) {
     if (!policy.allowHrContent) return t('HR case content is not sent to an AI unless your organisation allows it. Insights still works.');
     let local;
@@ -49,11 +50,11 @@ export function recordBlock({ record, eff }) {
     } catch {
       local = false;
     }
-    if (!(policy.aiProvider || policy.aiBaseUrl || local)) return t('HR case content can only go to an AI your organisation has approved. Ask your administrator.');
+    if (!(policy.aiProvider || policy.aiBaseUrl || local)) return t('HR case content can only go to an AI service your organisation has approved. Ask your administrator.');
   }
   // Every function on an HR record needs Strict (or Local-only): the pipeline's own rule (requiredMode), said once for the record.
   const recordNeeds = requiredMode({}, packLike(record), policy);
-  if (below(eff, recordNeeds)) return t('HR records need {mode} privacy mode (or stricter). Change it in Settings.', { mode: modeLabel(recordNeeds) });
+  if (below(eff, recordNeeds)) return t('HR tickets need {mode} privacy mode (or stricter). Change it in Settings.', { mode: modeLabel(recordNeeds) });
   return '';
 }
 
@@ -78,16 +79,8 @@ export function featureBlock(feature, eff, record = null) {
  *   lets that feature through; a feature with no gate is not affected.
  */
 export function offeredFeatures({ record, header = null, eff, features = FEATURES, gates = {} }) {
-  const kind = record?.kind || 'other';
-  const policy = eff?.policy || {};
-  return features.filter(
-    (f) =>
-      (f.kinds || []).includes(kind) &&
-      isFeatureAvailable(f, policy) &&
-      shownFor(profilesOfFeature(f), eff) &&
-      whenAllows(f, record, header) &&
-      (!Object.prototype.hasOwnProperty.call(gates, f.id) || gates[f.id] === true)
-  );
+  // One answer for the panel, the bar and the shortcuts: src/features/visibility.js (kind, policy, profiles, state rules).
+  return features.filter((f) => featureShown(f, { record, header, eff }) && (!Object.prototype.hasOwnProperty.call(gates, f.id) || gates[f.id] === true));
 }
 
 /**
@@ -110,6 +103,7 @@ export function primaryAction(five = [], stage = null) {
  *   rest: { feature, reason, caution }[],                        the others (All tools)
  *   primary: string,                                             the feature id of the one filled mark, or ''
  *   total: number,
+ *   note: string,                                                 one quiet line for a kind of ticket the product knows little about, or ''
  * }}
  */
 export function actionPlan({ record, header = null, eff, features = FEATURES, gates = {} }) {
@@ -117,5 +111,5 @@ export function actionPlan({ record, header = null, eff, features = FEATURES, ga
   const offered = offeredFeatures({ record, header, eff, features, gates });
   const items = offered.map((feature) => ({ feature, reason: featureBlock(feature, eff, record), caution: cautionFor(feature, record) }));
   const { five, rest } = focusActions(items);
-  return { stage, block: recordBlock({ record, eff }), items, five, rest, primary: primaryAction(five, stage), total: items.length };
+  return { stage, block: recordBlock({ record, eff }), items, five, rest, primary: primaryAction(five, stage), total: items.length, note: limitedKindNote(record?.kind || 'other') };
 }

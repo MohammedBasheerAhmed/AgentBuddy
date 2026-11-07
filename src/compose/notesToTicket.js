@@ -6,7 +6,7 @@
 // their choice values, and anything else is kept for display ("Category hint", "Questions still to ask") or dropped.
 // A value the AI made up is never passed on to the form.
 
-import { isolate, t, tm } from '../i18n/index.js';
+import { t, tm } from '../i18n/index.js';
 
 /** The only form fields Notes to ticket may fill, in the order they are filled. */
 export const FILLABLE_FIELDS = Object.freeze(['short_description', 'description', 'impact', 'urgency', 'contact_type']);
@@ -176,10 +176,10 @@ export function parseTicketProposal(input) {
  */
 export function planFill(values, newRecord) {
   if (!newRecord || typeof newRecord !== 'object') {
-    return { canFill: false, reason: t('Fill is only offered on a blank ticket form (a new incident or case on the classic screen). Open one, or copy the text instead.'), fields: [] };
+    return { canFill: false, reason: t('Fill works on a new, empty incident or case form. Open one, or copy the text.'), fields: [] };
   }
   if (!TICKET_KINDS.has(newRecord.kind)) {
-    return { canFill: false, reason: t('The blank form that is open ({table}) is not an incident or case form. Copy the text instead.', { table: isolate(String(newRecord.table || 'unknown').slice(0, 40)) }), fields: [] };
+    return { canFill: false, reason: t('The blank form that is open is not an incident or case form. Copy the text instead.'), fields: [] };
   }
   const given = values && typeof values === 'object' ? values : {};
   // Own properties only: nothing inherited can become a value.

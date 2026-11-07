@@ -6,7 +6,24 @@
 // pass for "the articles of this knowledge base" or "the tickets that have an article".
 
 import { LIMITS } from './allowlists.js';
-import { STATUS, classifyReadError, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
+import { NOTE_TEXT, STATUS, classifyReadError, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead, tm } from './access.js';
+
+// What the knowledge reads say (fixed sentences without a table name or "your user"; marked for the Arabic catalogue).
+const KB_NOTE = Object.freeze({
+  chooseScope: tm('Choose a knowledge base or a category first.'),
+  typeWords: tm('Type a few words that describe the problem, or an article number.'),
+  chooseTickets: tm('Choose incidents or cases.'),
+  emptyScope: tm('There is nothing in that scope to look at.'),
+  noArticles: tm('No published articles here.'),
+  noMore: tm('There are no more articles to compare.'),
+  noneInScope: tm('No published articles in this scope.'),
+  groupsUnclear: tm('Could not tell which groups are yours, so the radar was not limited to them.'),
+  noGroups: tm('You are not a member of any group that you can see.'),
+  noTickets: tm('No tickets were resolved in that time.'),
+  dateIgnored: tm('ServiceNow did not apply the date range as asked, so only tickets inside it were used.'),
+  newestRead: tm('Only the newest {n} were read.'),
+  linksDifferent: tm('This ServiceNow site stores article links differently, so they could not be used.'),
+});
 import { SYS_ID_RE, cleanText, disp, formatSnTime, mapLimit, oneLine, parseSnTime, queryValue, raw, stripHtml } from './util.js';
 import { queryTerm, similarKeywords } from '../lib/similar.js';
 // The ranking of the ticket's "Knowledge that may help" (src/context/similar.js, Insights agent), used read-only so both rank alike.
@@ -46,10 +63,17 @@ export const statsToStrings = (stats) => Object.fromEntries(Object.entries(stats
 
 const idOf = (value) => (SYS_ID_RE.test(String(value || '')) ? String(value).toLowerCase() : '');
 
+// How many are listed to choose from: the biggest knowledge bases and the biggest categories of one base. A real base can have a few
+// hundred categories; the ones left out are counted (`hidden`), never dropped without a word.
+export const KB_MAX_BASES = 100;
+export const KB_MAX_CATEGORIES = 300;
+
 /**
  * The knowledge bases (or, with `knowledgeBase`, the categories of that base) that hold published articles this user can
- * read, with how many. One Aggregate read; nothing but counts and names is transferred.
- * @returns {Promise<{ items: { id: string, name: string, count: number }[], access: object[] }>}
+ * read, with how many. One Aggregate read; nothing but counts and names is transferred. The counts are the instance's own: a row
+ * that a row rule hides from the person can still be in them.
+ * @returns {Promise<{ items: { id: string, name: string, count: number }[], hidden?: number, access: object[] }>}
+ *   hidden: how many smaller ones were left out of `items`
  */
 export async function readKnowledgeScopes({ knowledgeBase = '' } = {}, deps, { memo } = {}) {
   const kb = idOf(knowledgeBase);
@@ -63,18 +87,19 @@ export async function readKnowledgeScopes({ knowledgeBase = '' } = {}, deps, { m
     const failure = classifyReadError(err, KB_TABLE);
     return { items: [], access: [accessEntry(KB_TABLE, failure.status, failure.note)] };
   }
-  const items = (Array.isArray(groups) ? groups : [])
+  const found = (Array.isArray(groups) ? groups : [])
     .map((group) => {
       const field = (group?.groupby_fields || []).find((g) => g.field === column) || group?.groupby_fields?.[0] || {};
       return { id: idOf(field.value), name: oneLine(field.display_value || '', 100), count: Number.parseInt(group?.stats?.count, 10) || 0 };
     })
     .filter((item) => item.id && item.count > 0)
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, 100)
-    .map((item) => ({ ...item, name: item.name || '(unnamed)' }));
-  if (items.length) return { items, access: [accessEntry(KB_TABLE, STATUS.OK)] };
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  // The biggest ones are listed; `hidden` is how many smaller ones are not, so the panel can say so instead of looking complete.
+  const cap = kb ? KB_MAX_CATEGORIES : KB_MAX_BASES;
+  const items = found.slice(0, cap).map((item) => ({ ...item, name: item.name || '(unnamed)' }));
+  if (items.length) return { items, hidden: Math.max(0, found.length - items.length), access: [accessEntry(KB_TABLE, STATUS.OK)] };
   const seen = await confirmEmptyIsReallyEmpty(KB_TABLE, deps, memo);
-  return { items, access: [accessEntry(KB_TABLE, seen.status, seen.status === STATUS.EMPTY ? 'No published articles here.' : seen.note)] };
+  return { items, access: [accessEntry(KB_TABLE, seen.status, seen.status === STATUS.EMPTY ? KB_NOTE.noArticles : seen.note)] };
 }
 
 // ---- The articles of one scope (bounded) ---------------------------------------------------------------------------
@@ -100,43 +125,63 @@ const toListItem = (row) => ({
 // (the comparison is done in the panel, every title against every other).
 export const KB_MAX_OFFSET = 1200;
 
+// The number of published articles in a scope: ONE Aggregate count (countRecords, GET only, through the same policy guard as every
+// read). It is the instance's own count, so it can include articles that a row rule hides from this person (docs/live-checks-
+// 2026-11-07.md: the total ignores row filtering): an upper bound on what can be read, never a promise. null when it cannot be read.
+async function countPublished(conditions, deps) {
+  try {
+    const count = await deps.countRecords(KB_TABLE, conditions);
+    return Number.isFinite(count) && count >= 0 ? Math.floor(count) : null;
+  } catch (err) {
+    if (err?.code === 'SESSION_EXPIRED' || err?.name === 'AbortError') throw err;
+    return null;
+  }
+}
+
 /**
  * Published articles of one knowledge base and/or one category, newest change first, at most `max` (300) from `offset` on.
- * @returns {Promise<{ articles: object[], total: number|null, truncated: boolean, offset: number, access: object[] }>}
- *   article: { sysId, number, title, knowledgeBase, category, updated, views }; truncated: more articles follow this page
+ *
+ * `total` is how many articles the scope holds, from one count read on the first page. A later page passes the `total` it was given
+ * (`total` argument) so the count is read once per scan, not once per page. It is an upper bound on what this person can read (see
+ * countPublished), so a page can come back shorter than asked (a row rule hides some of its rows) and the pages can add up to less
+ * than `total`: "more follow" is therefore decided by how far the window has moved (`offset + 300`) against `total`, never by the
+ * length of the page alone. Without a count a full page is taken to mean that more follow and a short one that none do.
+ * @returns {Promise<{ articles: object[], total: number|null, truncated: boolean, next: number|null, offset: number, access: object[] }>}
+ *   article: { sysId, number, title, knowledgeBase, category, updated, views }
+ *   truncated: more articles follow this page (by the count); next: the offset to ask for them, or null when there are none or one
+ *   scan cannot go that far (truncated and no next: the cap, KB_MAX_OFFSET)
  */
-export async function readKnowledgeList({ knowledgeBase = '', category = '', offset = 0 } = {}, deps, { max = KB_MAX_ARTICLES, memo } = {}) {
+export async function readKnowledgeList({ knowledgeBase = '', category = '', offset = 0, total: knownTotal } = {}, deps, { max = KB_MAX_ARTICLES, memo } = {}) {
   const kb = idOf(knowledgeBase);
   const cat = idOf(category);
   const start = Math.max(0, Math.min(KB_MAX_OFFSET, Math.floor(Number(offset)) || 0));
-  if (!kb && !cat) return { articles: [], total: 0, truncated: false, offset: start, access: [accessEntry(KB_TABLE, STATUS.SKIPPED, 'Choose a knowledge base or a category first.')] };
+  const counted = Number.isFinite(knownTotal) && knownTotal >= 0 ? Math.floor(knownTotal) : null;
+  const closed = (total, access) => ({ articles: [], total, truncated: false, next: null, offset: start, access });
+  if (!kb && !cat) return closed(0, [accessEntry(KB_TABLE, STATUS.SKIPPED, KB_NOTE.chooseScope)]);
 
   const conditions = ['workflow_state=published', kb && `kb_knowledge_base=${kb}`, cat && `kb_category=${cat}`].filter(Boolean).join('^');
   const limit = Math.max(1, Math.min(max, KB_MAX_ARTICLES));
-  const { rows, failure } = await softRead(deps, KB_TABLE, `${conditions}^ORDERBYDESCsys_updated_on`, KB_LIST_FIELDS, { limit, offset: start, displayValue: true });
-  if (failure) return { articles: [], total: null, truncated: false, offset: start, access: [accessEntry(KB_TABLE, failure.status, failure.note)] };
+  // (the second sort key is a tie-break: a bulk change gives hundreds of articles the same time, and without it the pages of such a
+  // run could overlap or skip articles)
+  const { rows, failure } = await softRead(deps, KB_TABLE, `${conditions}^ORDERBYDESCsys_updated_on^ORDERBYDESCsys_id`, KB_LIST_FIELDS, { limit, offset: start, displayValue: true });
+  if (failure) return closed(null, [accessEntry(KB_TABLE, failure.status, failure.note)]);
 
   const wrong = rows.some((row) => (kb && raw(row.kb_knowledge_base).toLowerCase() !== kb) || (cat && raw(row.kb_category).toLowerCase() !== cat));
-  if (wrong) {
-    return { articles: [], total: null, truncated: false, offset: start, access: [accessEntry(KB_TABLE, STATUS.ERROR, 'The instance did not apply the knowledge base or category filter, so its articles were not used.')] };
-  }
+  if (wrong) return closed(null, [accessEntry(KB_TABLE, STATUS.ERROR, NOTE_TEXT.ignoredFilter)]);
   if (!rows.length) {
-    if (start > 0) return { articles: [], total: start, truncated: false, offset: start, access: [accessEntry(KB_TABLE, STATUS.OK, 'There are no more articles to compare.')] };
+    // Past the last article this person can read: the end, whatever the count says.
+    if (start > 0) return closed(counted, [accessEntry(KB_TABLE, STATUS.OK, KB_NOTE.noMore)]);
     const seen = await confirmEmptyIsReallyEmpty(KB_TABLE, deps, memo);
-    return { articles: [], total: 0, truncated: false, offset: start, access: [accessEntry(KB_TABLE, seen.status, seen.status === STATUS.EMPTY ? 'No published articles in this scope.' : seen.note)] };
+    return closed(0, [accessEntry(KB_TABLE, seen.status, seen.status === STATUS.EMPTY ? KB_NOTE.noneInScope : seen.note)]);
   }
 
   const articles = rows.map(toListItem).filter((a) => SYS_ID_RE.test(a.sysId));
-  const full = rows.length >= limit;
-  let total = start + rows.length;
-  if (full) {
-    total = await deps.countRecords(KB_TABLE, conditions).catch(() => null);
-    if (!Number.isFinite(total)) total = null;
-  }
-  // More follow when this page was full and the count says so (or the count could not be read).
-  const truncated = full && (total === null || total > start + rows.length);
-  const note = truncated ? `Only the ${start + articles.length} most recently changed articles were compared${total ? ` (of ${total})` : ''}. Choose a category to narrow it.` : '';
-  return { articles, total, truncated, offset: start, access: [accessEntry(KB_TABLE, STATUS.OK, note)] };
+  const read = counted ?? (await countPublished(conditions, deps));
+  // (the window reached `start + rows.length` raw positions at least, so the instance's own count cannot be smaller than that)
+  const total = read === null ? null : Math.max(read, start + rows.length);
+  const reached = start + limit;
+  const truncated = total === null ? rows.length >= limit : reached < total;
+  return { articles, total, truncated, next: truncated && reached <= KB_MAX_OFFSET ? reached : null, offset: start, access: [accessEntry(KB_TABLE, STATUS.OK)] };
 }
 
 // ---- Knowledge search (N23): any article, typed words, the same ranking as the ticket's "Knowledge that may help" ----------
@@ -215,7 +260,7 @@ const daysBetween = (from, to) => (Number.isFinite(from) && Number.isFinite(to) 
 export async function searchKnowledgeText({ query = '' } = {}, deps, { now = Date.now(), limit = KB_SEARCH_LIMIT, memo } = {}) {
   const terms = searchTerms(query);
   const result = (hits, more, access) => ({ hits, keywords: terms.keywords, number: terms.number, more, access });
-  if (!terms.number && !terms.keywords.length) return result([], false, [accessEntry(KB_TABLE, STATUS.SKIPPED, 'Type a few words that describe the problem, or an article number.')]);
+  if (!terms.number && !terms.keywords.length) return result([], false, [accessEntry(KB_TABLE, STATUS.SKIPPED, KB_NOTE.typeWords)]);
 
   const rows = new Map();
   const read = async (q) => {
@@ -340,14 +385,14 @@ export async function readMyGroups(deps) {
   const { rows, failure } = await softRead(deps, table, ME_DYNAMIC, ['user', 'group'], { limit: MAX_SCOPE_GROUPS, displayValue: true });
   if (failure) return { groups: [], access: [accessEntry(table, failure.status, failure.note)] };
   const users = new Set(rows.map((r) => raw(r.user).toLowerCase()).filter(Boolean));
-  if (users.size > 1) return { groups: [], access: [accessEntry(table, STATUS.ERROR, 'Could not tell which groups are yours, so the radar was not limited to them.')] };
+  if (users.size > 1) return { groups: [], access: [accessEntry(table, STATUS.ERROR, KB_NOTE.groupsUnclear)] };
   const seen = new Map();
   for (const r of rows) {
     const id = raw(r.group).toLowerCase();
     if (SYS_ID_RE.test(id) && !seen.has(id)) seen.set(id, oneLine(disp(r.group), 100) || id);
   }
   const groups = [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  return { groups, access: [accessEntry(table, groups.length ? STATUS.OK : STATUS.EMPTY, groups.length ? '' : 'You are not a member of any group that you can see.')] };
+  return { groups, access: [accessEntry(table, groups.length ? STATUS.OK : STATUS.EMPTY, groups.length ? '' : KB_NOTE.noGroups)] };
 }
 
 /**
@@ -409,9 +454,9 @@ export async function readResolvedTickets({ days = 60, tables = ['incident'], sc
   let truncated = false;
   let total = 0;
   let totalKnown = true;
-  if (!wanted.length) return { tickets, truncated, days: span, total: 0, access: [accessEntry('tickets', STATUS.SKIPPED, 'Choose incidents or cases.')] };
+  if (!wanted.length) return { tickets, truncated, days: span, total: 0, access: [accessEntry('tickets', STATUS.SKIPPED, KB_NOTE.chooseTickets)] };
   const limit = scopeCondition(scope);
-  if (!limit.ok) return { tickets, truncated, days: span, total: 0, access: [accessEntry('tickets', STATUS.SKIPPED, 'There is nothing in that scope to look at.')] };
+  if (!limit.ok) return { tickets, truncated, days: span, total: 0, access: [accessEntry('tickets', STATUS.SKIPPED, KB_NOTE.emptyScope)] };
   const conditions = resolvedConditions(cutoff, limit.query);
 
   const perTable = Math.max(1, Math.floor(Math.min(max, GAP_MAX_TICKETS) / wanted.length));
@@ -425,26 +470,32 @@ export async function readResolvedTickets({ days = 60, tables = ['incident'], sc
     }
     if (rows.length && !rows.every(limit.accepts)) {
       totalKnown = false;
-      access.push(accessEntry(table, STATUS.ERROR, `The instance did not apply the ${scope?.category !== undefined ? 'category' : 'group'} filter on ${table}, so its tickets were not used.`));
+      access.push(accessEntry(table, STATUS.ERROR, NOTE_TEXT.ignoredFilter));
       continue;
     }
     const inWindow = rows.filter((row) => parseSnTime(raw(row.resolved_at)) >= cutoffMs);
     if (!rows.length) {
       // eslint-disable-next-line no-await-in-loop
       const seen = await confirmEmptyIsReallyEmpty(table, deps, memo);
-      access.push(accessEntry(table, seen.status, seen.status === STATUS.EMPTY ? `No ${table} tickets were resolved in the last ${span} days${limit.query ? ' in that scope' : ''}.` : seen.note));
+      access.push(accessEntry(table, seen.status, seen.status === STATUS.EMPTY ? KB_NOTE.noTickets : seen.note));
       continue;
     }
+    // A date condition the instance ignored brings older rows (newest first, so the window ends inside this read): the tickets of the
+    // window are all here, and a count with the same ignored condition would be far too large, so it is not asked for.
+    const dateIgnored = inWindow.length < rows.length;
+    const cut = rows.length >= perTable && !dateIgnored;
     // How many the window holds, when this read did not take them all.
-    if (rows.length >= perTable) {
+    if (cut) {
       // eslint-disable-next-line no-await-in-loop
-      const count = await deps.countRecords(table, conditions).catch(() => null);
-      if (Number.isFinite(count)) total += count;
+      const count = await deps.countRecords(table, conditions).catch((err) => {
+        if (err?.code === 'SESSION_EXPIRED' || err?.name === 'AbortError') throw err;
+        return null;
+      });
+      if (Number.isFinite(count)) total += Math.max(count, inWindow.length);
       else totalKnown = false;
     } else total += inWindow.length;
-    // A date condition the instance ignored brings older rows; only the ones inside the window count.
-    const note = inWindow.length < rows.length ? 'The instance did not apply the date filter, so only tickets inside the window were used.' : rows.length >= perTable ? `Only the newest ${perTable} were read.` : '';
-    truncated = truncated || rows.length >= perTable;
+    const note = dateIgnored ? KB_NOTE.dateIgnored : cut ? KB_NOTE.newestRead.replace('{n}', String(perTable)) : '';
+    truncated = truncated || cut;
     access.push(accessEntry(table, STATUS.OK, note));
     for (const row of inWindow) {
       const sysId = raw(row.sys_id).toLowerCase();
@@ -495,13 +546,11 @@ export function detectLinkColumn(table, columns, deps, memo) {
     const { rows, failure } = await softRead(deps, table, '', ['sys_id', ...columns], { limit: 1, displayValue: false });
     if (failure) return { column: '', visible: false, failure };
     if (!rows.length) {
-      const note = `Your user sees no rows of ${table} at all, so "none for this record" proves nothing: the instance may have none, or an access rule hides them.`;
-      return { column: '', visible: false, failure: { status: STATUS.EMPTY_OR_HIDDEN, note } };
+      return { column: '', visible: false, failure: { status: STATUS.EMPTY_OR_HIDDEN, note: NOTE_TEXT.hidden } };
     }
     const column = columns.find((name) => Object.prototype.hasOwnProperty.call(rows[0], name)) || '';
     if (!column) {
-      const names = columns.length === 2 ? `neither a ${columns[0]} nor a ${columns[1]} column` : `none of the columns ${columns.join(', ')}`;
-      return { column: '', visible: true, failure: { status: STATUS.ERROR, note: `${table} has ${names}, so it says nothing about which tickets used an article.` } };
+      return { column: '', visible: true, failure: { status: STATUS.ERROR, note: KB_NOTE.linksDifferent } };
     }
     return { column, visible: true, failure: null };
   })();
@@ -529,7 +578,7 @@ async function readLinkSource({ table, columns }, ids, deps, memo) {
     }
     if (rows.some((row) => !asked.has(raw(row[task]).toLowerCase()))) {
       usable = false;
-      problem = { status: STATUS.ERROR, note: `The instance did not apply the ${task} filter on ${table}, so its rows were not used.` };
+      problem = { status: STATUS.ERROR, note: NOTE_TEXT.ignoredFilter };
       return null;
     }
     return { index, rows };

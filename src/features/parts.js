@@ -8,7 +8,8 @@
 //  - Free text that may have come in by email (a description, a note) loses what the mail program added: the quoted thread,
 //    signatures, legal notices (cleanEmailText in src/context/journal.js). The pack keeps the whole text.
 import { cleanEmailText } from '../context/journal.js';
-import { t, tm, t as tr } from '../i18n/index.js';
+import { t, tm } from '../i18n/index.js';
+import { tableLabel } from '../lib/tableLabels.js';
 
 const LABELS = {
   number: 'Number',
@@ -35,6 +36,8 @@ const LABELS = {
   close_notes: 'Close notes',
   contact_type: 'Contact type',
   cat_item: 'Catalog item',
+  request_item: 'Requested item', // (the fallback would say 'Request item'; F10)
+  hr_service: 'HR service',
   stage: 'Stage',
   due_date: 'Due date',
   product: 'Product',
@@ -42,7 +45,9 @@ const LABELS = {
   risk: 'Risk',
 };
 
-export const labelFor = (field) => LABELS[field] || String(field).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+// (an unknown column becomes words, and a short word that is always written in capitals keeps them: 'u_hr_leave' -> 'U HR leave')
+const CAPITALS = /\b(hr|it|ci|sla|kb|vip|id|url)\b/g;
+export const labelFor = (field) => LABELS[field] || String(field).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()).replace(CAPITALS, (w) => w.toUpperCase());
 
 // Columns whose text is often an email (a ticket opened by mail): cleaned like a note.
 const EMAIL_COLUMNS = new Set(['description']);
@@ -116,24 +121,24 @@ export function peopleFor(pack) {
 // carries one short part listing what was not available (src/lib/pipeline.js adds it), and the panel gets the same list to show
 // "Made without: ..." next to the answer. All wording here is fixed: nothing from the instance's error text.
 
-// What each source is, for the person and for the model. The words stay English here (the model reads them too); the panel shows
-// them in its language (madeWithout below). tm() marks them for the catalogue.
-const SOURCE_LABEL = {
-  task_sla: tm('SLAs'),
-  sysapproval_approver: tm('Approvals'),
-  task: tm('Child tasks'),
-  change_task: tm('Change tasks'),
-  sc_task: tm('Catalog tasks'),
-  sc_req_item: tm('Requested items'),
-  sc_item_option_mtom: tm('Answers to the request form'),
-  item_option_new: tm('Answers to the request form'),
-  incident: tm('Linked incidents'),
-  change_request: tm('Other changes'),
-  journal: tm('Notes and comments'),
-  sys_journal_field: tm('Notes and comments'),
-  sn_customerservice_case: tm("The account's other cases"),
-  'caller-history': tm("The caller's other tickets"),
-};
+// What each source is, for the person and for the model: the name of a table through the one shared label (src/lib/tableLabels.js), so
+// "Made without" and the "Not available" part say 'Incidents' and 'Customer service cases' for the table they read, wherever it is read
+// from (before, two tables were given the name of one place they happen to be read: 'Linked incidents', "The account's other cases").
+// The words stay English for the model (sourceWords with english: true); the panel shows them in its language (madeWithout below).
+// A few sources are not tables: the notes, the chat messages, the field history and the caller's other tickets.
+const SOURCE_TABLE = { journal: 'sys_journal_field', chat: 'sys_cs_message', 'field history': 'sys_audit' };
+const SOURCE_PHRASE = { 'caller-history': tm("The caller's other tickets"), tickets: tm('Tickets') };
+const TABLE_NAME = /^[a-z][a-z0-9_]*$/;
+
+/** What a source is called, with a capital: 'SLAs', 'Customer service cases'. English for the model, the panel's language otherwise. */
+export function sourceWords(source, { english = true } = {}) {
+  const name = String(source ?? '').trim();
+  if (Object.hasOwn(SOURCE_PHRASE, name)) return english ? SOURCE_PHRASE[name] : t(SOURCE_PHRASE[name]);
+  const table = SOURCE_TABLE[name] || name;
+  if (TABLE_NAME.test(table)) return tableLabel(table, { plural: true, sentenceCase: true, english });
+  return english ? 'Something' : t('Something'); // a source nobody can name: never print it as it is
+}
+
 // People lookups only affect email addresses; the model has no use for hearing about them.
 const QUIET_SOURCES = new Set(['sys_user', 'csm_consumer', 'customer_contact', 'sys_user_group']);
 
@@ -143,15 +148,22 @@ const PHRASE = {
   denied: 'not readable by your user',
   'empty-or-hidden': 'nothing visible to your user; it may exist but be hidden from them',
   error: 'could not be read',
+  partial: 'some of it may be hidden from your user (do not say there is none)',
 };
 // For the person ("Made without: ...").
 const PERSON_PHRASE = {
   blocked: tm('not allowed by your organisation'),
-  denied: tm('your user cannot read them'),
-  'empty-or-hidden': tm('may be hidden from your user'),
+  denied: tm('you cannot read them'),
+  'empty-or-hidden': tm('may be hidden from you'),
   error: tm('could not be read'),
   skipped: tm('not read'),
+  partial: tm('some may be hidden from you'),
 };
+// The two kinds of note a journal read can come back without (src/context/journal.js workNotesHidden / commentsHidden).
+const HIDDEN_NOTES = [
+  ['workNotesHidden', 'Internal notes', tm('Internal notes')],
+  ['commentsHidden', 'Comments to the customer', tm('Comments to the customer')],
+];
 
 const present = (value) => String(value ?? '').trim();
 
@@ -167,9 +179,17 @@ export function unavailable(pack) {
   for (const a of Array.isArray(pack?.access) ? pack.access : []) {
     if (!a || typeof a !== 'object' || QUIET_SOURCES.has(a.source) || a.reference === true) continue;
     const status = String(a.status || '');
+    // The read worked but came back without a whole kind of note: not an error, not proof that there are none.
+    for (const [flag, what] of HIDDEN_NOTES) {
+      if (a[flag] === true && !seen.has(`${what}|partial`)) {
+        seen.add(`${what}|partial`);
+        out.push({ source: String(a.source || 'journal'), what, status: 'partial', why: PERSON_PHRASE.partial, note: '' });
+      }
+    }
     if (!PHRASE[status] && !(status === 'skipped' && present(a.note))) continue;
     const source = String(a.source || '');
-    const what = SOURCE_LABEL[source] || (source && source === pack?.table ? tm('Some fields of this record') : source.slice(0, 60) || tm('Something'));
+    // (a skip on the record's own table is the record's own fields; any other status on that table is a read of OTHER records of it)
+    const what = source && source === pack?.table && status === 'skipped' ? 'Some fields of this ticket' : sourceWords(source);
     const key = `${what}|${status}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -225,14 +245,14 @@ export function notAvailablePart(list, cut = null) {
   return text ? { label: 'Not available', field: NOT_AVAILABLE_FIELD, text } : null;
 }
 
-/** The one line the panel can show under an answer: "Made without: Notes and comments (your user cannot read them); SLAs (...)." */
+/** The one line the panel can show under an answer: "Made without: Notes and comments (you cannot read them); SLAs (...)." */
 export const madeWithoutText = (list) =>
   Array.isArray(list) && list.length ? t('Made without: {list}.', { list: list.map((m) => t('{what} ({why})', { what: m.what, why: m.why })).join(t('; ')) }) : '';
 
 /** "Made without: ..." for the panel: `{ what, why, status }` in plain words, nothing from the instance. */
 export function madeWithout(list, cut = null) {
   // (for the person only, so it is said in the language of the panel; what the model reads is unavailableText above)
-  const out = list.map((u) => ({ what: tr(u.what), why: tr(u.why), status: u.status }));
+  const out = list.map((u) => ({ what: u.what === 'Some fields of this ticket' ? t('Some fields of this ticket') : u.status === 'partial' ? t(u.what) : sourceWords(u.source, { english: false }), why: t(u.why), status: u.status }));
   if (cut) {
     const why = cut.trimmed
       ? t('left out to fit the AI model (the newest {sent} of {total} were sent)', { sent: cut.sent, total: cut.total })

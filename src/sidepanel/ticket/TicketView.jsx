@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { read } from '../ask.js';
 import ErrorBoundary from '../ErrorBoundary.jsx';
-import { headerPhase } from '../recordHeader.js';
+import { headerPhaseFor, phaseOfError } from '../recordHeader.js';
 import { aiNeedsText, isAiReady } from '../aiReady.js';
 import { launchIsForPage } from '../../lib/launch.js';
 import { aiAvailable, aiOffByPolicy } from '../../profiles/profiles.js';
@@ -10,8 +10,11 @@ import { ModelSwitch, ProfileHint, useHalf } from '../shell/shellParts.jsx';
 import { useRailPublish } from '../shell/SideRail.jsx';
 import { shareTicketHeader, useAllTools } from '../palette/allToolsContext.js';
 import { Glance, INSIGHT_CARDS } from './cards/index.js';
+import { useTicketFacts } from './cards/data.js';
+import { recordWithReads, requesterCanRead } from '../../domain/requesterReads.js';
 import { offeredFeatures, useActionPlan } from './assist/actions/index.js';
-import { useAnswers } from './assist/answers/index.js';
+import { forgetAnswers, useAnswers } from './assist/answers/index.js';
+import { useClearOnUserChange } from './cards/useInsight.js';
 import { useCardReports } from './cardReports.js';
 import { groupOfCard, insightGroups, lookCount, readLaunch } from './focusView.js';
 import { useNeeds } from './useNeeds.js';
@@ -46,7 +49,16 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   // that answers late (below) is dropped.
   const [head, setHead] = useState(() => ({ key, phase: 'loading', header: null }));
   const { phase, header } = head.key === key ? head : { phase: 'loading', header: null };
+  // A different person signed in (signed out and in again, or an administrator acting as someone): what was read for the one before goes.
+  useClearOnUserChange(page, forgetAnswers);
   const assist = useAnswers({ page, eff, record });
+  // Can the requester read the comments on this catalog task? ONE boolean from the ticket's own read (the Glance's, joined: no new read), for
+  // the wording of the comment choices and their caution (src/lib/fillable.js catalogCommentCaution; src/domain/requesterReads.js). true when the
+  // person who opened the task is the requester, false when someone else did, null when it cannot be told or the kind is another: the careful
+  // wording then. It travels on the record the answers are drawn for.
+  const facts = useTicketFacts({ page, record, eff, active: Boolean(active) && kind === 'catalog_task' });
+  const reads = kind === 'catalog_task' ? requesterCanRead(facts.data?.pack) : null;
+  const assistRecord = useMemo(() => recordWithReads(record, reads), [record, reads]);
   const reports = useCardReports(key);
   const aiOn = !aiOffByPolicy(eff);
   const [half, setHalf] = useHalf('ticket', eff);
@@ -71,7 +83,7 @@ export default function TicketView({ page, eff, active = true, launch = null, on
   const listed = insightGroups({ cards }).groups.flatMap((g) => g.cards);
   const needs = useNeeds({ page, record, eff, header, headPhase: phase, cards: listed });
   const { groups } = insightGroups({ cards, reports: reports.cards, needs });
-  const plan = useActionPlan({ page, eff, record, header, aiReady: ready && (shown === 'assist' || visited.has('assist')) });
+  const plan = useActionPlan({ page, eff, record: assistRecord, header, aiReady: ready && (shown === 'assist' || visited.has('assist')) });
   // All tools lists this record's cards and actions beyond the five: it takes the same header (a `when` rule may ask for the priority)
   // and the same actions (one may need a read first: the checklist from the instructions).
   const offeredIds = plan.items.map((it) => it.feature.id).join(',');
@@ -113,9 +125,10 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     let cancelled = false;
     // An answer lands only while the header is still this record's (the tab may have moved on while it was on its way).
     const land = (next) => !cancelled && setHead((h) => (h.key === forKey ? { key: forKey, ...next } : h));
+    // (a failure is said by its cause: only a refusal is "not available to you"; src/sidepanel/recordHeader.js)
     read(page.tabId, 'header', { table: record.table, sysId: record.sysId, allowSensitive: Boolean(eff.policy?.allowHrContent) })
-      .then((h) => land({ phase: headerPhase(h), header: h }))
-      .catch(() => fresh && land({ phase: 'failed', header: null }));
+      .then((h) => land({ phase: headerPhaseFor(h, record, eff.policy?.sensitiveTablePrefixes), header: h }))
+      .catch((err) => fresh && land({ phase: phaseOfError(err), header: null }));
     return () => {
       cancelled = true;
     };
@@ -188,7 +201,7 @@ export default function TicketView({ page, eff, active = true, launch = null, on
     // by the pipeline (HR, privacy mode) still happens in the run itself, with its audit entry. Right after the record changed its
     // header is not known yet (null: a state rule hides nothing then), never the last record's.
     const feature = offeredFeatures({ record, header, eff }).find((f) => f.id === asked.id);
-    if (!feature) setLaunchNote(t('That action is not available for this record.'));
+    if (!feature) setLaunchNote(t('That action is not available for this ticket.'));
     else if (!aiOn) setLaunchNote(t('Your organisation has switched AI Assist off.'));
     else if (!ready) setLaunchNote(aiNeedsText(eff, 'this action') || t('Set up AI Assist in Settings to use this action.'));
     else if (busyRef.current) setLaunchNote(t('An answer is on its way. Choose the action again when it has arrived.'));
@@ -244,7 +257,7 @@ export default function TicketView({ page, eff, active = true, launch = null, on
       {aiOn && (
         <HalfPanel idBase="ab-ticket-half" half="assist" hidden={shown !== 'assist'}>
           {(visited.has('assist') || shown === 'assist') && (
-            <TicketAssist page={page} eff={eff} record={record} assist={assist} plan={plan} ready={ready} active={active && shown === 'assist'} onRun={runAi} ask={ask.key === key ? ask : null} />
+            <TicketAssist page={page} eff={eff} record={assistRecord} assist={assist} plan={plan} ready={ready} active={active && shown === 'assist'} onRun={runAi} ask={ask.key === key ? ask : null} />
           )}
           {/* At the end, out of the way: where text goes, in one sentence without the address (the check before sending names the
               destination), and the model in use, to switch without opening Settings. */}

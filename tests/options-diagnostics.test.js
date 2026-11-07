@@ -185,7 +185,7 @@ test('What you work on: tick boxes, Show everything, Skip AI; locked profiles ar
 
 test('a refused site permission says the next step; the diagnostics button is there', () => {
   assert.match(SITE_REFUSED_TEXT, /choose Allow/);
-  assert.match(SITE_REFUSED_TEXT, /IT team may block it/);
+  assert.match(SITE_REFUSED_TEXT, /your organisation may block it: ask your administrator/);
   assert.match(draw(DiagnosticsSection, { eff: effOf() }), /Copy diagnostics/);
 });
 

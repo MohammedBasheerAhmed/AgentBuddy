@@ -5,9 +5,9 @@
 // and instanceFetch() refuses any method other than GET (tests/readonly.test.js also scans the source for write verbs).
 // "Insert" in the UI only fills a field on the open form; the agent presses the form's own Save.
 
-import { forgetSessionToken, sessionHeaders } from './sessionToken.js';
-import { TABLE_RE } from '../context/util.js';
-import { READ_CODE, READ_REASON, READ_TEXT, deniedReason, isMissingColumn, isMissingTable } from '../context/access.js';
+import { forgetSessionToken, getSessionUser, sessionHeaders } from './sessionToken.js';
+import { FIELD_RE, TABLE_RE, oneLine } from '../context/util.js';
+import { NOTE_TEXT, READ_CODE, READ_REASON, READ_TEXT, deniedReason, isMissingColumn, isMissingTable } from '../context/access.js';
 
 // Hard ceiling on rows per request. Guards against a mistyped query pulling tens of thousands of rows into memory.
 const MAX_LIMIT = 1000;
@@ -15,8 +15,23 @@ const MAX_LIMIT = 1000;
 // A table name is a plain identifier. Every caller validates it already; this is the last check before it becomes part of the
 // address, because encodeURIComponent leaves "." alone and "/api/now/table/.." would be a request for another path.
 function checkTable(table) {
-  if (typeof table !== 'string' || !TABLE_RE.test(table)) throw new Error('That is not a valid table name.');
+  if (typeof table !== 'string' || !TABLE_RE.test(table)) throw invalidRead('That is not a valid table name.');
 }
+
+// An error whose `message` is what a person may read (a fixed plain sentence, src/context/access.js) and whose `detail` keeps the
+// technical words for whoever debugs it (the panel never shows `detail`; the logic that tells a missing table from a refusal reads it).
+function friendlyError(message, { detail = '', code = '', reason = READ_REASON.ERROR, status = 0 } = {}) {
+  const err = new Error(message);
+  if (detail) err.detail = detail;
+  if (code) err.code = code;
+  err.reason = reason;
+  if (status) err.status = status;
+  return err;
+}
+
+// A read that was asked for something Agent Buddy cannot read (a name that is not a table or a column). The mistake is the code's; the
+// person is told to choose another option, never which name was wrong.
+const invalidRead = (detail) => friendlyError(READ_TEXT.invalid, { detail, code: 'INVALID_READ' });
 
 // Rows per request: 1 to MAX_LIMIT. A negative, zero or non-numeric limit must never reach the instance as "no limit".
 export function clampLimit(limit) {
@@ -36,7 +51,8 @@ export const SESSION_EXPIRED_MESSAGE = READ_TEXT.session;
 export const READ_TIMEOUT_MS = 20000;
 export const READ_TIMEOUT_CODE = 'SN_TIMEOUT';
 
-export const READ_TIMEOUT_MESSAGE = `ServiceNow did not answer within ${Math.round(READ_TIMEOUT_MS / 1000)} seconds. It may be busy: try again in a moment.`;
+// (the person's sentence: no number of seconds, and the same words as every other timeout, so it has its Arabic)
+export const READ_TIMEOUT_MESSAGE = READ_TEXT.timeout;
 
 /** The error for a read that ran out of time (the person's sentence names no table or API: it says what happened and what to do). */
 export function readTimeoutError() {
@@ -101,47 +117,49 @@ function sessionExpiredError() {
   return err;
 }
 
-// An error that says why the instance refused or limited a read: `reason` (READ_REASON in src/context/access.js) for the readers in
-// the content script, `code` because it survives the trip to the panel, and the HTTP status for whoever needs the number.
-function readError(message, { code = '', reason = READ_REASON.ERROR, status = 0 } = {}) {
-  const err = new Error(message);
-  if (code) err.code = code;
-  err.reason = reason;
-  if (status) err.status = status;
-  return err;
-}
+const looksLikeHtml = (text) => /^s*</.test(text || '');
 
-const looksLikeHtml = (text) => /^\s*</.test(text || '');
+// A REST API access policy can answer 401 "User Not Authenticated" to a person who is signed in (the same words as a lost sign-in).
+// Only words that name a policy, or the header ServiceNow sets on every answer (X-Is-Logged-In: true), say that the sign-in is fine
+// and the organisation is the one refusing. Anything else with a 401 is a lost sign-in. Unverified: docs/live-questions/audit-1107-notes.md.
+const POLICY_401 = /access polic|api access|snc_platform_rest_api_access|api[- ]level/i;
 
 /**
  * The error for an answer that is not OK (after the retries of instanceFetch). Every refusal is said as one, and none of them is retried
- * here or read another way (build rule 9):
+ * here or read another way (build rule 9). The message is a fixed plain sentence (src/context/access.js); the technical words (what
+ * was read, the HTTP status, ServiceNow's own text) stay in `detail` and `status`, which the logic reads and no view shows:
  *   403  ACCESS_DENIED: an access rule (reason 'acl') or the organisation's restriction of this kind of read ('policy')
+ *   401 with a live sign-in  ACCESS_DENIED, 'policy' (see POLICY_401)
  *   429  the instance is limiting requests; 503, 502, 504: busy or under maintenance
- *   400 about a table or column this instance does not have, and 404: 'missing' (left out quietly by the readers), ServiceNow's own
- *        words kept in the message because isMissingTable reads them
+ *   400 about a table or column this instance does not have, and 404: 'missing' (left out quietly by the readers)
  *   any other status with a page instead of a JSON error: 'not-data'
  */
 function refusalError(status, text, what) {
-  const detail = serviceNowErrorText(text);
+  const said = serviceNowErrorText(text);
+  const detail = `${what} failed (${status})${said ? `: ${said}` : ''}`;
+  if (status === 401) return friendlyError(READ_TEXT.policy, { detail, code: 'ACCESS_DENIED', reason: READ_REASON.POLICY, status });
   if (status === 403) {
-    const reason = deniedReason(detail);
-    const message = reason === READ_REASON.POLICY ? READ_TEXT.policy : `Your user is not allowed to read this (403)${detail ? `: ${detail}` : ''}.`;
-    return readError(message, { code: 'ACCESS_DENIED', reason, status });
+    const reason = deniedReason(said);
+    return friendlyError(reason === READ_REASON.POLICY ? READ_TEXT.policy : NOTE_TEXT.denied, { detail, code: 'ACCESS_DENIED', reason, status });
   }
-  if (status === 429) return readError(READ_TEXT.rateLimited, { code: READ_CODE.RATE_LIMITED, reason: READ_REASON.RATE_LIMITED, status });
-  if (status === 502 || status === 503 || status === 504) return readError(READ_TEXT.unavailable, { code: READ_CODE.UNAVAILABLE, reason: READ_REASON.UNAVAILABLE, status });
-  const message = `${what} failed (${status})${detail ? `: ${detail}` : ''}`;
-  if (status === 404 || (status === 400 && (isMissingTable(detail) || isMissingColumn(detail)))) return readError(message, { reason: READ_REASON.MISSING, status });
-  if (!detail && looksLikeHtml(text)) return readError(READ_TEXT.notData, { code: READ_CODE.NOT_DATA, reason: READ_REASON.NOT_DATA, status });
-  return readError(message, { status });
+  if (status === 429) return friendlyError(READ_TEXT.rateLimited, { detail, code: READ_CODE.RATE_LIMITED, reason: READ_REASON.RATE_LIMITED, status });
+  if (status === 502 || status === 503 || status === 504) return friendlyError(READ_TEXT.unavailable, { detail, code: READ_CODE.UNAVAILABLE, reason: READ_REASON.UNAVAILABLE, status });
+  if (status === 404 || (status === 400 && (isMissingTable(said) || isMissingColumn(said)))) return friendlyError(NOTE_TEXT.missing, { detail, reason: READ_REASON.MISSING, status });
+  if (!said && looksLikeHtml(text)) return friendlyError(READ_TEXT.notData, { detail, code: READ_CODE.NOT_DATA, reason: READ_REASON.NOT_DATA, status });
+  return friendlyError(NOTE_TEXT.error, { detail, status });
+}
+
+// A 401 is a lost sign-in unless the answer shows the sign-in is fine and a policy is refusing (POLICY_401, X-Is-Logged-In: true).
+function isPolicyRefusal(response, text) {
+  if (response.status !== 401) return false;
+  return response.headers?.get?.('x-is-logged-in') === 'true' || POLICY_401.test(serviceNowErrorText(text));
 }
 
 function isSessionExpired(response, text) {
-  if (response.status === 401) return true;
+  if (response.status === 401) return !isPolicyRefusal(response, text);
   if (response.headers?.get?.('x-is-logged-in') === 'false') return true;
   if (response.redirected && LOGIN_URL.test(response.url || '')) return true;
-  return /^\s*</.test(text || '') && LOGIN_PAGE.test(text);
+  return /^s*</.test(text || '') && LOGIN_PAGE.test(text);
 }
 
 /** ServiceNow's own explanation from a JSON error body: "message - detail", or ''. */
@@ -216,8 +234,10 @@ export async function readJson(response, what) {
   });
   if (isSessionExpired(response, text)) {
     // The token belongs to the session that ended: a new sign-in gets a new one, so it is read again from the page next time
-    // instead of being sent (and refused) for the rest of the five minutes it would otherwise be kept.
+    // instead of being sent (and refused) for the rest of the five minutes it would otherwise be kept. So are the labels kept for the
+    // person who was signed in (clearTableMeta): whoever signs in next may be someone else.
     forgetSessionToken();
+    clearTableMeta();
     throw sessionExpiredError();
   }
   if (!response.ok) throw refusalError(response.status, text, what);
@@ -228,7 +248,8 @@ export async function readJson(response, what) {
     // A page (an SSO step the login checks above did not recognise, a maintenance page, a proxy's page) or something else where data
     // was asked for. The token is dropped too: if this was a sign-in page, the sign-in that follows brings a new one.
     forgetSessionToken();
-    throw readError(READ_TEXT.notData, { code: READ_CODE.NOT_DATA, reason: READ_REASON.NOT_DATA, status: response.status });
+    clearTableMeta();
+    throw friendlyError(READ_TEXT.notData, { detail: `${what} was not data`, code: READ_CODE.NOT_DATA, reason: READ_REASON.NOT_DATA, status: response.status });
   }
 }
 
@@ -271,7 +292,7 @@ export async function countRecords(table, query = '', { signal } = {}) {
     `Count on "${table}"`
   );
   const count = Number(data?.result?.stats?.count);
-  if (!Number.isFinite(count)) throw new Error('The instance returned no count.');
+  if (!Number.isFinite(count)) throw friendlyError(NOTE_TEXT.error, { detail: 'The instance returned no count.' });
   return count;
 }
 
@@ -281,7 +302,7 @@ export async function countRecords(table, query = '', { signal } = {}) {
  */
 export async function countByColumn(table, query, column, { signal } = {}) {
   checkTable(table);
-  if (!AGGREGATE_COLUMN_RE.test(String(column))) throw new Error('That is not a valid column name.');
+  if (!AGGREGATE_COLUMN_RE.test(String(column))) throw invalidRead('That is not a valid column name.');
   const params = new URLSearchParams({ sysparm_count: 'true', sysparm_group_by: column, sysparm_display_value: 'all' });
   if (query) params.set('sysparm_query', query);
   const data = await readWithLimit(
@@ -305,9 +326,9 @@ const AGGREGATE_HAVING_RE = /^count\^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){0,2}\^(>
 export async function aggregate(table, { query = '', groupBy = [], avgFields = [], having = '', signal } = {}) {
   checkTable(table);
   [...groupBy, ...avgFields].forEach((name) => {
-    if (!AGGREGATE_COLUMN_RE.test(String(name))) throw new Error('That is not a valid column name.');
+    if (!AGGREGATE_COLUMN_RE.test(String(name))) throw invalidRead('That is not a valid column name.');
   });
-  if (having && !AGGREGATE_HAVING_RE.test(String(having))) throw new Error('That is not a valid group filter.');
+  if (having && !AGGREGATE_HAVING_RE.test(String(having))) throw invalidRead('That is not a valid group filter.');
   const params = new URLSearchParams({ sysparm_count: 'true' });
   if (query) params.set('sysparm_query', query);
   if (groupBy.length) {
@@ -322,4 +343,95 @@ export async function aggregate(table, { query = '', groupBy = [], avgFields = [
     `Report on "${table}"`
   );
   return data?.result ?? null;
+}
+
+// ---- The words of a table's columns and choices: the one read that is not a table read ------------------------------------------
+//
+// A plain agent cannot read the choice list (sys_choice answers 403 in every query shape, measured on dev364920 on 2026-11-07,
+// docs/live-checks-2026-11-07.md), but the UI meta service answers for an agent and for a person with no role, with each column's
+// `label` and `choices` ([{ value, label }]) in the person's own language. So this is the ONE address besides /api/now/table and
+// /api/now/stats the read layer asks for, and it is as narrow as the others: GET only (instanceFetch), same origin, the same headers,
+// the same time limit and the same sorting of refusals (readJson), the table checked as an identifier before it becomes part of the
+// address, no query string at all, and the organisation's blockedTables applied by the caller (src/context/choices.js asks the policy
+// guard first, so a blocked table is never asked for). Of the answer only the wanted columns' label and choices are kept (cut to
+// size); every other thing the service says about the table is dropped here, never passed on. Kept in MEMORY only, per signed-in
+// person and table, for ten minutes, and dropped when the sign-in ends (build rule 7: nothing is stored).
+
+const META_MAX_COLUMNS = 12;
+const META_MAX_CHOICES = 200;
+const META_TTL_MS = 10 * 60 * 1000;
+const META_CACHE_MAX = 60;
+const metaCache = new Map(); // `${person}|${table}|${columns}` -> { at, value }
+const metaInflight = new Map(); // the same key -> the read on its way (shared by callers that did not bring their own cancel)
+
+/** Forget the labels kept for the person who was signed in (the sign-in ended; tests). */
+export function clearTableMeta() {
+  metaCache.clear();
+  metaInflight.clear();
+}
+
+/** The service's answer reduced to what was asked for: { [column]: { label, choices: [{ value, label }] } }, only for columns it has. */
+export function reduceTableMeta(data, columns) {
+  const result = data && typeof data === 'object' ? data.result : null;
+  const all = result && typeof result === 'object' ? (result.columns && typeof result.columns === 'object' ? result.columns : result) : null;
+  const out = {};
+  if (!all) return out;
+  for (const name of columns) {
+    // (own properties only: a column name is an identifier, but nothing is looked up on the prototype)
+    const column = Object.hasOwn(all, name) ? all[name] : null;
+    if (!column || typeof column !== 'object') continue;
+    const choices = [];
+    for (const choice of Array.isArray(column.choices) ? column.choices.slice(0, META_MAX_CHOICES) : []) {
+      const value = choice && (typeof choice.value === 'string' || typeof choice.value === 'number') ? String(choice.value).trim().slice(0, 80) : '';
+      const label = choice && typeof choice.label === 'string' ? oneLine(choice.label, 80, { html: false }) : '';
+      if (value && label) choices.push({ value, label });
+    }
+    out[name] = { label: typeof column.label === 'string' ? oneLine(column.label, 80, { html: false }) : '', choices };
+  }
+  return out;
+}
+
+/**
+ * The labels of some columns of a table and the choices of each, in the signed-in person's language, from the UI meta service.
+ * Asked for the columns it needs only (at most twelve identifiers). A column the person may not read, or the table has not, is left
+ * out of the answer. Failures are thrown like every other read's (readJson): a refusal says so, a lost sign-in is SESSION_EXPIRED.
+ * @param {string} table
+ * @param {string[]} columns
+ * @param {{ signal?: AbortSignal, userKey?: string }} [options] `userKey`: who the answer is kept for (the signed-in person's id, taken
+ *   from the page when absent); with no way to tell who is signed in nothing is kept.
+ * @returns {Promise<Record<string, { label: string, choices: { value: string, label: string }[] }>>}
+ */
+export async function readTableMeta(table, columns = [], { signal, userKey } = {}) {
+  checkTable(table);
+  const wanted = [...new Set(Array.isArray(columns) ? columns : [])];
+  if (!wanted.length || wanted.length > META_MAX_COLUMNS || wanted.some((name) => typeof name !== 'string' || !FIELD_RE.test(name))) throw invalidRead('That is not a valid column name.');
+  // Who is signed in: asked of the page alone (getSessionUser without a table reader makes no read of its own, so no policy is skipped).
+  const person = typeof userKey === 'string' ? userKey : (await getSessionUser().catch(() => null))?.userId || '';
+  const key = person ? `${person}|${table}|${[...wanted].sort().join(',')}` : '';
+  const kept = key ? metaCache.get(key) : null;
+  if (kept && Date.now() - kept.at < META_TTL_MS) return kept.value;
+  if (key && !signal && metaInflight.has(key)) return metaInflight.get(key);
+
+  // (started before anything is awaited again, so a second reader that arrives meanwhile finds this one in metaInflight)
+  const read = (async () => {
+    const data = await readWithLimit(
+      `/api/now/ui/meta/${encodeURIComponent(table)}`,
+      { method: 'GET', credentials: 'same-origin', headers: await sessionHeaders(), ...(signal ? { signal } : {}) },
+      `Labels of "${table}"`
+    );
+    const value = reduceTableMeta(data, wanted);
+    if (key) {
+      metaCache.delete(key);
+      metaCache.set(key, { at: Date.now(), value });
+      while (metaCache.size > META_CACHE_MAX) metaCache.delete(metaCache.keys().next().value);
+    }
+    return value;
+  })();
+  if (!key || signal) return read;
+  metaInflight.set(key, read);
+  const done = () => {
+    if (metaInflight.get(key) === read) metaInflight.delete(key);
+  };
+  read.then(done, done);
+  return read;
 }

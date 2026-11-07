@@ -104,7 +104,7 @@ module.exports = {
 
     // 4. An action this record does not have: the panel says so instead of running anything.
     await writeLaunch(ctx, { ...base, featureId: 'change-cab-brief', at: Date.now() });
-    await p.waitForFunction(() => /not available for this record/.test(document.body.innerText), { timeout: 8000 });
+    await p.waitForFunction(() => /not available for this ticket/.test(document.body.innerText), { timeout: 8000 });
     t.check('an action this kind of record does not have is refused in plain words, nothing runs', !(await dialogShown(p)) && ai.requests.length === before);
     t.check('and the request is used up', (await readLaunch(ctx)) === null);
 

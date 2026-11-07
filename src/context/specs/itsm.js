@@ -21,7 +21,7 @@ export default {
     // and the catalog item or product, so those are read. The people are read only to be masked, not shown.
     'next-best-action': {
       common: ['number', 'short_description', 'description', 'state', 'hold_reason', 'priority', 'category', 'subcategory', 'cmdb_ci', 'business_service', ...PEOPLE],
-      by: { requested_item: ['cat_item'], case: ['product'] },
+      by: { requested_item: ['cat_item'], catalog_task: ['request_item.cat_item'], case: ['product'] },
     },
     // A8. Owners of the work (assignee, group) and the person it is for, so "who owns what" can be answered.
     'thread-summary': {

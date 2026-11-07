@@ -5,7 +5,7 @@
 // The Aggregate API cannot bucket by date, so the trend reads only the date columns (a bounded number of rows, newest
 // first) and buckets them here. When there are more rows than the limit the section says so and marks the oldest buckets partial.
 import { LIMITS } from './constants.js';
-import { attempt } from './reader.js';
+import { attempt, keyName } from './reader.js';
 import { say, tm } from './say.js';
 import { t } from '../../i18n/core.js';
 import { shown, placeholderName } from '../shown.js';
@@ -63,7 +63,7 @@ export function durationsHours(rows, resolvedField) {
 export function repeatCallers(groups, min = LIMITS.repeatCallerMin) {
   return groups
     .filter((g) => g.count >= min && g.keys[0]?.value)
-    .map((g) => ({ id: g.keys[0].value, name: g.keys[0].display || tm('Unknown'), count: g.count }))
+    .map((g) => ({ id: g.keys[0].value, name: keyName(g.keys[0], tm('Unknown'), tm('A person you cannot see')), count: g.count }))
     .sort(byCountDesc);
 }
 
@@ -79,7 +79,7 @@ export function mergeTop(lists, n = 8) {
   return [...map.values()].sort(byCountDesc).slice(0, n);
 }
 
-const namedCounts = (groups) => groups.filter((g) => g.keys[0]?.value).map((g) => ({ id: g.keys[0].value, name: g.keys[0].display || g.keys[0].value, count: g.count })).sort(byCountDesc);
+const namedCounts = (groups) => groups.filter((g) => g.keys[0]?.value).map((g) => ({ id: g.keys[0].value, name: keyName(g.keys[0], ''), count: g.count })).sort(byCountDesc);
 
 async function readTable(ctx, tableInfo, { starts, since, step, windowDays }) {
   const { reader, scope, now } = ctx;
@@ -155,7 +155,7 @@ export async function qualitySection(ctx) {
   const backlogOk = resolvable.length === usable.length && usable.length > 0 && parts.every((p) => p.openNow.ok) && !usable.some((p) => p.opened.capped || p.resolved?.capped);
   const backlogPerTable = backlogOk ? usable.map((p) => backlogSeries(p.openNow.value, p.opened.counts, p.resolved.counts)) : null;
   const backlog = backlogPerTable ? starts.map((_, i) => backlogPerTable.reduce((n, series) => n + series[i], 0)) : null;
-  if (!backlogOk && usable.length) ctx.notes.push(tm('The backlog trend is not shown: it needs every table\'s resolved dates and a complete read.'));
+  if (!backlogOk && usable.length) ctx.notes.push(tm('The backlog trend is not shown: it needs the resolved dates of every ticket type and a complete read.'));
 
   const durations = parts.flatMap((p) => p.durations);
   const resolvedRead = parts.filter((p) => p.resolvedRead?.ok);
@@ -201,7 +201,7 @@ export async function qualitySection(ctx) {
     categories: mergeTop(cat, 8),
     cis: mergeTop(ci, 8),
     // How many callers there were in all is not known (the instance sends only the repeat callers), so it is not claimed.
-    repeatCallers: callerPart?.callers?.ok ? { items: repeat.slice(0, 10), total: repeat.length, days: LIMITS.repeatCallerDays, min: LIMITS.repeatCallerMin, table: callerPart.tableInfo.meta.label } : null,
+    repeatCallers: callerPart?.callers?.ok ? { items: repeat.slice(0, 10), total: repeat.length, days: LIMITS.repeatCallerDays, min: LIMITS.repeatCallerMin, tableLabel: callerPart.tableInfo.meta.label } : null,
     perTable: parts.map((p) => ({
       table: p.tableInfo.table,
       label: p.tableInfo.meta.label,

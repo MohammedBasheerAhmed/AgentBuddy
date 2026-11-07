@@ -12,7 +12,6 @@ export const AR_FIX = {
   'Error codes in the ticket': 'رموز الخطأ في التذكرة',
   'Search articles and solved tickets': 'ابحث في المقالات والتذاكر المحلولة',
   'Articles: {articles}. Solved tickets: {tickets}.': 'المقالات: {articles}. التذاكر المحلولة: {tickets}.',
-  'No article or solved ticket mentions {code}.': 'لا يذكر أي مقال أو تذكرة محلولة {code}.',
   'Mentions {code}': 'يذكر {code}',
 
   // "Solved before by" (src/insights/solvedBy.js): the group most solved look-alikes went to, and who in it solved most of them

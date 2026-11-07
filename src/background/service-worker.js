@@ -1,6 +1,7 @@
 // Agent Buddy service worker (in Firefox the same file runs as an event page: it uses nothing that only a service worker has).
 // Deliberately small: it holds no keys, makes no AI calls and never talks to ServiceNow.
-// Its jobs are (1) open the panel from the toolbar button, (2) register the content scripts on exactly the
+// Its jobs are (1) open the panel from the toolbar button, and keep it to the sites the person added (Chrome and Edge: panelScope.js),
+// (2) register the content scripts on exactly the
 // instances the person enabled (and the browser granted), (3) keep that registration in sync with the permissions, and
 // (4) answer the bar on the ServiceNow page: which actions it may show, and "open the panel and run this one" (bar.js).
 import { MSG, pageStateMessage, toWireError } from '../lib/messages.js';
@@ -13,6 +14,8 @@ import { BAR_TYPES, barAiOn, handleBarMessage, restrictStorageAccess, retireOpen
 import { handleCommand } from './commands.js';
 import { LAUNCH_KEY } from '../lib/launch.js';
 import { describeInstances, reinjectAfterInstalled, wantedInstances } from './instances.js';
+import { clickPlan } from './panelScope.js';
+import { wirePanelScope } from './panelScopeWire.js';
 
 // First thing on every start of the worker: content scripts may not read or change chrome.storage.local / .session (where the
 // browser supports closing them). Nothing in a content script needs them; see restrictStorageAccess in bar.js.
@@ -23,8 +26,12 @@ const api = browserApi();
 // This extension's id and the origin of its own pages (chrome-extension://<id>; moz-extension://<uuid> in Firefox). Only those pages
 // may ask the worker for anything (src/lib/senderCheck.js).
 const OWN = extensionIdentity(chrome.runtime);
+// Chrome and Edge: the panel is off for every tab except the pages of the sites the person added, so it takes no width anywhere else
+// (src/background/panelScope.js decides, panelScopeWire.js keeps the tabs in step). Firefox and Safari: left as they are.
+// Set up on every start of the worker, at the top level, like the toolbar button.
+const panelScope = wirePanelScope(api, { activeOrigins: () => activeInstances() });
 // The toolbar button opens the panel. Set up on every start: in Firefox only a listener added while the event page starts wakes it.
-wireToolbarButton(api);
+wireToolbarButton(api, panelScope.onToolbarClick);
 
 const CONTENT_ID = 'ab-content';
 const BRIDGE_ID = 'ab-bridge';
@@ -96,7 +103,7 @@ async function enableInstance(rawOrigin) {
   const origin = normalizeInstance(rawOrigin);
   if (!origin) throw new Error(tm('That is not a valid https address.'));
   const policy = await loadPolicy();
-  if (!isInstanceAllowed(origin, policy)) throw new Error(tm('Your organisation has not approved this instance for Agent Buddy.'));
+  if (!isInstanceAllowed(origin, policy)) throw new Error(tm('Your organisation has not approved this site for Agent Buddy.'));
   if (!(await chrome.permissions.contains({ origins: [instancePattern(origin)] }))) {
     throw new Error(tm('The browser has not granted access to this site yet. Use the Enable button in the side panel.'));
   }
@@ -136,7 +143,9 @@ const barDeps = {
   // needed)? Only whether a key is saved is looked at, never the key itself.
   aiOn: (settings, policy) => barAiOn(settings, policy, { keyMode: (provider) => keyStore().mode(provider) }),
   // (asks the browser at once, before anything is awaited; resolves only when the panel is open: src/lib/platform.js)
-  openPanel: (tabId) => openPanel(api, tabId),
+  // `tab` (a keyboard shortcut passes it; the bar on an added site does not): a ServiceNow page that is not added gets the panel for
+  // this press, as a click on the toolbar button does; any other page that is not an added site is refused by the browser.
+  openPanel: (tabId, tab) => openPanel(api, tabId, clickPlan(tab)),
   // storage.session: the panel can read it, a content script cannot
   saveLaunch: (launch) => chrome.storage.session.set({ [LAUNCH_KEY]: launch }),
 };

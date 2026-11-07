@@ -20,8 +20,9 @@ export default {
       common: ['number', 'short_description', 'state', 'hold_reason', 'assignment_group', 'assigned_to', 'requested_for', 'opened_at', 'due_date', 'closed_at'],
       by: {
         request: ['request_state', 'stage', 'approval'],
-        requested_item: ['stage', 'approval', 'cat_item', 'request'],
-        catalog_task: ['request_item'],
+        // quantity: how many were ordered ("For Abel Tuter · Laptop · Quantity 2", F3); it is on the item's ceiling, no other spec read it
+        requested_item: ['stage', 'approval', 'cat_item', 'request', 'quantity'],
+        catalog_task: ['request_item', 'request_item.cat_item'],
       },
     },
     // The customer-facing message needs the state and the due date. It does not need the answers or the team names; the
@@ -55,7 +56,7 @@ export default {
         problem: ['known_error', 'cause_notes', 'workaround', 'fix_notes', 'resolution_code'],
         change: ['type', 'risk'],
         requested_item: ['cat_item', 'stage'],
-        catalog_task: ['request_item'],
+        catalog_task: ['request_item', 'request_item.cat_item'],
         case: ['product', 'account', 'resolution_code'],
       },
     },
@@ -65,7 +66,7 @@ export default {
       common: ['number', 'short_description', 'description', 'state', 'special_instructions', ...PEOPLE],
       by: {
         requested_item: ['cat_item', 'stage', 'due_date'],
-        catalog_task: ['request_item', 'due_date'],
+        catalog_task: ['request_item', 'request_item.cat_item', 'due_date'],
       },
     },
   },

@@ -14,7 +14,7 @@
 import { MSG, SITE_OFF_CODE } from '../lib/messages.js';
 import { tm } from '../i18n/core.js'; // (an English text marked for the catalogue: the panel shows it in its language, see plainError)
 import { contentScriptOrigin } from '../lib/senderCheck.js';
-import { kindForTable } from '../context/kinds.js';
+import { isTicketTable, kindForTable } from '../context/kinds.js';
 import { TABLE_RE } from '../context/util.js';
 import { effectiveSettings, isSensitiveByPolicy, isTableAllowed } from '../policy/policy.js';
 import { QUICK_CARDS, quickActions, quickItems } from '../features/quick.js';
@@ -56,15 +56,21 @@ function siteOff() {
 const CARD_KINDS = new Set(['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task']);
 
 /**
- * What the bar offers for a record of this table. With AI: the AI actions (quick.js quickActions: the person's pins or the defaults,
+ * What the bar offers for a record of this table. Nothing for a table that is not a ticket's (a UI page, a user, the home page: the
+ * content script does not ask for them any more, and a copy of it from before an update may): `proven` is the page's own word that
+ * the form has a number (a customer's own task table), `policy.sensitiveTablePrefixes` the organisation's own record families.
+ * With AI: the AI actions (quick.js quickActions: the person's pins or the defaults,
  * minus the policy). Without AI (switched off by the organisation, "Skip AI for now", no key saved): the items that need no AI
  * ('card:ready', 'card:related'), which open a card of the Insights half; nothing is sent anywhere. Each item says which it is (`ai`).
  * @returns {Promise<{ id: string, label: string, ai: boolean }[]>}
  */
-export async function barActions({ table, settings, policy, deps }) {
+export async function barActions({ table, settings, policy, deps, proven = false }) {
+  if (proven !== true && !isTicketTable(table, { extraPrefixes: policy?.sensitiveTablePrefixes })) return [];
   const kind = kindForTable(table);
   const aiOn = deps.aiOn ? await Promise.resolve(deps.aiOn(settings, policy)).catch(() => true) : true;
-  if (aiOn) return quickActions({ kind, pins: settings.quickPins, policy, aiOn: true }).map((a) => ({ id: a.id, label: t(a.label), ai: true }));
+  // The same rules as the panel's list (src/features/visibility.js): the kind, the person's profiles, a ticket with no customer, and Strict
+  // mode for HR. The bar does not read the ticket's state, so the state rules are the panel's to apply when the action opens.
+  if (aiOn) return quickActions({ kind, table, eff: effectiveSettings(settings, policy), pins: settings.quickPins, policy, aiOn: true }).map((a) => ({ id: a.id, label: t(a.label), ai: true }));
   // The ids of the cards those items open, from QUICK_CARDS itself ('resolve', 'related'), so the two cannot drift apart again.
   const cards = CARD_KINDS.has(kind) ? Object.values(QUICK_CARDS).map((c) => c.card) : [];
   return quickItems({ kind, pins: settings.quickPins, policy, ai: false, cards })
@@ -73,7 +79,7 @@ export async function barActions({ table, settings, policy, deps }) {
 }
 
 /**
- * @param {object} message { type, table?, sysId?, featureId? }
+ * @param {object} message { type, table?, sysId?, featureId?, proven? }   proven: true when the page's form has a number (see barActions)
  * @param {object} sender  chrome's MessageSender
  * @param {object} deps    { runtimeId, activeInstances(), loadSettings(), loadPolicy(), openPanel(tabId), saveLaunch(launch), now(),
  *                          aiOn?(settings, policy) -> Promise<boolean> (barAiOn; absent = AI on) }
@@ -84,7 +90,7 @@ export async function handleBarMessage(message, sender, deps) {
   // BAR_ACTIONS with no table at all is the question "is the bar on here?"; an empty or odd table is still refused.
   const probe = message.type === MSG.BAR_ACTIONS && message.table === undefined;
   const table = typeof message.table === 'string' ? message.table.trim().toLowerCase() : '';
-  if (!probe && !TABLE_RE.test(table)) throw new Error(tm('That is not a valid record.'));
+  if (!probe && !TABLE_RE.test(table)) throw new Error(tm('This is not a ticket Agent Buddy can open.'));
 
   // The browser opens the side panel only while the click that asked for it is still being handled, and that ends the first time
   // this function waits for anything. So the panel is opened first, before the checks below; if a check then fails the person has
@@ -113,14 +119,14 @@ export async function handleBarMessage(message, sender, deps) {
 
   // Hidden for this record: the organisation blocked the table, or it is HR content the organisation does not allow.
   const shown = bar && isTableAllowed(table, policy) && !(isSensitiveByPolicy(table, policy) && !policy.allowHrContent);
-  const actions = shown ? await barActions({ table, settings, policy, deps }) : [];
+  const actions = shown ? await barActions({ table, settings, policy, deps, proven: message.proven === true }) : [];
 
   if (message.type === MSG.BAR_ACTIONS) return { actions, bar, language, theme };
 
   // BAR_LAUNCH: only an action the bar was allowed to offer for this table.
-  if (!actions.some((a) => a.id === message.featureId)) throw new Error(tm('That action is not available here.'));
+  if (!actions.some((a) => a.id === message.featureId)) throw new Error(tm("That action isn't available on this page. Open the ticket and try again."));
   const launch = makeLaunch({ tabId: sender.tab.id, table, sysId: message.sysId, featureId: message.featureId, now: deps.now() });
-  if (!launch) throw new Error(tm('That is not a valid request.'));
+  if (!launch) throw new Error(tm('Agent Buddy could not start that action. Open the ticket and try again.'));
   await deps.saveLaunch(launch);
   return { opened: opening ? await opening : false };
 }

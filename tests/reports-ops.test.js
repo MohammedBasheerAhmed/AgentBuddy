@@ -174,12 +174,10 @@ test('aggregate without a grouping sends no grouping and returns the stats objec
 
 test('aggregate refuses column names and table names that are not plain identifiers, before any request', async () => {
   const calls = stubBrowser({ stats: { count: '1' } });
-  await assert.rejects(() => aggregate('incident', { groupBy: ['state^ORDERBYname'] }), /valid column/);
-  await assert.rejects(() => aggregate('incident', { avgFields: ['a b'] }), /valid column/);
+  await assert.rejects(() => aggregate('incident', { groupBy: ['state^ORDERBYname'] }), (err) => err.code === 'INVALID_READ' && /valid column/.test(err.detail) && err.message === 'That cannot be read. Choose another option.');
+  await assert.rejects(() => aggregate('incident', { avgFields: ['a b'] }), (err) => err.code === 'INVALID_READ' && /valid column/.test(err.detail));
   // A table name becomes part of the address: "a/../b" (or "..") would ask for another path, so it is refused like on every read path.
-  await assert.rejects(() => aggregate('a/../b', { query: '' }), /valid table/);
-  await assert.rejects(() => aggregate('..', { query: '' }), /valid table/);
-  await assert.rejects(() => aggregate('', { query: '' }), /valid table/);
+  for (const name of ['a/../b', '..', '']) await assert.rejects(() => aggregate(name, { query: '' }), (err) => err.code === 'INVALID_READ' && /valid table/.test(err.detail), name);
   assert.equal(calls.length, 0);
   await aggregate('incident', { query: '' });
   assert.ok(calls[0].url.includes('/api/now/stats/incident?'));
@@ -191,7 +189,7 @@ test('aggregate sends a count-only group filter (sysparm_having) and refuses any
   await aggregate('incident', { groupBy: ['caller_id'], having: 'count^caller_id^>^2' });
   assert.equal(new URL(calls[0].url, 'https://x.example').searchParams.get('sysparm_having'), 'count^caller_id^>^2');
   for (const bad of ['count^caller_id^>^2^active=false', 'avg^caller_id^>^2', 'count^caller_id^!=^2', 'count^caller_id^>^x', 'count^a b^>^2', 'count^caller_id^>^2\n']) {
-    await assert.rejects(() => aggregate('incident', { groupBy: ['caller_id'], having: bad }), /valid group filter/, bad);
+    await assert.rejects(() => aggregate('incident', { groupBy: ['caller_id'], having: bad }), (err) => err.code === 'INVALID_READ' && /valid group filter/.test(err.detail), bad);
   }
   assert.equal(calls.length, 1);
   await aggregate('incident', { groupBy: ['caller_id'] });

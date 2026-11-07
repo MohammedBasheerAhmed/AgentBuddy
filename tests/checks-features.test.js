@@ -27,7 +27,8 @@ test('feature ids are unique across ALL packs, and so are the context specs', ()
 test('each of my features is an AI Assist action of the kinds it belongs to, and of no other', () => {
   const expected = {
     'request-explain': ['request', 'requested_item', 'catalog_task'],
-    'resolution-improve': ['incident', 'requested_item', 'catalog_task', 'case', 'task'],
+    // (a change and an HR case have close notes too: audit of 2026-11-07, W-09, W-10)
+    'resolution-improve': ['incident', 'change', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task'],
     'fulfilment-checklist': ['requested_item', 'catalog_task'],
   };
   for (const id of MINE) {
@@ -60,12 +61,15 @@ test('each feature has a title, a description, a wave, a prompt, an instruction 
 // It now says what it does: the names, and what the one list of fillable fields (src/lib/fillable.js, which the send check reads)
 // says about each of them. ResultView is a component; its wiring is covered where it is owned.)
 test('inserts go to the intended form field; the two that the customer reads are customer-visible, the checklist\'s is internal', () => {
-  assert.deepEqual(insertsFor(feature('request-explain')).map((i) => i.field), ['comments']);
+  // The status message for the requester: a comment where the requester reads it (the request and its item); on a catalog task the work
+  // notes come first and the comment is the second choice (audit of 2026-11-07, W-02: the requester reads the item, not its tasks).
+  assert.deepEqual(insertsFor(feature('request-explain')).map((i) => [i.field, i.kinds]), [['comments', ['request', 'requested_item']], ['work_notes', ['catalog_task']], ['comments', ['catalog_task']]]);
   // One box per kind: "Resolution notes" on incidents and cases, "Close notes" on the request forms; both replace what is there.
   assert.deepEqual(insertsFor(feature('resolution-improve')).map((i) => i.field), ['close_notes', 'close_notes']);
   assert.ok(insertsFor(feature('resolution-improve')).every((i) => i.mode === 'replace'), 'the rewrite replaces the notes it started from');
   assert.deepEqual(insertsFor(feature('fulfilment-checklist')).map((i) => i.field), ['work_notes'], 'the checklist is internal');
-  for (const id of ['request-explain', 'resolution-improve']) for (const i of insertsFor(feature(id))) assert.equal(isCustomerVisible(i.field), true, `${id} writes to ${i.field}, which the customer can read`);
+  for (const i of insertsFor(feature('resolution-improve'))) assert.equal(isCustomerVisible(i.field), true, `resolution-improve writes to ${i.field}, which the customer can read`);
+  for (const i of insertsFor(feature('request-explain')).filter((x) => x.field === 'comments')) assert.equal(isCustomerVisible(i.field), true);
   assert.equal(isCustomerVisible('work_notes'), false, 'work notes are internal');
   for (const id of MINE) for (const i of insertsFor(feature(id))) assert.ok(i.label && i.fieldLabel, id);
 });

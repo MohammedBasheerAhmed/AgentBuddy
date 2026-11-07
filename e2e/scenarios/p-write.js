@@ -73,7 +73,7 @@ module.exports = {
     await clickButton(p, /^Check my comment/);
     await waitForText(p, /Your customer comment: check before sending\./, { timeout: 15000 });
     const checked = await p.evaluate(() => document.querySelector('.ab-write-check')?.innerText || '');
-    t.check('"Check my comment" checks what was TYPED in the form: the password is flagged, shown masked only', /password, key or token/.test(checked) && !checked.includes(data.MORE_SEED.rewritePassword), checked.replace(/\s+/g, ' ').slice(0, 200));
+    t.check('"Check my comment" checks what was TYPED in the form: the password is flagged, shown masked only', /password or a secret key/.test(checked) && !checked.includes(data.MORE_SEED.rewritePassword), checked.replace(/\s+/g, ' ').slice(0, 200));
     t.check('...internal wording ("escalated to") is pointed out', /escalated to/i.test(checked), checked.replace(/\s+/g, ' ').slice(0, 200));
     t.check('...and the check wrote nothing to the form and asked no AI', (await ticket.evaluate(() => window.__gformCalls.length)) === checkCalls && ai.requests.length === aiBeforeCheck);
     await ticket.close();
@@ -147,14 +147,21 @@ module.exports = {
     await checkAiRun(t, ctx, p, 'notes-to-ticket', ran, { before, system: /log a ticket from rough call/, userHas: [/label="Call notes"/, /\[PHONE_\d+\]/] });
     await waitForText(p, 'Review, then fill the form', { timeout: 8000 });
     const savedPlan = await p.evaluate(() => ({ fillDisabled: window.__vis(document.querySelectorAll('button')).find((b) => /^Fill the form/.test(b.innerText.trim()))?.disabled, reason: document.querySelector('[aria-label="Review before filling the form"] .ab-note[role="status"]')?.innerText || '' }));
-    t.check('on a SAVED record the form cannot be filled: the button is off and says why; Copy buttons remain', savedPlan.fillDisabled === true && /only offered on a blank ticket form/.test(savedPlan.reason), JSON.stringify(savedPlan));
+    t.check('on a SAVED record the form cannot be filled: the button is off and says why; Copy buttons remain', savedPlan.fillDisabled === true && /works on a new, empty incident or case form/.test(savedPlan.reason), JSON.stringify(savedPlan));
     t.check('the proposal is shown for review: short description, description, and the questions still to ask', (await p.$eval('#ab-notes-short', (el) => el.value)).startsWith('VPN is down for the sales team') && (await p.evaluate(() => document.body.innerText)).includes('Which VPN client version is installed?'));
     await captureClipboard(p);
     // The log already holds the copies of the steps above (the capture is installed once per page): wait for a NEW one, or an earlier
     // copy would be read as this one whenever the click is a little slow.
     const copiesBefore = (await clipboardLog(p)).length;
-    await clickButton(p, /^Copy short description/);
-    await ctx.waitUntil('copy', async () => (await clipboardLog(p)).length > copiesBefore, { timeout: 5000 });
+    // Press, and wait for the copy. In Edge the press now and then lands on the button a moment before the panel re-draws it (the AI run
+    // has only just ended), and does nothing: press again, up to three times. A copy that never comes still fails the scenario. (Not
+    // bringToFront: the panel follows the main window's active tab, and giving it the focus makes it see its own page.)
+    let copiedNow = false;
+    for (let attempt = 0; attempt < 3 && !copiedNow; attempt += 1) {
+      await clickButton(p, /^Copy short description/);
+      copiedNow = await ctx.waitUntil('copy', async () => (await clipboardLog(p)).length > copiesBefore, { timeout: 4000 }).then(() => true, () => false);
+    }
+    if (!copiedNow) throw new Error('Timed out waiting for copy (pressed three times)');
     const copied = await clipboardLog(p);
     t.check('Copy short description copies the (editable) short description', copied.slice(-1)[0] === 'VPN is down for the sales team since this morning', JSON.stringify(copied.map((c) => String(c).slice(0, 60))));
     t.check('no field of the saved incident was touched', (await ticket.evaluate(() => window.__gformCalls.length)) === 0);
@@ -285,7 +292,7 @@ module.exports = {
     const notJson = path.join(ctx.TMP, 'snippets-e2e.txt');
     fs.writeFileSync(notJson, exported);
     await input.uploadFile(notJson);
-    await waitForText(p, /Choose a \.json file saved by Agent Buddy/, { timeout: 8000 });
+    await waitForText(p, /Choose a snippet file saved by Agent Buddy/, { timeout: 8000 });
     t.check('a file that is not .json is refused with a plain sentence', true);
 
     // A page that is not a record: the preview says it shows examples, and no AI was involved in any of this

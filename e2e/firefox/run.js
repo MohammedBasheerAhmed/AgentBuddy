@@ -326,6 +326,61 @@ const STEPS = [
   },
 
   {
+    // Audit of 2026-11-07, part 9 (S17): Firefox's run only ever opened a classic form. A Workspace page has no g_form: the ticket comes from the
+    // address, the box is found by its label inside shadow roots (the page bridge's DOM path), the composer's Work notes / customer comments
+    // switch is read, and a note is typed into the box (nothing is pressed: not the page's Post, not its Save).
+    title: 'Workspace page: the ticket from the address, a box found by its label with no g_form, the composer\'s switch read, a note filled',
+    async run(t, ctx) {
+      const { data, origin } = ctx;
+      const needle = `/record/incident/${data.INCIDENT_ID}?variant=modes`;
+      const ws = await ctx.browser.newPage();
+      trackWebPage(ws, ctx.webErrors);
+      await ws.goto(`${origin}/now/sow${needle}`, { waitUntil: 'load', timeout: 15000 });
+      const tabId = await ctx.waitUntil('the Workspace tab', () => ctx.ext(async (p) => (await chrome.tabs.query({})).find((x) => (x.url || '').includes(p))?.id ?? null, needle), { timeout: 10000 }).catch(() => null);
+      const ask = (message) =>
+        ctx.ext(
+          async (job) => {
+            try {
+              return await chrome.tabs.sendMessage(job.tabId, job.message);
+            } catch (err) {
+              return { sendError: String(err.message || err) };
+            }
+          },
+          { tabId, message }
+        );
+      const state = await ctx.waitUntil('the content script to answer on the Workspace page', async () => {
+        const s = await ask({ type: 'ab:page-state' });
+        return s?.record ? s : null;
+      }, { timeout: 15000 }).catch(() => null);
+      t.check('Workspace page (no g_form): the ticket comes from the address, on the workspace surface', state?.record?.table === 'incident' && state.record.sysId === data.INCIDENT_ID && state.surface === 'workspace', oneLine(JSON.stringify({ record: state?.record, surface: state?.surface })));
+      const here = { table: 'incident', sysId: data.INCIDENT_ID };
+      const probe = await ask({ type: 'ab:read', op: 'insertTargets', args: { fields: [{ name: 'work_notes', label: 'Work notes' }, { name: 'comments', label: 'Additional comments' }], expect: here } });
+      t.check('the Work notes box is found by its label inside the shadow roots, and the composer is read as set to Work notes', probe?.fields?.work_notes?.state === 'editable' && probe.fields.work_notes.label === 'Work notes' && probe.fields.work_notes.mode === 'match', oneLine(JSON.stringify(probe)));
+      t.check('the customer comments box is not on this composer: "absent", said before any click', probe?.fields?.comments?.state === 'unknown' && probe.fields.comments.gap === 'absent', oneLine(JSON.stringify(probe?.fields?.comments)));
+      const typed = await ws.evaluate(() => {
+        const walk = (root) => {
+          for (const el of root.querySelectorAll('*')) {
+            if (el.tagName === 'TEXTAREA' && el.getAttribute('aria-label') === 'Work notes') return el.value;
+            if (el.shadowRoot) {
+              const found = walk(el.shadowRoot);
+              if (found !== undefined) return found;
+            }
+          }
+          return undefined;
+        };
+        return walk(document);
+      });
+      const filled = await ask({ type: 'ab:fill-field', field: 'work_notes', value: 'A note from the Firefox run.', label: 'Work notes', mode: 'append', expect: here });
+      t.check('a work note goes into the box in Firefox too (typed like a person: the page saw input and change events)', filled?.ok === true && filled.method === 'dom' && !filled.modeUnread, oneLine(JSON.stringify(filled)));
+      const after = await ws.evaluate(() => ({ events: window.__wsEvents, posts: window.__wsPosts.length, saves: window.__wsSaves }));
+      t.check('...and it was never posted or saved by the add-on', after.posts === 0 && after.saves === 0 && after.events.input >= 1 && after.events.change >= 1, JSON.stringify(after));
+      t.info(`the box held "${oneLine(typed, 60)}" before the note`);
+      await ws.close();
+      if (ctx.ticket) await ctx.ticket.bringToFront();
+    },
+  },
+
+  {
     title: 'Settings: options.html loads with no CSP errors',
     async run(t, ctx) {
       const mark = await ctx.mark();

@@ -16,6 +16,7 @@ import { CALLER_ROLES, CALLER_TICKETS_LIMIT, callerOf, callerTicketsText, cleanC
 import { columnsForPart } from '../src/features/partColumns.js';
 import { QUICK_LABELS } from '../src/features/quick.js';
 import { groupOf } from '../src/features/stages.js';
+import { kindNote } from '../src/features/kindWords.js';
 import { PAIN_POINTS } from '../src/features/focus.js';
 import { profilesOfFeature } from '../src/profiles/profiles.js';
 import { RunBlocked, prepareRun } from '../src/lib/pipeline.js';
@@ -137,15 +138,15 @@ test('the texts a person reads have their Arabic', () => {
   for (const text of [feature.title, feature.description, QUICK_LABELS[ID]]) assert.ok(typeof AR[text] === 'string' && AR[text].length > 3, text);
 });
 
-test('offered on every kind of record that has a caller, never on a change, an article or "other"', () => {
-  assert.deepEqual([...CALLER_KINDS], ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task', 'chat']);
+test('offered on every kind of record that has a caller (a change has the person who asked for it), never on a problem, an article or "other"', () => {
+  assert.deepEqual([...CALLER_KINDS], ['incident', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task', 'chat']);
   assert.deepEqual([...feature.kinds], [...CALLER_KINDS]);
   for (const kind of KINDS) {
     assert.equal(featuresFor(kind, normalizePolicy({})).some((f) => f.id === ID), CALLER_KINDS.includes(kind), kind);
   }
   // every one of them has a column for the person it is for, or at least for who opened it
   for (const kind of CALLER_KINDS) {
-    assert.ok(FIELDS_BY_KIND[kind].some((name) => ['caller_id', 'requested_for', 'contact', 'consumer', 'opened_for', 'opened_by'].includes(name)), kind);
+    assert.ok(FIELDS_BY_KIND[kind].some((name) => ['caller_id', 'requested_for', 'contact', 'consumer', 'opened_for', 'requested_by', 'opened_by'].includes(name)), kind);
   }
   // and the organisation can switch it off like any feature
   assert.ok(!featuresFor('incident', normalizePolicy({ disabledFeatures: [ID] })).some((f) => f.id === ID));
@@ -196,7 +197,7 @@ test('the prompt is fixed text: the five headings in order, each on its own line
 // ---- Who the caller is --------------------------------------------------------------------------------------------------------
 
 test('the caller: the same roles in the same order as the caller card, the first with a valid sys_id', () => {
-  assert.deepEqual([...CALLER_ROLES], ['caller', 'requested_for', 'contact', 'consumer', 'opened_for', 'opened_by']);
+  assert.deepEqual([...CALLER_ROLES], ['caller', 'requested_for', 'contact', 'consumer', 'opened_for', 'requested_by', 'opened_by']);
   const p = (role, who, sysId = who.sysId) => ({ role, name: who.name, email: who.email, sysId });
   assert.deepEqual(callerOf({ people: [p('opened_by', BETH), p('caller', ABEL)] }), { role: 'caller', sysId: ABEL.sysId });
   assert.deepEqual(callerOf({ people: [p('consumer', CHARLIE), p('contact', ERIN)] }), { role: 'contact', sysId: ERIN.sysId });
@@ -327,9 +328,16 @@ test('the read worked and found nothing: the list is a checked "none", and says 
   assert.equal(out.requirePreview, undefined);
   assert.equal(partOf(out, 'caller_tickets').text, 'The caller is the person in this ticket\'s "Caller" field.\nChecked: the caller has no other tickets that your user can see.');
   // opened_by stands in only when the record names nobody it is for, and the model is told so
-  const problem = incidentPack({ table: 'problem', kind: 'problem', people: [{ role: 'opened_by', name: DAVE.name, sysId: DAVE.sysId }] });
-  const p = await feature.enrich(problem, spy(answerOf([])));
+  const plain = incidentPack({ table: 'task', kind: 'task', people: [{ role: 'opened_by', name: DAVE.name, sysId: DAVE.sysId }] });
+  const p = await feature.enrich(plain, spy(answerOf([])));
   assert.match(partOf(p, 'caller_tickets').text, /^This ticket names no caller, requester or contact, so the person in its "Opened by" field is taken as the caller\./);
+  // ...but not on a ticket with no customer: a problem, or the task of a problem or a change (F22); whoever opened it is an agent at work
+  for (const [table, kind] of [['problem', 'problem'], ['change_task', 'task'], ['problem_task', 'task']]) {
+    const internal = incidentPack({ table, kind, people: [{ role: 'opened_by', name: DAVE.name, sysId: DAVE.sysId }] });
+    const out = await feature.enrich(internal, spy(answerOf([])));
+    assert.equal(out.related.callerTickets, undefined, table);
+    assert.ok(out.access.some((a) => a.source === 'caller-history' && a.status === 'skipped'), table);
+  }
 });
 
 test('a full list says older tickets may exist; a repeat the read saw is named when both tickets are on the list', async () => {
@@ -454,7 +462,9 @@ test('end to end: what is sent masks the caller and the agent, keeps the fixes, 
     for (const secret of [ABEL.name, 'Abel', 'Tuter', ABEL.email, BETH.name, 'Anglin', BETH.email]) assert.ok(!text.includes(secret), `${mode}: sent "${secret}"`);
     assert.match(text, /INC0009640/);
     assert.match(text, /replaced the certificate/);
-    assert.equal(prepared.request.messages[0].content, `${feature.system}\n\n${RULES_PREAMBLE}`, 'no ticket data in the system message');
+    // (the task, then one FIXED sentence about the kind of ticket chosen from a lookup by kind, then the rules: nothing from the ticket)
+    const task = [feature.system, kindNote(feature.id, pack.kind)].filter(Boolean).join('\n');
+    assert.equal(prepared.request.messages[0].content, `${task}\n\n${RULES_PREAMBLE}`, 'no ticket data in the system message');
     assert.equal(prepared.request.feature, ID);
   }
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useEffective } from './useEffective.js';
 import { useForgetOnClear } from './forgetOnClear.js';
 import { usePage } from './usePage.js';
@@ -10,7 +10,8 @@ import FirstRun from './FirstRun.jsx';
 import { isAiReady } from './aiReady.js';
 import { planPanel, withVisited } from './sections.js';
 import { nextTabIndex, panelId, tabId } from './tabKeys.js';
-import { screensFor } from '../profiles/profiles.js';
+import { screensFor, withProfiles } from '../profiles/profiles.js';
+import { useProfileOwner } from '../profiles/useProfileOwner.js';
 import { BrandMark, Icon, screenIcon } from './ui/icons.jsx';
 import { SettingsButton } from './shell/shellParts.jsx';
 import CommandPalette, { isPaletteKey, modalOnScreen, paletteShortcut } from './palette/CommandPalette.jsx';
@@ -64,7 +65,7 @@ function instanceOf(page) {
 function Header({ base, onAllTools }) {
   const instance = base ? instanceOf(base) : null;
   const allTools = t('All tools');
-  const promise = t('Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
+  const promise = t('Reads from ServiceNow as you. Personal data is masked before any AI call. Nothing is written to ServiceNow.');
   const ref = useHeightVar('--ab-head-h');
   return (
     <header className="ab-header" ref={ref}>
@@ -72,7 +73,7 @@ function Header({ base, onAllTools }) {
       <div className="ab-brandtext" title={promise}>
         <span className="ab-brand">{t('Agent Buddy')}</span>
         {instance && (
-          <span className="ab-instance" title={t('Reading {host} with your own session', { host: isolate(instance.host) })}>
+          <span className="ab-instance" title={t('Reading {host} as you', { host: isolate(instance.host) })}>
             {instance.short}
           </span>
         )}
@@ -344,13 +345,17 @@ export function useOwnLaunch(ttl = LAUNCH_TTL_MS) {
 }
 
 function Panel() {
-  const eff = useEffective();
+  const base = useEffective(); // the settings as stored; `eff` below adds the profiles the roles and the open ticket call for
   // Settings "Clear everything" or a site turned off: the answers, card reads, inserts and carried drafts held in memory go
   // (forgetOnClear.js).
   useForgetOnClear();
-  const lang = useLanguage(eff.values?.language); // before anything below draws a text
-  useTheme(eff.values?.theme);
-  const { page, lastGood, lastSeen, refresh } = usePage(eff.policy);
+  const lang = useLanguage(base.values?.language); // before anything below draws a text
+  useTheme(base.values?.theme);
+  const { page, lastGood, lastSeen, refresh } = usePage(base.policy);
+  // Until the person chooses their profiles, the roles say which tools to show; a requested item or catalog task always gets the fulfilment tools.
+  // `who` is the short one-way hash of the signed-in person: a different person on a shared browser is asked for the profile again (W-18).
+  const who = useProfileOwner(page);
+  const eff = useMemo(() => withProfiles(base, { roles: page?.user?.roles, kind: page?.record?.kind, who }), [base, page?.user?.roles, page?.record?.kind, who]);
   const { launch, clear: clearLaunch } = useLaunch();
   const [paletteOpen, setPaletteOpen, paletteSection] = usePaletteToggle();
   // The opener every part of the panel gets (AllToolsContext): stable, so a screen that keeps it does not draw again for it.

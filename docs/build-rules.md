@@ -25,6 +25,7 @@ or `g_user`.
    the notes passed the review; nothing is saved. On a page without `g_form` the choice is never touched: only the notes are filled
    and the panel names the code to pick. Every Insert can be undone: `FILL_FIELD` mode `undo` puts a box back only while it still
    holds exactly what the insert left, on the same record, without saving (`restoreField`, src/page/bridge.js).
+   After every FILL_FIELD the bridge reads the box back; a value that did not take is reported as locked, never as inserted.
 2. **Every AI call goes through the PII firewall.** Views use `useRun()` / `<RunPanel>` (`src/sidepanel/useRun.js`), which runs
    `prepareRun` -> preview -> `executeRun`. Never import `sendChat`, the provider senders (`providers/index.js`, `openai.js`,
    `anthropic.js`, `messages.js`) or anything from `src/pii/seal.js` in a view; `providers/config.js` (which provider, which address,
@@ -42,10 +43,14 @@ or `g_user`.
    another browser's manifest is made from `manifest.json` (`scripts/lib/browsers.js`) is a manifest change too.
 7. **Store no ticket content.** `chrome.storage` holds settings, snippets and dashboard/report *configuration* only. Never cache
    record text, names or emails in storage. In-memory caches are fine and must be cleared on refresh.
-   One named exception (round 4, approved by the user on 2026-11-06): "since you last looked" keeps, per instance, the sys_id and
-   table of a ticket the person opened and the time they opened it (`src/lib/lastViewed.js`): no number, title, text or names;
-   at most 500 entries, none older than 30 days; cleared by Settings > Stored data > Clear all; off when policy
-   `rememberLastViewed` is false.
+   One named exception (round 4, approved 2026-11-06; kept per person 2026-11-07): "since you last looked" keeps, per instance and per
+   signed-in person, the sys_id and table of a ticket the person opened and the time (`src/lib/lastViewed.js`). No number, title, text,
+   names or user id. The person is told apart by a one-way hash (first 8 bytes of SHA-256 over instance and user id, 16 hex
+   characters). With no user id nothing is kept. At most 500 entries, none older than 30 days. Cleared by Settings > Stored data >
+   Clear all. Off when policy `rememberLastViewed` is false.
+   A second named exception (2026-11-07): the setting `profilesFor` holds the same one-way hash of instance and user id, to tell who
+   confirmed the work profiles (a different person on a shared browser is asked again); never the user id; empty when it is not known;
+   cleared by Settings > Stored data > Clear all.
 8. **Field allowlists are the contract.** A column is read only if it is on the feature's spec (`src/context/specs/<area>.js`), which
    is intersected with the kind's ceiling. Add columns only with a reason. HR-family tables (`sn_hr_*`) stay sensitive: free text and
    identities are read only with `allowSensitive`, and HR content is blocked unless the organisation's policy allows it.

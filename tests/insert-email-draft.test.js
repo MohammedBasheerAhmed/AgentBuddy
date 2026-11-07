@@ -144,7 +144,7 @@ test('where an email insert lands, and the next step: nothing is sent until Send
   const targets = insertTargets({ id: feature.id, insert: emailInserts(draftOf()) }, { page: emailPage() });
   assert.deepEqual(targets.map((t) => [t.field, t.mode, t.modes]), [['subject', 'replace', ['replace']], ['body', 'append', ['replace', 'append']]]);
   // the ticket's own boxes are unchanged
-  assert.equal(describeInsert({ field: 'comments' }).next, 'Then press Save. Saving sends the comment to the customer.');
+  assert.equal(describeInsert({ field: 'comments' }).next, 'Then press Save. The customer may be emailed.');
 });
 
 // ---- The card on the email form ------------------------------------------------------------------------------------------------

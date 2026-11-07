@@ -6,7 +6,7 @@ import {
   GAP_MAX_DAYS, GAP_TABLES, KB_MAX_OFFSET, cleanCategory, readArticleLinks, readGapCategories, readKnowledgeList, readKnowledgeScopes, readMyGroups,
   readResolvedTickets, searchKnowledgeText,
 } from '../../context/knowledge.js';
-import { STATUS, entry as accessEntry } from '../../context/access.js';
+import { STATUS, entry as accessEntry, tm } from '../../context/access.js';
 import { SYS_ID_RE } from '../../context/util.js';
 import { buildGapRadar } from '../../knowledge/gaps.js';
 import { DUPLICATE_THRESHOLD, findDuplicateClusters, pairwiseText } from '../../knowledge/similarity.js';
@@ -19,6 +19,9 @@ function optionalId(value, what) {
   return value.toLowerCase();
 }
 
+// A count the panel passes back is only ever shown and compared with a window, never put into a read: still bounded.
+const MAX_COUNT = 10000000;
+
 function boundedNumber(value, min, max, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
@@ -27,7 +30,7 @@ function boundedNumber(value, min, max, fallback) {
 const tablesOf = (asked) => {
   const list = asked === undefined ? ['incident'] : asked;
   const tables = Array.isArray(list) ? list.filter((t) => typeof t === 'string' && Object.hasOwn(GAP_TABLES, t)) : [];
-  if (!tables.length) throw new Error('Choose incidents or cases.');
+  if (!tables.length) throw new Error(tm('Choose incidents or cases.'));
   return [...new Set(tables)];
 };
 
@@ -54,25 +57,30 @@ export default {
    */
   kbSearch: async (args, { deps }) => {
     const query = typeof args?.query === 'string' ? args.query.slice(0, 200) : '';
-    if (!query.trim()) throw new Error('Type a few words to search for.');
+    if (!query.trim()) throw new Error(tm('Type a few words to search for.'));
     return searchKnowledgeText({ query }, deps, { now: Date.now(), memo: new Map() });
   },
 
   /**
    * Published articles of one knowledge base / category, 300 titles at a time (`offset` pages on: 0, 300, 600 ...), and the groups
    * among them whose titles read alike. Titles and counts only. The panel keeps the pages it read and compares them all together.
+   * `total` (optional) is the count the first page answered with: a later page passes it back so the scope is counted once.
+   * Answers `total` (how many articles the scope holds; null when it could not be counted), `truncated` (more follow) and `next` (the
+   * offset to ask for them; null when there are none or one scan cannot go further).
    */
   kbDuplicates: async (args, { deps }) => {
     const knowledgeBase = optionalId(args?.knowledgeBase, 'knowledge base');
     const category = optionalId(args?.category, 'category');
-    if (!knowledgeBase && !category) throw new Error('Choose a knowledge base or a category first.');
+    if (!knowledgeBase && !category) throw new Error(tm('Choose a knowledge base or a category first.'));
     const threshold = boundedNumber(args?.threshold, 0.4, 0.9, DUPLICATE_THRESHOLD);
     const offset = Math.floor(boundedNumber(args?.offset, 0, KB_MAX_OFFSET, 0));
-    const list = await readKnowledgeList({ knowledgeBase, category, offset }, deps, { memo: new Map() });
+    const total = Number.isInteger(args?.total) && args.total >= 0 ? Math.min(args.total, MAX_COUNT) : undefined;
+    const list = await readKnowledgeList({ knowledgeBase, category, offset, total }, deps, { memo: new Map() });
     return {
       scanned: list.articles.length,
       total: list.total,
       truncated: list.truncated,
+      next: list.next,
       offset: list.offset,
       threshold,
       articles: list.articles,
@@ -136,7 +144,7 @@ export default {
           truncated: false,
           scope: { kind: 'mine', groups: 0 },
           link: { known: false, sources: [] },
-          access: scopeAccess.length ? scopeAccess : [accessEntry('sys_user_grmember', STATUS.EMPTY, 'You are not a member of any group that you can see.')],
+          access: scopeAccess.length ? scopeAccess : [accessEntry('sys_user_grmember', STATUS.EMPTY, tm('You are not a member of any group that you can see.'))],
         };
       }
     }

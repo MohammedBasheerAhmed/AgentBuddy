@@ -53,4 +53,4 @@ export function pageStateMessage(policy) {
 
 /** Errors that cross the message boundary travel as { error: { message, code } } so the panel can show plain text. */
 // (tm: this file is in the page script's bundle, which has no catalogue; the panel shows the text through plainError, which translates it)
-export const toWireError = (err) => ({ error: { message: String(err?.message || err || tm('Something went wrong.')), code: err?.code || '' } });
+export const toWireError = (err) => ({ error: { message: String(err?.message || err || tm('Something went wrong. Try again; if it keeps happening, tell your administrator.')), code: err?.code || '' } });

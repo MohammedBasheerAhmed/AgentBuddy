@@ -72,7 +72,7 @@ test('the message carries the field, the plain text, the label, the mode and the
   const send = async (tab, message) => (sent.push([tab, message]), { ok: true, method: 'gform' });
   const outcome = await performInsert({ page: pageOf(), spec: { field: 'work_notes', label: 'Add to work notes', fieldLabel: 'Work notes' }, value: 'A note', expect: { table: 'incident', sysId: A }, send });
   assert.equal(outcome.status, 'inserted');
-  assert.equal(outcome.note, 'Inserted into the form. Review it, then save the record yourself.');
+  assert.equal(outcome.note, 'Inserted into the form. Review it, then save the ticket yourself.');
   assert.deepEqual(sent, [[5, { type: MSG.FILL_FIELD, field: 'work_notes', value: 'A note', label: 'Work notes', mode: 'append', expect: { table: 'incident', sysId: A } }]]);
 });
 
@@ -151,7 +151,7 @@ test('a wrong record says which record the text was written for; a Workspace box
   assert.equal(wrong.why, 'This was written for INC0010001. Open that ticket again, or use Copy.');
   const dom = await performInsert({ page: pageOf(), spec: { field: 'comments' }, value: 'x', send: async () => ({ ok: true, method: 'dom', label: 'Additional comments' }) });
   assert.match(dom.note, /box labelled "Additional comments"/);
-  const reasons = { 'read-only': /read-only/, 'no-such-field': /not on this form/, 'too-long': /too long/, 'set-failed': /did not accept/, 'bad-field': /cannot be filled/ };
+  const reasons = { 'read-only': /locked/, 'no-such-field': /not on this form/, 'too-long': /too long/, 'set-failed': /did not accept/, 'bad-field': /cannot be filled/ };
   for (const [reason, re] of Object.entries(reasons)) {
     const out = await performInsert({ page: pageOf(), spec: { field: 'comments' }, value: 'x', send: async () => ({ ok: false, reason }) });
     assert.match(out.why, re, reason);
@@ -205,7 +205,7 @@ test('a draft on a blank form is bound to that form, not to the record it was wr
 test('low-severity findings are shown on the card as "Worth a look", and serious text does not hide them', () => {
   const markup = card({ feature: featureById('reply-draft'), page: pageOf(), text: 'Please ask your colleague John Smith about 10.1.2.3.', source: null, people: [], scan: null });
   assert.match(markup, /Worth a look/);
-  assert.match(markup, /someone who is not on this record/);
+  assert.match(markup, /someone who is not on this ticket/);
   assert.match(markup, /IP address/);
   // an internal-only insert has nothing to warn the customer about
   assert.ok(!card({ feature: featureById('thread-summary'), page: pageOf(), text: 'Please ask your colleague John Smith about 10.1.2.3.', people: [], scan: null }).includes('Worth a look'));

@@ -60,7 +60,7 @@ test('resolveProviderConfig: the v1 form by default, the default api-version, an
   assert.match(resolveProviderConfig(azure({ azure: { form: 'deployment', apiVersion: 'latest' } }), 'k').invalidBaseUrl, /API version must look like/);
   assert.match(resolveProviderConfig(azure({ models: { azure: 'my deployment' } }), 'k').invalidBaseUrl, /deployment name may only use/);
   assert.match(resolveProviderConfig(azure({ baseUrls: { azure: 'http://contoso.openai.azure.com' } }), 'k').invalidBaseUrl, /https/);
-  assert.match(resolveProviderConfig(azure({ baseUrls: { azure: 'https://contoso.openai.azure.com/?api-version=2024-10-21' } }), 'k').invalidBaseUrl, /query/);
+  assert.match(resolveProviderConfig(azure({ baseUrls: { azure: 'https://contoso.openai.azure.com/?api-version=2024-10-21' } }), 'k').invalidBaseUrl, /anything after the address/);
   assert.deepEqual(azureOptions({ form: 'nonsense', apiVersion: ' 2025-04-01-preview ' }), { form: 'v1', apiVersion: '2025-04-01-preview', apiVersionOk: true });
 });
 

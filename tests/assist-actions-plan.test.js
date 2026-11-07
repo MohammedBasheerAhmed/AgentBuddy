@@ -137,14 +137,14 @@ test('featureBlock: Strict privacy mode needed, or switched off; nothing otherwi
 
 test('recordBlock: a blocked table, HR content not allowed, HR without an approved endpoint, HR below Strict', () => {
   assert.equal(recordBlock({ record: rec('incident'), eff: eff() }), '');
-  assert.match(recordBlock({ record: rec('incident'), eff: eff({ policy: { blockedTables: ['incident'] } }) }), /does not allow Agent Buddy to use incident records/);
+  assert.match(recordBlock({ record: rec('incident'), eff: eff({ policy: { blockedTables: ['incident'] } }) }), /does not allow Agent Buddy to use incidents/);
   const hrRec = rec('hr_case', 'sn_hr_core_case');
   assert.match(recordBlock({ record: hrRec, eff: eff() }), /HR case content is not sent/);
   assert.match(recordBlock({ record: hrRec, eff: eff({ values: { piiMode: 'strict' }, policy: { allowHrContent: true } }) }), /approved/);
-  assert.match(recordBlock({ record: hrRec, eff: eff({ policy: { allowHrContent: true, aiProvider: 'openai' } }) }), /HR records need Strict privacy mode/);
+  assert.match(recordBlock({ record: hrRec, eff: eff({ policy: { allowHrContent: true, aiProvider: 'openai' } }) }), /HR tickets need Strict privacy mode/);
   // the pipeline's own rule (requiredMode): an HR child table, or a policy prefix, counts the same
-  assert.match(recordBlock({ record: rec('task', 'sn_hr_core_task'), eff: eff({ policy: { allowHrContent: true, aiProvider: 'openai' } }) }), /HR records need Strict/);
-  assert.match(recordBlock({ record: rec('incident', 'u_pay_case'), eff: eff({ policy: { allowHrContent: true, aiProvider: 'openai', sensitiveTablePrefixes: ['u_pay_'] } }) }), /HR records need Strict/);
+  assert.match(recordBlock({ record: rec('task', 'sn_hr_core_task'), eff: eff({ policy: { allowHrContent: true, aiProvider: 'openai' } }) }), /HR tickets need Strict/);
+  assert.match(recordBlock({ record: rec('incident', 'u_pay_case'), eff: eff({ policy: { allowHrContent: true, aiProvider: 'openai', sensitiveTablePrefixes: ['u_pay_'] } }) }), /HR tickets need Strict/);
   assert.equal(recordBlock({ record: hrRec, eff: eff({ values: { piiMode: 'strict' }, policy: { allowHrContent: true, aiProvider: 'openai' } }) }), '');
   // the plan carries it once, for the whole half
   const p = actionPlan({ record: hrRec, header: head('Work in Progress'), eff: eff({ values: { profiles: ['hr'] } }) });
@@ -160,12 +160,12 @@ test("a disabled action keeps its row (it says why) but is never the primary: th
   assert.match(waiting.reason, /^Needs Strict privacy mode/);
   // on an HR record the whole record needs Strict: said once (recordBlock), not on each button
   const hr = actionPlan({ record: rec('hr_case', 'sn_hr_core_case'), header: head('Ready'), eff: eff({ values: { profiles: ['hr'] }, policy: { allowHrContent: true, aiProvider: 'openai' } }) });
-  assert.match(hr.block, /HR records need Strict/);
+  assert.match(hr.block, /HR tickets need Strict/);
   assert.ok(hr.items.every((i) => i.reason === ''), 'no button repeats it');
 });
 
 test('cautions travel with the action: comments on a catalog task do not reach the requester', () => {
   const p = plan('catalog_task', 'Work in Progress', { table: 'sc_task' });
   const reply = p.items.find((i) => i.feature.id === 'reply-draft');
-  assert.match(reply.caution, /requester does not see comments on a catalog task/);
+  assert.match(reply.caution, /requester may not see comments on a catalog task/);
 });

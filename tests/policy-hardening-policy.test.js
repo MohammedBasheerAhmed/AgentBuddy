@@ -185,7 +185,7 @@ test('SEC-04: a lost session during the class lookup stops the read (it is not "
 test('SEC-04: the class decides what the policy guard says: an incident opened as `task` fails when incident is blocked', async () => {
   const guard = createPolicyGuard({ getManaged: async () => ({ known: true, raw: { blockedTables: ['incident'] } }) });
   const deps = await guard.deps(fakeDeps({ task: [incidentRow], incident: [incidentRow] }));
-  await assert.rejects(() => readContextPack({ table: 'task', sysId: ID }, deps, { feature: 'record-summary' }), (e) => e.code === 'BLOCKED_TABLE' && /incident/.test(e.message));
+  await assert.rejects(() => readContextPack({ table: 'task', sysId: ID }, deps, { feature: 'record-summary' }), (e) => e.code === 'BLOCKED_TABLE' && e.table === 'incident');
 });
 
 // ---- SEC-12: an unknown feature is refused -------------------------------------------------------------------------------

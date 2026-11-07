@@ -166,6 +166,18 @@ Changed items: N9 also flags priority mismatches; AI1 sits next to N24 (the jour
 4. **Leads and knowledge owners:** N15 to N19, AI25 to AI30.
 5. **Role packs:** CSM (N28, AI5, AI14), HR (AI4), problem and change.
 
+## Platform recipes: do these in ServiceNow itself
+
+Agent Buddy only builds what an agent needs and ServiceNow cannot do inside the platform (see the product filter in TRACKER.md). These are
+pain points the platform already solves, with ordinary configuration, so they are not built here. Each is a recipe for the ServiceNow
+administrator:
+
+- **Expiring and stale knowledge articles:** use ServiceNow's own Knowledge dashboards and reports (articles that expire soon, articles not
+  updated for a year, articles nobody reads). Not built in Agent Buddy; its Knowledge screen shows an article's freshness when you search, and
+  finds duplicates and gaps, which the platform does not.
+- SLA warnings, inactivity monitors and auto-close of tickets waiting on the customer; VIP highlighting; ping-pong (reassignment) alerts;
+  outage detection when a ticket is created; change conflict checks; on-call schedules; survey reports; guided tours for new agents.
+
 ## Sources
 
 - Chen et al., "An Empirical Investigation of Incident Triage for Online Service Systems", ICSE 2019 SEIP (Microsoft):

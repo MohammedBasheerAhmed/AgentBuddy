@@ -72,7 +72,7 @@ test('a 4xx that would come back the same is never retried; a used-up quota (429
     assert.equal(fetchFn.calls.length, 1, `status ${status}`);
   }
   const quota = scripted(json(429, { error: { message: 'You exceeded your current quota', type: 'insufficient_quota', code: 'insufficient_quota' } }));
-  await assert.rejects(() => requestJson({ ...base, fetchFn: quota, sleep: sleeps() }), (err) => err.code === 'NO_CREDIT' && /no balance left/.test(err.message));
+  await assert.rejects(() => requestJson({ ...base, fetchFn: quota, sleep: sleeps() }), (err) => err.code === 'NO_CREDIT' && /no credit left/.test(err.message));
   assert.equal(quota.calls.length, 1);
   // A 500 may have been half-done by the provider: not sent again.
   const broken = scripted(json(500, 'oops'));
@@ -211,5 +211,5 @@ test('a provider answer that redirects is never followed: the request fails as u
     if (init.redirect === 'error') throw new TypeError('Failed to fetch');
     return json(200, OK);
   };
-  await assert.rejects(() => requestJson({ ...base, fetchFn }), (err) => err.code === 'UNREACHABLE' && /does not redirect elsewhere/.test(err.message));
+  await assert.rejects(() => requestJson({ ...base, fetchFn }), (err) => err.code === 'UNREACHABLE' && /Could not reach the AI service at/.test(err.message));
 });

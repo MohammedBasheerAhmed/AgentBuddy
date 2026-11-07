@@ -72,25 +72,25 @@ test('AI errors say what to do: no balance (402), rate limit (429), unreachable,
   const noWait = { skipBudget: true, sleep: async () => {} }; // 429 is retried; the pauses are not part of this test
   try {
     globalThis.fetch = answer(402, JSON.stringify({ error: { message: 'Insufficient Balance', type: 'unknown_error' } }));
-    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /DeepSeek says the account has no balance left \(Insufficient Balance\)\. Add credit/);
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /DeepSeek says the account has no credit left \(Insufficient Balance\)\. Add credit/);
 
     globalThis.fetch = answer(429, JSON.stringify({ error: { message: 'Rate limit reached' } }));
     await assert.rejects(() => sendChat(config, sealedRequest(), noWait), /DeepSeek is limiting requests \(Rate limit reached\)\. Wait a minute/);
 
     globalThis.fetch = answer(401, '{"error":{"message":"Authentication Fails"}}');
-    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /DeepSeek rejected the API key\. Check it in Agent Buddy settings\./);
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /DeepSeek did not accept the AI key\. Check it in Settings\./);
 
     // A body that is not the provider's JSON error (a proxy's page, an echo of the request) is never shown: only the status.
     globalThis.fetch = answer(500, 'x'.repeat(1000));
     await assert.rejects(
       () => sendChat(config, sealedRequest(), { skipBudget: true }),
-      (err) => /DeepSeek had a problem on its side \(answer 500\)\. Try again in a minute\./.test(err.message) && !/xxxx/.test(err.message) && err.message.length < 200
+      (err) => /DeepSeek had a problem on its side\. Try again in a minute\./.test(err.message) && !/500|answer/.test(err.message) && err.status === 500 && !/xxxx/.test(err.message) && err.message.length < 200
     );
 
     globalThis.fetch = async () => {
       throw new TypeError('Failed to fetch');
     };
-    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /Could not reach api\.deepseek\.com\. Check your internet connection, VPN or proxy/);
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /Could not reach the AI service at api\.deepseek\.com\. Check your internet connection or VPN/);
   } finally {
     globalThis.fetch = real;
   }
@@ -105,7 +105,7 @@ test('a request with no key says so by name, and never reaches the network', asy
     return new Response('{}');
   };
   try {
-    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /Missing API key for DeepSeek/);
+    await assert.rejects(() => sendChat(config, sealedRequest(), { skipBudget: true }), /Add your AI key in Settings to use AI./);
     assert.equal(called, 0);
   } finally {
     globalThis.fetch = real;

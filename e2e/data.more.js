@@ -439,6 +439,8 @@ export function addMoreTables(tables) {
     { sys_id: v('e2egm4'), user: v(CHARLIE.sysId, CHARLIE.name), group: v(GROUP_NETWORK.value, 'Network Support') }
   );
   addChecklistTask(tables);
+  addFulfilledBefore(tables);
+  addLargeKnowledgeBase(tables);
   return tables;
 }
 
@@ -456,6 +458,7 @@ export function addChecklistTask(tables) {
     assignment_group: v(GROUP_DESKTOP_ID, 'Desktop Support'),
     active: v('true'),
     request_item: v('e3f4a5b6c7d84e9fa0b1c2d3e4f5a6b7', 'RITM0010050'),
+    opened_by: v(CHARLIE.sysId, CHARLIE.name), // the requester of its item: the requester can read comments on this task
     opened_at: time(daysAgo(2)),
     sys_updated_on: time(daysAgo(1)),
     due_date: time(daysAgo(-2)),
@@ -466,6 +469,107 @@ export function addChecklistTask(tables) {
 export const CHECKLIST_TASK_ID = hexId(100);
 export const CHECKLIST_TASK_NUMBER = 'SCTASK0020070';
 export const CHECKLIST_STEPS = ['Image the laptop with the standard build', 'Add it to the asset register', 'Send the delivery note to the requester'];
+
+/**
+ * "Fulfilled before" (wave 6, catalog fulfiller): completed catalog tasks of the SAME catalog item as the open task SCTASK0020070
+ * (its item RITM0010050 is a Standard Laptop; catalog items get 32-character ids here, as on a real instance: the read refuses anything else). Three completed tasks of two earlier laptop requests, one with no
+ * close notes, plus two that must NOT be listed (a task that was closed incomplete, and a completed task of another catalog item).
+ * Also a second approval row on the open item, three days old, so its approval line says one other approval is waiting.
+ */
+export function addFulfilledBefore(tables) {
+  const RITM_OPEN = 'e3f4a5b6c7d84e9fa0b1c2d3e4f5a6b7';
+  const CI_LAPTOP = hexId(130);
+  const CI_PHONE = hexId(131);
+  // the shared fixture names the open item's catalog item 'ci1'; give it a real-shaped id so the earlier tasks of the same item can be asked for
+  for (const open of tables.sc_req_item || []) if (open.sys_id.value === RITM_OPEN) open.cat_item = v(CI_LAPTOP, 'Standard Laptop');
+  const ritm = (n, number, item) => ({
+    sys_id: v(hexId(110 + n)),
+    number: v(number),
+    short_description: v(`${item[1]} for an earlier requester`),
+    state: v('3', 'Closed Complete'),
+    stage: v('complete', 'Complete'),
+    active: v('false'),
+    cat_item: v(item[0], item[1]),
+    request: v(hexId(115 + n), `REQ00200${n}`),
+    requested_for: v(CHARLIE.sysId, CHARLIE.name),
+    opened_at: time(daysAgo(20)),
+    sys_updated_on: time(daysAgo(2)),
+  });
+  const ri = [
+    ritm(1, 'RITM0010041', [CI_LAPTOP, 'Standard Laptop']),
+    ritm(2, 'RITM0010042', [CI_LAPTOP, 'Standard Laptop']),
+    ritm(3, 'RITM0010043', [CI_PHONE, 'Mobile Phone']),
+  ];
+  // The fake instance ignores a query condition on a column no row has, so the moment the new items carry `active` the open item must carry it too.
+  for (const open of tables.sc_req_item || []) if (!open.active) open.active = v('true', 'true');
+  tables.sc_req_item = [...(tables.sc_req_item || []), ...ri];
+  const done = (n, number, title, who, ritmRow, opened, closed, notes, state = ['3', 'Closed Complete']) => ({
+    sys_id: v(hexId(120 + n)),
+    number: v(number),
+    short_description: v(title),
+    state: v(state[0], state[1]),
+    active: v('false'),
+    assigned_to: v(who.sysId, who.name),
+    assignment_group: v(GROUP_DESKTOP_ID, 'Desktop Support'),
+    request_item: v(ritmRow.sys_id.value, ritmRow.number.value),
+    opened_at: time(opened),
+    closed_at: time(closed),
+    close_notes: v(notes),
+    sys_updated_on: time(closed),
+  });
+  tables.sc_task = [
+    ...(tables.sc_task || []),
+    done(1, 'SCTASK0020061', 'Image the laptop', BETH, ri[0], daysAgo(4), daysAgo(2), 'Imaged with the standard build and joined it to the domain. Asset tag added.'),
+    done(2, 'SCTASK0020062', 'Deliver the laptop', DAVE, ri[0], hoursAgo(53), hoursAgo(50), 'Handed over at the desk. Receipt signed.'),
+    done(3, 'SCTASK0020063', 'Image the laptop', CHARLIE, ri[1], daysAgo(14), daysAgo(12), ''),
+    // Not listed: closed incomplete (state 4) on the same item, and a completed task of another catalog item
+    done(4, 'SCTASK0020064', 'Image the laptop (cancelled order)', BETH, ri[0], daysAgo(9), daysAgo(8), 'Order withdrawn.', ['4', 'Closed Incomplete']),
+    done(5, 'SCTASK0020065', 'Set up the phone', BETH, ri[2], daysAgo(6), daysAgo(5), 'Phone enrolled.'),
+  ];
+  // a second approval waiting on the open item (the fixture's IT Procurement row is the oldest; this one is three days old)
+  tables.sysapproval_approver = [
+    ...(tables.sysapproval_approver || []),
+    {
+      sys_id: v('e2eappr31'),
+      sysapproval: v(RITM_OPEN, 'RITM0010050'),
+      approver: v(ERIN.sysId, ERIN.name),
+      group: v('', ''),
+      state: v('requested', 'Requested'),
+      sys_updated_on: time(daysAgo(3)),
+      sys_created_on: time(daysAgo(3)),
+    },
+  ];
+  return tables;
+}
+
+/**
+ * A third knowledge base of 340 published articles (wave 6, knowledge manager): more than one scan of 300, so the Duplicates panel
+ * says "Compared 300 of 340" and offers the next 40. Two articles share a title: the newest and the oldest, so the duplicate only
+ * shows once the second page is added. The existing "IT (5)" and "HR (1)" checks are unaffected (other bases).
+ */
+export const KB_BASE_3_ID = hexId(23);
+export const KB_CATEGORY_3_ID = hexId(24);
+export function addLargeKnowledgeBase(tables) {
+  const rows = Array.from({ length: 340 }, (_, i) => ({
+    sys_id: v(hexId(5000 + i)),
+    number: v(`KB${String(40001 + i).padStart(7, '0')}`),
+    short_description: v(i === 335 || i === 5 ? 'Park the service van at the depot' : `Depot task${i.toString(36)}z notes ${i}`),
+    text: v('<p>Short.</p>'),
+    workflow_state: v('published', 'Published'),
+    kb_knowledge_base: v(KB_BASE_3_ID, 'Field Service Knowledge Base'),
+    kb_category: v(KB_CATEGORY_3_ID, 'Field work'),
+    article_type: v('html', 'HTML'),
+    meta: v(''),
+    published: time(daysAgo(200)),
+    valid_to: v('2028-12-31'),
+    sys_updated_on: time(daysAgo(341 - i)),
+    sys_view_count: v('0'),
+    view_count: v('0'),
+    author: v(BETH.sysId, BETH.name),
+  }));
+  tables.kb_knowledge = [...(tables.kb_knowledge || []), ...rows];
+  return tables;
+}
 
 /** The sys_id of fixture article KB00200nn (n = 1..6). */
 export const kbArticleId = (n) => hexId(50 + n);

@@ -35,7 +35,7 @@ export function requestDetail(detail, scope = globalThis) {
 
 /**
  * Call an action exposed by src/page/bridge.js: getCsrfToken, getSessionInfo, getFormMeta, getFormValues, getFieldStates,
- * getBoxValues, fillField (the list in the bridge itself is the one that counts).
+ * getBoxValues, watchInsert, fillField, restoreField (the list in the bridge itself is the one that counts).
  * @returns {Promise<any>}
  */
 export function callPage(action, args = [], { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {

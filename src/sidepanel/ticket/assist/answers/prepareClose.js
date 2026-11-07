@@ -8,7 +8,7 @@
 //   codeTargetFor(...)   the close code's box, as an insert target
 //   closePlan(...)       what ONE Insert does on this record: the code to fill (by its stored value) or to pick by hand, and the
 //                        line said before the click ("Insert fills Close code and Resolution notes on the open form. ...")
-import { describeInsert } from '../../../../lib/fillable.js';
+import { closeStep, describeInsert } from '../../../../lib/fillable.js';
 import { PREPARE_CLOSE } from '../../../../features/packs/close.js';
 import { closeCodeFact } from '../../../../insights/closeCode.js';
 import { openFindings } from '../../../../checks/resolutionCheck.js';
@@ -57,10 +57,17 @@ export function closePlan({ kind = '', surface = 'classic', vote = null, notes =
   const notesName = notes ? tr(notes.fieldLabel || notes.label || '') : '';
   let line = '';
   if (notes && !notes.blocked) {
+    // The state is what closes the ticket (F13): a kind with a step of its own ends the line with it, in place of "until you press Save".
+    const step = closeStep(kind);
     line = fill
-      ? t('Insert fills {fields} on the open form. Nothing is saved until you press Save.', { fields: both(tr(CODE_LABEL), notesName) })
-      : t('Insert fills {field} on the open form. Nothing is saved until you press Save.', { field: notesName });
+      ? step
+        ? t('Insert fills {fields} on the open form. Nothing is saved.', { fields: both(tr(CODE_LABEL), notesName) })
+        : t('Insert fills {fields} on the open form. Nothing is saved until you press Save.', { fields: both(tr(CODE_LABEL), notesName) })
+      : step
+        ? t('Insert fills {field} on the open form. Nothing is saved.', { field: notesName })
+        : t('Insert fills {field} on the open form. Nothing is saved until you press Save.', { field: notesName });
     if (byHand) line = `${line} ${t('Choose the close code {code} yourself.', { code: isolate(byHand) })}`;
+    if (step) line = `${line} ${step}`;
   } else if (notes?.blocked) line = notes.blocked;
   return { code: fill ? { target: code, value: wanted.value, label: wanted.label } : null, byHand, line };
 }

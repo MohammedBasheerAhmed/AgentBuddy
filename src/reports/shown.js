@@ -11,6 +11,7 @@
 // Only call it for words the engine or the panel wrote ("Open", "Some tables could not be counted"), never for ticket data (a state,
 // a group, a person): "Open" as a state of a ticket is the instance's word and must stay as it is.
 import { catalogueOf, getLanguage, isolate, t as translate, tm } from '../i18n/core.js';
+import { translateTableNoun } from '../lib/tableLabels.js';
 
 // A few English words are a button in one place and a label in another ("Open": افتح, but مفتوحة above a count). The label has its own
 // entry, used here.
@@ -138,6 +139,9 @@ function direct(text, table, depth) {
     const capital = lookup(table, first.toUpperCase() + text.slice(1));
     if (capital) return capital;
   }
+  // The name of a kind of record the engine said with the shared labels ('group memberships', 'Approvals'): src/lib/tableLabels.js.
+  const noun = translateTableNoun(text);
+  if (noun !== undefined) return noun;
   return depth >= MAX_DEPTH ? undefined : fromTemplate(text, table, depth);
 }
 
@@ -174,14 +178,21 @@ export function shown(text) {
   return out;
 }
 
+/**
+ * The state of a ticket in a list of a report: the site's own label as it is; when the site gave none (only the stored number) the
+ * engine named it by what it means (`statePlain`, an English word of the engine) and that word is shown in the language of the panel.
+ */
+export const stateShown = (item) => (item?.statePlain ? shown(item.state) : String(item?.state ?? ''));
+
 /** "Open, In my groups" (a list the engine joined with commas), each part shown in the language of the panel. */
 export function shownList(text) {
   if (typeof text !== 'string' || !text) return text;
   return text.split(', ').map(shown).join(translate(', '));
 }
 
-// The names the engine gives a row that has no value ('(unassigned)', '(no group)', '(none)', '(empty)', 'Unknown'). Any other name is data.
-const PLACEHOLDERS = new Set(['(unassigned)', '(no group)', '(none)', '(empty)', 'Unknown']);
+// The names the engine gives a row that has no value ('(unassigned)', '(no group)', '(none)', '(empty)', 'Unknown') or whose person this user
+// may not see ('Not shown to you'). Any other name is data.
+const PLACEHOLDERS = new Set(['(unassigned)', '(no group)', '(none)', '(empty)', 'Unknown', 'Not shown to you']);
 
 /** A name from a report row: the engine's own word for "nobody" shown in the language of the panel, any other name as it is. */
 export const placeholderName = (name) => (PLACEHOLDERS.has(name) ? shown(name) : name);

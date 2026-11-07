@@ -2,7 +2,7 @@
 // site, say what you work on (work profiles), set up AI or skip it for now, open a ticket. Pure: the panel's state in, the steps
 // out (tests/panel-first-run.test.js). FirstRun.jsx draws the card with the action of the step that is next; SetupView.jsx leaves
 // out what the card already offers, so nothing is said twice.
-import { PROFILES, suggestProfiles } from '../profiles/profiles.js';
+import { PROFILES, confirmPatch, profilesConfirmedFor, suggestProfiles } from '../profiles/profiles.js';
 import { t, tm } from '../i18n/index.js';
 
 /**
@@ -18,8 +18,9 @@ export function firstRunSteps({ page, lastSeen = null, aiReady, eff = null, acti
   const instances = Array.isArray(eff?.values?.instances) ? eff.values.instances : [];
   const siteOn = enabledHere || Boolean(lastSeen) || instances.length > 0 || (Array.isArray(activeInstances) && activeInstances.length > 0);
   const onTicket = page?.status === 'record';
-  // Profiles: answered, or set by the organisation (then there is nothing to ask). Without settings (an old caller) it is not asked.
-  const profilesDone = !eff?.values || eff.values.profilesConfirmed === true || Boolean(eff.locked?.profiles);
+  // Profiles: answered BY THIS PERSON (a different person signed in on the same browser is asked again, once the page tells us their roles:
+  // W-18), or set by the organisation (then there is nothing to ask). Without settings (an old caller) it is not asked.
+  const profilesDone = !eff?.values || profilesConfirmedFor(eff.values, { who: eff.signedIn, roles: page?.user?.roles }) || Boolean(eff.locked?.profiles);
   // AI: set up, skipped for now ("Skip AI for now"), or switched off by the organisation (then the step is not there at all).
   const aiOff = eff?.policy?.aiEnabled === false;
   const aiDone = Boolean(aiReady) || eff?.values?.aiSkipped === true;
@@ -34,8 +35,8 @@ export function firstRunSteps({ page, lastSeen = null, aiReady, eff = null, acti
       hint: '',
     },
     { id: 'profiles', label: t('Choose what you work on'), done: profilesDone, hint: t('Agent Buddy then shows the tools for that work first. You can change it in Settings.') },
-    ...(aiOff ? [] : [{ id: 'ai', label: t('Set up AI, or skip it for now'), done: aiDone, hint: t('Add a key for your AI provider in Settings. Without AI, everything under Insights still works.') }]),
-    { id: 'ticket', label: t('Open a ticket'), done: onTicket, hint: t('An incident, request, catalog task or case. Agent Buddy offers help for it here.') },
+    ...(aiOff ? [] : [{ id: 'ai', label: t('Set up AI, or skip it for now'), done: aiDone, hint: t('Add your AI key in Settings. Without AI, everything under Insights still works.') }]),
+    { id: 'ticket', label: t('Open a ticket'), done: onTicket, hint: t('Any ticket you work on will do. Agent Buddy offers help for it here.') },
   ];
   let next = '';
   const steps = raw.map(({ done, ...step }) => {
@@ -88,9 +89,12 @@ export const hrApprovedBy = (policy) => Boolean(policy?.allowedProfiles?.include
 
 /**
  * The profiles a person may choose here, split into the main ones and the add-ons, and the ones ticked to start with.
- * @param {{ eff: object, roles?: string[], hints?: { managesGroup?: boolean, hasCatalogWork?: boolean } }} input
+ * @param {{ eff: object, roles?: string[]|null, hints?: { managesGroup?: boolean, hasCatalogWork?: boolean } }} input
+ *   roles: the page's list of roles, or null when it could not say (profiles.js rolesState). The suggestion is the one the panel acts on until
+ *   the person chooses (profiles.js withProfiles): the same derivation.
  * @returns {{ main: object[], addOns: object[], ticked: string[], locked: boolean }}
- *   ticked: the person's own choice when they made one, else the suggestion from their roles and work
+ *   ticked: the person's own choice when they made one (not another person's on the same browser: profiles.js profilesConfirmedFor), else
+ *   the suggestion from their roles and work
  */
 export function profileChoices({ eff, roles = [], hints = {} }) {
   const policy = eff?.policy || {};
@@ -100,16 +104,20 @@ export function profileChoices({ eff, roles = [], hints = {} }) {
   const ids = offered.map((p) => p.id);
   const own = Array.isArray(eff?.values?.profiles) ? eff.values.profiles.filter((id) => ids.includes(id)) : [];
   const suggested = suggestProfiles({ roles, managesGroup: hints.managesGroup === true, hasCatalogWork: hints.hasCatalogWork === true, hrApproved }).filter((id) => ids.includes(id));
-  const ticked = eff?.values?.profilesConfirmed && own.length ? own : suggested.length ? suggested : ids.slice(0, 1);
+  const mine = profilesConfirmedFor(eff?.values, { who: eff?.signedIn, roles });
+  const ticked = mine && own.length ? own : suggested.length ? suggested : ids.slice(0, 1);
   return { main: offered.filter((p) => !p.addOn), addOns: offered.filter((p) => p.addOn), ticked, locked: Boolean(eff?.locked?.profiles) };
 }
 
-/** The settings to save when the person confirms: known, allowed ids in the profiles' own order; never empty. */
-export function confirmedProfiles(ticked, choices) {
+/**
+ * The settings to save when the person confirms: known, allowed ids in the profiles' own order; never empty. With `eff` (the panel's
+ * settings, which carry who is signed in) it also records who confirmed them (confirmPatch); the Settings page passes none.
+ */
+export function confirmedProfiles(ticked, choices, eff = null) {
   const order = [...choices.main, ...choices.addOns].map((p) => p.id);
   const picked = order.filter((id) => ticked.includes(id));
   // Every add-on needs a base (someone with only a lead role still opens tickets): the first main profile when none is ticked.
   const hasBase = picked.some((id) => choices.main.some((p) => p.id === id));
   const withBase = hasBase || !choices.main.length ? picked : [choices.main[0].id, ...picked];
-  return { profiles: withBase, profilesConfirmed: true };
+  return confirmPatch(withBase, eff);
 }

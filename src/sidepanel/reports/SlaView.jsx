@@ -1,11 +1,12 @@
 import { Tile, StackedBar } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
-import Summary from './Summary.jsx';
+import Foldable from './Foldable.jsx';
 import TicketList from './TicketList.jsx';
 import { useSection } from './useSection.js';
 import { useMinuteClock } from './hooks.js';
 import { shownElsewhere } from './onDashboard.js';
 import { dueText } from './format.js';
+import { showsPersonRows } from '../../reports/engine/common.js';
 import { t } from '../../i18n/index.js';
 import { placeholderName } from '../../reports/shown.js';
 
@@ -20,7 +21,7 @@ const rows = (list) => list.filter((r) => r.breached + r.atRisk > 0).map((r) => 
 export const slaFacts = (item, now) => [
   dueText({ endMs: item.endMs, breached: item.breached, paused: item.sla?.paused, plannedEnd: item.sla?.plannedEnd }, now),
   item.breached ? '' : t('{percent}% used', { percent: item.sla?.percentage ?? 0 }),
-  item.owner || t('Unassigned'),
+  placeholderName(item.owner) || t('Unassigned'),
   item.priority,
 ];
 
@@ -31,31 +32,35 @@ export const slaFacts = (item, now) => [
 export function SlaBody({ d, env, now }) {
   const clock = useMinuteClock();
   const at = Number.isFinite(now) ? now : clock;
-  const owners = env.scopeKind !== 'mine' ? rows(d.byOwner) : [];
+  // (one row per person: whether they are shown is decided in one place, showsPersonRows)
+  const owners = showsPersonRows({ kind: env.scopeKind }) ? rows(d.byOwner) : [];
   const groups = env.scopeKind !== 'mine' ? rows(d.byGroup) : [];
   const inOverview = shownElsewhere(env, 'overview');
+  // A count from an SLA read that stopped early is "at least": 12+ (the sentence under the dashboard says why).
+  const count = (n) => (d.atLeast ? `${n}+` : n);
   return (
     <>
-      <div className="ab-tiles">
-        {!inOverview && <Tile label={t('Breached')} value={d.counts.breached} tone={d.counts.breached > 0 ? 'bad' : 'neutral'} hint={t('SLA already breached')} />}
-        <Tile label={t('At risk')} value={d.counts.atRisk} tone={d.counts.atRisk > 0 ? 'warn' : 'neutral'} hint={t('{percent}% or more of the time used', { percent: d.atRiskPercent })} />
-        {!inOverview && <Tile label={t('Due soon')} value={d.counts.dueSoon} tone={d.counts.dueSoon > 0 ? 'warn' : 'neutral'} hint={t('Ends within {hours} hours', { hours: d.dueSoonHours })} />}
-      </div>
+      <Foldable id="closest" title={t('Closest to breaking')}>
+        <div className="ab-tiles">
+          {!inOverview && <Tile label={t('Breached')} value={count(d.counts.breached)} tone={d.counts.breached > 0 ? 'bad' : 'neutral'} hint={t('SLA already breached')} />}
+          <Tile label={t('At risk')} value={count(d.counts.atRisk)} tone={d.counts.atRisk > 0 ? 'warn' : 'neutral'} hint={t('{percent}% or more of the time used', { percent: d.atRiskPercent })} />
+          {!inOverview && <Tile label={t('Due soon')} value={count(d.counts.dueSoon)} tone={d.counts.dueSoon > 0 ? 'warn' : 'neutral'} hint={t('Ends within {hours} hours', { hours: d.dueSoonHours })} />}
+        </div>
 
-      <TicketList
-        caption={t('Closest to breaking')}
-        items={d.top}
-        env={env}
-        meta={(item) => slaFacts(item, at)}
-        empty={d.ticketsAtIssue ? t('The tickets at issue are listed by number only when ticket details can be read.') : t('No SLA is at risk right now.')}
-      />
+        <TicketList
+          caption={t('Closest to breaking')}
+          items={d.top}
+          env={env}
+          meta={(item) => slaFacts(item, at)}
+          empty={d.ticketsAtIssue ? t('The tickets at issue are listed by number only when ticket details can be read.') : t('No SLA is at risk right now.')}
+        />
+      </Foldable>
 
       {(owners.length > 0 || groups.length > 1) && (
-        <details className="ab-details">
-          <Summary>{t('Who holds the risk')}</Summary>
+        <Foldable id="sla-who" title={t('Who holds the risk')}>
           {owners.length > 0 && <StackedBar title={t('SLA risk by owner')} rows={owners} series={slaSeries()} labelHeader={t('Owner')} />}
           {groups.length > 1 && <StackedBar title={t('SLA risk by group')} rows={groups} series={slaSeries()} labelHeader={t('Group')} />}
-        </details>
+        </Foldable>
       )}
     </>
   );

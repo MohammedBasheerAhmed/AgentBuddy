@@ -3,6 +3,7 @@ import { OUTAGE_RULE, outageSignal } from '../../../insights/outage.js';
 import { useTicketFacts } from './data.js';
 import { useReport } from './useInsight.js';
 import { ItemLink, Notes, ReadState } from './bits.jsx';
+import { plainNote } from '../../plainAccess.js';
 import { t } from '../../../i18n/index.js';
 
 // N29, the outage spotter: other open tickets on the same configuration item or service. When at least three arrived in the last two
@@ -12,8 +13,9 @@ export default function OutageCard({ page, eff, record, active, setSummary, setA
   const ticket = useTicketFacts({ page, record, eff, active });
   const pack = ticket.data?.pack || null;
   const sig = pack && ticket.data?.outage ? outageSignal(ticket.data.outage, pack) : null;
-  useReport(setSummary, sig ? sig.line || sig.note : '');
-  useReport(setAttention, sig?.over ? 'danger' : sig?.readable && !sig.hits.length ? 'clear' : '');
+  useReport(setSummary, sig ? sig.line || plainNote(sig.note) : '');
+  // Green only when the check ran to the end: a read that could not see everything is not "no other ticket" (R-04).
+  useReport(setAttention, sig?.over ? 'danger' : sig?.checked && !sig.hits.length ? 'clear' : '');
 
   if (!sig) return <ReadState state={ticket} what={t('this ticket')} onRetry={ticket.reload} />;
   const recentFirst = [...sig.hits].sort((a, b) => (a.hoursAgo ?? 1e9) - (b.hoursAgo ?? 1e9));
@@ -24,8 +26,8 @@ export default function OutageCard({ page, eff, record, active, setSummary, setA
           {t('{line}. This may be one outage: check for a parent incident before working it alone.', { line: sig.line })}
         </p>
       )}
-      {!sig.over && sig.readable && <p className="ab-hint">{t('{threshold} or more in {hours} hours counts as a possible outage.', { threshold: OUTAGE_RULE.threshold, hours: OUTAGE_RULE.hours })}</p>}
-      {sig.note && <p className="ab-hint">{sig.note}</p>}
+      {!sig.over && sig.checked && <p className="ab-hint">{t('{threshold} or more in {hours} hours counts as a possible outage.', { threshold: OUTAGE_RULE.threshold, hours: OUTAGE_RULE.hours })}</p>}
+      {sig.note && <p className="ab-hint">{plainNote(sig.note)}</p>}
       {recentFirst.length > 0 && (
         <ShowMore
           items={recentFirst}

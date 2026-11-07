@@ -1,78 +1,21 @@
-import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
+import { blankFormLink, linkFor, staysInOwnUi } from '../lib/snLinks.js';
 
-// Opening another record from the panel, in the kind of page the agent is already using: the classic UI via nav_to.do, a Workspace
-// via its own record route (/now/sow/record/incident/<sys_id>), a portal (Service Portal, Employee Center, customer service portal,
-// HR portal) via the portal's own ticket page. Only the instance the page is on is ever used as the target.
-//
-// Two ways to open it:
-//   openUrl / openRecord          in the tab the panel is attached to (My work: picking a ticket to work on)
-//   openInNewTab / openRecordTab  in a new tab next to it (the Ticket screen: a look at a related ticket never replaces the one
-//                                 being worked on, with its unsaved typing)
+// Opening another record from the panel. WHAT the address is lives in one place, src/lib/snLinks.js (the classic form, a Workspace's
+// record route, a portal's ticket page, the article reader); this file is the thin wrappers the screens use, and WHERE it opens:
+//   openUrl / openRecord / openNewRecord   in the tab the panel is attached to ("go work on this": My work, a blank form the person
+//                                          asked for). If the address would take a Workspace or a portal tab to a classic page, it
+//                                          opens in a new tab instead: that tab is never replaced.
+//   openInNewTab / openRecordTab           in a new tab next to it ("look at this": a related ticket, an article, a duplicate; the
+//                                          ticket being worked on, with anything typed on it and not saved, stays put)
+// Only the instance the page is on is ever used as the target.
 
-const PORTAL_SEGMENT_RE = /^[a-z][a-z0-9_-]{0,30}$/i;
-// ticket, standard_ticket, csm_ticket, hr_ticket: the page a portal shows a ticket on.
-const TICKET_PAGE_RE = /^[a-z0-9_]{0,30}ticket$/;
-// The part of a Workspace address before "/record/": /now/sow, /now/cwf/agent, /now/workspace/agent. Up to three plain segments.
-const WORKSPACE_PREFIX_RE = /^(\/now(?:\/[a-z0-9_-]{1,40}){1,3})\/record\/[a-z][a-z0-9_]*\/[0-9a-f]{32}(?:[/?#]|$)/i;
-// Records a Workspace's record route is not used for (an article has its own reader; see docs/live-questions/insights.md).
-const CLASSIC_ONLY = new Set(['kb_knowledge']);
+export { workspacePrefix } from '../lib/snLinks.js';
 
-// Which portal the page is on: the content script's answer (page.portal.base), else the first segment of the address, else /sp.
-const portalBase = (page) => {
-  const given = page.portal?.base;
-  if (typeof given === 'string' && given.startsWith('/') && PORTAL_SEGMENT_RE.test(given.slice(1))) return given.toLowerCase();
-  try {
-    const first = new URL(page.href).pathname.split('/').filter(Boolean)[0] || '';
-    return PORTAL_SEGMENT_RE.test(first) ? `/${first.toLowerCase()}` : '/sp';
-  } catch {
-    return '/sp';
-  }
-};
-
-// Another ticket opens on the same kind of page as this one (a customer service portal has its own csm_ticket page), and on the
-// shared `ticket` page when the agent is not on a ticket now. An article has its own page.
-const portalPageId = (page, table) => {
-  if (table === 'kb_knowledge') return 'kb_article';
-  const current = typeof page.portal?.pageId === 'string' ? page.portal.pageId.toLowerCase() : '';
-  return TICKET_PAGE_RE.test(current) ? current : 'ticket';
-};
-
-/** The Workspace the page is in ("/now/sow"), read from the address of the record on screen; '' when it cannot be told. */
-export function workspacePrefix(page) {
-  try {
-    const m = WORKSPACE_PREFIX_RE.exec(new URL(page.href).pathname);
-    return m ? m[1] : '';
-  } catch {
-    return '';
-  }
-}
-
-/** The address of a record, as the page the panel is attached to would open it; '' when it cannot be built safely. */
-export function recordUrl(page, { table, sysId }) {
-  if (!TABLE_RE.test(table || '') || !SYS_ID_RE.test(sysId || '')) return '';
-  let origin;
-  try {
-    origin = new URL(page.href).origin;
-  } catch {
-    return '';
-  }
-  if (page.surface === 'portal') return `${origin}${portalBase(page)}?id=${portalPageId(page, table)}&table=${table}&sys_id=${sysId.toLowerCase()}`;
-  // A Workspace opens a record on its own route, so the agent stays in the Workspace. Away from a record page the Workspace cannot
-  // be told for sure, and the classic address works everywhere.
-  const prefix = page.surface === 'workspace' && !CLASSIC_ONLY.has(table) ? workspacePrefix(page) : '';
-  if (prefix) return `${origin}${prefix}/record/${table}/${sysId.toLowerCase()}`;
-  return `${origin}/nav_to.do?uri=${encodeURIComponent(`${table}.do?sys_id=${sysId}`)}`;
-}
+/** The address of a record as the agent opens it (an article: its reader; `intent: 'author'` its authoring form); '' when it cannot be built safely. */
+export const recordUrl = (page, ref, opts) => linkFor(page, ref, { audience: 'agent', intent: opts?.intent });
 
 /** The address of a blank form for a table on the classic UI. */
-export function newRecordUrl(page, table) {
-  if (!TABLE_RE.test(table || '')) return '';
-  try {
-    return `${new URL(page.href).origin}/nav_to.do?uri=${encodeURIComponent(`${table}.do?sys_id=-1`)}`;
-  } catch {
-    return '';
-  }
-}
+export const newRecordUrl = (page, table) => blankFormLink(page, table);
 
 const sameInstance = (page, url) => {
   try {
@@ -87,7 +30,9 @@ export function openUrl(page, url) {
   try {
     // Never navigate anywhere but the instance the panel is working on.
     if (!sameInstance(page, url)) return false;
-    chrome.tabs.update(page.tabId, { url });
+    // In front: the screens keep the last ServiceNow tab when the tab on show is another site, and a tab changed in the background
+    // would look like nothing happened.
+    chrome.tabs.update(page.tabId, { url, active: true });
     return true;
   } catch {
     return false; // the tab went away
@@ -113,6 +58,18 @@ export function openInNewTab(page, url) {
   }
 }
 
-export const openRecord = (page, ref) => openUrl(page, recordUrl(page, ref));
+/**
+ * "Go work on this": in the tab the panel is attached to, unless that would replace a Workspace or portal tab with a classic page
+ * (a list, a blank form, a ticket from a Workspace home page): then in a new tab next to it. Returns true when it was started.
+ */
+export const openWork = (page, url) => (staysInOwnUi(page, url) ? openUrl(page, url) : openInNewTab(page, url));
+
+export const openRecord = (page, ref) => openWork(page, recordUrl(page, ref));
 export const openRecordTab = (page, ref) => openInNewTab(page, recordUrl(page, ref));
-export const openNewRecord = (page, table) => openUrl(page, newRecordUrl(page, table));
+export const openNewRecord = (page, table) => openWork(page, newRecordUrl(page, table));
+
+/** Does a blank form for this table open in a new tab from this page? (A Workspace or portal tab: yes.) For the line that says where it opened. */
+export const newRecordOpensInNewTab = (page, table) => {
+  const url = newRecordUrl(page, table);
+  return Boolean(url) && !staysInOwnUi(page, url);
+};

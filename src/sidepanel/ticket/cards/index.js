@@ -29,6 +29,7 @@ import RiskCard from './RiskCard.jsx';
 import RoutingCard from './RoutingCard.jsx';
 import MissingCard from './MissingCard.jsx';
 import StepsCard from './StepsCard.jsx';
+import FulfilledCard from './FulfilledCard.jsx';
 import EmailCard from './EmailCard.jsx';
 import JourneyCard from './JourneyCard.jsx';
 import ChangesCard from './ChangesCard.jsx';
@@ -59,9 +60,9 @@ const card = (id, title, kinds, profiles, Card, defaultOpen = false) => ({
   },
   kinds,
   profiles,
-  order: (record, header) => rankFor(id, header),
+  order: (record, header) => rankFor(id, header, record),
   defaultOpen,
-  openWhen: (record, header) => openFor(id, header),
+  openWhen: (record, header) => openFor(id, header, record),
   Card: perRecord(Card, `${id}Card`),
 });
 
@@ -73,6 +74,8 @@ export const INSIGHT_CARDS = Object.freeze([
   card('account', () => t('Account at a glance'), ['case'], ['csm'], AccountCard), // N28
   card('missing', () => t('Missing details'), FAULTS, ['it', 'csm'], MissingCard), // N11
   card('routing', () => t('Where similar tickets went'), ['incident', 'case'], ['it', 'csm'], RoutingCard), // N10
+  // (wave 6: what the last tasks of this kind that were done say; one card inside the Find the fix row; no AI, one limited read)
+  card('fulfilled', () => t('Fulfilled before'), ['requested_item', 'catalog_task'], ['req', 'it'], FulfilledCard),
   card('steps', () => t('Steps that worked before'), ['incident', 'problem', 'case', 'requested_item', 'catalog_task', 'task'], ['it', 'csm', 'req'], StepsCard), // N12
   card('caller', () => t("Caller's other tickets"), TICKETS, ['all'], CallerCard), // N2, the caller's half (the "Same caller" row)
   card('related', () => t('Related tickets'), TICKETS, ['all'], RelatedCard), // N2
@@ -83,7 +86,8 @@ export const INSIGHT_CARDS = Object.freeze([
   card('email', () => t('Which email fits'), TICKETS, ['all'], EmailCard), // N20
   card('journey', () => t('Ticket journey'), TICKETS, ['all'], JourneyCard), // N24
   card('outage', () => t('Outage spotter'), WITH_CI, ['it'], OutageCard), // N29
-  card('resolve', () => t('Ready to resolve?'), ['incident', 'problem', 'request', 'requested_item', 'catalog_task', 'case', 'task'], ['all'], ResolveCard), // N4
+  // (a change and an HR case have a close too: W-09, W-10; an HR case's checks are honest about the text it was read without)
+  card('resolve', () => t('Ready to resolve?'), ['incident', 'problem', 'change', 'request', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task'], ['all'], ResolveCard), // N4
 ]);
 
 export { Glance };

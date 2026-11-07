@@ -8,6 +8,7 @@
 
 import { isSensitiveTable, kindForTable } from './kinds.js';
 import { EXTRA } from './specs/index.js';
+import { PARENT_LINK, PARENT_PERSON_FEATURES, PARENT_PERSON_LINK, PARENT_WALK } from './specs/fit.js';
 
 // The first eight features are defined in this file. Every later one is defined in src/context/specs/<area>.js and merged
 // below (see docs/contracts.md, 'Context specs'), so people can add features without editing the same file.
@@ -144,7 +145,8 @@ const BASE_SPEC = {
       change: ['type', 'risk', 'start_date', 'end_date', 'approval', 'conflict_status', 'requested_by'],
       request: ['request_state', 'stage', 'approval', 'due_date', 'special_instructions'],
       requested_item: ['stage', 'approval', 'cat_item', 'request', 'due_date'],
-      catalog_task: ['request_item', 'due_date'],
+      // (cat_item: what was ordered, walked from the requested item, F2)
+      catalog_task: ['request_item', 'request_item.cat_item', 'due_date'],
       case: ['account', 'product', 'entitlement', 'subcategory'],
       hr_case: ['hr_service', 'subject_person', 'opened_for'],
       task: ['parent'],
@@ -157,7 +159,7 @@ const BASE_SPEC = {
       change: ['type', 'start_date', 'end_date', 'approval'],
       request: ['request_state', 'approval', 'due_date'],
       requested_item: ['cat_item', 'stage', 'approval', 'due_date'],
-      catalog_task: ['request_item'],
+      catalog_task: ['request_item', 'request_item.cat_item'],
       case: ['account', 'product'],
       hr_case: ['opened_for'],
     },
@@ -174,7 +176,7 @@ const BASE_SPEC = {
       problem: ['known_error', 'cause_notes', 'workaround', 'fix_notes', 'resolution_code'],
       change: ['type', 'risk'],
       requested_item: ['cat_item', 'stage'],
-      catalog_task: ['request_item'],
+      catalog_task: ['request_item', 'request_item.cat_item'],
       case: ['product', 'account', 'resolution_code'],
     },
   },
@@ -188,7 +190,7 @@ const BASE_SPEC = {
       change: ['type', 'risk', 'start_date', 'end_date', 'approval', 'conflict_status', 'requested_by'],
       request: ['request_state', 'stage', 'approval', 'due_date'],
       requested_item: ['cat_item', 'request', 'stage', 'approval', 'due_date'],
-      catalog_task: ['request_item', 'due_date'],
+      catalog_task: ['request_item', 'request_item.cat_item', 'due_date'],
       case: ['account', 'product', 'entitlement'],
       hr_case: ['hr_service', 'opened_for'],
     },
@@ -201,7 +203,7 @@ const BASE_SPEC = {
     by: {
       change: ['type', 'risk', 'start_date', 'end_date'],
       requested_item: ['cat_item', 'request'],
-      catalog_task: ['request_item'],
+      catalog_task: ['request_item', 'request_item.cat_item'],
       case: ['product', 'account', 'entitlement'],
     },
   },
@@ -217,6 +219,7 @@ const BASE_SPEC = {
     by: {
       change: ['type'],
       requested_item: ['cat_item'],
+      catalog_task: ['request_item.cat_item'], // (the item of a catalog task is its requested item's: look-alikes of a task are tasks of the same item, F18)
       case: ['product'],
       hr_case: ['hr_service'],
     },
@@ -225,6 +228,7 @@ const BASE_SPEC = {
     common: ['number', 'short_description', 'description', 'category', 'subcategory', 'cmdb_ci', 'business_service'],
     by: {
       requested_item: ['cat_item'],
+      catalog_task: ['request_item.cat_item'], // F18: the articles of what was ordered
       case: ['product'],
     },
   },
@@ -267,10 +271,13 @@ export const FEATURE_TIMES = Object.freeze({ ...EXTRA.times });
 // (src/context/people.js PERSON_FIELDS maps most of these to roles; tests/policy-hardening-people.test.js keeps the two in step.)
 export const PERSON_COLUMNS = Object.freeze([
   'caller_id', 'requested_for', 'contact', 'consumer', 'opened_by', 'requested_by', 'assigned_to', 'opened_for', 'subject_person', 'author',
+  // A catalog task's requester, walked from its requested item (src/context/specs/fit.js): the person a catalog task is FOR.
+  'request_item.requested_for',
 ]);
 
 // Search-only features: they rank tickets and articles locally and send nothing to an AI, so they read no extra columns.
-export const SEARCH_ONLY_FEATURES = Object.freeze(['caller-history', 'similar', 'kb-recs']);
+// ('fulfilled-before': the earlier tasks of the same catalog item, shown to the agent only; src/context/specs/fix.js.)
+export const SEARCH_ONLY_FEATURES = Object.freeze(['caller-history', 'similar', 'kb-recs', 'fulfilled-before']);
 
 function buildFeatureFields() {
   const out = {};
@@ -282,8 +289,23 @@ function buildFeatureFields() {
     for (const kind of Object.keys(FIELDS_BY_KIND)) {
       const ceiling = FIELDS_BY_KIND[kind];
       const declared = new Set([...common, ...(by[kind] || [])]);
+      // A column walked from the parent (a catalog task's `request_item.requested_for`) is the feature's own when the feature lists the
+      // name it has on the pack (`requested_for`): the spec says what the feature wants, the walk is how a task of that kind gets it.
+      const walked = PARENT_WALK[kind] || {};
+      for (const [dotted, alias] of Object.entries(walked)) if (declared.has(alias)) declared.add(dotted);
       const wanted = new Set(declared);
       if (!SEARCH_ONLY_FEATURES.includes(feature)) for (const name of ceiling) if (PERSON_COLUMNS.includes(name)) wanted.add(name);
+      // The link to the parent is read whenever a walked column is the feature's own (it says whether there IS a parent, so an empty
+      // requester is not taken for "nobody"), and whenever the feature reads the parent's answers (`variables`, src/context/related.js). It is read for
+      // that and for nothing else: unless the feature lists it, it is not a field of the pack (maskOnly below).
+      const link = PARENT_LINK[kind];
+      if (link && (Object.keys(walked).some((name) => declared.has(name)) || (FEATURE_RELATED[feature] || []).includes('variables'))) wanted.add(link);
+      // A task's person is its parent's (F15, specs/fit.js PARENT_PERSON): the link to the parent is read for every feature whose own spec names
+      // a person (caller, requester, contact...), because the parent's person must be masked wherever the task's text mentions them and is the
+      // person the caller card and the greeting name. A feature that names nobody (the one-kind domain features) reads nothing more of a task.
+      // Unless the feature lists it (it is a field of the pack for record-summary and the glance), it is read for that and for nothing else
+      // (maskOnly below).
+      if (kind === 'task' && !SEARCH_ONLY_FEATURES.includes(feature) && ([...declared].some((name) => PERSON_COLUMNS.includes(name)) || PARENT_PERSON_FEATURES.includes(feature))) wanted.add(PARENT_PERSON_LINK);
       // Ceiling order, so the list reads the same everywhere and nothing outside the ceiling can slip in.
       out[feature][kind] = Object.freeze(ceiling.filter((name) => wanted.has(name)));
       maskOnly[feature][kind] = Object.freeze(out[feature][kind].filter((name) => !declared.has(name)));
@@ -295,6 +317,15 @@ function buildFeatureFields() {
 }
 
 const BUILT = buildFeatureFields();
+
+/**
+ * Does the feature's OWN spec list this column (for any kind)? A person who is not on a feature's list is read to be masked and is a person
+ * of the pack, but the column is not a field of the pack (see maskOnlyFields); the parent's person on a task follows the same rule (F15).
+ */
+export function featureListsColumn(feature, column) {
+  const spec = FEATURE_SPEC[feature];
+  return Boolean(spec) && (spec.common.includes(column) || Object.values(spec.by).some((names) => names.includes(column)));
+}
 
 /** FEATURE_FIELDS[feature][kind] -> the columns that feature may read for that kind (its own spec plus every person column). */
 export const FEATURE_FIELDS = BUILT.fields;

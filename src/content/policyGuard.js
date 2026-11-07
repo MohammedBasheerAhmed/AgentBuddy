@@ -32,10 +32,12 @@ import { TABLE_RE } from '../context/util.js';
 
 export const POLICY_TTL_MS = 30000;
 
-/** The error a refused read throws. The message is fixed wording plus a table name that passed the identifier check. */
+/** The error a refused read throws. The message is fixed wording; the table name (checked as an identifier) is on err.table. */
 export function blockedError(table) {
   const name = String(table || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 80) || 'that table';
-  const err = new Error(`Your organisation does not allow Agent Buddy to read ${name} records.`);
+  // The message is the one sentence the panel shows (no table name for a person); the table that was refused stays on the error for logic and logs.
+  const err = new Error('Your organisation does not allow Agent Buddy to read this.');
+  err.table = name;
   err.code = 'BLOCKED_TABLE';
   return err;
 }
@@ -102,6 +104,8 @@ export const DOT_WALK_TABLES = Object.freeze({
   requested_by: Object.freeze(['sys_user']),
   opened_for: Object.freeze(['sys_user']),
   contact: Object.freeze(['customer_contact', 'sys_user']),
+  // a ticket's assignment group (the look-alike read walks assignment_group.active: a site that blocks groups must not be read through it)
+  assignment_group: Object.freeze(['sys_user_group']),
 });
 
 /**
@@ -266,6 +270,14 @@ export function createPolicyGuard({ getManaged = readManaged, now = Date.now, tt
       wrapped.aggregate = async (table, options = {}) => {
         checkCall(table, options?.query, [...(options?.groupBy || []), ...(options?.avgFields || [])]);
         return deps.aggregate(table, options);
+      };
+    }
+    // readTableMeta(table, columns) (the UI meta address, src/content/tableApi.js) names a table too: a blocked table is never asked for,
+    // here at the call layer as well as where the context engine asks (src/context/choices.js checkNotBlocked).
+    if (typeof deps.readTableMeta === 'function') {
+      wrapped.readTableMeta = async (table, ...rest) => {
+        checkCall(table, '', []);
+        return deps.readTableMeta(table, ...rest);
       };
     }
     // checkRead(table, query, columns): the same checks for a read made some other way (the reports' Aggregate API call): throws

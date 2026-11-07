@@ -11,6 +11,7 @@
 // sent every time (requirePreview), as for every pack that carries other tickets' text.
 
 import { SYS_ID_RE, oneLine } from '../context/util.js';
+import { isFinishedState } from './states.js';
 
 /** At most this many of the caller's tickets reach the AI (the `history` read is asked for the newest 10 too). */
 export const CALLER_TICKETS_LIMIT = 10;
@@ -19,9 +20,15 @@ export const CALLER_TICKETS_LIMIT = 10;
  * Who the caller of a ticket is: the first of these roles (src/context/people.js PERSON_FIELDS) that the pack's people list has with a
  * sys_id. The same roles in the same order as the Ticket screen's caller card (CALLER_ROLES in src/sidepanel/ticket/cards/data.js), so
  * the card and the briefing always talk about the same person. opened_by comes last: an agent often opens a ticket for someone else,
- * so it only stands in when the record names nobody it is for (a problem, a catalog task, a plain task).
+ * so it only stands in when the record names nobody it is for (a plain task, a catalog task with no requested item), and never on a ticket
+ * with no customer (a problem, the task of a problem or a change). A change names the person who asked for it: requested_by (F6).
  */
-export const CALLER_ROLES = Object.freeze(['caller', 'requested_for', 'contact', 'consumer', 'opened_for', 'opened_by']);
+export const CALLER_ROLES = Object.freeze(['caller', 'requested_for', 'contact', 'consumer', 'opened_for', 'requested_by', 'opened_by']);
+
+// Tickets with no customer: a problem and the tasks of a problem or a change are internal work, so the person who opened them is an agent
+// at work, not a caller (F22). They name nobody; the panel says so instead of looking up the opener's tickets.
+const NO_CUSTOMER_TABLES = new Set(['change_task', 'problem_task']);
+const hasStandIn = (pack) => pack?.kind !== 'problem' && !NO_CUSTOMER_TABLES.has(String(pack?.table || '').toLowerCase());
 
 // The people list keeps ONE role per person: the first column that names them, in the order of the kind's ceiling (src/context/people.js
 // resolvePeople). On an HR case the employee is usually both subject_person and opened_for, and subject_person comes first, so the
@@ -36,6 +43,7 @@ const ROLE_FIELD = {
   consumer: 'Consumer',
   opened_for: 'Opened for',
   subject_person: 'Subject person',
+  requested_by: 'Requested by',
   opened_by: 'Opened by',
 };
 
@@ -56,7 +64,6 @@ const PHRASE = {
 
 // A record number: letters then digits (INC0010123, RITM0010050, CS0001234, HRC0001001).
 const NUMBER_RE = /^[A-Za-z]{2,12}\d{4,12}$/;
-const CLOSED_STATE = /closed|resolved|cancel|complete|solved/i;
 const HR_TABLE = /^sn_hr_/i;
 
 const isObject = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -73,6 +80,7 @@ const numberOf = (v) => {
 export function callerOf(pack) {
   const people = Array.isArray(pack?.people) ? pack.people.filter(isObject) : [];
   for (const wanted of CALLER_ROLES) {
+    if (wanted === 'opened_by' && !hasStandIn(pack)) continue;
     for (const role of SAME_AS[wanted] || [wanted]) {
       const person = people.find((p) => p.role === role && SYS_ID_RE.test(String(p.sysId || '')));
       if (person) return { role, sysId: String(person.sysId).toLowerCase() };
@@ -106,7 +114,7 @@ export function cleanCallerTickets(items, { allowHr = false } = {}) {
         close_code: text(row.close_code, 60),
         // The fix in a few sentences (the read keeps 400 characters).
         close_notes: text(row.close_notes, 300),
-        open: !resolved && row.active !== 'false' && !CLOSED_STATE.test(state),
+        open: !resolved && row.active !== 'false' && !isFinishedState({ table, label: state }),
         hr: HR_TABLE.test(table),
       };
     })

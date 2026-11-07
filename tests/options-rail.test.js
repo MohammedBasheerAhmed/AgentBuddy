@@ -88,7 +88,7 @@ test('the section: the menu entry "Side rail", one switch with its line, no name
   }
   // The bar on the ServiceNow page as before, its kinds as tabs over its actions.
   assert.match(markup, /<input id="page-bar" type="checkbox" role="switch"[^>]*checked=""/);
-  assert.match(markup, /role="tablist" aria-label="Kind of record"/);
+  assert.match(markup, /role="tablist" aria-label="Kind of ticket"/);
   assert.match(markup, /id="rail-kind-tab-incident"[^>]*aria-selected="true"[^>]*aria-controls="rail-page-panel"[^>]*tabindex="0"/);
   assert.match(markup, /id="rail-kind-tab-change"[^>]*aria-selected="false"[^>]*tabindex="-1"/);
   assert.match(markup, /id="rail-page-panel" role="tabpanel" aria-labelledby="rail-kind-tab-incident"/);
@@ -123,12 +123,12 @@ test('as drawn: four chosen turn the other pills off', () => {
 test('as drawn: AI switched off by the organisation, a bar switched off or locked: no actions and no kinds to choose them for', () => {
   const off = draw({ eff: effOf({}, { aiEnabled: false }), reload: () => {} });
   assert.ok(!/ab-set-rail-pill/.test(off));
-  assert.ok(!/Kind of record/.test(off));
+  assert.ok(!/Kind of ticket/.test(off));
   assert.match(off, /id="rail-show"/, 'the rail itself does not need AI');
   const bar = draw({ eff: effOf({ pageBar: false }), reload: () => {} });
   assert.match(bar, /<input id="page-bar" type="checkbox" role="switch"(?![^>]*checked="")[^>]*>/);
   assert.ok(!/ab-set-rail-pill/.test(bar));
-  assert.ok(!/Kind of record/.test(bar));
+  assert.ok(!/Kind of ticket/.test(bar));
   const locked = draw({ eff: effOf({}, { disablePageBar: true }), reload: () => {} });
   assert.match(locked, /<input id="page-bar" type="checkbox" role="switch"[^>]*disabled=""/);
   assert.match(locked, /Switched off by your organisation\./);
@@ -139,7 +139,7 @@ test('in Arabic the section speaks Arabic', () => {
   try {
     setLanguage('ar');
     const markup = draw({ eff: effOf({ railShow: true }), reload: () => {} });
-    for (const english of ['Side rail', 'Show the side rail', 'The five of each screen', 'All tools', 'Show names', 'Kind of record', 'On the ServiceNow page', 'Its actions']) {
+    for (const english of ['Side rail', 'Show the side rail', 'The five of each screen', 'All tools', 'Show names', 'Kind of ticket', 'On the ServiceNow page', 'Its actions']) {
       assert.ok(!markup.includes(english), english);
     }
     assert.match(markup, /الشريط الجانبي/);

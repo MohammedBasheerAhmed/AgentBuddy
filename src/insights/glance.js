@@ -85,10 +85,12 @@ export function waitingText(wait) {
 }
 
 /** The owner as the glance says it: the assignee, else the group, else "Unassigned" (only when the record was readable). */
-export function ownerText(fields) {
+export function ownerText(fields, unreadable = []) {
   const who = text(fields?.assigned_to);
   const group = text(fields?.assignment_group);
   if (who) return who;
+  // The owner's name did not come back (a field this user may not read): not "no one assigned" (R-14, D1).
+  if (unreadable.includes('assigned_to')) return group ? t('{group} (owner not shown to you)', { group: isolate(group) }) : t('Owner not shown to you');
   if (group) return t('{group} (no one assigned)', { group: isolate(group) });
   return t('Unassigned');
 }
@@ -113,7 +115,7 @@ export function buildGlance({ record, header, headPhase, answer, now }) {
   const line2 = [state && { text: state, tone: '' }, priority && { text: priority, tone: '' }, sla.text && { text: sla.text, tone: sla.tone }].filter(Boolean);
 
   const line3 = [];
-  if (pack && !pack.sensitive) line3.push(ownerText(fields));
+  if (pack && !pack.sensitive) line3.push(ownerText(fields, Array.isArray(pack.unreadable) ? pack.unreadable : []));
   const wait = pack ? customerWaiting(pack, now) : null;
   const waiting = waitingText(wait);
   if (waiting) line3.push(waiting);

@@ -34,7 +34,7 @@ import { shown } from '../../reports/shown.js';
 const AUTO_MS = 5 * 60 * 1000;
 // Coming back to the Team screen after this long reads the numbers again (TRACKER.md 2.4: fast and honest).
 const STALE_MS = 5 * 60 * 1000;
-const sessionText = () => t('Your ServiceNow session has ended. Sign in again in the ServiceNow tab, then press Try again.');
+const sessionText = () => t('You are signed out of ServiceNow. Sign in again, then try again.');
 
 const readAuto = () => {
   try {
@@ -127,6 +127,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
   const [notice, setNotice] = useState('');
   const [sessionLost, setSessionLost] = useState(false);
   const fileInput = useRef(null);
+  const rootRef = useRef(null);
   const context = useReportContext({ tabId: page.tabId, blocked, refreshKey, allowSensitive: hrOk });
 
   const dash = ready ? state.dashboards.find((d) => d.id === state.activeId) || state.dashboards[0] : null;
@@ -150,6 +151,26 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
   const say = useCallback((text) => {
     setNotice(text);
     setTimeout(() => setNotice(''), 5000);
+  }, []);
+
+  // A folded part is not printed while it is closed, and a printed dashboard is all of it: open them for the print, put them back after.
+  useEffect(() => {
+    if (typeof window.addEventListener !== 'function') return undefined;
+    let opened = [];
+    const before = () => {
+      opened = [...(rootRef.current?.querySelectorAll('details[data-fold]') || [])].filter((d) => !d.hasAttribute('open'));
+      opened.forEach((d) => d.setAttribute('open', ''));
+    };
+    const after = () => {
+      opened.forEach((d) => d.removeAttribute('open'));
+      opened = [];
+    };
+    window.addEventListener('beforeprint', before);
+    window.addEventListener('afterprint', after);
+    return () => {
+      window.removeEventListener('beforeprint', before);
+      window.removeEventListener('afterprint', after);
+    };
   }, []);
 
   // A section that is not on screen (another screen, or the AI Assist half) must not keep working: the timer runs only while shown.
@@ -311,7 +332,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       outcome = importLayout(text, s);
       return outcome.ok ? outcome.state : s;
     });
-    say(outcome?.ok ? t('Added "{name}". Its groups are checked against this instance when it loads.', { name: isolate(outcome.name) }) : outcome?.reason || t('The file could not be loaded.'));
+    say(outcome?.ok ? t('Added "{name}". Its groups are checked against this ServiceNow site when it loads.', { name: isolate(outcome.name) }) : outcome?.reason || t('The file could not be loaded.'));
   };
   // Never a lock: the added dashboard is the person's own copy, to change or remove like any other.
   const addOrg = () => {
@@ -336,7 +357,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
   const hrWanted = activeProfiles(eff).includes('hr') && !hrOk;
 
   return (
-    <div className={`ab-dash ab-dash-${layout}`}>
+    <div className={`ab-dash ab-dash-${layout}`} ref={rootRef}>
       {sessionLost && (
         <div className="ab-note ab-note-warn ab-dash-session" role="alert">
           <p>{sessionText()}</p>
@@ -353,7 +374,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
             ))}
           </select>
         </label>
-        <button type="button" className="ab-chip ab-scope-chip" aria-expanded={scopeOpen} aria-controls="ab-dash-scope" onClick={() => setScopeOpen((o) => !o)} title={t('Whose tickets, and which tables')}>
+        <button type="button" className="ab-chip ab-scope-chip" aria-expanded={scopeOpen} aria-controls="ab-dash-scope" onClick={() => setScopeOpen((o) => !o)} title={t('Whose tickets, and which ticket types')}>
           <span className="ab-scope-chip-text">{scopeChipText(dash.scope, context.data)}</span>
           <Icon name="chevronDown" size={14} className="ab-chevron" />
         </button>
@@ -363,7 +384,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       <p className="ab-statusline" role="status">
         {notice ? `${notice} ` : ''}
         {oldest ? t('Read at {time}', { time: clock(oldest) }) : t('Reading the numbers…')}
-        {oldest && selected.length ? ` · ${tn(selected.length, '{n} table', '{n} tables')}` : ''}
+        {oldest && selected.length ? ` · ${tn(selected.length, '{n} ticket type', '{n} ticket types')}` : ''}
         {auto ? ` · ${t('refreshes every 5 minutes')}` : ''}
       </p>
 
@@ -429,7 +450,7 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
                 ))}
             </div>
           </details>
-          <p className="ab-hint">{t('Only the layout is saved, on this computer and for this instance: sections, order, groups. Never numbers or names.')}</p>
+          <p className="ab-hint">{t('Only the layout is saved, on this computer and for this ServiceNow site: sections, order, groups. Never numbers or names.')}</p>
         </section>
       )}
 
@@ -446,10 +467,10 @@ export default function ReportsDashboard({ page, eff, layout = 'panel', active =
       )}
 
       {context.phase === 'error' && !context.data && context.code !== 'SESSION_EXPIRED' && <ErrorNote error={shown(context.error)} onRetry={refresh} />}
-      {context.phase === 'loading' && !context.data && <p className="ab-note" role="status">{t('Checking which tables you can read…')}</p>}
+      {context.phase === 'loading' && !context.data && <p className="ab-note" role="status">{t('Checking which ticket types you can read…')}</p>}
       {noTables && (
         <p className="ab-note ab-note-warn">
-          {t('No ticket table is available for this dashboard.')} {usableIds.length ? t('Turn a table on under the scope above.') : t('You cannot read incidents, requests, cases, problems, changes or change tasks with your roles.')}
+          {t('No ticket type is available for this dashboard.')} {usableIds.length ? t('Turn a ticket type on under the scope above.') : t('You cannot read incidents, requests, cases, problems, changes or change tasks with your roles.')}
           {hrWanted ? ` ${t('HR cases are shown when your organisation allows HR content in Agent Buddy.')}` : ''}
         </p>
       )}

@@ -58,7 +58,8 @@ test('journal limit keeps the newest entries', () => {
 
 test('every feature applies to the right record kinds and respects the policy switch', () => {
   assert.ok(featuresFor('incident', policy()).some((f) => f.id === 'record-summary'));
-  assert.ok(!featuresFor('change', policy()).some((f) => f.id === 'resolution-notes'));
+  assert.ok(!featuresFor('request', policy()).some((f) => f.id === 'resolution-notes'));
+  assert.ok(featuresFor('change', policy()).some((f) => f.id === 'resolution-notes'), 'a change has close notes (audit of 2026-11-07, W-10)');
   assert.ok(!featuresFor('incident', policy({ disabledFeatures: ['record-summary'] })).some((f) => f.id === 'record-summary'));
   featuresFor('incident', policy()).forEach((f) => {
     // A feature may offer one insert, several, or none (Copy only); every insert it does offer names a field.
@@ -171,8 +172,8 @@ test('a failed send is audited as an error with a machine reason and rethrown', 
   const fw = fakeFirewall({});
   const prepared = { request: fw.buildRequest({ feature: 'x', system: 's', parts: [] }), firewall: fw, feature: featureById('record-summary'), pack: PACK };
   await assert.rejects(
-    () => executeRun({ prepared, config: config(), values: values(), sendChat: async () => { throw new Error('Anthropic rejected the API key. abel.tuter@example.com'); }, logAudit: async (e) => audits.push(e) }),
-    /rejected the API key/
+    () => executeRun({ prepared, config: config(), values: values(), sendChat: async () => { throw new Error('Anthropic did not accept the AI key. abel.tuter@example.com'); }, logAudit: async (e) => audits.push(e) }),
+    /did not accept the AI key/
   );
   assert.equal(audits[0].outcome, 'error');
   assert.equal(audits[0].reason, 'BAD_KEY');

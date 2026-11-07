@@ -3,6 +3,98 @@
 All notable changes to Agent Buddy. The version stays 0.1.0 until the first release is cut (the lead decides the number). Rows in
 brackets are the `TRACKER.md` items.
 
+## Unreleased: audit of 2026-11-07, agents and fulfillers (not committed, not pushed)
+
+You said the panel showed table names (`ui_page` on the home page), did not evaluate access levels, opened knowledge articles in
+different views, and (later) took space on non-ServiceNow pages such as ifBash.com. Nine read-only audits, four waves of builders and live
+checks on dev364920 (as administrator, ITIL User and a user with no role) found and fixed the causes; the record is
+`docs/review/audit-2026-11-07.md`, the live answers `docs/live-checks-2026-11-07.md`, the raw reports `docs/review/audit-2026-11-07/`.
+Nothing new on screen: the changes are wording, what is offered or shown, and what is checked first. [R22, R23]
+
+- **Record gate.** A page counts as a ticket only when its table is a known kind, a built-in family or a configured table, or when the
+  live form shows a number (`isTicketTable`, `src/context/kinds.js`). The classic home page (`/ui_page.do?sys_id=...`) and every other
+  UI page, list, dashboard and admin page now show the plain "open a ticket" help: no header, no reads of a table named after a page, no
+  AI actions on the dock, nothing stored for "since you last looked". The article reader (`kb_view.do`) is recognised as an article.
+  Bridge version 5 to 8.
+- **One label helper.** `src/lib/tableLabels.js` names a table for a person: about 75 shipped tables and their families (any HR case
+  table is "HR case"), then the instance's own label, then the name made into words; translated, and the AI-bound English stays fixed.
+  Used by the header, the Write screen, "Made without", the banners, Team and the reports ("By table" is now "By ticket type").
+- **Plain read notes and words.** An access note carries a reason, and the panel words it ("Earlier tickets: not available to you with
+  your role"); no table name, HTTP code, "Table API", "ACL" or "your user" reaches a person; one wording for a lost sign-in; AI errors,
+  limits and Settings text in plain words (`docs/plain-words.md`, enforced by `tests/words-banned.test.js`). Every new sentence has its Arabic
+  (3,205 texts, none missing or unused).
+- **One link module.** `src/lib/snLinks.js`: an agent opening an article gets the reader by number on every surface, the copied link is
+  one address, "look at this" links open a new tab and "go work on this" links stay (the Knowledge screen no longer replaces the ticket
+  tab); a Workspace or portal tab is never replaced by a classic page. Both `articleShareUrl` functions are gone.
+- **Honest reads and per-user caches.** A card says "could not check" unless its read completed (the Caller card no longer says "No
+  earlier tickets" after a refused read); a column missing from the row is "could not read it" (live: a hidden field is a missing key);
+  a sys_id is never shown as a name; the Insights cache, the "Me" lookup and "since you last looked" are kept per signed-in person and
+  cleared when it changes (a one-way hash, no user id stored); the At risk chip says when facts could not be read.
+- **Roles and write checks.** Roles are a list, an empty list or unknown, never guessed (live: no `g_user` in Next Experience or the
+  Workspace); the profile follows the roles and the ticket's kind (a requested item or catalog task always gets the fulfilment help);
+  the page bar uses the panel's own visibility rule (HR needs Strict mode); every fill is read back, so a locked field says "locked"
+  instead of "inserted"; the comment channel follows the kind (catalog tasks: work note first, "the requester may not see this"; a problem
+  has no customer comment); Prepare to close says what it filled if the notes fail.
+- **Fulfiller fit.** A catalog task carries its requester and requested item (dot-walked) and its parent's answers; one "For X · Item ·
+  Qty" line in the Request card; close wording and checks per kind (delivery, change, HR); HR cases and changes get close help and a
+  change gets one risk and window line; custom task tables are generic tasks; a problem's workaround shows in "Steps that worked
+  before"; state and priority words in the person's language, never "State 10".
+- **Workspace honesty.** Insert is offered only when the page's box is found (checked before the click; otherwise Copy leads, with the
+  reason); the composer's Work notes / Customer mode is read and never assumed or clicked; a time budget replaces the 25,000-element
+  cap; save and post buttons are recognised in English and Arabic and a second, wordless sign withdraws Undo; dialogs inside shadow
+  roots are seen. The fake instance gained the Workspace shapes (shadow-DOM shell, composer modes, a very large page).
+- **One state classifier.** `src/domain/states.js` (`classifyState`), keyed by table and stored value with label words in English,
+  German and Arabic as the fallback, replaces five classifiers that disagreed; the table is `docs/states.md` (for your review). Catalog
+  task Pending is waiting, Open is working; change Assess, Scheduled and Review are live work, Authorize is waiting; Closed
+  Incomplete and Skipped are cancelled. My work: no customer follow-up on catalog tasks, the group queue ordered by SLA then priority
+  then age; Team covers requests, case and HR tasks and custom classes.
+- **Fixes from the live checks.** A plain role refusal is an access rule, not an organisation block; choice labels come from
+  `GET /api/now/ui/meta/<table>` (`readTableMeta`, one more read address, `docs/security.md` 5A) because a plain agent cannot read
+  `sys_choice`; `problem_task` and requested-item stage values; roles from the form frame of a classic page.
+- **The last open items (wave 5).** The person of a ticket is called by the right word (requester for a requested item, catalog task
+  and change; employee for HR; customer for CSM; caller stays for an incident: `src/insights/personWords.js`); Prepare to close names the
+  state step per kind ("Set State to Closed Complete (or Closed Incomplete or Closed Skipped), then save"); a problem shows "N linked
+  incidents that you can see"; a task kind takes its person from its parent (incident task: the incident's caller; change task: the change's
+  requester; CSM task: contact, consumer, account; HR task: the employee, only when sensitive content is allowed; one GET by the parent's
+  id, `docs/security.md` 5A); routing hints skip assignment groups that are no longer active (`assignment_group.active`, walked in the
+  same read and covered by the blocked-table guard); a different person on a shared browser is asked for the work profile again (one
+  one-way hash, `profilesFor`, rule 7); leftover technical words of the first-run hint, the portal line and the privacy text. Not built, with
+  reasons in `docs/review/audit-2026-11-07.md`: fulfilment instructions of a catalog item (live check: no such field) and a role gate on
+  new knowledge articles (live check: the create rule has no roles).
+- **An automated run in Edge.** `npm run e2e:edge` (`e2e/edge.js`) runs the whole end-to-end suite in Microsoft Edge with the same harness; Edge
+  156: 1,244 checks passed. The real side panel and the toolbar button are still hand steps (`docs/panel-scope.md`).
+- **Panel only on added sites.** In Chrome and Edge the side panel is off by default and on only for tabs on a site in Settings >
+  ServiceNow sites; other pages take no width. The toolbar icon opens it on an added site; on an unadded `*.service-now.com` address it
+  opens the panel so "Turn on for this site" works; elsewhere it opens Settings > ServiceNow sites. No new permission and no manifest
+  change. Firefox cannot close its sidebar by itself and is unchanged. `docs/panel-scope.md`.
+
+### Three roles to Strong (wave 6: catalog fulfiller, team lead, knowledge manager) [R24]
+
+The Fulfiller Value Map rated these three roles Good. What a feature can do is built here; "Strong" also needs real use (a pilot).
+
+- **Catalog fulfiller.** A card "Fulfilled before" in the Find the fix row: the last (up to five) completed tasks for the same catalog
+  item, with their close notes, who did them and how long they took (one limited read; none, could not check and blocked are said apart).
+  The comment wording is exact: "The requester can read comments on this task." when the task's `opened_by` is the requester, "The
+  requester may not see this." when someone else opened it, and a hedged line when either is unknown (the old flat "does not see" claim
+  is gone: the platform does not guarantee it, see `docs/live-checks-2026-11-07.md`). The Request card says who the request waits on and
+  for how long ("Waiting on Dana Lee for 3 days", the other approvals counted).
+- **Team lead.** "Needs attention now" comes first on the Team overview: at most eight tickets, each with one reason (breached, closest
+  to breaking, waiting for approval, reassigned often, open longest, customer waiting), opened in a new tab. It says when part of the
+  data could not be read and never "nothing needs attention" unless every source was read. Six sections stay open (the lead's own
+  questions) and nine fold under their titles. The counts are proven equal to the sections they come from, and the inconsistencies
+  found between sections were fixed (resolved-but-active tickets counted as open in Request fulfilment and the hand-over, a failed count
+  silently lowering a number, an SLA read cut at 1,000 rows looking exact, a hidden person shown as "Unassigned"). The chip says
+  "Waiting for approval" and the row says how long the TICKET has been open (it is not the approval's own age).
+- **Knowledge manager.** Duplicates says "Compared N of TOTAL articles in SCOPE" and "No duplicates found" only when everything in
+  scope was compared; "Compare the next 300" goes on through a large knowledge base; each group gives one line on why it was grouped;
+  the gap radar shows how many tickets back each topic. Expiring and stale articles are left to ServiceNow's own Knowledge dashboards
+  (`docs/agent-pain-points.md`, "Platform recipes").
+- **Checks and records.** New e2e rows and checks for each role (a 340-article knowledge base, completed tasks of one catalog item and a
+  second waiting approval, the Team overview's order and folds); the ticket-number links of the Team lists are at least 24 px tall;
+  `docs/review/audit-2026-11-07.md` ("Three roles to Strong"). Final gate: unit 4,191 (all passing after two tests were corrected to the new wording), Arabic texts 3,345; the end-to-end suites in
+  Chrome, Edge and Firefox are to be re-run after the last fixes (a first full Chrome run: 1,131 passed, 11 failed, all since fixed or shown to
+  be a known timing flake).
+
 ## Unreleased: round 4, "Loved" (2026-11-06/07, committed locally, not pushed)
 
 Your rule for this round: no clutter, and only the pain points ServiceNow cannot solve in the platform. Nothing new on screen: every

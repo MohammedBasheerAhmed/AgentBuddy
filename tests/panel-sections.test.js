@@ -129,7 +129,7 @@ test('the header is quiet: name, the instance, the privacy promise and two icon 
   assert.match(header, /<button type="button" class="ab-iconbtn ab-alltools-btn" aria-label="All tools" title="All tools \((?:Ctrl\+K|⌘K)\)" aria-keyshortcuts="Control\+K Meta\+K" aria-haspopup="dialog">/);
   assert.ok(!/Switch to (dark|light) colours/.test(header), 'no sun and moon button');
   // The promise the shield mark carried stays in the header: on hover over the name, and as text for a screen reader.
-  const promise = 'Reads with your own ServiceNow session. Personal data is masked before any AI call. Nothing is written to ServiceNow.';
+  const promise = 'Reads from ServiceNow as you. Personal data is masked before any AI call. Nothing is written to ServiceNow.';
   assert.match(header, new RegExp(`class="ab-brandtext" title="${promise.replace(/\./g, '\\.')}"`));
   assert.match(header, new RegExp(`<span class="ab-sr ab-promise">${promise.replace(/\./g, '\\.')}</span>`));
   assert.ok(!header.includes('<select'), 'no model picker in the header');

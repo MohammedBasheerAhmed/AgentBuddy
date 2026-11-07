@@ -54,7 +54,11 @@ test('no code under src/content or src/background can write to the instance', ()
       if (/method\s*:\s*['"`](POST|PUT|PATCH|DELETE)/i.test(text)) offenders.push(`${rel(p)}: non-GET method`);
       if (/XMLHttpRequest|sendBeacon|navigator\.sendBeacon|WebSocket|EventSource/.test(text)) offenders.push(`${rel(p)}: other network API`);
       if (/\b(createRecord|updateRecord|deleteRecord|runBackgroundScript|impersonat)/i.test(text)) offenders.push(`${rel(p)}: write helper`);
-      if (/\/api\/now\/(?!table|stats)/.test(text)) offenders.push(`${rel(p)}: API outside table/stats`);
+      // The one other address the read layer asks for: the UI meta service (the words of a table's columns and their choices, because a
+      // plain agent cannot read the choice table), in tableApi.js only. Any other address needs the security review.
+      for (const m of text.matchAll(/\/api\/now\/(?!table|stats)([a-z_]+(?:\/[a-z_]+)?)/g)) {
+        if (!(rel(p) === 'src/content/tableApi.js' && m[1] === 'ui/meta')) offenders.push(`${rel(p)}: API outside table/stats: /api/now/${m[1]}`);
+      }
       if (/sys\.scripts\.do|xmlhttp\.do|\.do\?.*sysparm_processor/.test(text)) offenders.push(`${rel(p)}: script endpoint`);
     });
   assert.deepEqual(offenders, []);
@@ -99,8 +103,8 @@ test('a table name that is not a plain identifier never becomes part of a reques
     return { ok: true, status: 200, headers: { get: () => null }, redirected: false, url: String(url), text: async () => JSON.stringify({ result: [] }) };
   };
   for (const table of ['..', '.', 'a/../b', 'incident?x=1', 'Incident', '', 'x'.repeat(81), null, 5]) {
-    await assert.rejects(() => queryTable(table, 'active=true', ['number']), /valid table/, String(table));
-    await assert.rejects(() => countRecords(table, 'active=true'), /valid table/, String(table));
+    await assert.rejects(() => queryTable(table, 'active=true', ['number']), (err) => err.code === 'INVALID_READ' && /valid table/.test(err.detail), String(table));
+    await assert.rejects(() => countRecords(table, 'active=true'), (err) => err.code === 'INVALID_READ' && /valid table/.test(err.detail), String(table));
   }
   assert.deepEqual(calls, []);
 });

@@ -84,7 +84,7 @@ module.exports = {
     const notesRun = await runFeature(panel.page, /^Write resolution notes/);
     t.check('resolution notes produced', Boolean(notesRun.result), notesRun.error || '');
     const where = await newestHint(panel.page);
-    t.check('before the click the card says where the text lands and the next step', /^Replaces what is in Resolution notes, which the customer can often read\. Then press Save\./.test(where || ''), where || '');
+    t.check('before the click the card says where the text lands and the next step', /^Replaces what is in Resolution notes, which the customer can often read\. Set State to Resolved, then save\./.test(where || ''), where || '');
     await clickButton(panel.page, /^Insert into resolution notes/);
     await waitForText(panel.page, /Inserted\. Review it|Check before/, { timeout: 8000 });
     if (await panel.page.$('.ab-note-warn[role="alert"]')) await clickButton(panel.page, /^Insert anyway/);
@@ -96,7 +96,7 @@ module.exports = {
     t.check('reply draft produced', Boolean(reply.result), reply.error || '');
     t.check('the draft has the real names back but keeps the card number and password hidden as markers', Boolean(reply.result) && reply.result.includes(data.SEED.callerName) && /\[CARD_\d+\]/.test(reply.result) && /\[SECRET_\d+\]/.test(reply.result) && !reply.result.includes(data.SEED.card) && !reply.result.includes(data.SEED.password), (reply.result || '').replace(/\s+/g, ' ').slice(0, 160));
     const replyWhere = await newestHint(panel.page);
-    t.check('the reply card says the comment reaches the customer, and that saving sends it', /Additional comments, which the customer sees\. Then press Save\. Saving sends the comment to the customer\./.test(replyWhere || ''), replyWhere || '');
+    t.check('the reply card says the comment reaches the customer, and that the customer may be emailed', /Additional comments, which the customer sees\. Then press Save\. The customer may be emailed\./.test(replyWhere || ''), replyWhere || '');
     const callsBefore = await ticket.evaluate(() => window.__gformCalls.length);
     await clickButton(panel.page, /^Insert as customer comment/);
     await panel.page.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
@@ -112,7 +112,7 @@ module.exports = {
     await clickButton(panel.page, /^Insert as customer comment/);
     await panel.page.waitForSelector('.ab-note-warn[role="alert"]', { timeout: 8000 });
     await clickButton(panel.page, /^Insert anyway/);
-    await waitForText(panel.page, /Saving sends the comment to the customer/, { timeout: 8000 });
+    await waitForText(panel.page, /The customer may be emailed/, { timeout: 8000 });
     const forced = await ticket.evaluate(() => window.__gformCalls.slice(-1)[0]);
     t.check("'Insert anyway' is a deliberate override: then the comments field is filled", forced?.name === 'comments' && forced.value.length > 20, JSON.stringify(forced).slice(0, 120));
 

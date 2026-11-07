@@ -192,7 +192,7 @@ test('neither (Safari for now): opening rejects and touches nothing', async () =
 
 // ---- the toolbar button -----------------------------------------------------------------------------------------------------------
 
-test('Chrome and Edge: the toolbar button opens the side panel through setPanelBehavior, set once per start of the worker', async () => {
+test('Chrome and Edge: without a click handler the toolbar button opens the side panel through setPanelBehavior, set once per start of the worker', async () => {
   const { api, calls } = chromeLike();
   assert.equal(wireToolbarButton(api), 'side-panel');
   assert.equal(wireToolbarButton(api), 'side-panel');
@@ -339,7 +339,10 @@ test('the background runs as a Chrome service worker and as a Firefox event page
     assert.ok(!/\bself\.registration\b|\bclients\.|\bskipWaiting\b|\bimportScripts\b|\bServiceWorkerGlobalScope\b|\boninstall\b|\bonactivate\b/.test(src), f);
   }
   const worker = fs.readFileSync(path.join(dir, 'service-worker.js'), 'utf8');
-  assert.match(worker, /^wireToolbarButton\(api\);$/m, 'at the top level, not inside onInstalled or onStartup');
-  assert.match(worker, /openPanel: \(tabId\) => openPanel\(api, tabId\)/);
+  // (the click handler of the panel scope goes in with the button, tests/panel-scope-wire.test.js: the old `wireToolbarButton(api)`
+  // let the browser open the panel on every page, which is what the scope exists to stop)
+  assert.match(worker, /^wireToolbarButton\(api, panelScope\.onToolbarClick\);$/m, 'at the top level, not inside onInstalled or onStartup');
+  assert.match(worker, /^const panelScope = wirePanelScope\(api, /m, 'at the top level too');
+  assert.match(worker, /openPanel: \(tabId, tab\) => openPanel\(api, tabId, clickPlan\(tab\)\)/);
   assert.match(worker, /checkExtensionSender\(sender, OWN\)/);
 });

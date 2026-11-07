@@ -31,6 +31,11 @@ import { SYS_ID_RE, TABLE_RE } from '../context/util.js';
 // (core.js, not index.js: this file is also in the page script's bundle, which has no Arabic catalogue to carry. The texts below are
 // only ever shown by the side panel.)
 import { t, tm, isolate, t as tr } from '../i18n/core.js';
+import { tableLabel } from './tableLabels.js';
+
+// The kinds of ticket whose comments the requester may not see (src/features/packs/kinds.js NOTE_FIRST_KINDS, and a problem, which has
+// no customer). The kind is the panel's (src/context/kinds.js), so every task table is 'task'.
+const NO_REQUESTER_KINDS = new Set(['catalog_task', 'task', 'problem']);
 
 export const FILLABLE_FIELDS = Object.freeze({
   // Journal fields of the ticket forms (comments are customer-visible, work notes are not).
@@ -103,32 +108,88 @@ const FIELD_NAMES = {
 const EMAIL_FIELDS = new Set(['subject', 'body']);
 export const EMAIL_NEXT = tm('Nothing is sent until you press Send in the email form.'); // an English text: show it with t()
 
+// ---- What comes after the notes of a close (audit of 2026-11-07, F13) ---------------------------------------------------------------
+// The notes and the close code are not what closes a ticket: the state is, and nothing said so ("Then press Save" is all the insert used
+// to say). Advice, not a claim: whether the form needs the state, or another field, before it will save is not known here, and the words
+// of an instance's own states may differ from the base system's. One sentence per kind, written out in full; the names of the states are
+// what the form's State list shows, so they go in as data (isolate keeps them whole) and are not translated.
+//   incident, problem   the state Resolved          requested item, catalog task   Closed Complete, or Closed Incomplete / Closed Skipped
+//   change              Closed                      customer service case, HR case  the state the organisation's process uses
+// A kind with no step of its own (a request, a plain task, anything else) has none: the insert says what it always said.
+const CLOSE_FIELDS = new Set(['close_notes', 'fix_notes', 'close_code']);
+
+/** The sentence that names the state step of a close for this kind of ticket, or '' when the kind has none. */
+export function closeStep(kind) {
+  switch (kind) {
+    case 'incident':
+    case 'problem':
+      return t('Set State to {state}, then save.', { state: isolate('Resolved') });
+    case 'requested_item':
+    case 'catalog_task':
+      return t('Set State to {done} (or {notDone} or {skipped}), then save.', { done: isolate('Closed Complete'), notDone: isolate('Closed Incomplete'), skipped: isolate('Closed Skipped') });
+    case 'change':
+      return t('Move the change to {state}, then save.', { state: isolate('Closed') });
+    case 'case':
+    case 'hr_case':
+      return t('Set the state your process uses to close, then save.');
+    default:
+      return '';
+  }
+}
+
+/**
+ * What a comment on a catalog task says about its reader, by whether the requester can read the task (wave 6; src/domain/requesterReads.js
+ * works out which of the three applies). The platform does not decide it: a requester reads a catalog task only by its read rule (it asks who
+ * opened the task) and its comments have no rule of their own (docs/live-checks-2026-11-07.md). So:
+ *   true   the person who opened the task is the requester                  "The requester can read comments on this task."
+ *   false  someone else opened it                                           "The requester may not see this." (and where to reach them)
+ *   null   either is not known: the sentence this panel has always said     (the careful one)
+ */
+export function catalogCommentCaution(requesterCanRead = null) {
+  if (requesterCanRead === true) return t('The requester can read comments on this task.');
+  if (requesterCanRead === false) return t('The requester may not see this. Use the requested item to reach them.');
+  return t('The requester may not see comments on a catalog task. Use the requested item to reach them.');
+}
+
 /**
  * One line that says where an insert lands, one that says what to do after it, and a caution when the box is not what it seems.
  * Shown BEFORE the click, next to the Insert button (TRACKER.md F5: "say where text lands and the next step").
- * @param {{ field: string, fieldLabel?: string, mode?: string, kind?: string, surface?: string, table?: string }} target
- *   surface: 'classic' | 'workspace' | 'portal' | 'other' (the page the person is on); table: the form the insert belongs to
+ * @param {{ field: string, fieldLabel?: string, mode?: string, kind?: string, surface?: string, table?: string, composerMode?: string,
+ *   requesterCanRead?: boolean|null }} target
+ *   surface: 'classic' | 'workspace' | 'portal' | 'other' (the page the person is on); table: the form the insert belongs to;
+ *   composerMode: what the page said a Workspace composer is set to ('match' = to this field's kind): then the caution that it might not be goes;
+ *   requesterCanRead: for a comment on a catalog task, whether the requester can read it (catalogCommentCaution): true / false / null (not known).
+ *   One boolean from the ticket's own read (src/domain/requesterReads.js); any other kind ignores it.
  * @returns {{ where: string, next: string, caution: string }}
  */
-export function describeInsert({ field, fieldLabel = '', mode = 'append', kind = '', surface = 'classic', table = '' } = {}) {
+export function describeInsert({ field, fieldLabel = '', mode = 'append', kind = '', surface = 'classic', table = '', composerMode = '', requesterCanRead = null } = {}) {
   const email = EMAIL_FIELDS.has(field);
   // (the label is an English text marked in the feature, or the page's own label: tr shows the known ones in the panel's language)
   const label = (email ? FIELD_NAMES[field] : fieldLabel) || FIELD_NAMES[field] || field;
   const name = tr(label);
   const replacing = fillModeFor(field, mode) === 'replace';
   const into = table === 'kb_knowledge' ? t('the article form ({name})', { name }) : name;
-  // Whole sentences, so a language can put the clause about who reads it where it likes.
-  const reader = field === 'comments' ? 'customer' : field === 'work_notes' ? 'colleagues' : isCustomerVisible(field) && table !== 'kb_knowledge' && !email ? 'often' : '';
+  // Whole sentences, so a language can put the clause about who reads it where it likes. The customer sees a comment on an incident, a
+  // request or a case; on a catalog task or any other task (and a problem, which has no customer) the requester MAY NOT, and nothing
+  // here says they do (audit of 2026-11-07, W-02).
+  const requesterMayNotSee = field === 'comments' && NO_REQUESTER_KINDS.has(kind);
+  // (a catalog task whose opener is the requester: they can read the task, and its comments have no rule of their own)
+  const requesterReads = requesterMayNotSee && kind === 'catalog_task' && requesterCanRead === true;
+  const reader = requesterReads ? 'requester' : requesterMayNotSee ? 'maybe' : field === 'comments' ? 'customer' : field === 'work_notes' ? 'colleagues' : isCustomerVisible(field) && table !== 'kb_knowledge' && !email ? 'often' : '';
   let where;
   if (replacing) {
     where =
-      reader === 'customer' ? t('Replaces what is in {into}, which the customer sees.', { into })
+      reader === 'maybe' ? t('Replaces what is in {into}, which the requester may not see.', { into })
+      : reader === 'requester' ? t('Replaces what is in {into}, which the requester can read.', { into })
+      : reader === 'customer' ? t('Replaces what is in {into}, which the customer sees.', { into })
       : reader === 'colleagues' ? t('Replaces what is in {into}, which only your colleagues see.', { into })
       : reader === 'often' ? t('Replaces what is in {into}, which the customer can often read.', { into })
       : t('Replaces what is in {into}.', { into });
   } else {
     where =
-      reader === 'customer' ? t('Goes below what is in {into}, which the customer sees.', { into })
+      reader === 'maybe' ? t('Goes below what is in {into}, which the requester may not see.', { into })
+      : reader === 'requester' ? t('Goes below what is in {into}, which the requester can read.', { into })
+      : reader === 'customer' ? t('Goes below what is in {into}, which the customer sees.', { into })
       : reader === 'colleagues' ? t('Goes below what is in {into}, which only your colleagues see.', { into })
       : reader === 'often' ? t('Goes below what is in {into}, which the customer can often read.', { into })
       : t('Goes below what is in {into}.', { into });
@@ -139,16 +200,19 @@ export function describeInsert({ field, fieldLabel = '', mode = 'append', kind =
   let caution = '';
   if (isJournalField(field) && surface === 'workspace') {
     next = t('Then press Post.');
-    caution = t('In a Workspace one box can hold both comments and work notes: check it is set to {box} before you post.', { box: field === 'comments' ? t('Additional comments') : t('Work notes') });
+    if (composerMode !== 'match') caution = t('In a Workspace one box can hold both comments and work notes: check it is set to {box} before you post.', { box: field === 'comments' ? t('Additional comments') : t('Work notes') });
   } else if (isJournalField(field) && surface === 'portal') {
     next = t("Then press the page's own Send.");
-  } else if (field === 'comments') {
-    next = t('Then press Save. Saving sends the comment to the customer.');
+  } else if (field === 'comments' && !requesterMayNotSee) {
+    // (softly: whether saving emails the caller depends on how the ticket came in and on the site's notifications, which nothing here knows)
+    next = t('Then press Save. The customer may be emailed.');
   } else if (table === 'kb_knowledge') {
     next = t('Then save the article.');
   }
-  if (field === 'comments' && kind === 'catalog_task') caution = t('The requester does not see comments on a catalog task. Use the requested item to reach them.');
-  else if (field === 'comments' && kind === 'task' && !caution) caution = t('Comments on a task may not reach the customer. Check who can see them.');
+  // The notes (or the code) of a close: the state is the step that closes the ticket, so the line names it for the kind (F13).
+  if (CLOSE_FIELDS.has(field) && surface !== 'portal' && table !== 'kb_knowledge') next = closeStep(kind) || next;
+  if (field === 'comments' && kind === 'catalog_task') caution = catalogCommentCaution(requesterCanRead);
+  else if (field === 'comments' && kind === 'task' && !caution) caution = t('The requester may not see comments on a task. Check who can see them.');
   return { where, next, caution };
 }
 
@@ -181,16 +245,20 @@ export function toSafeHtml(text) {
 export const FILL_REASON_TEXT = Object.freeze({
   'no-form': tm('Agent Buddy could not reach a form field on this page.'),
   'no-such-field': tm('That field is not on this form.'),
-  'read-only': tm('That field is read-only on this form.'),
+  // (read back after the write, or by the list of editable fields, or by a ticket that is closed: all three look the same to a person)
+  'read-only': tm('This field is locked on this form.'),
   'too-long': tm('The text is too long to insert.'),
   'set-failed': tm('The form did not accept the text.'),
   'bad-field': tm('That field cannot be filled.'),
-  'wrong-record': tm('The open form is not the record this text was written for.'),
+  'wrong-record': tm('The open form is not the ticket this text was written for.'),
   // Round 4: a choice list on a page without g_form (Workspace, portal), a value the form's list does not have, and an Undo of a box
   // that no longer holds what the insert left there.
   'choice-by-hand': tm('Agent Buddy does not pick from a list on this page.'),
   'no-such-choice': tm('That choice is not in the list on this form.'),
   changed: tm('The box was changed after the insert, so it was left as it is.'),
+  // Audit of 2026-11-07, part 9 (Workspaces): a page too big to look through in time, and a composer that is set to the other kind of note.
+  unreachable: tm('This page is too big for Agent Buddy to find the box.'),
+  'wrong-mode': tm('The box on this page is set to the other kind of note. Switch it, then try again.'),
 });
 
 export const FILL_REASONS = Object.freeze(Object.keys(FILL_REASON_TEXT));
@@ -218,14 +286,43 @@ export function parseExpect(expect) {
   return SYS_ID_RE.test(sysId) ? { kind: 'record', table, sysId } : 'invalid';
 }
 
+// The address a wrapper carries inside it, or '': the classic shell (nav_to.do?uri=email_client.do%3Fsysparm_table%3D...) and the
+// Next Experience (/now/nav/ui/classic/params/target/email_client.do%3Fsysparm_table%3D..., where the whole inner address sits
+// encoded in the path). It is decoded up to twice, as the address may have been encoded twice (src/context/kinds.js does the same).
+function wrappedAddress(url) {
+  let inner = '';
+  let inPath = false;
+  if (/\/nav_to\.do$/i.test(url.pathname)) inner = url.searchParams.get('uri') || '';
+  else {
+    const target = /\/params\/target\/(.+)$/i.exec(url.pathname);
+    if (target) {
+      inner = target[1];
+      inPath = true;
+    }
+  }
+  // (only the address in a path is still encoded: the uri parameter of the classic shell was decoded once by URLSearchParams)
+  for (let i = 0; inPath && i < 2 && /%(?:3F|3D|26|2F|25)/i.test(inner); i += 1) {
+    try {
+      inner = decodeURIComponent(inner);
+    } catch {
+      break;
+    }
+  }
+  // (a wrapper that was not encoded keeps the inner query where a query goes)
+  return inPath && inner && !inner.includes('?') ? inner + url.search : inner;
+}
+
 // The record and table of the email client address: .../email_client.do?sysparm_table=incident&sysparm_sys_id=<id>, also when the
-// classic shell wraps it (nav_to.do?uri=email_client.do%3Fsysparm_table%3D...).
+// classic shell or the Next Experience wraps it (see wrappedAddress); a wrapper inside a wrapper is followed up to three levels.
 export function emailClientTarget(href) {
   try {
     let url = new URL(href);
-    if (/\/nav_to\.do$/i.test(url.pathname)) {
-      const uri = url.searchParams.get('uri') || '';
-      url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(uri) ? uri : `/${uri.replace(/^\/+/, '')}`, url.origin);
+    for (let depth = 0; depth < 3; depth += 1) {
+      const inner = wrappedAddress(url);
+      if (!inner) break;
+      const next = new URL(/^[a-z][a-z0-9+.-]*:/i.test(inner) ? inner : `/${inner.replace(/^\/+/, '')}`, url.origin);
+      if (next.origin !== url.origin) return null; // a wrapper that points at another site is no email form of this one
+      url = next;
     }
     if (!/\/email_client\.do$/i.test(url.pathname)) return null;
     return { table: (url.searchParams.get('sysparm_table') || '').toLowerCase(), sysId: (url.searchParams.get('sysparm_sys_id') || '').toLowerCase() };
@@ -295,8 +392,8 @@ export function wrongRecordText(source) {
   const kind = want && want !== 'invalid' ? want.kind : '';
   const number = String(source?.number || '').trim();
   if (kind === 'email') return t('This was written for the email form of {number}. Open that email form, or use Copy.', { number: number ? isolate(number) : t('its own ticket') });
-  if (kind === 'new') return t('This was written for a new {table} form. Open that form again, or use Copy.', { table: want.table });
-  const record = number ? isolate(number) : kind ? t('another {table} record', { table: want.table }) : t('another record');
+  if (kind === 'new') return t('This was written for a new {form} form. Open that form again, or use Copy.', { form: tableLabel(want.table) });
+  const record = number ? isolate(number) : kind ? t('another {type}', { type: tableLabel(want.table) }) : t('another ticket');
   return t('This was written for {record}. Open that ticket again, or use Copy.', { record });
 }
 
@@ -306,9 +403,11 @@ export function wrongRecordText(source) {
  */
 export function insertedNote(answer, target = null) {
   // With the target ({ field, surface, ... }) the note names the next step for that box (Post in a Workspace, Save on a form).
-  const base = target?.field ? t('Inserted. Review it. {next}', { next: describeInsert(target).next }) : t('Inserted into the form. Review it, then save the record yourself.');
-  if (answer?.method === 'dom' && typeof answer.label === 'string' && answer.label) return t('{base} It went into the box labelled "{label}".', { base, label: isolate(answer.label) });
-  return base;
+  const base = target?.field ? t('Inserted. Review it. {next}', { next: describeInsert(target).next }) : t('Inserted into the form. Review it, then save the ticket yourself.');
+  const named = answer?.method === 'dom' && typeof answer.label === 'string' && answer.label ? t('{base} It went into the box labelled "{label}".', { base, label: isolate(answer.label) }) : base;
+  // A Workspace composer serves Work notes and customer comments: when the page could not say which one it was set to, a work note must be
+  // checked before it is posted (audit of 2026-11-07, W-12). A customer reply is safe either way: it was reviewed for the customer.
+  return answer?.modeUnread === true && target?.field === 'work_notes' ? `${named} ${t('Check the box says Work notes before you post.')}` : named;
 }
 
 /** The record of the page an Agent Buddy result is for, for the audit log: table and sys_id only. */

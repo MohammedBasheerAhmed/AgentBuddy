@@ -5,7 +5,8 @@
 // read with it is sent anywhere: the Insights half has no AI. The person columns are read like on every non-search spec (the names
 // are shown to the agent, who can see them on the form anyway).
 
-const PEOPLE = ['caller_id', 'requested_for', 'contact', 'consumer', 'opened_by', 'assigned_to'];
+// (requested_by: the person who asked for a change is its "caller", F6)
+const PEOPLE = ['caller_id', 'requested_for', 'contact', 'consumer', 'opened_by', 'requested_by', 'assigned_to'];
 
 export default {
   spec: {
@@ -23,9 +24,19 @@ export default {
       by: {
         request: ['request_state', 'stage'],
         requested_item: ['stage', 'cat_item'],
+        // (what a catalog task is for: its requested item's, walked in the same read, src/context/specs/fit.js)
+        catalog_task: ['request_item.cat_item'],
         // N28: the account, its entitlement, product and asset are part of the case at a glance
         case: ['account', 'product', 'asset', 'entitlement'],
+        // (the change line of the Glance: type, risk, window and approval, F6, src/insights/changeLine.js; approval is read above for the emails)
         change: ['type', 'risk', 'start_date', 'end_date'],
+        // F14: the workaround and the known-error mark of a problem, in "Steps that worked before". (The count of its linked incidents, "3 linked
+        // incidents that you can see" in the glance, reads incident.problem_id and sys_id, two columns already on the incident ceiling
+        // (specs/checks.js), in one limited read: readLinkedIncidentCount in src/content/ops/insights.js. Nothing of those incidents is kept.)
+        problem: ['known_error', 'workaround'],
+        // F15: what a task is a part of ("Part of CS0001234", with a link)
+        task: ['parent'],
+        other: ['parent'],
         hr_case: ['hr_service', 'opened_for', 'subject_person'],
       },
     },

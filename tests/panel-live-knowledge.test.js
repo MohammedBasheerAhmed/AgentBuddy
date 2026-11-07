@@ -57,9 +57,10 @@ test('knowledge search for everyone: a result opens in the agent\'s own UI and "
   assert.match(ui.text(), /KB0000001 Reset your VPN password/);
   assert.match(ui.text(), /Updated 4 weeks ago/);
   const link = ui.$('a.ab-kbx-hit-title');
-  assert.equal(link.getAttribute('href'), `${ORIGIN}/nav_to.do?uri=${encodeURIComponent(`kb_knowledge.do?sys_id=${sys('a')}`)}`);
+  // (audit 6, 2026-11-07) an article opens at the article reader, by its number, and "Copy link" copies the very same address
+  assert.equal(link.getAttribute('href'), `${ORIGIN}/kb_view.do?sysparm_article=KB0000001`);
   await click(ui.button('Copy link'));
-  assert.deepEqual(copied, [`${ORIGIN}/kb_view.do?sysparm_article=KB0000001`]);
+  assert.deepEqual(copied, [link.getAttribute('href')]);
   assert.ok(ui.hasButton('Link copied'));
   await ui.unmount();
 });
@@ -110,10 +111,12 @@ test('the duplicate finder pages through more titles and compares them all; the 
   await openCard(insights, 'Duplicate articles');
   await choose(insights.field('Knowledge base'), 'kb1');
   await click(insights.button('Find duplicates'));
-  assert.match(insights.text(), /Compared 2 of 4 titles\. 1 group read alike\./);
-  await click(insights.button('Compare 2 more'));
+  // (Wave 6: the line names the scope, and the button is "Compare the next {n}"; the wording is tested in tests/km-panel.test.js.)
+  assert.match(insights.text(), /Compared 2 of 4 articles in IT\. 1 group read alike\./);
+  await click(insights.button('Compare the next 2'));
   assert.deepEqual(fake.readsOf('kbDuplicates').map((a) => a.offset), [0, 2]);
-  assert.match(insights.text(), /Compared 4 titles\. 1 group read alike\./, 'the second page is compared with the first');
+  assert.equal(fake.readsOf('kbDuplicates')[1].total, 4, 'the second page is told the count of the first: the scope is counted once');
+  assert.match(insights.text(), /Compared 4 of 4 articles in IT\. 1 group read alike\./, 'the second page is compared with the first');
   assert.match(insights.text(), /3 articles that read alike/);
   await click(insights.button('Compare'));
   await click(insights.button('Compare their text'));
@@ -216,7 +219,7 @@ test('another instance in the tab: search results, duplicate groups and topics o
   await click(ui.button('Find topics'));
   let text = ui.text();
   assert.match(text, /KB0000001 Reset your VPN password IT · Network/);
-  assert.match(text, /Compared 2 of 4 titles/);
+  assert.match(text, /Compared 2 of 4 articles/);
   assert.match(text, /Looked at 3 tickets/);
   assert.match(text, /Knowledge search 1 for "vpn"/);
   // A search on its way when the tab moves on is dropped too.
@@ -250,6 +253,6 @@ test('a read that fails says so in plain words and offers to try again', async (
   assert.match(ui.text(), /lost touch with this page/);
   assert.ok(!/Receiving end/.test(ui.text()));
   await click(ui.button('Try again'));
-  assert.match(ui.text(), /Compared 2 of 4 titles/);
+  assert.match(ui.text(), /Compared 2 of 4 articles/);
   await ui.unmount();
 });

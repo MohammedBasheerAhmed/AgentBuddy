@@ -252,7 +252,7 @@ test('"Copy for your administrator" puts the policy entry on the clipboard', asy
   await click([...item.querySelectorAll('button')].find((b) => b.textContent === 'Copy for your administrator'));
   assert.equal(copied.length, 1);
   assert.deepEqual(JSON.parse(copied[0]), { feature: 'record-summary', words: 90 });
-  assert.match(ui.text(), /Your administrator can add it to the orgFormats list/);
+  assert.match(ui.text(), /Send it to your administrator/);
   await ui.unmount();
 });
 

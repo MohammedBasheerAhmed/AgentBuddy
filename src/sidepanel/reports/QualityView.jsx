@@ -1,5 +1,6 @@
 import { Tile, TrendChart, HorizontalBar, DataTable } from '../charts/index.js';
 import SectionShell from './SectionShell.jsx';
+import Foldable from './Foldable.jsx';
 import { useSection } from './useSection.js';
 import { TREND_CHOICES } from '../../reports/engine/quality.js';
 import { hours } from './format.js';
@@ -19,9 +20,9 @@ export function QualityBody({ d }) {
   ];
 
   return (
-    <>
+    <Foldable id="quality" title={t('Quality measures')}>
       <div className="ab-tiles">
-        {d.opened && <Tile label={t('Opened')} value={d.opened.value} hint={d.opened.partial ? t('Some tables could not be counted') : t('In the last {days} days', { days: d.windowDays })} />}
+        {d.opened && <Tile label={t('Opened')} value={d.opened.value} hint={d.opened.partial ? t('Some ticket types could not be counted') : t('In the last {days} days', { days: d.windowDays })} />}
         {d.resolved && <Tile label={t('Resolved')} value={d.resolved.value} hint={d.resolved.capped ? t('First rows read only') : t('In the last {days} days', { days: d.windowDays })} />}
         {d.mttr && <Tile label={t('Time to resolve')} value={hours(d.mttr.meanHours)} hint={t('Mean. Median {median}, from {tickets}', { median: hours(d.mttr.medianHours), tickets: tn(d.mttr.sample, '{n} ticket', '{n} tickets') })} />}
         {d.reopen && <Tile label={t('Reopen rate')} value={pct(d.reopen.percent)} hint={t('{reopened} of {total} opened', { reopened: d.reopen.reopened, total: d.reopen.of })} tone={d.reopen.percent >= 10 ? 'warn' : 'neutral'} />}
@@ -38,7 +39,7 @@ export function QualityBody({ d }) {
       {trend.backlog ? (
         <TrendChart title={t('Open tickets at the end of each period (estimate)')} series={[{ key: 'backlog', label: shown('Open'), tone: 'c3', points: trend.labels.map((label, i) => ({ label, value: trend.backlog[i] })) }]} area unit={t('tickets')} labelHeader={weekly ? t('Week starting') : t('Day')} />
       ) : (
-        <p className="ab-hint">{t('The backlog trend needs complete date reads for every table, so it is not shown here.')}</p>
+        <p className="ab-hint">{t('The backlog trend needs complete date reads for every ticket type, so it is not shown here.')}</p>
       )}
 
       {d.categories.length > 0 && <HorizontalBar title={t('Top categories')} items={d.categories.map((c) => ({ key: c.name, label: placeholderName(c.name), value: c.count }))} unit={t('tickets')} labelHeader={t('Category')} maxItems={8} />}
@@ -47,14 +48,14 @@ export function QualityBody({ d }) {
       {d.repeatCallers &&
         (d.repeatCallers.items.length > 0 ? (
           <DataTable
-            caption={t('{table}: callers with {min}+ tickets in {days} days ({total})', { table: shown(d.repeatCallers.table), min: d.repeatCallers.min, days: d.repeatCallers.days, total: d.repeatCallers.total })}
+            caption={t('{table}: callers with {min}+ tickets in {days} days ({total})', { table: shown(d.repeatCallers.tableLabel), min: d.repeatCallers.min, days: d.repeatCallers.days, total: d.repeatCallers.total })}
             columns={[{ key: 'name', label: t('Caller') }, { key: 'count', label: t('Tickets'), align: 'right' }]}
             rows={d.repeatCallers.items.map((c) => ({ ...c, name: placeholderName(c.name) }))}
           />
         ) : (
           <p className="ab-hint">{t('No caller has {min} or more tickets in {days} days.', { min: d.repeatCallers.min, days: d.repeatCallers.days })}</p>
         ))}
-    </>
+    </Foldable>
   );
 }
 

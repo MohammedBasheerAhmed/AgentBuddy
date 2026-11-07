@@ -105,7 +105,7 @@ test('notes show only what could not be read, in plain words (no table names), a
   });
   assert.match(markup, /Article links: You cannot read article links\./);
   assert.ok(!markup.includes('kb_use'), 'no table name');
-  assert.match(markup, /X: not available to you\./);
+  assert.match(markup, /could not be read just now\. Try again in a moment\./, 'an entry with no note is worded by its status, with the label of its source');
   assert.ok(!markup.includes('m2m_kb_task'));
   assert.ok(!markup.includes('<img'), 'text is escaped, never markup');
   assert.match(markup, /&lt;img/);

@@ -3,6 +3,7 @@ import { CHAT_WAITING_WARN_MINUTES, chatOverviewOf } from '../../../insights/cha
 import { read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { Notes, QuietButton, ReadState } from './bits.jsx';
+import { plainNote } from '../../plainAccess.js';
 import { t, tn, isolate } from '../../../i18n/index.js';
 
 // N8, chat facts: how many messages, from whom, how long the customer has waited, how long it lasted, who takes part, and the
@@ -34,7 +35,7 @@ export default function ChatCard({ page, record, active, setSummary, setAttentio
   return (
     <>
       {noMessages ? (
-        <p className="ab-note ab-note-warn" role="status">{chatEntry?.note || t('No chat messages are available to you.')}</p>
+        <p className="ab-note ab-note-warn" role="status">{plainNote(chatEntry?.note) || t('No chat messages are available to you.')}</p>
       ) : (
         <>
           <div className="ab-tags">
@@ -49,7 +50,7 @@ export default function ChatCard({ page, record, active, setSummary, setAttentio
               {t('The customer has been waiting {time} for an answer.', { time: describeMinutes(o.waitingMinutes) })}
             </p>
           )}
-          {!o.canTellSides && <p className="ab-hint">{t('This instance does not say who sent each message, so waiting time cannot be worked out.')}</p>}
+          {!o.canTellSides && <p className="ab-hint">{t('ServiceNow does not say who sent each message here, so waiting time cannot be worked out.')}</p>}
           <dl className="ab-kb-facts">
             {o.durationMinutes !== null && (
               <>
@@ -78,7 +79,7 @@ export default function ChatCard({ page, record, active, setSummary, setAttentio
           )}
         </>
       )}
-      {chatEntry && chatEntry.status === 'ok' && chatEntry.note && /newest/.test(chatEntry.note) && <p className="ab-hint">{chatEntry.note}</p>}
+      {chatEntry && chatEntry.status === 'ok' && chatEntry.note && /newest/.test(chatEntry.note) && <p className="ab-hint">{plainNote(chatEntry.note)}</p>}
       <Notes access={access.filter((a) => a.source !== 'chat' || !noMessages)} />
       <div className="ab-ins-foot">
         <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>

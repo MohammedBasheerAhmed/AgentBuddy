@@ -24,9 +24,15 @@ export function raw(v) {
   return v == null ? '' : String(v);
 }
 
+/**
+ * What a person sees for a value. The stored value stands in for an empty display value, EXCEPT when it is a sys_id: a reference the
+ * signed-in user may not read can come back with no display value, and its stored value is the id of the thing. A bare id is never a
+ * name (audit of 2026-11-07, D1/R-13), so it is '' here and the caller says "not visible to you" in its own words. The id stays
+ * available to logic through raw().
+ */
 export function disp(v) {
-  if (v && typeof v === 'object') return String(v.display_value || v.value || '');
-  return v == null ? '' : String(v);
+  const shown = v && typeof v === 'object' ? String(v.display_value || v.value || '') : v == null ? '' : String(v);
+  return SYS_ID_RE.test(shown) ? '' : shown;
 }
 
 // ---- Text ---------------------------------------------------------------------------------------

@@ -14,6 +14,7 @@
 // order of suggestions falls back to a neutral one). docs/live-questions/assist.md lists what to check on a real instance.
 
 import { t } from '../i18n/core.js';
+import { stageFor } from '../domain/states.js';
 
 export const STAGES = Object.freeze(['new', 'working', 'resolve', 'closed']);
 
@@ -36,30 +37,26 @@ const norm = (value) =>
     .replace(/^\d+\s*-\s*/, '') // "7 - Closed" (a choice list that shows its value)
     .replace(/[_\s]+/g, ' ');
 
-// Checked in this order: "Closed Complete" is closed, not "complete work"; "Resolved" before anything that merely contains a word.
-const CLOSED = /^(closed\b.*|cancel+ed|complete|completed|retired|outdated|abandoned|withdrawn|rejected)$/;
-const RESOLVE = /^(resolved|resolution proposed|solution proposed|review|fixed|awaiting closure)$/;
-const NEW = /^(new|draft|ready|requested|submitted|pending|pending approval|awaiting approval|not yet requested|awaiting acceptance|assess|triage|unassigned)$/;
-const WORKING = /(progress|hold|await|suspend|authori[sz]e|schedul|implement|root cause|fix in|approved|^open$|^active$|accepted|escalat|assigned|waiting|investigat|pending (customer|user|vendor|change|problem))/;
+// The meaning of a state is read in ONE place, src/domain/states.js (docs/states.md): the stored value by table first, then the label's
+// words in English, German and Arabic. This file only turns that meaning into the stage names the Ticket screen uses.
 
-/** The stage of a ticket from the display value of its state; null when the state is empty or not one we recognise. */
-export function stageOfState(state) {
-  const s = norm(state);
-  if (!s) return null;
-  if (CLOSED.test(s)) return 'closed';
-  if (RESOLVE.test(s)) return 'resolve';
-  if (NEW.test(s)) return 'new';
-  if (WORKING.test(s)) return 'working';
-  return null;
+/** The stage of a ticket from the display text of its state alone; null when the state is empty or not one we recognise. */
+export function stageOfState(state, table = '', value = '') {
+  return stageFor({ table, value, label: state });
 }
 
 /**
- * The stage of the open ticket. `header` is the panel's header read ({ number, short_description, state, priority }, display
- * values); a record may carry its own `state` too. null while the header is loading or when the state is unknown.
+ * The stage of the open ticket. `header` is the panel's header read ({ number, short_description, state, stateValue, priority }: the
+ * state as shown and as stored); a record may carry its own `state` too. null while the header is loading or when the state is unknown.
  */
 export function stageOf(record, header) {
-  const state = header && typeof header.state === 'string' && header.state ? header.state : record?.state;
-  return stageOfState(state);
+  const fromHeader = header && typeof header.state === 'string' && header.state;
+  return stageFor({
+    table: record?.table || record?.kind || '',
+    value: fromHeader ? header.stateValue : record?.stateValue,
+    label: fromHeader ? header.state : record?.state,
+    stage: header?.stage,
+  });
 }
 
 // ---- feature -> group ------------------------------------------------------------------------------------------------------
@@ -134,11 +131,14 @@ export const notNew = (record, header) => stageOf(record, header) !== 'new';
 /** While the ticket is open and being worked: not resolved, not closed. */
 export const stillOpen = (record, header) => !['resolve', 'closed'].includes(stageOf(record, header));
 
-// Tasks of a problem or a change are internal work: there is no customer to reply to.
-const INTERNAL_TASK_TABLES = new Set(['change_task', 'problem_task']);
+// A problem and the tasks of a problem or a change are internal work: there is no customer to reply to.
+const INTERNAL_TABLES = new Set(['problem', 'change_task', 'problem_task']);
 
-/** A record with someone to reply to: not a task of a problem or a change. */
-export const hasCustomer = (record) => !INTERNAL_TASK_TABLES.has(String(record?.table || '').toLowerCase());
+/** A record with someone to reply to: not a problem, and not a task of a problem or a change. */
+export const hasCustomer = (record) => record?.kind !== 'problem' && !INTERNAL_TABLES.has(String(record?.table || '').toLowerCase());
+
+/** A ticket someone can still be written to about: open, and with a customer ("Draft a reply", "Ask for the missing details"). */
+export const replyable = (record, header) => notClosed(record, header) && hasCustomer(record);
 
 /**
  * A major incident: an incident whose major incident state (the Major Incident Management plugin) is proposed or accepted. When
@@ -172,7 +172,11 @@ export function whenAllows(feature, record, header) {
 export function cautionFor(feature, record) {
   const id = feature?.id;
   if (!['reply-draft', 'missing-info', 'request-explain'].includes(id)) return '';
-  if (record?.kind === 'catalog_task') return t('The requester does not see comments on a catalog task. Use the requested item to reach them.');
-  if (record?.kind === 'task') return t('Comments on a task may not reach the customer. Check who can see them.');
+  if (record?.kind === 'catalog_task') {
+    if (record.requesterCanRead === true) return t('The requester can read comments on this task.');
+    if (record.requesterCanRead === false) return t('The requester may not see this. Use the requested item to reach them.');
+    return t('The requester may not see comments on a catalog task. Use the requested item to reach them.');
+  }
+  if (record?.kind === 'task') return t('The requester may not see comments on a task. Check who can see them.');
   return '';
 }

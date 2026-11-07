@@ -131,7 +131,7 @@ test('a layout file holds the configuration and nothing else, and loads back as 
   assert.equal(loaded.ok, true);
   assert.equal(loaded.name, 'Team overview (imported)', 'a name that is taken is told apart');
   const added = loaded.state.dashboards.find((d) => d.id === loaded.state.activeId);
-  assert.deepEqual(added.widgets.map((w) => w.section), ['overview', 'workload', 'sla', 'quality', 'fulfilment']);
+  assert.deepEqual(added.widgets.map((w) => w.section), ['attention', 'overview', 'workload', 'sla', 'quality', 'fulfilment']);
   assert.deepEqual(added.scope, chosen, 'chosen groups come along; the engine checks them against this instance');
   assert.equal(new Set(loaded.state.dashboards.map((d) => d.id)).size, loaded.state.dashboards.length);
 });

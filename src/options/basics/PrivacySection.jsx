@@ -8,7 +8,7 @@ import { t, tm, t as tr } from '../../i18n/index.js';
 // (English texts marked with tm(); each is shown with tr(), the translation function, at the moment it is used)
 const PII_TEXT = {
   standard: tm('Masks detected personal data (names on the ticket, emails, phone and card numbers, IDs, secrets).'),
-  strict: tm('Also refuses sensitive fields and keeps HR free text out entirely.'),
+  strict: tm('Also refuses sensitive fields and keeps HR descriptions and notes out entirely.'),
   'local-only': tm('Only allows an AI model running on this computer. Nothing leaves it.'),
 };
 const PREVIEW_TEXT = { always: tm('Show the exact outgoing text every time'), first: tm('Show it the first time for each action'), never: tm('Do not show it') };

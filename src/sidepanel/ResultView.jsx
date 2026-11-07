@@ -7,12 +7,14 @@ import { insertsFor } from '../features/registry.js';
 import { currentFromPage, expectForInsert, fillModeFor, isCustomerVisible, matchesExpect, wrongRecordText } from '../lib/fillable.js';
 import { openNewRecord } from './openRecord.js';
 import { originOf, setPending } from './pendingDraft.js';
-import { choicesOf, createGuard, insertTargets, insertText, insertsForKind, performInsert, primaryOf } from './insertFlow.js';
+import { applyFieldStates, choicesOf, createGuard, insertButtonView, insertTargets, insertText, insertsForKind, performInsert, primaryOf, readFieldStates, recheckDelay, sameStates } from './insertFlow.js';
+import { read } from './ask.js';
 import ReviewHints from './ReviewHints.jsx';
 import InsertFindings from './InsertFindings.jsx';
 import InsertEditor from './ticket/assist/answers/InsertEditor.jsx';
 import { AiBadge } from './ui/primitives.jsx';
 import { t, isolate } from '../i18n/index.js';
+import { tableLabel } from '../lib/tableLabels.js';
 
 const NO_TEXTS = []; // (one array, so the memoised review below is not redone on every render)
 
@@ -87,6 +89,33 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
   const bound = target === undefined ? source?.expect || null : null;
   const wrongRecord = Boolean(bound) && !matchesExpect(bound, currentFromPage(page));
 
+  // Before the click: does the open page have each box, and can it be filled? (audit of 2026-11-07, S4, as on the answer cards.) Asked
+  // again when the ticket or the form changes, and every few seconds while a Workspace or portal page has no usable box yet, because
+  // the person can open the Notes tab or switch the composer on the page without anything here changing. Fail-soft (insertFlow).
+  const [states, setStates] = useState(null);
+  const baseTargets = useMemo(() => insertTargets(feature, { record: page.record, page }), [feature, page.record?.kind, page.surface]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on what the targets depend on, not the page object
+  const probed = useMemo(() => applyFieldStates(baseTargets, states), [baseTargets, states]);
+  const ticketKey = `${page.record?.table || page.newRecord?.table || ''}:${page.record?.sysId || ''}`;
+  useEffect(() => {
+    if (wrongRecord || !baseTargets.length) return undefined;
+    let cancelled = false;
+    let timer = 0;
+    const ask = () =>
+      readFieldStates(page, baseTargets, read, bound).then((s) => {
+        if (cancelled) return;
+        setStates((before) => (sameStates(before, s) ? before : s));
+        const again = recheckDelay(s);
+        if (again) timer = setTimeout(ask, again);
+      });
+    ask();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the tab and the ticket, not the page object, so the form is not asked again on every render
+  }, [wrongRecord, baseTargets, page.tabId, ticketKey, page.formStamp, bound]); // formStamp: the form was saved, so a box may now be locked
+  const blockedLines = [...new Set(probed.map((item) => item.blocked).filter(Boolean))];
+
   async function copy(why = '', value = plain) {
     try {
       await navigator.clipboard.writeText(value);
@@ -104,7 +133,7 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     // exists on the incident too, and filling that by mistake would be easy to miss.
     const here = page.record?.table || page.newRecord?.table || '';
     if (spec.table && here !== spec.table) {
-      const form = spec.table === 'kb_knowledge' ? t('knowledge article') : spec.table;
+      const form = tableLabel(spec.table);
       setNote({
         kind: 'warn',
         text: feature.open?.table === spec.table
@@ -182,13 +211,13 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
     }
     return outcome;
   }
-  const targets = editing ? insertTargets(feature, { record: page.record, page }) : [];
+  const targets = editing ? probed : [];
   const choices = choicesOf(feature, plain);
 
   const replacing = inserts.some((spec) => fillModeFor(spec.field, spec.mode) === 'replace');
   // Which ticket this answer belongs to, said on the card itself where it can be inserted: an answer must never be taken for another
   // ticket's. (A Copy-only answer, such as a rewrite of pasted text, is not bound to a record, so it names none.)
-  const writtenFor = !inserts.length ? '' : target?.newRecord ? t('For a new {form} form', { form: target.table === 'kb_knowledge' ? t('knowledge article') : target.table }) : source?.number ? t('Written for {number}', { number: isolate(source.number) }) : '';
+  const writtenFor = !inserts.length ? '' : target?.newRecord ? t('For a new {form} form', { form: tableLabel(target.table) }) : source?.number ? t('Written for {number}', { number: isolate(source.number) }) : '';
 
   return (
     <section className="ab-surface ab-result" aria-labelledby={headingId}>
@@ -248,12 +277,14 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
         {inserts.map((spec, i) => {
           const key = `${spec.field}:${i}`;
           const inserted = Boolean(done[key]);
+          const view = insertButtonView(probed, spec, i, copyFirst);
           return (
             <button
               key={key}
               type="button"
-              className={`ab-btn${i === 0 && !copyFirst ? ' ab-btn-primary' : ''}`}
-              disabled={busy || inserted || (wrongRecord && !spec.table)}
+              className={`ab-btn${view.lead ? ' ab-btn-primary' : ''}`}
+              disabled={busy || inserted || Boolean(view.blocked) || (wrongRecord && !spec.table)}
+              title={view.blocked || undefined}
               onClick={() => insert(spec, key, false)}
             >
               {inserted ? t('Inserted') : spec.label}
@@ -283,6 +314,9 @@ export default function ResultView({ feature, text, page, people, scan, onAgain,
         {onAgain && <button type="button" className="ab-btn" onClick={onAgain}>{t('Try again')}</button>}
         <button type="button" className="ab-btn ab-btn-quiet" onClick={onClose}>{t('Close')}</button>
       </div>
+      {blockedLines.map((line) => (
+        <p key={line} className="ab-hint ab-result-foot" role="status">{line}</p>
+      ))}
       {replacing && <p className="ab-hint ab-result-foot">{t('A one-line field such as a title is replaced, not added to.')}</p>}
       <p className="ab-hint ab-result-foot">{t('AI can be wrong. Check the text before you use it.')}</p>
     </section>

@@ -83,6 +83,11 @@ export function buildTables() {
     journalRow(11, ABEL.login, '2026-10-26 09:45:00', SEEDED_COMMENT_INJECTION)
   );
 
+  // The main incident's history: its state and priority changed once each. The Ticket journey reads these rows and asks the instance's
+  // UI meta service for the words of the values (a plain agent cannot read the choice table), so the card shows "New", "In Progress".
+  const auditRow = (n, field, from, to, when) => ({ sys_id: `e2ea${n}`, tablename: 'incident', documentkey: INCIDENT_ID, fieldname: field, oldvalue: from, newvalue: to, sys_created_on: when });
+  tables.sys_audit = [...(tables.sys_audit || []), auditRow(1, 'state', '1', '2', '2026-10-26 09:00:00'), auditRow(2, 'priority', '3', '2', '2026-10-26 09:10:00')];
+
   // 2. My Day: three tickets assigned to the agent with different urgency. Expected order:
   //    INC0010100 (SLA breached, P3)  ->  INC0010001 (SLA used up 118%, P2)  ->  INC0010101 (P1, no SLA at all)
   const base = incidentRow();

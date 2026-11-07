@@ -3,10 +3,12 @@
 // Each item says why it matters. Pure.
 //
 // A field the pack could not read is not "missing": on a sensitive (HR) record free text is not read at all, and then the text
-// rules are skipped instead of reporting every text as empty.
+// rules are skipped instead of reporting every text as empty. The same for a column that did not come back with the ticket at all
+// (pack.unreadable: a field the user may not read, R-14): an empty column is "missing", an absent one is "could not check".
 
 import { customersOf } from '../context/identity.js';
 import { isolate, t } from '../i18n/index.js';
+import { personWords } from './personWords.js';
 import { arabicFolded, arabicRule } from '../lib/similar.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -92,12 +94,21 @@ const item = (id, title, why) => ({ id, title, why, short: SHORT[id] || id });
 
 /**
  * @param {object} pack ContextPack read with the 'insights-ticket' spec
- * @returns {{ applicable: boolean, items: { id, title, why }[], textRead: boolean }}
+ * @returns {{ applicable: boolean, items: { id, title, why }[], textRead: boolean, unchecked: string[] }}
+ *   unchecked: the ids of the items that could not be checked because the column did not come back (a field the user may not read)
  */
 export function missingDetails(pack) {
   const kind = text(pack?.kind);
-  if (!MISSING_KINDS.includes(kind)) return { applicable: false, items: [], textRead: false };
+  if (!MISSING_KINDS.includes(kind)) return { applicable: false, items: [], textRead: false, unchecked: [] };
   const f = pack?.fields || {};
+  const hidden = new Set(Array.isArray(pack?.unreadable) ? pack.unreadable : []);
+  const unchecked = [];
+  // True when one of these columns did not come back with the ticket; the item is then "could not check", never "missing".
+  const blind = (id, ...columns) => {
+    if (!columns.some((name) => hidden.has(name))) return false;
+    if (!unchecked.includes(id)) unchecked.push(id);
+    return true;
+  };
   // A minimised pack (HR, or a task whose class is unknown) has no free text by design.
   const textRead = !pack?.sensitive && !(Array.isArray(pack?.access) ? pack.access : []).some((a) => a?.status === 'skipped' && /free text/i.test(text(a?.note)));
   const title = text(f.short_description);
@@ -109,36 +120,50 @@ export function missingDetails(pack) {
   const arBody = arabicFolded(body);
   const items = [];
 
-  if (textRead) {
+  // The rules that read the text need the short description and the description both: if either did not come back, what is missing
+  // from the text is not known (R-14).
+  const textBlind = hidden.has('short_description') || hidden.has('description');
+  if (textRead && !blind('title', 'short_description')) {
     const words = title.split(/\s+/).filter(Boolean);
     const vague = VAGUE_TITLE.test(title) || (arTitle !== '' && AR_VAGUE_TITLE.test(arTitle));
     if (!title) items.push(item('title', t('No short description'), t('A clear title is what the next person and the search for look-alikes start from.')));
     else if (words.length < 3 || vague) items.push(item('title', t('The short description is vague'), t('Say what fails and where, for example "VPN drops every 10 minutes on the London profile".')));
+  }
+  if (textRead && !blind('description', 'description')) {
     if (!body) items.push(item('description', t('No description'), t('Ask what happened, since when, and what the person was doing.')));
     else if (body.length < 40) items.push(item('description', t('The description is very short'), t('A few more sentences save a round trip to the customer.')));
   }
-  if (['incident', 'problem', 'case'].includes(kind) && !text(f.cmdb_ci) && !text(f.asset) && !text(f.product)) {
+  if (['incident', 'problem', 'case'].includes(kind) && !text(f.cmdb_ci) && !text(f.asset) && !text(f.product) && !blind('ci', 'cmdb_ci', 'asset', 'product')) {
     items.push(item('ci', t('No configuration item'), t('Without it, outages, recent changes and known errors on the same item cannot be checked.')));
   }
-  if (textRead && ['incident', 'case', 'task'].includes(kind) && !SCOPE.test(all) && !(arAll && AR_SCOPE.test(arAll))) {
+  if (textRead && !textBlind && ['incident', 'case', 'task'].includes(kind) && !SCOPE.test(all) && !(arAll && AR_SCOPE.test(arAll))) {
     items.push(item('impact', t('Not clear who else is affected'), `${t('Ask whether colleagues have the same problem.')}${text(f.impact) ? ` ${t('The impact is set to {impact}.', { impact: isolate(text(f.impact)) })}` : ''}`));
   }
-  if (textRead && ['incident', 'problem', 'case'].includes(kind) && (title || body) && !ERROR_TEXT.test(all) && !(arAll && AR_ERROR.test(arAll))) {
+  if (textRead && !textBlind && ['incident', 'problem', 'case'].includes(kind) && (title || body) && !ERROR_TEXT.test(all) && !(arAll && AR_ERROR.test(arAll))) {
     items.push(item('error', t('No error message quoted'), t('The exact error text (or a screenshot) is often the fastest way to the fix.')));
   }
   // The caller, requester, contact or consumer (src/context/identity.js).
   const [customer] = customersOf(pack);
   // An email that could not be read (sys_user refused) is not an email that is missing.
   const usersRead = !(Array.isArray(pack?.access) ? pack.access : []).some((a) => a?.source === 'sys_user' && a?.status !== 'ok' && a?.status !== 'empty');
-  if (textRead && kind !== 'problem') {
-    if (!customer) items.push(item('contact', t('No caller or contact'), t('Nobody is named as the person to keep informed.')));
-    else if (!text(customer.email) && usersRead) items.push(item('contact', t('No email address for the caller'), t('Check how to reach them before you promise an update.')));
+  // (a caller column that did not come back is a caller we could not read, not "nobody"; the same for the caller's email column)
+  const words = personWords(pack);
+  const callerBlind = !customer && blind('contact', 'caller_id', 'requested_for', 'contact', 'consumer', 'opened_for', 'subject_person');
+  if (textRead && kind !== 'problem' && !callerBlind) {
+    if (!customer) items.push(item('contact', words.noContact(), t('Nobody is named as the person to keep informed.')));
+    else if (customer.emailUnreadable) {
+      if (!unchecked.includes('contact')) unchecked.push('contact');
+    } else if (!text(customer.email) && usersRead) items.push(item('contact', words.noEmail(), t('Check how to reach them before you promise an update.')));
   }
-  if (textRead && ['incident', 'problem', 'case'].includes(kind) && body && !STEPS.test(body) && !(arBody && AR_STEPS.test(arBody))) {
+  if (textRead && !textBlind && ['incident', 'problem', 'case'].includes(kind) && body && !STEPS.test(body) && !(arBody && AR_STEPS.test(arBody))) {
     items.push(item('steps', t('No steps to reproduce'), t('Ask what they do just before it happens, so you can see it yourself.')));
   }
-  if (['incident', 'problem', 'case'].includes(kind) && !text(f.category)) {
+  if (['incident', 'problem', 'case'].includes(kind) && !text(f.category) && !blind('category', 'category')) {
     items.push(item('category', t('No category'), t('The category drives routing and reports.')));
   }
-  return { applicable: true, items, textRead };
+  // (the rules that read the text could not run when it did not come back)
+  if (textRead && textBlind) {
+    for (const id of ['impact', 'error', 'steps']) if (!unchecked.includes(id)) unchecked.push(id);
+  }
+  return { applicable: true, items, textRead, unchecked };
 }

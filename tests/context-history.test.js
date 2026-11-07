@@ -104,7 +104,7 @@ test('zero rows from a table that has rows for others is "empty"; a table that s
   for (const source of ['sn_customerservice_case', 'sc_req_item']) {
     const entry = hidden.access.find((a) => a.source === source);
     assert.equal(entry.status, 'empty-or-hidden', source);
-    assert.match(entry.note, /proves nothing/);
+    assert.match(entry.note, /cannot tell whether there are none/);
   }
   assert.equal(hidden.items.length, 6, 'the readable table still answers');
 });
@@ -128,7 +128,7 @@ test('rows that are not the caller\'s are dropped when the instance ignored the 
   assert.ok(!JSON.stringify(items).includes('Someone else'));
   const entry = access.find((a) => a.source === 'sc_req_item');
   assert.equal(entry.status, 'error');
-  assert.match(entry.note, /did not apply the filter/);
+  assert.match(entry.note, /did not narrow the results as asked/);
 });
 
 test('the second requester column is tried when the first one does not exist', async () => {

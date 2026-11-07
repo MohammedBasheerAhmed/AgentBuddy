@@ -1,7 +1,7 @@
 // Whose tickets a report covers: just mine, the groups I belong to, or groups I pick. Pure given a reader.
 import { SYS_ID_RE, oneLine } from '../../context/util.js';
 import { LIMITS, SCOPE_KINDS } from './constants.js';
-import { attempt, raw, disp } from './reader.js';
+import { attempt, keyName, raw, disp } from './reader.js';
 import { andQuery, buildQuery } from './queryBuilder.js';
 import { say, tm } from './say.js';
 
@@ -85,7 +85,7 @@ export async function readMyTeam(reader, userId, { tables = [] } = {}) {
     const id = raw(r.group);
     if (SYS_ID_RE.test(id) && !seen.has(id)) {
       seen.add(id);
-      all.push({ id, name: disp(r.group) || id });
+      all.push({ id, name: disp(r.group) || tm('A group you cannot see') });
     }
   });
   const more = rows.length >= LIMITS.membershipMax;
@@ -136,7 +136,7 @@ async function inferGroups(reader, userId, tables) {
   for (const table of tables) {
     // eslint-disable-next-line no-await-in-loop -- a few small reads, one at a time.
     const r = await attempt(() => reader.groups(table, `assigned_to=${userId}^active=true`, ['assignment_group']), table);
-    if (r.ok) r.value.forEach((g) => g.keys[0]?.value && SYS_ID_RE.test(g.keys[0].value) && found.set(g.keys[0].value, g.keys[0].display || g.keys[0].value));
+    if (r.ok) r.value.forEach((g) => g.keys[0]?.value && SYS_ID_RE.test(g.keys[0].value) && found.set(g.keys[0].value, keyName(g.keys[0], '', tm('A group you cannot see'))));
   }
   return [...found].map(([id, name]) => ({ id, name })).slice(0, LIMITS.maxGroups);
 }
@@ -162,9 +162,9 @@ export async function resolveScope(input, { reader, userId, tables = [] }) {
     const checked = await checkChosenGroups(reader, scope.groupIds.map((id) => ({ id, name: scope.groupNames[id] || 'Group' })));
     groups = checked.groups;
     const n = checked.missing.length;
-    if (n && !groups.length) note = tm('None of the chosen groups exists on this instance (they may have been chosen on another one). Choose groups again.');
-    else if (n === 1) note = tm('1 of the chosen groups does not exist on this instance, so it is left out. Choose groups again.');
-    else if (n) note = say(tm('{n} of the chosen groups do not exist on this instance, so they are left out. Choose groups again.'), { n });
+    if (n && !groups.length) note = tm('None of the chosen groups exists on this ServiceNow site (they may have been chosen on another one). Choose groups again.');
+    else if (n === 1) note = tm('1 of the chosen groups does not exist on this ServiceNow site, so it is left out. Choose groups again.');
+    else if (n) note = say(tm('{n} of the chosen groups do not exist on this ServiceNow site, so they are left out. Choose groups again.'), { n });
     if (checked.inactive.length) note = [note, say(tm('No longer active: {names}.'), { names: checked.inactive.map((g) => g.name).join(', ') })].filter(Boolean).join(' ');
   } else {
     const mine = await attempt(() => readMyTeam(reader, userId, { tables }), 'sys_user_grmember');

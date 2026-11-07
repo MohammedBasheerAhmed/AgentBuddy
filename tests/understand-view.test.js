@@ -6,7 +6,8 @@ import { forgetLastViewed } from '../src/sidepanel/ticket/useNeeds.js';
 import { forgetAnswers } from '../src/sidepanel/ticket/assist/answers/index.js';
 import { insightStore } from '../src/sidepanel/ticket/cards/useInsight.js';
 import { LAUNCH_KEY, freshLaunch } from '../src/lib/launch.js';
-import { LAST_VIEWED_KEY } from '../src/lib/lastViewed.js';
+import { LAST_VIEWED_KEY, scopeOf } from '../src/lib/lastViewed.js';
+import { createHash } from 'node:crypto';
 import { DEFAULT_SETTINGS, effectiveSettings } from '../src/policy/policy.js';
 
 // "Understand the ticket" on the Ticket screen, in a small DOM (round 4): what the caller wrote last, with "Translate" (the AI mark)
@@ -20,7 +21,9 @@ const ORIGIN = 'https://acme.service-now.com';
 const SYS = 'c'.repeat(32);
 const KEY = 'sk-ant-test-0123456789';
 const record = { table: 'incident', sysId: SYS, number: 'INC0010042', kind: 'incident' };
-const page = { status: 'record', tabId: 701, href: `${ORIGIN}/incident.do?sys_id=${SYS}`, surface: 'classic', portal: null, record, newRecord: null, user: { name: 'Beth Anglin' } };
+const page = { status: 'record', tabId: 701, href: `${ORIGIN}/incident.do?sys_id=${SYS}`, surface: 'classic', portal: null, record, newRecord: null, user: { name: 'Beth Anglin', userId: 'e'.repeat(32) } };
+// Where this person's times are kept: the instance and a short hash of the user id, never the id (R-17).
+const SCOPE = scopeOf(ORIGIN, createHash('sha256').update(`${ORIGIN}|${page.user.userId}`).digest('hex').slice(0, 16));
 const header = { number: 'INC0010042', short_description: 'Mail does not open', state: 'In Progress', priority: '3 - Moderate' };
 const effOf = (values = {}, policy = {}, apiKey = KEY) => ({ ready: true, ...effectiveSettings({ ...DEFAULT_SETTINGS, profiles: ['it'], profilesConfirmed: true, provider: 'anthropic', previewMode: 'always', ...values }, policy), apiKey, keyLocked: false });
 const sn = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
@@ -154,7 +157,7 @@ test('a message in the panel\'s own script: the message, no "Translate"; AI swit
 test('since you last looked: read once when the ticket is shown, "now" kept (sys_id, table, time), the change on the row\'s line', async () => {
   const fake = setup(ARABIC);
   const before = Date.now() - 3 * H;
-  await fake.chrome.storage.local.set({ [LAST_VIEWED_KEY]: { v: 1, instances: { [ORIGIN]: { [SYS]: { table: 'incident', at: new Date(before).toISOString() } } } } });
+  await fake.chrome.storage.local.set({ [LAST_VIEWED_KEY]: { v: 2, instances: { [SCOPE]: { [SYS]: { table: 'incident', at: new Date(before).toISOString() } } } } });
   const ui = await mount(<TicketView page={page} eff={effOf()} active />);
   try {
     await settle(8);
@@ -169,9 +172,9 @@ test('since you last looked: read once when the ticket is shown, "now" kept (sys
     assert.equal(fake.readsOf('journey').length, 1, 'the journey\'s own read, shared with the journey card: once');
     // What is kept now: this ticket, now; nothing else about it.
     const kept = fake.chrome.storage.local.data[LAST_VIEWED_KEY];
-    assert.deepEqual(Object.keys(kept.instances[ORIGIN][SYS]).sort(), ['at', 'table']);
-    assert.ok(Date.parse(kept.instances[ORIGIN][SYS].at) > before);
-    assert.ok(!JSON.stringify(kept).includes('INC0010042') && !JSON.stringify(kept).includes('Abel'), 'no number, no name');
+    assert.deepEqual(Object.keys(kept.instances[SCOPE][SYS]).sort(), ['at', 'table']);
+    assert.ok(Date.parse(kept.instances[SCOPE][SYS].at) > before);
+    assert.ok(!JSON.stringify(kept).includes('INC0010042') && !JSON.stringify(kept).includes('Abel') && !JSON.stringify(kept).includes(page.user.userId), 'no number, no name, not the user id');
     // Drawn again for the same ticket (another language, say): not read again, so the change stays.
     await ui.rerender(<TicketView page={{ ...page }} eff={effOf()} active />);
     await settle(4);
@@ -188,12 +191,12 @@ test('the first visit: no "since" fact, the time kept; the organisation turns it
     await settle(6);
     await click(understand(ui));
     assert.equal(ui.$('li[data-need="since"]'), null);
-    assert.ok(fake.chrome.storage.local.data[LAST_VIEWED_KEY]?.instances?.[ORIGIN]?.[SYS], 'kept for next time');
+    assert.ok(fake.chrome.storage.local.data[LAST_VIEWED_KEY]?.instances?.[SCOPE]?.[SYS], 'kept for next time');
   } finally {
     await ui.unmount();
   }
   const offFake = setup(ENGLISH);
-  const earlier = { v: 1, instances: { [ORIGIN]: { [SYS]: { table: 'incident', at: new Date(Date.now() - 3 * H).toISOString() } } } };
+  const earlier = { v: 2, instances: { [SCOPE]: { [SYS]: { table: 'incident', at: new Date(Date.now() - 3 * H).toISOString() } } } };
   await offFake.chrome.storage.local.set({ [LAST_VIEWED_KEY]: earlier });
   const off = await mount(<TicketView page={page} eff={effOf({}, { rememberLastViewed: false })} active />);
   try {
@@ -209,7 +212,7 @@ test('the first visit: no "since" fact, the time kept; the organisation turns it
 
 test('"Clear everything" in Settings removes the stored times: the fact held for the ticket on screen goes too', async () => {
   const fake = setup(ARABIC);
-  await fake.chrome.storage.local.set({ [LAST_VIEWED_KEY]: { v: 1, instances: { [ORIGIN]: { [SYS]: { table: 'incident', at: new Date(Date.now() - 3 * H).toISOString() } } } } });
+  await fake.chrome.storage.local.set({ [LAST_VIEWED_KEY]: { v: 2, instances: { [SCOPE]: { [SYS]: { table: 'incident', at: new Date(Date.now() - 3 * H).toISOString() } } } } });
   const ui = await mount(<TicketView page={page} eff={effOf()} active />);
   try {
     await settle(8);

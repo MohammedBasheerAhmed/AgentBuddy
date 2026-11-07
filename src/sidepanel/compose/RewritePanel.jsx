@@ -80,7 +80,7 @@ export default function RewritePanel({ page, eff, showKeyNote = true }) {
         kind: 'warn',
         text: provenance.number
           ? t('This text was read from {number}. Open that ticket again, or paste the text here.', { number: isolate(provenance.number) })
-          : t('This text was read from another record. Open that ticket again, or paste the text here.'),
+          : t('This text was read from another ticket. Open that ticket again, or paste the text here.'),
       });
       return;
     }

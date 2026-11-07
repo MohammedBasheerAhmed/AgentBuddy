@@ -77,9 +77,9 @@ test('a page of a site that is not turned on is refused, and nothing is saved', 
 });
 
 test('a table that is not a table name is refused', async () => {
-  for (const table of ['', 'a b', '../x', '1incident', 'x-y', 5, null]) await assert.rejects(handleBarMessage({ ...actions, table }, fromPage(), deps()), /valid record/, String(table));
+  for (const table of ['', 'a b', '../x', '1incident', 'x-y', 5, null]) await assert.rejects(handleBarMessage({ ...actions, table }, fromPage(), deps()), /not a ticket Agent Buddy can open/, String(table));
   // a launch always names a table (only BAR_ACTIONS may leave it out: "is the bar on here?")
-  for (const table of ['', undefined, 'a b']) await assert.rejects(handleBarMessage({ ...launch, table }, fromPage(), deps()), /valid record/, String(table));
+  for (const table of ['', undefined, 'a b']) await assert.rejects(handleBarMessage({ ...launch, table }, fromPage(), deps()), /not a ticket Agent Buddy can open/, String(table));
 });
 
 // ---- BAR_ACTIONS ---------------------------------------------------------------------------------------------------
@@ -104,7 +104,7 @@ test('BAR_ACTIONS answers with nothing when the person switched the bar off', as
 test('BAR_ACTIONS answers with nothing when the organisation switched the bar off, whatever the person chose', async () => {
   const d = deps({ loadSettings: async () => ({ pageBar: true }), loadPolicy: async () => normalizePolicy({ disablePageBar: true }) });
   assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: false, language: 'en', theme: '' });
-  await assert.rejects(handleBarMessage(launch, fromPage(), d), /not available/);
+  await assert.rejects(handleBarMessage(launch, fromPage(), d), /isn't available on this page/);
   assert.deepEqual(d.calls.saved, []);
 });
 
@@ -113,11 +113,15 @@ test('BAR_ACTIONS answers with nothing for a table the organisation blocked', as
   assert.deepEqual(await handleBarMessage(actions, fromPage(), d), { actions: [], bar: true, language: 'en', theme: '' });
 });
 
-test('BAR_ACTIONS answers with nothing on HR content unless the organisation allows it', async () => {
+test('BAR_ACTIONS answers with nothing on HR content unless the organisation allows it, and then only in Strict privacy mode', async () => {
   const hr = { ...actions, table: 'sn_hr_core_case' };
   assert.deepEqual(await handleBarMessage(hr, fromPage(), deps()), { actions: [], bar: true, language: 'en', theme: '' });
-  const allowed = deps({ loadPolicy: async () => normalizePolicy({ allowHrContent: true }) });
-  assert.ok((await handleBarMessage(hr, fromPage(), allowed)).actions.length > 0);
+  const allowed = (settings) => deps({ loadPolicy: async () => normalizePolicy({ allowHrContent: true }), loadSettings: async () => settings });
+  // every HR function needs Strict (audit of 2026-11-07, W-08): a button that can only open a refusal is not offered
+  assert.deepEqual((await handleBarMessage(hr, fromPage(), allowed({}))).actions, []);
+  assert.deepEqual((await handleBarMessage(hr, fromPage(), allowed({ piiMode: 'standard' }))).actions, []);
+  assert.ok((await handleBarMessage(hr, fromPage(), allowed({ piiMode: 'strict' }))).actions.length > 0);
+  assert.ok((await handleBarMessage(hr, fromPage(), allowed({ piiMode: 'local-only' }))).actions.length > 0);
 });
 
 test('BAR_ACTIONS leaves out an action the policy switched off', async () => {
@@ -175,23 +179,23 @@ test('Firefox: a click on the bar cannot open the sidebar; the answer says wheth
 test('BAR_LAUNCH refuses an action the bar was not allowed to offer here', async () => {
   for (const featureId of ['coaching-snapshot', 'change-cab-brief', 'nope', '', undefined, '../../x']) {
     const d = deps();
-    await assert.rejects(handleBarMessage({ ...launch, featureId }, fromPage(), d), /not available|valid/, String(featureId));
+    await assert.rejects(handleBarMessage({ ...launch, featureId }, fromPage(), d), /isn't available on this page|not a ticket Agent Buddy can open/, String(featureId));
     assert.deepEqual(d.calls.saved, [], String(featureId));
   }
 });
 
 test('BAR_LAUNCH refuses an action the policy switched off, and a bar that is switched off', async () => {
   const policyOff = deps({ loadPolicy: async () => normalizePolicy({ disabledFeatures: ['record-summary'] }) });
-  await assert.rejects(handleBarMessage(launch, fromPage(), policyOff), /not available/);
+  await assert.rejects(handleBarMessage(launch, fromPage(), policyOff), /isn't available on this page/);
   const barOff = deps({ loadSettings: async () => ({ pageBar: false }) });
-  await assert.rejects(handleBarMessage(launch, fromPage(), barOff), /not available/);
+  await assert.rejects(handleBarMessage(launch, fromPage(), barOff), /isn't available on this page/);
   assert.deepEqual(policyOff.calls.saved.concat(barOff.calls.saved), []);
 });
 
 test('BAR_LAUNCH refuses a record that is not a sys_id', async () => {
   for (const sysId of [undefined, '', 'abc', 'z'.repeat(32), 12]) {
     const d = deps();
-    await assert.rejects(handleBarMessage({ ...launch, sysId }, fromPage(), d), /valid request/, String(sysId));
+    await assert.rejects(handleBarMessage({ ...launch, sysId }, fromPage(), d), /could not start that action/, String(sysId));
     assert.deepEqual(d.calls.saved, []);
   }
 });

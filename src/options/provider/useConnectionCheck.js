@@ -36,7 +36,7 @@ export function useConnectionCheck({ eff, typedKey, setBusy, setStatus, change }
       await work(controller.signal);
     } catch (err) {
       if (err?.code === 'CANCELLED') setStatus({ kind: 'warn', text: t('Cancelled.') });
-      else setStatus({ kind: 'danger', text: err?.message || t('Something went wrong.') });
+      else setStatus({ kind: 'danger', text: err?.message || t('Something went wrong. Try again; if it keeps happening, tell your administrator.') });
     } finally {
       if (running.current === controller) running.current = null;
       setBusy('');

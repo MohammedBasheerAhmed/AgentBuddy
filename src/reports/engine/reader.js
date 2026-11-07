@@ -7,8 +7,8 @@
 // A lost session is not a read problem: it is thrown so the whole report can say "log in again".
 import { classifyReadError, confirmEmptyIsReallyEmpty, STATUS } from '../../context/access.js';
 import { say, tm } from './say.js';
-import { raw, disp } from '../../context/util.js';
-import { LIMITS } from './constants.js';
+import { SYS_ID_RE, raw, disp } from '../../context/util.js';
+import { LIMITS, tableWords } from './constants.js';
 
 export class ReportError extends Error {
   constructor(code, message) {
@@ -20,6 +20,21 @@ export class ReportError extends Error {
 
 export const isSessionExpired = (err) => err?.code === 'SESSION_EXPIRED';
 
+// A text for a person that is also a table name, or 'this': what a failed read is about is said as words ('incidents'), never as the
+// table's name (the note is shown as it is written, and the instance's own error text is never part of it).
+const TABLE_NAME = /^[a-z][a-z0-9_]*$/;
+const thing = (what) => (what !== 'this' && TABLE_NAME.test(String(what)) ? tableWords(what) : String(what));
+// A column in a sentence ('configuration item', not cmdb_ci): the few the reports group by, else the name as words.
+const COLUMN_WORDS = { cmdb_ci: 'configuration item', caller_id: 'caller', assigned_to: 'assigned to', assignment_group: 'assignment group', opened_by: 'opened by', business_service: 'service' };
+const columnWords = (name) => COLUMN_WORDS[name] || String(name).replace(/^u_/, '').replace(/_/g, ' ');
+
+// What a person is told about a failed read: fixed sentences by status (the engine's notes are shown as they are written).
+const FAILED_NOTE = {
+  denied: tm('Not available to you.'),
+  error: tm('Could not be read right now.'),
+  skipped: tm('Not available on this ServiceNow site.'),
+};
+
 /** { ok: true, value } or { ok: false, status, note } for one number: 'denied' | 'hidden' | 'blocked' | 'timeout' | 'error'. */
 export async function attempt(fn, what = 'this') {
   try {
@@ -29,8 +44,12 @@ export async function attempt(fn, what = 'this') {
     if (err?.code === 'TIMEOUT' || err?.name === 'AbortError') return { ok: false, status: 'timeout', note: tm('It took too long to read.') };
     if (err?.code === 'BLOCKED') return { ok: false, status: 'blocked', note: err.message };
     if (err?.code === 'NO_COLUMN') return { ok: false, status: 'error', note: err.message };
-    const { status, note } = classifyReadError(err, what);
-    return { ok: false, status, note };
+    const { status } = classifyReadError(err, thing(what));
+    if (status === 'blocked') {
+      // (the policy guard's own message names a table: said here with the table's words)
+      return { ok: false, status, note: what !== 'this' && TABLE_NAME.test(String(what)) ? say(tm('Your organisation does not allow reports to read {table}.'), { table: thing(what) }) : tm('Your organisation does not allow reports to read this.') };
+    }
+    return { ok: false, status, note: FAILED_NOTE[status] || FAILED_NOTE.error };
   }
 }
 
@@ -49,10 +68,37 @@ export function normalizeGroups(result) {
       keys: (Array.isArray(g?.groupby_fields) ? g.groupby_fields : []).map((f) => ({
         field: String(f?.field || ''),
         value: f?.value == null ? '' : String(f.value),
-        display: String(f?.display_value || f?.value || ''),
+        // A reference the user may not read can come back with no display value: its stored value is the id, which is never a name
+        // (D1, R-13). keyName says what to show instead.
+        display: shownName(f),
       })),
     };
   });
+}
+
+// What a group-by key shows: its display value, else the stored value unless that is an id.
+function shownName(field) {
+  const shown = String(field?.display_value || field?.value || '');
+  return SYS_ID_RE.test(shown) ? '' : shown;
+}
+
+/**
+ * The name shown for a person or group column of a ticket row: its display value; for a reference whose name is hidden from this user,
+ * `hidden` (the person is there, "(unassigned)" would be false); '' for an empty column.
+ */
+export function nameOf(cell, hidden = tm('Not shown to you')) {
+  const shown = disp(cell);
+  if (shown) return shown;
+  return raw(cell) ? hidden : '';
+}
+
+/**
+ * The name of a group-by key for a row: its display value; for a key that is an id with no display value, `hidden` (the person or group
+ * exists, its name is hidden from this user: never counted as "nobody" and never shown as an id); else `empty` (the column is empty).
+ */
+export function keyName(key, empty, hidden = tm('Not shown to you')) {
+  if (key?.display) return key.display;
+  return key?.value ? hidden : empty;
 }
 
 /**
@@ -95,7 +141,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
 
   function check(table) {
     if (aborted()) throw timeoutError();
-    if (blocks(table)) throw new ReportError('BLOCKED', say(tm('Your organisation does not allow reports to read {table}.'), { table }));
+    if (blocks(table)) throw new ReportError('BLOCKED', say(tm('Your organisation does not allow reports to read {table}.'), { table: tableWords(table) }));
   }
 
   const limited = (fn) => limiter.run(() => (abortion ? Promise.race([Promise.resolve().then(fn), abortion]) : fn()));
@@ -130,7 +176,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
         limited(async () => {
           const result = await deps.aggregate(table, { query, signal });
           const n = Number(result?.stats?.count);
-          if (!Number.isFinite(n)) throw new ReportError('BAD_ANSWER', say(tm('The instance returned no count for {table}.'), { table }));
+          if (!Number.isFinite(n)) throw new ReportError('BAD_ANSWER', say(tm('ServiceNow did not return a count for {table}.'), { table: tableWords(table) }));
           return n;
         })
       );
@@ -151,7 +197,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
           const result = await deps.aggregate(table, { query, groupBy: columns, avgFields: avg, signal, ...(having ? { having } : {}) });
           const groups = normalizeGroups(result);
           // A column the table does not have may be ignored by the instance: the answer is then not grouped at all.
-          if (!groups) throw new ReportError('NO_COLUMN', say(tm('{columns} is not available on {table}.'), { columns: columns.join(' and '), table }));
+          if (!groups) throw new ReportError('NO_COLUMN', say(tm('{columns} is not available on {table}.'), { columns: columns.map(columnWords).join(' and '), table: tableWords(table) }));
           return groups;
         })
       );
@@ -164,7 +210,7 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
         limited(async () => {
           const result = await deps.aggregate(table, { query, avgFields: columns, signal });
           const stats = result?.stats;
-          if (!stats) throw new ReportError('BAD_ANSWER', say(tm('The instance returned no average for {table}.'), { table }));
+          if (!stats) throw new ReportError('BAD_ANSWER', say(tm('ServiceNow did not return an average for {table}.'), { table: tableWords(table) }));
           const out = { count: Number(stats.count) || 0 };
           columns.forEach((c) => {
             const n = Number(stats.avg?.[c]);
@@ -222,19 +268,21 @@ export function createReader({ deps, cache, limiter, prefix = '', blocked = [], 
      * zero from this table proves nothing (confirmEmptyIsReallyEmpty, as everywhere else in Agent Buddy).
      */
     async visibility(table) {
-      if (blocks(table)) return { status: 'blocked', note: say(tm('Your organisation does not allow reports to read {table}.'), { table }) };
+      if (blocks(table)) return { status: 'blocked', note: say(tm('Your organisation does not allow reports to read {table}.'), { table: tableWords(table) }) };
       if (aborted()) return { status: 'error', note: tm('It took too long to read this.') };
       try {
         return await cached(`visible|${table}`, async () => {
           const reads = { queryTable: (t, q, f, o) => api.rows(t, q, f, o) };
           const answer = await confirmEmptyIsReallyEmpty(table, reads, new Map());
           if (answer.status === STATUS.EMPTY) return { status: 'ok', note: '' };
-          if (answer.status === STATUS.EMPTY_OR_HIDDEN) return { status: 'hidden', note: answer.note };
-          if (answer.status === STATUS.DENIED) return { status: 'denied', note: answer.note };
-          if (answer.status === STATUS.BLOCKED) return { status: 'blocked', note: answer.note };
+          // (the notes are this engine's own fixed sentences, said with the table's words: not the read layer's, which names the table)
+          const words = tableWords(table);
+          if (answer.status === STATUS.EMPTY_OR_HIDDEN) return { status: 'hidden', note: say(tm('You can see no {table} at all, so a count of none proves nothing: there may be none, or your role may not let you see them.'), { table: words }) };
+          if (answer.status === STATUS.DENIED) return { status: 'denied', note: FAILED_NOTE.denied };
+          if (answer.status === STATUS.BLOCKED) return { status: 'blocked', note: say(tm('Your organisation does not allow reports to read {table}.'), { table: words }) };
           // A passing failure (a timeout, a busy instance) is an answer for now only: thrown so the cache does not keep it, and a
           // table is not reported as unreadable for the next minute because of one slow request.
-          throw Object.assign(new Error(answer.note), { visibility: { status: 'error', note: answer.note } });
+          throw Object.assign(new Error(FAILED_NOTE.error), { visibility: { status: 'error', note: FAILED_NOTE.error } });
         });
       } catch (err) {
         if (err?.visibility) return err.visibility;

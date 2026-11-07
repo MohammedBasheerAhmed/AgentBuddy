@@ -93,7 +93,7 @@ test('time to resolve uses only rows with both dates in the right order', () => 
 test('repeat callers need the minimum number of tickets and a real caller', () => {
   const g = (id, name, n) => ({ count: n, avg: {}, keys: [{ field: 'caller_id', value: id, display: name }] });
   const out = repeatCallers([g('1', 'Ann', 2), g('2', 'Bo', 3), g('3', 'Cy', 5), g('', '', 9), g('4', '', 3)]);
-  assert.deepEqual(out.map((x) => [x.name, x.count]), [['Cy', 5], ['Bo', 3], ['Unknown', 3]]);
+  assert.deepEqual(out.map((x) => [x.name, x.count]), [['Cy', 5], ['A person you cannot see', 3], ['Bo', 3]]);
   assert.deepEqual(repeatCallers([g('1', 'Ann', 3)], 4), []);
   assert.deepEqual(repeatCallers([]), []);
 });

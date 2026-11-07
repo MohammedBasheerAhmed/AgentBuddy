@@ -7,9 +7,11 @@
 import { isolate, t } from '../i18n/index.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
+// The kinds whose form calls the box "Close notes" (an incident and a customer service case call it "Resolution notes").
+const closeNotesKind = (kind) => Boolean(kind) && !['incident', 'case', 'problem', 'other'].includes(kind);
 
-const fixes = () => ({
-  notes: { where: t('Resolution notes are on the form, usually under Resolution information.') },
+const fixes = (kind) => ({
+  notes: { where: closeNotesKind(kind) ? t('Close notes are on the form, usually under Closure information.') : t('Resolution notes are on the form, usually under Resolution information.') },
   code: { where: t('The close code is on the form, next to the resolution notes.') },
   customer: { card: 'email', label: t('Which email fits') },
   links: { card: 'knowledge', label: t('Knowledge for this ticket') },
@@ -17,9 +19,9 @@ const fixes = () => ({
 });
 
 /** { card, label } (open that Insights card), { where } (a line about the form), or null. Only for a finding that needs a look. */
-export function fixFor(check) {
+export function fixFor(check, kind = '') {
   if (!check || check.status === 'ok') return null;
-  return fixes()[check.id] || null;
+  return fixes(kind)[check.id] || null;
 }
 
 const stateWord = (state) => ({ approval: t('approval'), rejected: t('rejected approval'), hold: t('on hold'), task: t('open work'), progress: t('owner') })[state];
@@ -36,5 +38,6 @@ export function chaseLine(status) {
   const why = stateWord(state) || t('owner');
   if (owner) return { text: t('Chase: {owner} ({why})', { owner: isolate(owner), why }), tone: state === 'approval' || state === 'rejected' || state === 'hold' ? 'warn' : '' };
   if (state === 'approval') return { text: t('Chase: the approver (not visible to you)'), tone: 'warn' };
+  if (status?.ownerHidden) return { text: t('Chase: the owner (not shown to you)'), tone: 'warn' };
   return { text: t('Nobody is named to chase yet.'), tone: 'warn' };
 }

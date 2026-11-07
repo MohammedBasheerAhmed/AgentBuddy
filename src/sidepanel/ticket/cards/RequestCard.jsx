@@ -5,11 +5,14 @@ import { Facts, Hints, Tag } from '../../checks/Bits.jsx';
 import { allowSensitiveOf, read } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { Group, QuietButton, ReadState } from './bits.jsx';
+import { plainNote } from '../../plainAccess.js';
+import { spanWords } from '../../../insights/time.js';
 import { t, isolate } from '../../../i18n/index.js';
 
 // N5, request status: who to chase, in one line on top; then what it is waiting for, the due date and SLA, the approvals, the tasks
 // and the answers to the request questions (folded). On a catalog task the status is the requested item's. No AI: the message for
-// the requester is in AI Assist.
+// the requester is in AI Assist. While an approval is asked for, the status line says who it waits on and for how long ("Waiting on Dana Lee
+// for 3 days", the oldest when there are several; src/checks/approvalChase.js), and the card's one line adds the time.
 
 const isNotVisible = (err) => err?.code === 'NOT_FOUND' || err?.code === 'ACCESS_DENIED';
 
@@ -36,7 +39,9 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
   const data = state.data;
   const view = useMemo(() => (data ? buildRequestView(data.pack, { currentNumber: record.number || header?.number || '' }) : null), [data, record.number, header?.number]);
   const chase = view ? chaseLine(view.status) : null;
-  useReport(setSummary, chase ? chase.text : '');
+  // "Chase: Dana Lee (approval) · waiting 3 days": the time only when it could be read.
+  const waited = view?.waiting?.ms ?? null;
+  useReport(setSummary, chase ? (waited === null ? chase.text : `${chase.text} · ${t('waiting {span}', { span: spanWords(waited) })}`) : '');
   useReport(setAttention, view && (view.status.state === 'rejected' || view.status.due?.overdue) ? 'warn' : '');
 
   if (!view) return <ReadState state={state} what={t('the request')} onRetry={state.reload} />;
@@ -44,9 +49,16 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
   return (
     <>
       <p className={`ab-ins-chase${chase.tone ? ` ab-ins-chase-${chase.tone}` : ''}`}>{chase.text}</p>
-      {data.target.note && <p className="ab-note ab-note-warn">{data.target.note}</p>}
+      {view.forLine && <p className="ab-ins-line ab-ins-for">{view.forLine}</p>}
+      {data.target.note && <p className="ab-note ab-note-warn">{plainNote(data.target.note)}</p>}
       {data.target.table !== record.table && <p className="ab-hint">{t('This task belongs to {number}; the status is for that item.', { number: data.pack.fields?.number ? isolate(data.pack.fields.number) : t('a requested item') })}</p>}
-      <p className="ab-ins-line">{status.line}</p>
+      {view.waiting ? (
+        <p className="ab-ins-line" data-fact="approval-wait">
+          {view.waiting.line}
+        </p>
+      ) : (
+        <p className="ab-ins-line">{status.line}</p>
+      )}
       <Facts
         tight
         rows={[status.due && { label: t('Due'), value: status.due.overdue ? t('{date} (past due)', { date: status.due.text }) : status.due.text }, status.sla && { label: t('SLA'), value: status.sla.text }].filter(Boolean)}
@@ -56,7 +68,7 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
       {approvals.applicable && (
         <Group title={t('Approvals')} count={approvals.available ? approvals.rows.length : undefined}>
           {!approvals.available && <p className="ab-hint">{t('The approvals could not be read, so they are not shown.')}</p>}
-          {approvals.available && !approvals.rows.length && <p className="ab-hint">{t('No approvals are recorded.')}</p>}
+          {approvals.available && !approvals.rows.length && <p className="ab-hint">{t('No approvals that you can see are recorded.')}</p>}
           {approvals.rows.map((a, i) => (
             <div key={i} className="ab-ins-kv">
               <span>{a.who}</span>
@@ -68,7 +80,7 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
       {chain.applicable && (
         <Group title={chain.title} count={chain.available ? chain.rows.length : undefined}>
           {!chain.available && <p className="ab-hint">{t('{title} could not be read, so they are not shown.', { title: chain.title })}</p>}
-          {chain.available && !chain.rows.length && <p className="ab-hint">{t('None recorded.')}</p>}
+          {chain.available && !chain.rows.length && <p className="ab-hint">{t('None that you can see.')}</p>}
           {chain.rows.map((r, i) => (
             <div key={`${r.number}:${i}`} className={`ab-ins-kv${r.current ? ' ab-ins-current' : ''}`}>
               <span>
@@ -84,10 +96,10 @@ export default function RequestCard({ page, eff, record, header, active, setSumm
       )}
       {answers.applicable && (
         <Group title={t('Answers to the request questions')} count={answers.available ? answers.rows.length : undefined}>
-          {!answers.available && <p className="ab-hint">{answers.note}</p>}
+          {!answers.available && <p className="ab-hint">{plainNote(answers.note)}</p>}
           {answers.available && !answers.rows.length && <p className="ab-hint">{t('No answers are recorded for this item.')}</p>}
           {answers.rows.length > 0 && <Facts rows={answers.rows.map((r) => ({ label: r.question, value: r.value, hidden: r.hidden }))} />}
-          <Hints lines={[answers.available ? answers.note : '']} />
+          <Hints lines={[answers.available ? plainNote(answers.note) : '']} />
         </Group>
       )}
       <div className="ab-ins-foot">

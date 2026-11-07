@@ -35,9 +35,16 @@ test('only live.js imports the real client; the rest take deps as arguments', ()
       continue;
     }
     for (const spec of imports) {
-      assert.ok(spec.startsWith('./') || spec === '../lib/similar.js' || spec === '../lib/recordNumber.js', `${file} imports ${spec}`);
+      // (../domain/states.js is the one reader of what a state means; it is pure and has no imports of its own: checked right below)
+      assert.ok(spec.startsWith('./') || spec === '../lib/similar.js' || spec === '../lib/recordNumber.js' || spec === '../domain/states.js', `${file} imports ${spec}`);
     }
   }
+});
+
+test('the state reader the engine may import is pure: it imports nothing', () => {
+  const states = fs.readFileSync(path.join(dir, '..', 'domain', 'states.js'), 'utf8');
+  assert.ok(!/^\s*import\s/m.test(states), 'src/domain/states.js imports something');
+  assert.ok(!/\bchrome\.|\bfetch\(|XMLHttpRequest/.test(states), 'src/domain/states.js reaches for the browser or the network');
 });
 
 test('nothing writes to the instance', () => {

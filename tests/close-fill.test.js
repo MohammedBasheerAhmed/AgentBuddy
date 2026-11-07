@@ -56,7 +56,8 @@ test('the plan: the code by its VALUE (never the label) first, on an incident on
   assert.equal(plan.code.value, 'workaround', 'the stored value a choice field takes');
   assert.equal(plan.code.label, 'Solved (Work Around)');
   assert.equal(plan.byHand, '');
-  assert.equal(plan.line, 'Insert fills Close code and Resolution notes on the open form. Nothing is saved until you press Save.');
+  // (F13: the state is what closes an incident, so the line names it: "Set State to Resolved, then save." in place of "until you press Save")
+  assert.equal(plan.line, 'Insert fills Close code and Resolution notes on the open form. Nothing is saved. Set State to Resolved, then save.');
 });
 
 test('the plan: the notes box per kind; the code by hand on a case, a Workspace, a portal or a form without the field; none without a vote', () => {
@@ -68,12 +69,19 @@ test('the plan: the notes box per kind; the code by hand on a case, a Workspace,
     ['case', 'close_notes', 'Resolution notes'],
     ['problem', 'fix_notes', 'Fix notes'],
   ];
+  // (F13: each kind that has a state step of its own says it; a plain task has none and keeps "until you press Save")
+  const STEP = {
+    requested_item: 'Set State to Closed Complete (or Closed Incomplete or Closed Skipped), then save.',
+    catalog_task: 'Set State to Closed Complete (or Closed Incomplete or Closed Skipped), then save.',
+    case: 'Set the state your process uses to close, then save.',
+    problem: 'Set State to Resolved, then save.',
+  };
   for (const [kind, field, label] of cases) {
     const [notes] = notesOf(kind);
     assert.equal(notes.field, field, kind);
     const plan = closePlan({ kind, vote: null, notes, code: CODE_KINDS.includes(kind) ? code : null });
     assert.equal(plan.code, null, kind);
-    assert.equal(plan.line, `Insert fills ${label} on the open form. Nothing is saved until you press Save.`, kind);
+    assert.equal(plan.line, STEP[kind] ? `Insert fills ${label} on the open form. Nothing is saved. ${STEP[kind]}` : `Insert fills ${label} on the open form. Nothing is saved until you press Save.`, kind);
   }
   assert.deepEqual(notesOf('problem').map((x) => x.field), ['fix_notes', 'cause_notes'], 'a problem: fix notes, the cause under More');
   // a case with a vote: said, to pick by hand (its code is resolution_code)
@@ -81,14 +89,14 @@ test('the plan: the notes box per kind; the code by hand on a case, a Workspace,
   const onCase = closePlan({ kind: 'case', vote, notes: caseNotes, code: null });
   assert.equal(onCase.code, null);
   assert.equal(onCase.byHand, 'Solved (Work Around)');
-  assert.match(onCase.line, /Choose the close code Solved \(Work Around\) yourself\.$/);
+  assert.match(onCase.line, /Choose the close code Solved \(Work Around\) yourself\. Set the state your process uses to close, then save\.$/);
   // a Workspace or a portal: the code is never tried there
   const [notes] = notesOf('incident');
   for (const where of [{ surface: 'workspace' }, { surface: 'portal' }, { surface: 'classic', form: 'workspace' }, { surface: 'other', form: 'portal' }]) {
     const plan = closePlan({ kind: 'incident', vote, notes, code, ...where });
     assert.equal(plan.code, null, JSON.stringify(where));
     assert.equal(plan.byHand, 'Solved (Work Around)', JSON.stringify(where));
-    assert.equal(plan.line, 'Insert fills Resolution notes on the open form. Nothing is saved until you press Save. Choose the close code Solved (Work Around) yourself.');
+    assert.equal(plan.line, 'Insert fills Resolution notes on the open form. Nothing is saved. Choose the close code Solved (Work Around) yourself. Set State to Resolved, then save.');
   }
   // the form says the field is not there, or locked: by hand
   const [missing] = applyFieldStates([code], { known: true, form: 'gform', fields: { close_code: { state: 'missing' } } });
@@ -113,7 +121,8 @@ test('one Insert: the code first, then the notes, one FILL_FIELD each, both boun
   assert.equal(form.sent[0].value, 'workaround', 'the value, not the label');
   assert.equal(form.sent[1].value, NOTES);
   for (const m of form.sent) assert.deepEqual(m.expect, { table: 'incident', sysId: A });
-  assert.equal(out.note, 'Filled Close code and Resolution notes. Press Save in ServiceNow to keep them.');
+  // (the read-back proved both boxes hold their text; the last sentence is about what no read-back can see: audit of 2026-11-07, W-05)
+  assert.equal(out.note, 'Filled Close code and Resolution notes. Set State to Resolved, then save.');
   assert.deepEqual(out.undo.map((s) => s.field), ['close_code', 'close_notes'], 'an Undo step per box, in the order they went in');
   assert.ok(!form.sent.some((m) => /save|submit/i.test(JSON.stringify(m.type))), 'no message but FILL_FIELD');
 });
@@ -144,7 +153,7 @@ test('the page cannot set the choice (Workspace, portal, not in this form\'s lis
     assert.equal(out.code, 'by-hand', reason);
     assert.equal(out.codeWhy, fillReasonText(reason));
     assert.deepEqual(form.sent.map((m) => m.field), ['close_code', 'close_notes'], reason);
-    assert.equal(out.note, 'Filled Resolution notes. Press Save in ServiceNow to keep it. Choose the close code Solved (Work Around) yourself.');
+    assert.equal(out.note, 'Filled Resolution notes. Choose the close code Solved (Work Around) yourself. Set State to Resolved, then save.');
     assert.deepEqual(out.undo.map((s) => s.field), ['close_notes'], 'only what went in can be undone');
   }
   // planned by hand from the start (a Workspace): the code is never sent
@@ -155,7 +164,9 @@ test('the page cannot set the choice (Workspace, portal, not in this form\'s lis
   assert.deepEqual(ws.sent.map((m) => m.field), ['close_notes']);
   assert.equal(out.code, 'none');
   // the notes box was found by its label on a page without g_form: it is named
-  assert.equal(closeFilledNote({ filled: [notes], label: 'Resolution notes' }), 'Filled Resolution notes. Press Save in ServiceNow to keep it. It went into the box labelled "Resolution notes".');
+  // (no kind given: a kind with no step of its own keeps the two sentences it always had)
+  assert.equal(closeFilledNote({ filled: [notes], label: 'Resolution notes' }), 'Filled Resolution notes. Press Save in ServiceNow to keep it. It went into the box labelled "Resolution notes". Check the state and the other required fields, then save.');
+  assert.equal(closeFilledNote({ filled: [notes], label: 'Resolution notes', kind: 'incident' }), 'Filled Resolution notes. It went into the box labelled "Resolution notes". Set State to Resolved, then save.');
 });
 
 test('the notes cannot go in: the outcome says why (the card then copies them), and the code that went in can still be undone', async () => {
@@ -164,7 +175,8 @@ test('the notes cannot go in: the outcome says why (the card then copies them), 
   const form = formSend({ refuse: { close_notes: 'no-form' } });
   const out = await insertCloseAndNotes({ page: pageOf(), code: { target: codeTargetFor({ kind: 'incident' }), value: 'workaround', label: 'Solved (Work Around)' }, notes: { target: notes, text: NOTES }, source, send: form.send });
   assert.equal(out.status, 'failed');
-  assert.equal(out.why, fillReasonText('no-form'));
+  // W-04: the close code went in first, so the line says both (the card adds "Copied to the clipboard instead"): the notes failed, the code is filled
+  assert.equal(out.why, `${fillReasonText('no-form')} The close code Solved (Work Around) is already filled on the form. Undo puts it back.`);
   assert.equal(out.code, 'filled');
   assert.deepEqual(out.undo.map((s) => s.field), ['close_code']);
   // empty notes or a blocked box: nothing is written at all

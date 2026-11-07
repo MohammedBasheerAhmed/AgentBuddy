@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { readAudit, clearAudit } from '../../lib/storage.js';
 import { auditToCsv } from '../../audit/auditLog.js';
 import { downloadText } from '../../sidepanel/reports/download.js';
+import { tableLabel } from '../../lib/tableLabels.js';
 import { SectionHead, Status } from '../fields.jsx';
 import { t, tm } from '../../i18n/index.js';
 
-// What the activity log says happened to a run (src/audit/auditLog.js OUTCOMES); the action and the table are codes, shown as they are.
+// What the activity log says happened to a run (src/audit/auditLog.js OUTCOMES); the action is a code, shown as it is; the table is shown as the kind of ticket it is (src/lib/tableLabels.js).
 const OUTCOME_WORDS = { sent: tm('sent'), blocked: tm('blocked'), error: tm('error'), cancelled: tm('cancelled'), inserted: tm('inserted'), copied: tm('copied') };
 
 export function AuditSection({ eff }) {
@@ -35,7 +36,7 @@ export function AuditSection({ eff }) {
   return (
     <section className="ab-section ab-set-section" aria-labelledby="h-audit">
       <SectionHead id="h-audit" title={t('Activity log')}>
-        {t("A local record of what Agent Buddy did: which action, which table, how many items were masked, tokens and outcome. It never stores ticket text, names or the AI's answers.")}
+        {t("A local log of what Agent Buddy did: which action, which kind of ticket, how many items were masked, how much was used and the outcome. It never stores ticket text, names or the AI's answers.")}
       </SectionHead>
       <div className="ab-set-actions">
         <button type="button" className="ab-btn ab-btn-sm" onClick={exportCsv} disabled={!canExport || !log.length}>{t('Export CSV')}</button>
@@ -45,10 +46,10 @@ export function AuditSection({ eff }) {
       <Status status={status} />
       {log.length === 0 ? <p className="ab-note ab-set-empty">{t('Nothing yet.')}</p> : (
         <table className="ab-table ab-set-table">
-          <thead><tr><th scope="col">{t('Time')}</th><th scope="col">{t('Action')}</th><th scope="col">{t('Table')}</th><th scope="col">{t('Masked')}</th><th scope="col">{t('Outcome')}</th></tr></thead>
+          <thead><tr><th scope="col">{t('Time')}</th><th scope="col">{t('Action')}</th><th scope="col">{t('Ticket type')}</th><th scope="col">{t('Masked')}</th><th scope="col">{t('Outcome')}</th></tr></thead>
           <tbody>
             {log.slice(0, 40).map((e, i) => (
-              <tr key={i}><td>{String(e.time || '').replace('T', ' ').slice(0, 16)}</td><td><code data-ltr>{e.feature}</code></td><td><code data-ltr>{e.table}</code></td><td>{e.masked}</td><td>{OUTCOME_WORDS[e.outcome] ? t(OUTCOME_WORDS[e.outcome]) : e.outcome}{e.reason ? <> (<code data-ltr>{e.reason}</code>)</> : ''}</td></tr>
+              <tr key={i}><td>{String(e.time || '').replace('T', ' ').slice(0, 16)}</td><td><code data-ltr>{e.feature}</code></td><td>{e.table ? tableLabel(e.table, { sentenceCase: true }) : ''}</td><td>{e.masked}</td><td>{OUTCOME_WORDS[e.outcome] ? t(OUTCOME_WORDS[e.outcome]) : e.outcome}{e.reason ? <> (<code data-ltr>{e.reason}</code>)</> : ''}</td></tr>
             ))}
           </tbody>
         </table>

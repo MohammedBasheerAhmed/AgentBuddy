@@ -9,6 +9,7 @@
 import { computeSignals } from '../itsm/sentiment.js';
 import { TIME, shortSpan } from './time.js';
 import { customerWaiting } from './glance.js';
+import { personWords } from './personWords.js';
 import { isolate, t, tn } from '../i18n/index.js';
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -106,14 +107,15 @@ export function levelOf(value) {
 
 /**
  * Is the priority lower than what the ticket shows? One entry per reason; [] when it looks fine or the priority is not known.
- * @param {{ fields: object, vip: boolean, outageCount: number, urgencyWords: string[] }} input
+ * @param {{ fields: object, vip: boolean, outageCount: number, urgencyWords: string[], subject?: { kind?: string, table?: string } }} input
+ *   subject: the ticket (its pack), so the VIP person is named as the kind names them (F11); without it the incident's "caller"
  */
-export function priorityMismatch({ fields = {}, vip = false, outageCount = 0, urgencyWords = [] }) {
+export function priorityMismatch({ fields = {}, vip = false, outageCount = 0, urgencyWords = [], subject = null }) {
   const priority = levelOf(fields.priority);
   if (priority === null) return [];
   const label = text(fields.priority);
   const out = [];
-  if (vip && priority >= 3) out.push(t('The caller is a VIP but the priority is {priority}.', { priority: isolate(label) }));
+  if (vip && priority >= 3) out.push(personWords(subject).vipLow(isolate(label)));
   const impact = levelOf(fields.impact);
   if (impact === 1 && priority >= 3) out.push(t('The impact is {impact} but the priority is {priority}.', { impact: isolate(text(fields.impact)), priority: isolate(label) }));
   if (outageCount >= 3 && priority >= 3) {
@@ -125,20 +127,35 @@ export function priorityMismatch({ fields = {}, vip = false, outageCount = 0, ur
   return out;
 }
 
+// What the signals are worked out from, by the id the card gives when it could not read it (R-20): a fact that could not be read is not
+// "no risk", so the summary says what was not checked and the card is not green.
+const unreadableThing = (id) =>
+  ({
+    sla: t('the SLA'),
+    vip: t('the VIP flag'),
+    outage: t('other open tickets on the same item'),
+    notes: t('the notes'),
+    counts: t('how often it was reopened or reassigned'),
+  })[id] || id;
+
 /**
- * @param {{ pack: object, slas?: object[]|null, vip?: boolean, outageCount?: number, now: number }} input
+ * @param {{ pack: object, slas?: object[]|null, vip?: boolean, outageCount?: number, now: number, notChecked?: string[] }} input
  *   slas: the SLA rows of the `glance` read (null when they could not be read)
+ *   notChecked: ids of the facts that could not be read ('sla', 'vip', 'outage', 'notes', 'counts')
  * @returns {{ signals: { id: string, level: 'high'|'medium'|'low', title: string, why: string }[], attention: ''|'warn'|'danger',
- *   summary: string, customerKnown: boolean, commentsRead: number }}
+ *   summary: string, customerKnown: boolean, commentsRead: number, notChecked: string[], couldNot: string }}
+ *   couldNot: the unread facts as words ('the SLA and the VIP flag'), '' when everything was read
  */
-export function riskSignals({ pack, slas = null, vip = false, outageCount = 0, now }) {
+export function riskSignals({ pack, slas = null, vip = false, outageCount = 0, now, notChecked = [] }) {
   const withSlas = Array.isArray(slas) ? { ...pack, related: { ...(pack?.related || {}), slas: slas.map((s) => ({ ...s, breached: s.breached ? 'true' : 'false' })) } } : pack;
   const s = computeSignals(withSlas || {}, { now });
   const signals = [];
   const add = (id, level, title, why) => signals.push({ id, level, title, why });
 
-  if (vip) add('vip', 'medium', t('VIP caller'), t('The caller is marked VIP in ServiceNow.'));
-  for (const [i, why] of priorityMismatch({ fields: pack?.fields, vip, outageCount, urgencyWords: s.urgencyWords }).entries()) {
+  // (the person is named as the kind names them: a VIP requester, a VIP employee, F11)
+  const words = personWords(pack);
+  if (vip) add('vip', 'medium', words.vipTitle(), words.vipNote());
+  for (const [i, why] of priorityMismatch({ fields: pack?.fields, vip, outageCount, urgencyWords: s.urgencyWords, subject: pack }).entries()) {
     add(`priority-${i}`, 'high', t('Priority may be too low'), why);
   }
   if (s.slas && s.slas.breached) {
@@ -171,6 +188,10 @@ export function riskSignals({ pack, slas = null, vip = false, outageCount = 0, n
   const medium = signals.filter((x) => x.level === 'medium').length;
   const attention = high ? 'danger' : medium >= 2 ? 'warn' : '';
   const titles = [...new Set(signals.map((x) => x.title))];
-  const summary = titles.length ? `${titles.slice(0, 2).join(' · ')}${titles.length > 2 ? ` +${titles.length - 2}` : ''}` : t('No warning signs');
-  return { signals, attention, summary, customerKnown: s.customerKnown, commentsRead: s.commentsRead };
+  const unread = [...new Set(notChecked)];
+  const couldNot = unread.map(unreadableThing).join(t(', '));
+  // "No warning signs" is said only of what could be read; a fact that could not be read is named, and the card is not green.
+  const none = unread.length ? t('No warning signs found; could not check {list}', { list: couldNot }) : t('No warning signs');
+  const summary = titles.length ? `${titles.slice(0, 2).join(' · ')}${titles.length > 2 ? ` +${titles.length - 2}` : ''}` : none;
+  return { signals, attention, summary, customerKnown: s.customerKnown, commentsRead: s.commentsRead, notChecked: unread, couldNot };
 }

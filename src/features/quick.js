@@ -12,6 +12,7 @@
 //   quickActions()  the worker, for the bar on the ServiceNow page: AI items only, { id, label } as before. It may pass `stage`.
 //   quickItems()    the side panel: both kinds, marked, for the state the ticket is in, minus what this record does not offer.
 import { isFeatureEnabled } from '../policy/policy.js';
+import { barFeatureShown } from './visibility.js';
 import { t } from '../i18n/core.js';
 
 export const MAX_QUICK = 4;
@@ -136,17 +137,19 @@ export const QUICK_CARDS = Object.freeze({
 });
 
 // What the bar offers for a kind of record until the person pins their own, when the ticket's state is not known (the bar on the
-// ServiceNow page does not read it).
+// ServiceNow page does not read it). Only what the panel would offer for the kind (src/features/visibility.js; tests/quick-actions.test.js
+// and tests/roles-visibility.test.js check it): a problem has no customer to reply to, and a catalog task or another task is a
+// ticket whose requester may not see its comments, so neither leads with "Draft a reply" (audit of 2026-11-07, W-02).
 export const QUICK_DEFAULTS = Object.freeze({
   incident: ['record-summary', 'reply-draft', 'resolution-notes'],
-  problem: ['record-summary', 'reply-draft', 'problem-rca'],
+  problem: ['record-summary', 'problem-rca', 'handoff-brief'],
   change: ['record-summary', 'change-cab-brief', 'thread-summary'],
   request: ['record-summary', 'reply-draft', 'missing-info'],
   requested_item: ['record-summary', 'reply-draft', 'resolution-notes'],
-  catalog_task: ['record-summary', 'reply-draft', 'resolution-notes'],
+  catalog_task: ['record-summary', 'resolution-notes', 'handoff-brief'],
   case: ['record-summary', 'reply-draft', 'resolution-notes'],
-  hr_case: ['record-summary', 'reply-draft'],
-  task: ['record-summary', 'reply-draft', 'resolution-notes'],
+  hr_case: ['record-summary', 'reply-draft', 'resolution-notes'], // (an HR case has a close too: W-09)
+  task: ['record-summary', 'resolution-notes', 'handoff-brief'],
   knowledge: ['article-optimise'],
   chat: ['chat-summary', 'chat-reply'],
   other: ['record-summary', 'thread-summary'],
@@ -210,15 +213,18 @@ export function quickDefaults(kind, stage = null) {
 
 /**
  * The AI actions the bar on the ServiceNow page shows for a kind of record: the person's pins when they have any, else the
- * defaults; minus whatever the organisation's policy switched off. When every pin is switched off the defaults apply (still minus
- * the policy). Insights items are never returned here (the page bar runs AI actions only).
- * @param {{ kind: string, pins?: object, policy?: object, stage?: string|null, aiOn?: boolean }} input
- *   stage: the ticket's stage when the caller knows it; aiOn: false when AI is switched off (by the organisation, or "Skip AI")
+ * defaults; minus whatever the organisation's policy switched off, and minus what the panel would not offer on this kind of ticket
+ * (src/features/visibility.js: the kind, the person's profiles, no reply on a ticket with no customer, Strict mode for HR) when the
+ * caller passes `eff`. When every pin is switched off the defaults apply (still minus the policy). Insights items are never
+ * returned here (the page bar runs AI actions only).
+ * @param {{ kind: string, table?: string, eff?: object|null, pins?: object, policy?: object, stage?: string|null, aiOn?: boolean }} input
+ *   stage: the ticket's stage when the caller knows it; aiOn: false when AI is switched off (by the organisation, or "Skip AI");
+ *   table and eff (effectiveSettings(settings, policy)): the facts for the panel's rules; without eff only the policy applies
  * @returns {{ id: string, label: string }[]}
  */
-export function quickActions({ kind, pins, policy, stage = null, aiOn = true } = {}) {
+export function quickActions({ kind, table = '', eff = null, pins, policy, stage = null, aiOn = true } = {}) {
   if (aiOn === false) return [];
-  const allowed = (ids) => ids.filter((id) => isQuickId(id) && isFeatureEnabled(id, policy));
+  const allowed = (ids) => ids.filter((id) => isQuickId(id) && isFeatureEnabled(id, policy) && (!eff || barFeatureShown(id, { table, kind, eff })));
   const own = allowed(cleanPins(pins, kind));
   // The page bar's suggestions stay three (its own pins may be four), with or without a stage.
   const ids = own.length ? own : allowed(quickDefaults(kind, stage)).slice(0, 3);

@@ -10,7 +10,7 @@ import { buildComposePack, pageTable, peopleFromNames } from '../../compose/rewr
 import { reviewForCustomer } from '../../safeSend/review.js';
 import { expectFromPage } from '../../lib/fillable.js';
 import { ReviewHints, featureState, fillField, fillReason, isAiReady, useFill } from './shared.js';
-import { openNewRecord } from '../openRecord.js';
+import { openNewRecord, newRecordOpensInNewTab } from '../openRecord.js';
 import { AiBadge } from '../ui/primitives.jsx';
 import { shownFor } from '../../profiles/profiles.js';
 import NotesHints from './NotesHints.jsx';
@@ -137,7 +137,7 @@ export default function NotesPanel({ page, eff, showKeyNote = true }) {
     }
     if (done.length && !failed.length) setFilled(true);
     if (done.length) fill.audit('inserted');
-    if (done.length && !failed.length) setOutcome({ kind: 'ok', text: t('Filled: {fields}. Review the form, then save the record yourself.', { fields: done.join(t(', ')) }) });
+    if (done.length && !failed.length) setOutcome({ kind: 'ok', text: t('Filled: {fields}. Review the form, then save the ticket yourself.', { fields: done.join(t(', ')) }) });
     else if (done.length) setOutcome({ kind: 'warn', text: t('Filled: {fields}. Not filled: {failed}. Copy those values instead.', { fields: done.join(t(', ')), failed: failed.join(t('; ')) }) });
     else setOutcome({ kind: 'danger', text: t('Nothing was filled: {failed}. Use Copy instead.', { failed: failed.join(t('; ')) }) });
   }
@@ -314,7 +314,7 @@ function BlankForms({ page, eff, quiet = true }) {
             key={f.table}
             type="button"
             className={quiet ? 'ab-btn ab-btn-sm ab-btn-quiet' : 'ab-btn ab-btn-sm'}
-            onClick={() => setNote(openNewRecord(page, f.table) ? t('The blank form opens in this tab. Your notes and the proposal stay here.') : t('The blank form could not be opened from here. Open it in ServiceNow yourself.'))}
+            onClick={() => setNote(openNewRecord(page, f.table) ? (newRecordOpensInNewTab(page, f.table) ? t('The blank form opens in a new tab. Your notes and the proposal stay here.') : t('The blank form opens in this tab. Your notes and the proposal stay here.')) : t('The blank form could not be opened from here. Open it in ServiceNow yourself.'))}
           >
             {tr(f.label)}
           </button>

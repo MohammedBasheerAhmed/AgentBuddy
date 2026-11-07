@@ -15,6 +15,7 @@ import { checklistParts, mergeParentPack } from '../../checks/checklistParts.js'
 import { resolutionImproveParts } from '../../checks/resolutionParts.js';
 import { withCurrentNotes } from '../../checks/resolutionCheck.js';
 import { notClosed, notNew } from '../stages.js';
+import { requesterCommentLabel } from './kinds.js';
 import { rulesFor } from '../../prompts/rules.js';
 import { t, tm, t as tr } from '../../i18n/index.js';
 
@@ -93,7 +94,13 @@ export default [
     journal: 6,
     enrich: explainTarget,
     parts: requestExplainParts,
-    insert: { field: 'comments', get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments') },
+    // The requester reads the request and its requested item, not the catalog task (audit of 2026-11-07, W-02): on a task the work
+    // notes come first and the comment is the second, warned choice.
+    insert: [
+      { field: 'comments', kinds: ['request', 'requested_item'], get label() { return t('Insert as customer comment'); }, fieldLabel: tm('Additional comments') },
+      { field: 'work_notes', kinds: ['catalog_task'], get label() { return t('Add to work notes'); }, fieldLabel: tm('Work notes') },
+      { field: 'comments', kinds: ['catalog_task'], get label() { return requesterCommentLabel(); }, labelFor: requesterCommentLabel, fieldLabel: tm('Additional comments') },
+    ],
     system:
       'You help a service desk agent tell a requester where their service request stands.\n' +
       'Write a short, friendly status message the agent can send to the requester as a comment.\n' +
@@ -116,7 +123,7 @@ export default [
     },
     wave: 2,
     // The kinds whose form has close_notes (a problem keeps its fix in fix_notes, which this does not read).
-    kinds: ['incident', 'requested_item', 'catalog_task', 'case', 'task'],
+    kinds: ['incident', 'change', 'requested_item', 'catalog_task', 'case', 'hr_case', 'task'],
     group: 'resolve',
     primary: 'insert',
     when: notNew,
@@ -127,7 +134,7 @@ export default [
     // The answer keeps every fact of the notes it rewrites, so it REPLACES them (Add below would leave the old and the new).
     insert: [
       { field: 'close_notes', kinds: ['incident', 'case'], get label() { return t('Insert into resolution notes'); }, fieldLabel: tm('Resolution notes'), mode: 'replace' },
-      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task'], get label() { return t('Insert into close notes'); }, fieldLabel: tm('Close notes'), mode: 'replace' },
+      { field: 'close_notes', kinds: ['requested_item', 'catalog_task', 'task', 'change', 'hr_case'], get label() { return t('Insert into close notes'); }, fieldLabel: tm('Close notes'), mode: 'replace' },
     ],
     system:
       'You help a service desk agent improve the resolution notes they are writing for a ServiceNow ticket.\n' +

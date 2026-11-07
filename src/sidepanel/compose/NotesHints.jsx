@@ -79,7 +79,7 @@ export default function NotesHints({ page, text, names }) {
           {state.for && state.for !== askFor ? t('Look again for the new short description') : t('Look again')}
         </button>
       </div>
-      <p className="ab-hint">{t('Read with your session, not by AI. Agent Buddy does not fill caller, category or group.')}</p>
+      <p className="ab-hint">{t('Read as you, not by AI. Agent Buddy does not fill caller, category or group.')}</p>
     </div>
   );
 }

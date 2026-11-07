@@ -11,11 +11,12 @@
 // Every read is a GET through the shared reader, fails on its own and says so in `access`; a missing number is null, never 0.
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS, TICKET_FIELDS } from './constants.js';
-import { attempt } from './reader.js';
+import { attempt, nameOf } from './reader.js';
 import { tm } from './say.js';
 import { t } from '../../i18n/core.js';
-import { shown } from '../shown.js';
-import { andQuery, raw, disp, sectionResult, stateClass, usableTables, resolvedColumn, verifiedCount, readOpenStates } from './common.js';
+import { shown, stateShown } from '../shown.js';
+import { waitsOn } from '../../domain/states.js';
+import { andQuery, raw, disp, sectionResult, stateClass, stateName, usableTables, resolvedColumn, verifiedCount, readOpenStates } from './common.js';
 import { buildQuery } from './queryBuilder.js';
 import { HOUR, localDaysBetween, timeOf } from './time.js';
 import { overviewSection, waitingStates } from './overview.js';
@@ -40,14 +41,12 @@ export function normalizeHours(value) {
 }
 
 /**
- * What a waiting state is waiting FOR, judged from the label the instance shows: 'approval', 'customer' (the person who raised
- * it) or 'other' (on hold, pending, or waiting on another team or a vendor). Pure.
+ * What a waiting state is waiting FOR: 'approval', 'customer' (the person who raised it) or 'other' (on hold, pending, or waiting on
+ * another team or a vendor). Judged from the stored value of the state when the table is given (src/domain/states.js), else from the
+ * words of the label, in English, German or Arabic. Pure.
  */
-export function waitingKind(label) {
-  const text = String(label || '');
-  if (/approv/i.test(text)) return 'approval';
-  if (/\b(caller|customer|user|requester|requestor|requested for|info|information|response|reply|confirmation|feedback)\b/i.test(text)) return 'customer';
-  return 'other';
+export function waitingKind(label, { table = '', value = '' } = {}) {
+  return waitsOn({ table, value, label }) || 'other';
 }
 
 // Smaller priority number = more urgent; text with no number goes last.
@@ -64,6 +63,9 @@ function ticketItem(row, { table, kind }, { now, offsetMin }) {
   const opened = timeOf(raw(row.opened_at));
   const names = [row.opened_by, row.caller_id].map(disp).filter(Boolean);
   return {
+    // What the ticket waits for, judged from its own state (waitingKind), and when it was opened: kept for Needs attention, which picks
+    // the approvals and the customers out of the waiting lists; the hand-over's own output drops both (`strip`).
+    waits: waitsOn({ table, value: raw(row.state), label: disp(row.state) }),
     table,
     kind,
     sysId: raw(row.sys_id),
@@ -71,9 +73,9 @@ function ticketItem(row, { table, kind }, { now, offsetMin }) {
     title: disp(row.short_description),
     priority: disp(row.priority),
     priorityValue: raw(row.priority),
-    state: disp(row.state),
-    owner: disp(row.assigned_to),
-    group: disp(row.assignment_group),
+    ...stateOf(row, table),
+    owner: nameOf(row.assigned_to),
+    group: nameOf(row.assignment_group),
     openedAt: disp(row.opened_at),
     ageDays: Number.isFinite(opened) ? localDaysBetween(opened, now, offsetMin) : null,
     maskNames: [...new Set(names)],
@@ -81,7 +83,13 @@ function ticketItem(row, { table, kind }, { now, offsetMin }) {
   };
 }
 
-const strip = ({ openedMs, ...rest }) => rest;
+const strip = ({ openedMs, waits, ...rest }) => rest;
+
+// The state of a ticket row: the label shown; with none (only the stored number), the plain word for what it means (`statePlain`).
+const stateOf = (row, table) => {
+  const { name, plain } = stateName({ display: disp(row.state), value: raw(row.state) }, table);
+  return { state: name, statePlain: plain };
+};
 
 /** Most urgent first, then newest. Pure. */
 const byUrgency = (a, b) => priorityNumber(a.priorityValue || a.priority) - priorityNumber(b.priorityValue || b.priority) || b.openedMs - a.openedMs || a.number.localeCompare(b.number);
@@ -125,26 +133,62 @@ async function readTable(ctx, tableInfo, since) {
   const [openedF, openedO] = list([buildQuery([{ op: 'since', field: 'opened_at', ms: since }, urgent])], { orderBy: 'opened_at', descending: true });
   const [resolvedF, resolvedO] = resolved ? list([buildQuery([{ op: 'since', field: resolved, ms: since }, urgent])], { orderBy: resolved, descending: true }) : ['', ''];
   const canReassign = tableInfo.cols.has('reassignment_count');
-  const [reassignedF, reassignedO] = canReassign
-    ? list(['active=true', buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }, { op: 'since', field: 'sys_updated_on', ms: since }])], { orderBy: 'reassignment_count', descending: true })
-    : ['', ''];
 
   // The state breakdown has the same query as the Overview's, so it is a cache hit when Overview ran first. It also says which
-  // states mean 'resolved, waiting to close': those tickets are not 'oldest open'.
-  const { states, live } = await readOpenStates(reader, tableInfo.table, open);
-  const waiting = states.ok ? waitingStates(states.value) : null;
-  const [, oldestO] = list(['active=true', live], { orderBy: 'opened_at' }); // a plain list: no total is counted
+  // states mean 'resolved, waiting to close': those tickets are not 'oldest open' and not 'handed over often' (the Workload leaves
+  // them out of its hand-off count the same way).
+  const opened = await readOpenStates(reader, tableInfo.table, open);
+  const { states, live } = opened;
+  const [reassignedF, reassignedO] = canReassign
+    ? list(['active=true', live, buildQuery([{ op: 'gte', field: 'reassignment_count', value: LIMITS.pingPongMin }, { op: 'since', field: 'sys_updated_on', ms: since }])], { orderBy: 'reassignment_count', descending: true })
+    : ['', ''];
 
-  const [openedUrgent, resolvedUrgent, reassigned, waitingRows, oldest] = await Promise.all([
+  const [openedUrgent, resolvedUrgent, reassigned, lists] = await Promise.all([
     readList(reader, tableInfo.table, openedF, openedO, fields, HANDOVER_LIMITS.list),
     resolved ? readList(reader, tableInfo.table, resolvedF, resolvedO, fields, HANDOVER_LIMITS.list) : null,
     canReassign ? readList(reader, tableInfo.table, reassignedF, reassignedO, [...fields, 'reassignment_count'], HANDOVER_LIMITS.reassigned) : null,
-    waiting?.values.length
-      ? attempt(() => reader.rows(tableInfo.table, q('active=true', buildQuery([{ op: 'in', field: 'state', values: waiting.values }], { orderBy: 'opened_at' })), fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), tableInfo.table)
-      : null,
-    attempt(() => reader.rows(tableInfo.table, oldestO, fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), tableInfo.table),
+    readWaitingAndOldest(ctx, tableInfo, opened),
   ]);
-  return { tableInfo, states, openedUrgent, resolvedUrgent, reassigned, waitingRows, oldest, hasResolved: Boolean(resolved), canReassign };
+  return { tableInfo, states, openedUrgent, resolvedUrgent, reassigned, waitingRows: lists.waitingRows, oldest: lists.oldest, hasResolved: Boolean(resolved), canReassign };
+}
+
+/** The stored state values that mean waiting, by what they wait for: { approval: [...], customer: [...], other: [...] }. Pure. */
+export function waitingValuesByKind(groups, table = '') {
+  const kinds = { approval: [], customer: [], other: [] };
+  (groups || []).forEach((g) => {
+    const key = g.keys[0];
+    if (!key || key.value === '' || stateClass(key.display, { table, value: key.value }) !== 'waiting') return;
+    const kind = waitingKind(key.display, { table, value: key.value });
+    if (!kinds[kind].includes(key.value)) kinds[kind].push(key.value);
+  });
+  return kinds;
+}
+
+/**
+ * The short lists of one table that the hand-over and Needs attention both show, worded once so they are the same requests (one
+ * cached read serves both): the oldest tickets that WAIT (up to HANDOVER_LIMITS.perTableOldest) and the oldest open tickets. Both leave
+ * out the resolved-but-active. `opened` is the table's readOpenStates when the caller has it already.
+ * `perKind` (Needs attention only): a table that has several kinds of wait also gets the oldest approvals and the oldest customers on
+ * their own, so a few old holds with a vendor do not push an approval or a customer out of the oldest five. A table with one kind of
+ * wait needs no more than the first list.
+ * @returns {{ waitingRows: {ok, value: row[]} | null, oldest: {ok, value: row[]}, kindRows: { approval?: {ok, value: row[]}, customer?: {ok, value: row[]} } }}
+ */
+export async function readWaitingAndOldest(ctx, tableInfo, opened = null, { perKind = false } = {}) {
+  const { reader, scope } = ctx;
+  const q = (...extra) => andQuery(scope.query, ...extra);
+  const { states, live } = opened || (await readOpenStates(reader, tableInfo.table, q('active=true')));
+  const fields = [...LOOKUP_FIELDS, ...(tableInfo.cols.has('caller_id') ? ['caller_id'] : [])];
+  const waiting = states.ok ? waitingStates(states.value, tableInfo.table) : null;
+  const byKind = perKind && waiting?.values.length ? waitingValuesByKind(states.value, tableInfo.table) : null;
+  const waitingList = (values) => attempt(() => reader.rows(tableInfo.table, q('active=true', buildQuery([{ op: 'in', field: 'state', values }], { orderBy: 'opened_at' })), fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), tableInfo.table);
+  const kinds = ['approval', 'customer'].filter((kind) => byKind && byKind[kind].length && byKind[kind].length < waiting.values.length);
+  const [waitingRows, oldest, ...kindReads] = await Promise.all([
+    waiting?.values.length ? waitingList(waiting.values) : null,
+    // a plain list: no total is counted
+    attempt(() => reader.rows(tableInfo.table, andQuery(q('active=true', live), buildQuery([], { orderBy: 'opened_at' })), fields, { limit: HANDOVER_LIMITS.perTableOldest, displayValue: true }), tableInfo.table),
+    ...kinds.map((kind) => waitingList(byKind[kind])),
+  ]);
+  return { waitingRows, oldest, kindRows: Object.fromEntries(kinds.map((kind, i) => [kind, kindReads[i]])) };
 }
 
 /** Tickets by sys_id from the task table (display values): { details: Map, failure }. Chunks of 50, bounded. */
@@ -195,11 +239,82 @@ function mergeLists(parts, pick, ctx, sorter, max) {
   };
 }
 
+/**
+ * Waiting, from what readTable / readWaitingAndOldest read: the state breakdown by label and by what each state waits for, the totals
+ * per kind, and the tickets that wait, oldest first (with `waits` and `openedMs` still on them for Needs attention; the hand-over strips
+ * both). A state with no label of its own is named by what it means (never by its stored number); what it waits for is judged per table,
+ * by the stored value first. Pure given the ctx's clock.
+ */
+export function summarizeWaiting(parts, ctx) {
+  const byLabel = new Map();
+  parts.filter((p) => p.states.ok).forEach((p) => {
+    p.states.value.forEach((g) => {
+      const key = g.keys[0];
+      if (!key || stateClass(key.display, { table: p.tableInfo.table, value: key.value }) !== 'waiting') return;
+      const { name, plain } = stateName(key, p.tableInfo.table);
+      if (!name) return;
+      const kind = waitingKind(key.display, { table: p.tableInfo.table, value: key.value });
+      const entry = byLabel.get(`${kind}|${name}`) || { label: name, plain, count: 0, kind };
+      entry.count += g.count;
+      byLabel.set(`${kind}|${name}`, entry);
+    });
+  });
+  const byState = [...byLabel.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  const sumKind = (kind) => byState.filter((s) => s.kind === kind).reduce((n, s) => n + s.count, 0);
+  const items = parts
+    .filter((p) => p.waitingRows?.ok)
+    .flatMap((p) => p.waitingRows.value.map((row) => ticketItem(row, kindOf(p.tableInfo), ctx)))
+    .sort(byAge);
+  return {
+    statesOk: parts.some((p) => p.states.ok),
+    // some ticket type's states could not be read, or its waiting list could not (its tickets are missing from the numbers or the list)
+    partial: parts.some((p) => !p.states.ok),
+    listsPartial: parts.some((p) => p.waitingRows && !p.waitingRows.ok),
+    byState,
+    sumKind,
+    items,
+  };
+}
+
+/**
+ * The tickets that wait for one kind of thing ('approval' or 'customer'), oldest first, out of the oldest-waiting list and (for a table
+ * that has several kinds of wait) the list of that kind alone. Each ticket once, listed only if its own state says it waits for that.
+ * `failed`: a list that could hold such tickets could not be read. Pure given the ctx's clock.
+ */
+export function summarizeWaitingKind(parts, kind, ctx) {
+  const seen = new Set();
+  const items = [];
+  let failed = false;
+  parts.forEach((p) => {
+    [p.waitingRows, p.kindRows?.[kind]].filter(Boolean).forEach((read) => {
+      if (!read.ok) {
+        failed = true;
+        return;
+      }
+      read.value.forEach((row) => {
+        const item = ticketItem(row, kindOf(p.tableInfo), ctx);
+        if (item.waits !== kind || seen.has(item.sysId)) return;
+        seen.add(item.sysId);
+        items.push(item);
+      });
+    });
+  });
+  return { items: items.sort(byAge), failed };
+}
+
+/** The oldest open tickets across the tables (the resolved-but-active left out), oldest first, with `openedMs` still on them. */
+export function summarizeOldest(parts, ctx) {
+  return parts
+    .filter((p) => p.oldest.ok)
+    .flatMap((p) => p.oldest.value.map((row) => ticketItem(row, kindOf(p.tableInfo), ctx)))
+    .sort(byAge);
+}
+
 export async function handoverSection(ctx) {
   const hours = normalizeHours(ctx.params.hours);
   const tables = usableTables(ctx);
   if (!tables.length) {
-    return sectionResult('handover', tm('Shift handover'), ctx, { available: false, reason: tm('No ticket table can be read with your access, so there is nothing to hand over.') });
+    return sectionResult('handover', tm('Shift handover'), ctx, { available: false, reason: tm('No ticket type can be read with your access, so there is nothing to hand over.') });
   }
   const since = ctx.now - hours * HOUR;
 
@@ -222,8 +337,8 @@ export async function handoverSection(ctx) {
   [approvals.mine, approvals.team].forEach((r) => {
     if (r && !r.ok) ctx.access.push({ source: 'sysapproval_approver', status: r.status, note: r.status === 'denied' ? tm('Approvals are not available to you.') : r.note });
   });
-  if (!parts.some((p) => p.canReassign)) ctx.notes.push(tm('Reassignment counts are not available on these tables, so heavy hand-offs are not shown.'));
-  if (!parts.some((p) => p.hasResolved)) ctx.notes.push(tm('These tables have no resolved date, so tickets resolved in this period are not shown.'));
+  if (!parts.some((p) => p.canReassign)) ctx.notes.push(tm('Reassignment counts are not available on these ticket types, so heavy hand-offs are not shown.'));
+  if (!parts.some((p) => p.hasResolved)) ctx.notes.push(tm('These ticket types have no resolved date, so tickets resolved in this period are not shown.'));
 
   // The tickets behind the most worrying SLAs and the breaches of the period, looked up together.
   const slaTop = sla.ok ? sla.tickets.slice(0, HANDOVER_LIMITS.slaTop) : [];
@@ -243,28 +358,12 @@ export async function handoverSection(ctx) {
   const slaItems = withDetails(slaTop, (e) => ({ risk: e.breached ? 'Breached' : e.atRisk ? 'At risk' : 'Due soon', percent: e.sla.percentage, plannedEnd: e.sla.plannedEnd, endMs: e.endMs ?? null, paused: Boolean(e.sla.paused) }));
   const breachItems = withDetails(breachTop, (e) => ({ risk: 'Breached', percent: e.sla.percentage, plannedEnd: e.sla.plannedEnd, endMs: e.endMs ?? null, paused: false }));
 
-  // Waiting: by state label, by what it waits for, and the oldest that wait.
-  const byLabel = new Map();
-  parts.filter((p) => p.states.ok).forEach((p) => {
-    p.states.value.forEach((g) => {
-      const label = g.keys[0]?.display || '';
-      if (label && stateClass(label) === 'waiting') byLabel.set(label, (byLabel.get(label) || 0) + g.count);
-    });
-  });
-  const byState = [...byLabel].map(([label, count]) => ({ label, count, kind: waitingKind(label) })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  const sumKind = (kind) => byState.filter((s) => s.kind === kind).reduce((n, s) => n + s.count, 0);
-  const waitingOldest = parts
-    .filter((p) => p.waitingRows?.ok)
-    .flatMap((p) => p.waitingRows.value.map((row) => ticketItem(row, kindOf(p.tableInfo), ctx)))
-    .sort(byAge)
-    .slice(0, HANDOVER_LIMITS.waitingOldest)
-    .map(strip);
-  const oldest = parts
-    .filter((p) => p.oldest.ok)
-    .flatMap((p) => p.oldest.value.map((row) => ticketItem(row, kindOf(p.tableInfo), ctx)))
-    .sort(byAge)
-    .slice(0, HANDOVER_LIMITS.oldest)
-    .map(strip);
+  // Waiting: by state label, by what it waits for, and the oldest that wait; and the oldest open (one function each, shared with Needs
+  // attention, so the two always agree).
+  const waitingNow = summarizeWaiting(parts, ctx);
+  const { byState, sumKind } = waitingNow;
+  const waitingOldest = waitingNow.items.slice(0, HANDOVER_LIMITS.waitingOldest).map(strip);
+  const oldest = summarizeOldest(parts, ctx).slice(0, HANDOVER_LIMITS.oldest).map(strip);
 
   const tile = (key) => overview.data.tiles.find((x) => x.key === key);
   const figure = (key) => {
@@ -354,13 +453,13 @@ export function handoverTables(result) {
     { key: 'owner', label: t('Assigned to'), person: true },
     { key: 'group', label: t('Group') },
   ];
-  const list = (title, items, extra = []) => items.length && out.push({ title, columns: [...ticketColumns, ...extra], rows: items.map((i) => ({ ...i, owner: i.owner || t('(unassigned)'), ...(i.risk ? { risk: RISK_WORDS()[i.risk] || i.risk } : {}) })) });
+  const list = (title, items, extra = []) => items.length && out.push({ title, columns: [...ticketColumns, ...extra], rows: items.map((i) => ({ ...i, state: stateShown(i), owner: i.owner || t('(unassigned)'), ...(i.risk ? { risk: RISK_WORDS()[i.risk] || i.risk } : {}) })) });
   list(t('Closest to breaking'), d.sla.top, [{ key: 'risk', label: t('SLA') }, { key: 'percent', label: t('Time used (%)') }, { key: 'plannedEnd', label: t('Due') }]);
   list(t('Priority 1-2 opened in the last {hours} hours', { hours: d.hours }), d.events.opened.items, [{ key: 'openedAt', label: t('Opened') }]);
   list(t('Priority 1-2 resolved in the last {hours} hours', { hours: d.hours }), d.events.resolved.items);
   list(t('SLAs breached in the last {hours} hours', { hours: d.hours }), d.events.breaches.items, [{ key: 'plannedEnd', label: t('Due') }]);
   list(t('Handed over {n}+ times', { n: LIMITS.pingPongMin }), d.events.reassigned.items, [{ key: 'reassignments', label: t('Reassignments') }]);
-  if (d.waiting.byState.length) out.push({ title: t('Waiting by state'), columns: [{ key: 'label', label: t('State') }, { key: 'kind', label: t('Waiting for') }, { key: 'count', label: t('Tickets') }], rows: d.waiting.byState.map((s2) => ({ ...s2, kind: { customer: t('The customer'), approval: t('An approval'), other: t('Other') }[s2.kind] || s2.kind })) });
+  if (d.waiting.byState.length) out.push({ title: t('Waiting by state'), columns: [{ key: 'label', label: t('State') }, { key: 'kind', label: t('Waiting for') }, { key: 'count', label: t('Tickets') }], rows: d.waiting.byState.map((s2) => ({ ...s2, label: s2.plain ? shown(s2.label) : s2.label, kind: { customer: t('The customer'), approval: t('An approval'), other: t('Other') }[s2.kind] || s2.kind })) });
   list(t('Oldest waiting'), d.waiting.oldest, [{ key: 'ageDays', label: t('Age (days)') }]);
   list(t('Oldest open'), d.oldest, [{ key: 'ageDays', label: t('Age (days)') }]);
   return out;

@@ -309,5 +309,5 @@ test('bridge, Workspace: the box an insert would use is put back when it still h
   for (const [args, reason] of odd) assert.deepEqual(page.call('restoreField', args), { ok: false, reason }, JSON.stringify(args).slice(0, 80));
   // the insert reports what the box held and holds, for the Undo
   const fresh = bridgePage({ url: WS, boxes: [[{ 'aria-label': 'Work notes' }, 'mine']] });
-  assert.deepEqual(fresh.call('fillField', ['work_notes', 'new', 'Work notes', true, '', '', { undo: true }]), { ok: true, method: 'dom', label: 'Work notes', previous: 'mine', after: 'mine\n\nnew' });
+  assert.deepEqual(fresh.call('fillField', ['work_notes', 'new', 'Work notes', true, '', '', { undo: true }]), { ok: true, method: 'dom', label: 'Work notes', modeUnread: true, previous: 'mine', after: 'mine\n\nnew' }); // (modeUnread: a Workspace box with no composer switch to read, audit 2026-11-07 W-12)
 });

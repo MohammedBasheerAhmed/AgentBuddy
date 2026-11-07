@@ -23,7 +23,14 @@ async function widgetReady(ctx, p, title, timeout = 30000) {
       return Boolean(el && ['ready', 'unavailable', 'error'].includes(el.getAttribute('data-state')) && el.getAttribute('aria-busy') !== 'true');
     }, widget(title)), { timeout });
 }
-const widgetText = (p, title) => p.$eval(widget(title), (el) => el.innerText.replace(/\s+/g, ' ').trim());
+// (the folded parts of a widget are not in innerText: open them first; the lead's Team overview folds the long tail, wave 6)
+const widgetText = (p, title) =>
+  p.$eval(widget(title), (el) => {
+    el.querySelectorAll('details[data-fold]').forEach((d) => {
+      d.open = true;
+    });
+    return el.innerText.replace(/\s+/g, ' ').trim();
+  });
 /** After the ServiceNow tab moved, the dashboard reads its numbers again: wait until every widget is done. */
 async function settleWidgets(ctx, page) {
   await ctx.sleep(1200);
@@ -108,6 +115,20 @@ module.exports = {
     t.check('the Insights half carries no AI element (no AI mark, no AI button)', insightsAi === 0 && !/Explain these numbers|Write the hand-over note/.test(await p.$eval('#ab-team-half-panel-insights', (el) => el.innerText)));
     t.check('no export bar under every widget any more (one export panel per dashboard)', !(await p.evaluate(() => window.__vis(document.querySelectorAll('button')).some((b) => /^(Download CSV|Copy as table)$/.test(b.innerText.trim())))));
 
+    // ============================== NEEDS ATTENTION NOW (wave 6, the team lead) ====================================================
+    // What needs the lead comes first, at most eight rows, one reason each; the long tail of the overview is folded until it is asked for.
+    await widgetReady(ctx, p, 'Needs attention now').catch(() => ctx.sleep(2000));
+    const attention = await p.evaluate(() => {
+      const widgets = window.__vis(document.querySelectorAll('section.ab-widget'));
+      const el = document.querySelector('section.ab-widget[aria-label="Needs attention now"]');
+      return { firstTitle: widgets[0]?.getAttribute('aria-label') || '', rows: el ? el.querySelectorAll('.ab-tlist-row').length : -1, text: el ? el.innerText.replace(/\s+/g, ' ').trim().slice(0, 200) : '' };
+    });
+    t.check('Team overview: "Needs attention now" comes first, with at most eight rows', attention.firstTitle === 'Needs attention now' && attention.rows >= 0 && attention.rows <= 8, JSON.stringify(attention));
+    const folds = await p.evaluate(() => window.__vis(document.querySelectorAll('details[data-fold]')).map((d) => ({ id: d.getAttribute('data-fold'), open: d.open })));
+    t.check('...the long tail is folded: none of the lead\'s own questions is a fold, and every fold starts closed', folds.length >= 1 && folds.every((f) => !f.open) && !folds.some((f) => ['attention', 'overview', 'closest', 'workload', 'approvals', 'handover'].includes(f.id)), JSON.stringify(folds));
+    await p.evaluate(() => window.__vis(document.querySelectorAll('details[data-fold] > summary'))[0]?.click());
+    t.check('...and a fold opens when it is tapped', await p.evaluate(() => window.__vis(document.querySelectorAll('details[data-fold]')).some((d) => d.open)));
+
     // ============================== OVERVIEW AND FULFILMENT (my own tickets) ======================================================
     await pickDashboard(p, 'preset-my-day');
     await widgetReady(ctx, p, 'Overview');
@@ -119,9 +140,10 @@ module.exports = {
     t.check('Overview: "Open" counts the agent\'s own active tickets across the ticket tables (more than the three incidents), "Breached" the SLAs that broke', open >= 6 && breached >= 2, `open=${open} breached=${breached}`);
     const status = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-statusline'))[0]?.innerText || '');
     const chip = await p.evaluate(() => window.__vis(document.querySelectorAll('.ab-scope-chip'))[0]?.innerText.trim());
-    t.check('the dashboard says once how fresh the numbers are, how many tables, and whose tickets', /Read at \d\d:\d\d · \d+ tables/.test(status) && chip === 'Mine', `${status} | ${chip}`);
+    t.check('the dashboard says once how fresh the numbers are, how many tables, and whose tickets', /Read at \d\d:\d\d · \d+ ticket types/.test(status) && chip === 'Mine', `${status} | ${chip}`);
     await widgetReady(ctx, p, 'Request fulfilment');
-    t.check('Request fulfilment: requested items and catalog tasks by state, and the oldest open items', /Oldest open items/.test(await widgetText(p, 'Request fulfilment')) && /RITM0010050/.test(await widgetText(p, 'Request fulfilment')));
+    const fulfilmentText = await widgetText(p, 'Request fulfilment');
+    t.check('Request fulfilment: requested items and catalog tasks by state, and the oldest open items', /Oldest open items/.test(fulfilmentText) && /RITM0010050/.test(fulfilmentText), fulfilmentText.slice(0, 600));
     await widgetReady(ctx, p, 'SLA risk radar');
     const slaText = await widgetText(p, 'SLA risk radar');
     // One number once: next to Overview the radar draws only its own count (At risk); Breached and Due soon are Overview's tiles.
@@ -300,7 +322,7 @@ module.exports = {
     const dash = await target.page();
     await dash.waitForSelector('.ab-dashboard-page', { timeout: 10000 });
     t.check('"Open full page" opened dashboard.html in a new tab, naming the ServiceNow tab it reads through', new URL(target.url()).pathname === '/dashboard.html' && new URL(target.url()).searchParams.get('tab') === String(sourceTabId), target.url());
-    await waitForText(dash, /Reading from localhost:\d+ with your own session/, { timeout: 20000 });
+    await waitForText(dash, /Reading from localhost:\d+ as you/, { timeout: 20000 });
     t.check('...it found its source tab (the content script answered an extension page in a tab) and says which site it reads from', true);
     await widgetReady(ctx, dash, 'Overview');
     t.check('the full page shows the same report (the same instance\'s dashboards), in its own layout', (await tileValue(dash, 'Open')) >= 6 && (await dash.$('.ab-dash-page')) !== null, `open=${await tileValue(dash, 'Open')}`);

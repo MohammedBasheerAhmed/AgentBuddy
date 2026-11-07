@@ -8,13 +8,22 @@
 //
 // Honesty about access: a refused read (403) and a read that answers "200, no rows" are reported in `access` and never as "this
 // account has no other cases" unless the person can see the case table, which they can: they have this case open. A row-level
-// rule may still hide other agents' cases, so the empty note says "that your user can see".
+// rule may still hide other agents' cases, so the empty note says "that you can see".
 
-import { STATUS, entry as accessEntry, isSessionExpired, softRead } from '../../context/access.js';
+import { NOTE_TEXT, STATUS, absentColumns, entry as accessEntry, hiddenFieldEntry, isSessionExpired, softRead, tm } from '../../context/access.js';
 import { kindForTable } from '../../context/kinds.js';
 import { SYS_ID_RE, cleanText, disp, oneLine, raw } from '../../context/util.js';
 
 export const ACCOUNT_CASES_MAX = 10;
+
+// What the account read says (fixed sentences that name no table and not "your user"; marked for the Arabic catalogue).
+const ACCOUNT_NOTE = Object.freeze({
+  noAccount: tm("This case has no account, so the account's other cases were not looked up."),
+  none: tm('No other cases for this account that you can see.'),
+  moreExist: tm('More cases exist for this account than are shown.'),
+  oneMore: tm('{n} more case exists for this account.'),
+  moreCases: tm('{n} more cases exist for this account.'),
+});
 // contact, consumer and assigned_to are read for the names only (they are masked wherever another case's wording mentions them);
 // they are returned as `people` and are not shown. They are on the 'account-briefing' spec for the case kind.
 const PEOPLE_FIELDS = ['contact', 'consumer', 'assigned_to'];
@@ -41,9 +50,11 @@ function shapeCase(row) {
 export async function readAccountCases({ table, sysId }, deps) {
   const own = await softRead(deps, table, `sys_id=${sysId}`, ['account'], { limit: 1, displayValue: false });
   if (own.failure) return reply([], 0, [accessEntry(table, own.failure.status, own.failure.note)]);
+  // The account column did not come back at all: the user may not read it, which is not "this case has no account" (R-14).
+  if (own.rows[0] && absentColumns(own.rows[0], ['account']).length) return reply([], 0, [hiddenFieldEntry(table)]);
   const account = raw(own.rows[0]?.account);
   if (!SYS_ID_RE.test(account)) {
-    return reply([], 0, [accessEntry(table, STATUS.SKIPPED, "This case has no account, so the account's other cases were not looked up.")]);
+    return reply([], 0, [accessEntry(table, STATUS.SKIPPED, ACCOUNT_NOTE.noAccount)]);
   }
 
   // Open cases first (active, descending), then the newest. Every row is checked against the account again: an instance that
@@ -52,13 +63,13 @@ export async function readAccountCases({ table, sysId }, deps) {
   const { rows, failure } = await softRead(deps, table, query, FIELDS, { limit: ACCOUNT_CASES_MAX + 1, displayValue: true });
   if (failure) return reply([], 0, [accessEntry(table, failure.status, failure.note)]);
   if (rows.some((row) => raw(row.account).toLowerCase() !== account.toLowerCase())) {
-    return reply([], 0, [accessEntry(table, STATUS.ERROR, `Could not check ${table} by account: the instance did not apply the filter, so its rows were not used.`)]);
+    return reply([], 0, [accessEntry(table, STATUS.ERROR, NOTE_TEXT.ignoredFilter)]);
   }
 
   const others = rows.filter((row) => raw(row.sys_id).toLowerCase() !== sysId);
   const cases = others.slice(0, ACCOUNT_CASES_MAX).map(shapeCase);
   if (!cases.length) {
-    return reply([], 0, [accessEntry(table, STATUS.EMPTY, 'No other cases for this account that your user can see.')]);
+    return reply([], 0, [accessEntry(table, STATUS.EMPTY, ACCOUNT_NOTE.none)]);
   }
 
   let more = 0;
@@ -72,7 +83,7 @@ export async function readAccountCases({ table, sysId }, deps) {
       if (isSessionExpired(err) || err?.name === 'AbortError') throw err;
     }
   }
-  const note = more === null ? 'More cases exist for this account than are shown.' : more ? `${more} more case${more === 1 ? '' : 's'} exist for this account.` : '';
+  const note = more === null ? ACCOUNT_NOTE.moreExist : more ? (more === 1 ? ACCOUNT_NOTE.oneMore : ACCOUNT_NOTE.moreCases).replace('{n}', String(more)) : '';
   return reply(cases, more, [accessEntry(table, STATUS.OK, note)]);
 }
 

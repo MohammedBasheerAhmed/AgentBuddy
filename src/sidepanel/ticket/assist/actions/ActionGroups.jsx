@@ -128,7 +128,7 @@ export function FocusActions({ plan, eff, busy = false, aiReady = true, quiet = 
   if (!plan.total) {
     return (
       <section className="ab-acts ab-acts-five" aria-label={t('AI actions')}>
-        <p className="ab-act-empty">{t('No AI actions fit this record. Insights still has what can be read here.')}</p>
+        <p className="ab-act-empty">{t('No AI actions fit this ticket. Insights still has what can be read here.')}</p>
       </section>
     );
   }
@@ -156,6 +156,7 @@ export function FocusActions({ plan, eff, busy = false, aiReady = true, quiet = 
           ))}
         </ul>
       )}
+      {plan.note && <p className="ab-hint">{plan.note}</p>}
     </section>
   );
 }

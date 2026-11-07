@@ -3,7 +3,7 @@ import { read } from '../ask.js';
 import { tm } from '../../i18n/index.js';
 
 // Kept in English and drawn with shown() (src/reports/shown.js), like every other text of a report: the language can change while it is on screen.
-const SESSION_TEXT = tm('Your ServiceNow session has expired. Log in again, then press Refresh.');
+const SESSION_TEXT = tm('You are signed out of ServiceNow. Sign in again, then try again.');
 const STALE = Symbol('stale');
 
 // When the ServiceNow tab moves to another page while a widget is reading, the page's content script goes away with the old page

@@ -1,4 +1,5 @@
 import { MSG } from '../lib/messages.js';
+import { READ_REASON, readReasonOf, reasonSentence } from '../context/access.js';
 import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
 
 // English constants (the tests and the callers compare them); every use below shows them in the language of the panel.
@@ -21,14 +22,33 @@ const UPDATED_RE = /extension context invalidated/i;
 /** The browser-level text for a failed message, or '' when this is some other error. */
 const browserProblem = (message) => (UPDATED_RE.test(message) ? tr(PANEL_UPDATED) : LOST_TOUCH_RE.some((rx) => rx.test(message)) ? tr(LOST_TOUCH) : '');
 
+// Words that are for whoever debugs a read, never for a person: the read layer's old technical messages ('Table API query on "x" failed
+// (500)'), an HTTP code, "Table API", "your user", the name of a table. The read layer now keeps them in `error.detail` and `status`; an
+// error that still carries them in its message (an older reader, another layer) is said by its reason instead.
+const TECHNICAL = /\bTable API\b|\bAggregate API\b|\b(?:query|count|breakdown|report) (?:on|of) "|\bfailed \(\d{3}\)|\byour user\b|\bHTTP (?:error |status )?\d{3}\b|\b(?:invalid|unknown|no such) (?:table|field|column|query)\b|\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/i;
+// An HTTP code in brackets after a plain clause ("... refused the request (answer 403)."): the clause is fine, the number is not.
+const HTTP_CODE = /\s*\((?:answer\s+)?[1-5]\d\d\)/g;
+
 /**
- * The words to show a person for an error: the browser's own text about a lost connection becomes one plain sentence; any other
- * message is already ours (or the page's) and passes through. A text that comes from another part of the extension (the service
- * worker, the page) in English is looked up like t(): it is shown in Arabic when the catalogue has the same text (tm() marks it there).
+ * The words to show a person for an error: one plain clause and, where there is one, the next step. The browser's own text about a lost
+ * connection becomes one plain sentence; a message that is already ours (or the page's) passes through, with an HTTP code in brackets
+ * taken out; a message that is technical (see TECHNICAL) is replaced by the fixed sentence of the error's reason ("Not available to you
+ * with your role.", "You are signed out of ServiceNow. Sign in again, then try again."), or by the fallback. A text that comes from
+ * another part of the extension (the service worker, the page) in English is looked up like t(): it is shown in Arabic when the
+ * catalogue has the same text (tm() marks it there).
  */
-export function plainError(err, fallback = t('Something went wrong.')) {
+export function plainError(err, fallback = t('Something went wrong. Try again; if it keeps happening, tell your administrator.')) {
   const message = String(err?.message ?? err ?? '').trim();
-  return browserProblem(message) || (message ? tr(message) : tr(fallback));
+  const lost = browserProblem(message);
+  if (lost) return lost;
+  if (!message) return tr(fallback);
+  const reason = readReasonOf(err);
+  const fixed = reasonSentence(reason); // (an English text the engine marked with tm(): src/context/access.js)
+  // The organisation's block names the table in its message (src/content/policyGuard.js): the fixed sentence says whose rule it is.
+  if (reason === READ_REASON.BLOCKED) return tr(fixed);
+  const clean = message.replace(HTTP_CODE, '').trim();
+  if (!TECHNICAL.test(clean)) return tr(clean);
+  return tr(fixed || fallback);
 }
 
 /** Send one message to the content script of a tab and unwrap its answer; errors from the page come back as Error with .code. */

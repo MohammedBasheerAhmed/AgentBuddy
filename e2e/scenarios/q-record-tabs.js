@@ -87,9 +87,23 @@ module.exports = {
     // ============================== REQUEST: a catalog task points at its item ===============================================================
     ticket = await ctx.openInstancePage(`/sc_task.do?sys_id=${data.CHECKLIST_TASK_ID}`, 'ticket-sctask');
     await waitForText(p, data.CHECKLIST_TASK_NUMBER, { timeout: 20000 });
+    // F1 (audit of 2026-11-07): the person of a catalog task is its requester, read through the requested item (not whoever opened the task)
+    await openCard(p, "Caller's other tickets");
+    const requesterSeen = await waitForText(p, /Earlier tickets from Charlie Whitherspoon/, { timeout: 15000 }).then(() => true, () => false);
+    t.check('catalog task: the same-person row follows the requested item to its requester (F1)', requesterSeen);
     await openCard(p, 'Request status');
     await waitForText(p, /belongs to RITM0010050; the status is for that item/, { timeout: 20000 });
     t.check('Request status on a catalog task: it follows the task to its requested item (op requestTarget) and says so', true);
+
+    // Wave 6 (catalog fulfiller): how the same catalog item was fulfilled before, the exact comment wording, and who the request waits on
+    await openCard(p, 'Fulfilled before');
+    await waitForText(p, /SCTASK0020061/, { timeout: 20000 });
+    const fulfilled = (await cardText(p, 'fulfilled')).replace(/\s+/g, ' ').trim();
+    t.check('Fulfilled before: the three completed tasks for the same catalog item, and neither the incomplete one nor the other item', ['SCTASK0020061', 'SCTASK0020062', 'SCTASK0020063'].every((n) => fulfilled.includes(n)) && !/SCTASK0020064|SCTASK0020065/.test(fulfilled), fulfilled.slice(0, 260));
+    t.check('...with how long the last one took and what its close notes said', /took 2 days/.test(fulfilled) && /Imaged with the standard build/.test(fulfilled), fulfilled.slice(0, 260));
+    await openCard(p, 'Request status');
+    await waitForText(p, /Waiting on IT Procurement for \d+ days\./, { timeout: 20000 });
+    t.check('Request status: says who the request waits on and for how long, and counts the other approval that is waiting', /1 other approval is also waiting/.test(await p.evaluate(() => document.body.innerText)));
 
     // ============================== CHECKLIST ==========================================================================================
     await openCard(p, 'Fulfilment checklist');

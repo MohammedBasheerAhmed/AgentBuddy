@@ -5,7 +5,7 @@
 import { worstSla, riskOf, isPaused, SLA_COLUMNS } from '../myDay.js';
 import { SYS_ID_RE } from '../../context/util.js';
 import { LIMITS } from './constants.js';
-import { attempt } from './reader.js';
+import { attempt, nameOf } from './reader.js';
 import { say, tm } from './say.js';
 import { t } from '../../i18n/core.js';
 import { placeholderName } from '../shown.js';
@@ -15,7 +15,7 @@ import { HOUR, snLiteral, timeOf } from './time.js';
 
 const SLA_FIELDS = [...SLA_COLUMNS];
 const TASK_FIELDS = ['sys_id', 'number', 'short_description', 'priority', 'state', 'assigned_to', 'assignment_group', 'sys_class_name'];
-export const SLA_UNSEEN = tm('You can see no SLA records at all, so SLA numbers would prove nothing: there may be none, or an access rule may hide them.');
+export const SLA_UNSEEN = tm('You can\'t see any SLAs at all, so SLA numbers would prove nothing: there may be none, or your role may not let you see them.');
 
 const isTrue = (v) => ['true', '1', 'yes'].includes(raw(v).toLowerCase());
 
@@ -98,7 +98,7 @@ export async function readSlaSnapshot(ctx) {
   ctx.slaMemo = (async () => {
     const { reader, scope, now } = ctx;
     const usable = usableTables(ctx).map((tableInfo) => tableInfo.table);
-    if (!usable.length) return { ok: false, status: 'error', note: tm('No ticket table can be read.') };
+    if (!usable.length) return { ok: false, status: 'error', note: tm('No ticket type can be read.') };
     const dueUntil = now + LIMITS.dueSoonHours * HOUR;
     const base = andQuery('active=true', `task.sys_class_nameIN${usable.join(',')}`, scope.taskQuery);
     const worrying = worryingQuery(LIMITS.slaAtRiskPercent, dueUntil);
@@ -118,7 +118,11 @@ export async function readSlaSnapshot(ctx) {
       activeSlas: total.value,
       rowsRead: read.value.fetched,
       cap: capNote('task_sla', read.value),
+      // The read stopped before the end (more worrying SLAs than rows read): every count below is "at least", never exact.
+      atLeast: Boolean(read.value.capped),
       tickets,
+      // (A ticket can be both at risk AND due soon, so atRisk + dueSoon can count it twice. The tickets that are not breached but at
+      // risk or due soon are `tickets.length - breached`: Needs attention's "closest to breaking".)
       counts: {
         breached: tickets.filter((ticket) => ticket.breached).length,
         atRisk: tickets.filter((ticket) => ticket.atRisk).length,
@@ -148,38 +152,54 @@ async function lookUpTickets(ctx, tickets) {
   return { details, failure, looked: wanted.length };
 }
 
+/**
+ * The SLA snapshot with the tickets behind it looked up (number, title, owner, group): the one reading of "which tickets are about to
+ * break" that the SLA radar and Needs attention both use, so they can never disagree. Once per report (memoised on the context).
+ * { snap, tickets (the looked-up ones, in rank order), known (those with a number), looked, failure } or { snap } when the SLAs cannot be read.
+ */
+export async function readSlaTickets(ctx) {
+  if (ctx.slaTicketsMemo) return ctx.slaTicketsMemo;
+  ctx.slaTicketsMemo = (async () => {
+    const snap = await readSlaSnapshot(ctx);
+    if (!snap.ok) return { snap, tickets: [], known: [], looked: 0, failure: null };
+    if (snap.cap) ctx.caps.push(snap.cap);
+
+    const { details, failure, looked } = await lookUpTickets(ctx, snap.tickets);
+    if (failure) ctx.access.push({ source: 'task', status: failure.status, note: tm('Ticket details are not available to you, so only the counts are shown.') });
+    if (snap.tickets.length > looked) ctx.notes.push(say(tm('Names and owners were looked up for the {looked} most worrying tickets of {total}.'), { looked, total: snap.tickets.length }));
+
+    const tickets = snap.tickets.slice(0, looked).map((ticket) => {
+      const d = details.get(ticket.sysId);
+      return {
+        ...ticket,
+        table: d ? raw(d.sys_class_name) : '',
+        number: d ? disp(d.number) : '',
+        title: d ? disp(d.short_description) : '',
+        priority: d ? disp(d.priority) : '',
+        state: d ? disp(d.state) : '',
+        owner: d ? nameOf(d.assigned_to) : '',
+        ownerId: d ? raw(d.assigned_to) : '',
+        group: d ? nameOf(d.assignment_group) : '',
+        groupId: d ? raw(d.assignment_group) : '',
+      };
+    });
+    return { snap, tickets, known: tickets.filter((ticket) => ticket.number), looked, failure };
+  })();
+  return ctx.slaTicketsMemo;
+}
+
 export async function slaSection(ctx) {
-  const snap = await readSlaSnapshot(ctx);
+  const { snap, known, failure } = await readSlaTickets(ctx);
   if (!snap.ok) {
     return sectionResult('sla', tm('SLA risk radar'), ctx, { available: false, reason: snap.note, status: snap.status });
   }
-  if (snap.cap) ctx.caps.push(snap.cap);
-
-  const { details, failure, looked } = await lookUpTickets(ctx, snap.tickets);
-  if (failure) ctx.access.push({ source: 'task', status: failure.status, note: tm('Ticket details are not available to you, so only the counts are shown.') });
-  if (snap.tickets.length > looked) ctx.notes.push(say(tm('Names and owners were looked up for the {looked} most worrying tickets of {total}.'), { looked, total: snap.tickets.length }));
-
-  const tickets = snap.tickets.slice(0, looked).map((ticket) => {
-    const d = details.get(ticket.sysId);
-    return {
-      ...ticket,
-      table: d ? raw(d.sys_class_name) : '',
-      number: d ? disp(d.number) : '',
-      title: d ? disp(d.short_description) : '',
-      priority: d ? disp(d.priority) : '',
-      state: d ? disp(d.state) : '',
-      owner: d ? disp(d.assigned_to) : '',
-      ownerId: d ? raw(d.assigned_to) : '',
-      group: d ? disp(d.assignment_group) : '',
-      groupId: d ? raw(d.assignment_group) : '',
-    };
-  });
-  const known = tickets.filter((ticket) => ticket.number);
   const topN = clampInt(ctx.params.top, 1, 25, LIMITS.topN);
 
   return sectionResult('sla', tm('SLA risk radar'), ctx, {
     available: true,
     counts: snap.counts,
+    // The read stopped early: the counts are "at least" (Needs attention and the Overview say so too).
+    atLeast: snap.atLeast,
     ticketsAtIssue: snap.tickets.length,
     activeSlas: snap.activeSlas,
     top: known.slice(0, topN),

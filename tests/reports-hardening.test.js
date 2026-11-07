@@ -224,7 +224,7 @@ test('SLA tiles: when no SLA record is visible at all, the tiles say "not availa
   const hidden = await run({ section: 'overview', scope: { kind: 'mine' }, tables: ['incident'] }, fakeInstance({ hidden: ['task_sla'] }));
   assert.equal(tileOf(hidden, 'breached').unavailable, true);
   assert.equal(tileOf(hidden, 'breached').value, null);
-  assert.match(tileOf(hidden, 'breached').note, /can see no SLA records at all/);
+  assert.match(tileOf(hidden, 'breached').note, /any SLAs at all/);
   const radar = await run({ section: 'sla', scope: { kind: 'mine' }, tables: ['incident'] }, fakeInstance({ hidden: ['task_sla'] }));
   assert.equal(radar.data.available, false);
   // A real zero (SLA records are visible, none is in the scope) is still a zero.
@@ -236,7 +236,7 @@ test('SLA tiles: when no SLA record is visible at all, the tiles say "not availa
 test('approvals: 0 waiting is only said when approval records are visible at all', async () => {
   const hidden = await run({ section: 'fulfilment', scope: { kind: 'mine' }, tables: ['sc_req_item'] }, fakeInstance({ hidden: ['sysapproval_approver'] }));
   assert.equal(hidden.data.approvals.mine, null);
-  assert.match(hidden.data.approvals.mineNote, /no approval records at all/);
+  assert.match(hidden.data.approvals.mineNote, /any approvals at all/);
   const real = await run({ section: 'fulfilment', scope: { kind: 'mine' }, tables: ['sc_req_item'] }, fakeInstance());
   assert.equal(real.data.approvals.mine, 0);
   const handover = await run({ section: 'handover', scope: { kind: 'mine' }, tables: ['sc_req_item'] }, fakeInstance({ hidden: ['sysapproval_approver', 'task_sla'] }));
@@ -375,7 +375,7 @@ test('the SLA radar reads the business percentage and the stage, as My work does
 test('builder: "SLA breached" with no SLA record visible at all is a plain reason, not a chart of zeros', async () => {
   const hidden = await run({ kind: 'builder', config: { table: 'incident', presets: ['breached'], groupBy: 'state' } }, fakeInstance({ hidden: ['task_sla'] }));
   assert.equal(hidden.data.available, false);
-  assert.match(hidden.data.reason, /no SLA records at all/);
+  assert.match(hidden.data.reason, /any SLAs at all/);
   // SLA records are visible and none of them is breached: then "none" is a real answer.
   const none = await run({ kind: 'builder', config: { table: 'incident', presets: ['breached'], groupBy: 'state' } }, fakeInstance());
   assert.equal(none.data.available, true);

@@ -19,6 +19,8 @@
 //   answered:  { [tabId]: true } tabs whose content script has answered at least once
 // }
 
+import { isTicketTable } from '../context/kinds.js';
+
 export const GRACE_POLLS = 2;
 export const GRACE_MS = 2000;
 
@@ -36,6 +38,20 @@ export const initialPageState = () => ({
 });
 
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * The record the content script says the page shows, or null when it is not a ticket page. The content script decides (it sees the
+ * form: src/content/recordResolver.js); this is the second look, for an answer from a copy of it that was injected before an update
+ * and still treats any `/<name>.do?sys_id=` as a record: a ticket's table, one of the organisation's families, or a record that
+ * carries a number (the form proved it) passes. Nothing else becomes the Ticket screen. Pure.
+ * @param {*} record  what the page said (untrusted)  @param {string[]} [extraPrefixes] the policy's sensitiveTablePrefixes
+ */
+export function vetRecord(record, extraPrefixes) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  if (typeof record.table !== 'string' || typeof record.sysId !== 'string' || !record.sysId) return null;
+  const numbered = typeof record.number === 'string' && record.number.trim() !== '';
+  return numbered || isTicketTable(record.table, { extraPrefixes }) ? record : null;
+}
 
 /**
  * @param {object} state a value from initialPageState()/reducePage()

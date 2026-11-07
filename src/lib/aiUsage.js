@@ -5,7 +5,7 @@
 // Every model call is logged (numbers and the names of the provider and model only); the caps count calls and tokens per day in the
 // user's own time zone, warn from 80% and refuse at 100%.
 // (core.js, not index.js: the service worker's bundle carries this file, and it has no Arabic catalogue to carry)
-import { t, tn } from '../i18n/core.js';
+import { t } from '../i18n/core.js';
 
 export const USAGE_KEY = 'agentbuddy_ai_usage';
 export const CAPS_KEY = 'agentbuddy_ai_caps';
@@ -43,7 +43,7 @@ export function validateBaseUrl(input) {
     return { ...empty, ok: false, error: t('Use https://. Plain http:// is only allowed for localhost or 127.0.0.1.') };
   }
   if (parsed.username || parsed.password) return { ...empty, ok: false, error: t('Do not put a user name or password in the address. The key goes in the key field.') };
-  if (parsed.search || parsed.hash || /[?#]/.test(text)) return { ...empty, ok: false, error: t('Leave off the ?query and #fragment.') };
+  if (parsed.search || parsed.hash || /[?#]/.test(text)) return { ...empty, ok: false, error: t('Leave off anything after the address: a ? or # and what follows it.') };
   const path = parsed.pathname.replace(/\/+$/, '');
   return { ok: true, url: `${parsed.origin}${path}`, host: parsed.host, origin: parsed.origin, local };
 }
@@ -237,10 +237,12 @@ export function normalizeCaps(caps) {
   return { dailyCalls: Math.floor(num(c.dailyCalls)), dailyTokens: Math.floor(num(c.dailyTokens)) };
 }
 
-const where = () => t('Agent Buddy settings > Usage and limits'); // where the caps are set, said when the message is made
+const where = () => t('Settings > Usage and limits'); // where the caps are set, said when the message is made
 
 /**
- * Where today's use (every provider's) stands against the person's own caps.
+ * Where today's use (every AI service's) stands against the person's own caps. The sentences say "AI limit", never "tokens" or
+ * "cap": a person does not count tokens (docs/plain-words.md). `id` tells the two limits apart for the code; the numbers stay in
+ * `used` and `limit`.
  * @returns {{ status: 'ok' | 'warn' | 'blocked', items: Array, worst: object | null, message: string }}
  */
 export function checkCaps(log, capsInput, now = new Date()) {
@@ -249,27 +251,27 @@ export function checkCaps(log, capsInput, now = new Date()) {
   const list = (Array.isArray(log) ? log : []).filter((e) => e && e.time && e.kind !== 'validate');
   const today = dayKey(now);
   const items = [];
-  const add = (name, used, limit, format) => {
+  const add = (id, used, limit) => {
     if (!limit) return;
-    items.push({ name, used, limit, pct: used / limit, format });
+    items.push({ id, used, limit, pct: used / limit });
   };
   const todayAll = list.filter((e) => dayKey(e.time) === today);
-  add(t('Daily calls'), todayAll.reduce((total, e) => total + callsOf(e), 0), caps.dailyCalls, (n) => tn(Math.round(n), '{n} call', '{n} calls'));
-  add(t('Daily tokens'), todayAll.reduce((total, e) => total + totalTokens(e), 0), caps.dailyTokens, (n) => tn(Math.round(n), '{n} token', '{n} tokens', { n: Math.round(n).toLocaleString('en-US') }));
+  add('calls', todayAll.reduce((total, e) => total + callsOf(e), 0), caps.dailyCalls);
+  add('tokens', todayAll.reduce((total, e) => total + totalTokens(e), 0), caps.dailyTokens);
 
   const worst = items.length ? [...items].sort((a, b) => b.pct - a.pct)[0] : null;
   const status = !worst ? 'ok' : worst.pct >= 1 ? 'blocked' : worst.pct >= WARN_AT ? 'warn' : 'ok';
   let message = '';
   if (status === 'blocked') {
-    message = t('{name} cap reached ({used} of {limit}). It resets at the start of the next {period}, or raise the cap in {where}.', {
-      name: worst.name,
-      used: worst.format(worst.used),
-      limit: worst.format(worst.limit),
-      period: t('day'),
-      where: where(),
-    });
+    const used = Math.round(worst.used).toLocaleString('en-US');
+    const limit = Math.round(worst.limit).toLocaleString('en-US');
+    message =
+      worst.id === 'calls'
+        ? t('Your daily limit of AI calls is reached ({used} of {limit}). It resets tomorrow, or raise it in {where}.', { used, limit, where: where() })
+        : t('Your daily AI limit is reached. It resets tomorrow, or raise it in {where}.', { where: where() });
   } else if (status === 'warn') {
-    message = t('{name}: {percent}% of the {limit} cap used.', { name: worst.name, percent: Math.round(worst.pct * 100), limit: worst.format(worst.limit) });
+    const percent = Math.round(worst.pct * 100);
+    message = worst.id === 'calls' ? t('{percent}% of your daily limit of AI calls is used.', { percent }) : t('{percent}% of your daily AI limit is used.', { percent });
   }
   return { status, items, worst, message };
 }

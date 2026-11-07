@@ -10,7 +10,7 @@ import { Tag } from '../../checks/Bits.jsx';
 import { allowSensitiveOf, read, useHistory, useLookalikes, useTicketFacts } from './data.js';
 import { recordKey, useInsight, useReport } from './useInsight.js';
 import { CardJump, QuietButton, ReadState } from './bits.jsx';
-import { t } from '../../../i18n/index.js';
+import { isolate, t } from '../../../i18n/index.js';
 
 // N4, "Ready to resolve?": what is worth a second look before the ticket is resolved (notes, close code, did the customer answer,
 // open child work, a linked problem or article, personal data in the text, a hold reason). It reads what is typed on the form and
@@ -40,6 +40,16 @@ const hintFor = (source) => {
   };
   return hints[source] || hints[''];
 };
+
+// What comes after the notes, for the kinds that are closed by a state and not by a code (F13): the state is the step nobody names.
+// (The state's label is the base system's; an instance may have renamed it.)
+// (the names are what the form's State list shows, so they go in as data and are not translated: isolate keeps them whole)
+const STATE_NAMES = { done: isolate('Closed Complete'), notDone: isolate('Closed Incomplete') };
+const nextStep = (kind) =>
+  ({
+    requested_item: t('When the notes are in, set the state to {done} (or {notDone} if it was not delivered), then press Save.', STATE_NAMES),
+    catalog_task: t('When the notes are in, set the state to {done} (or {notDone} if it was not delivered), then press Save.', STATE_NAMES),
+  })[kind] || '';
 
 /** The resolve check's read (the saved ticket and what is typed on the form), shared by this card and Prepare to close. */
 export function useResolveCheck({ page, eff, record, active }) {
@@ -77,7 +87,9 @@ export function useCloseWell({ page, eff, record, active }) {
   const vote = useMemo(() => (hits ? closeCodeVote(hits, { current: data ? currentCloseCode(data.pack, data.facts) : '' }) : null), [hits, data]);
   const fields = ticket.data?.pack?.fields || null;
   const past = history.data && !history.error ? history.data : null;
-  const repeat = useMemo(() => (fields && past ? repeatOfCaller(fields, past) : null), [fields, past]);
+  const pack = ticket.data?.pack || null;
+  // (the repeat names the person as the kind does: the same requester, the same employee, F11)
+  const repeat = useMemo(() => (fields && past ? repeatOfCaller(fields, past, pack) : null), [fields, past, pack]);
   return { state, view, vote, repeat };
 }
 
@@ -112,7 +124,7 @@ export default function ResolveCard({ page, eff, record, header, active, setSumm
   const { state, view, vote, repeat } = useCloseWell({ page, eff, record, active });
   const warn = view?.summary.warn || 0;
   useReport(setSummary, view ? closeWellLine({ ready: readyLine(view), vote, repeat }) : '');
-  useReport(setAttention, warn && ['resolved', 'closed'].includes(stateBucket(header?.state)) ? 'warn' : '');
+  useReport(setAttention, warn && ['resolved', 'closed'].includes(stateBucket(header, record)) ? 'warn' : '');
 
   return (
     <>
@@ -126,7 +138,7 @@ export default function ResolveCard({ page, eff, record, header, active, setSumm
             className="ab-chk-list"
             render={(c) => {
               const [word, tone] = labelFor(c.status);
-              const fix = fixFor(c);
+              const fix = fixFor(c, view.kind);
               return (
                 <div key={c.id} className="ab-chk-item" data-status={c.status}>
                   <span className="ab-chk-head">
@@ -140,6 +152,7 @@ export default function ResolveCard({ page, eff, record, header, active, setSumm
             }}
           />
           <CloseFacts page={page} vote={vote} repeat={repeat} />
+          {nextStep(view.kind) && <p className="ab-hint ab-close-next">{nextStep(view.kind)}</p>}
           <div className="ab-ins-foot">
             <QuietButton onClick={state.reload} disabled={state.phase === 'loading'}>
               {t('Check again')}

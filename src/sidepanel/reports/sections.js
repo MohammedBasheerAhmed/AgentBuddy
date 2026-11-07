@@ -9,6 +9,7 @@
 // To add a section: add an entry below, give the engine a section with the same id (or have the View call its own reader), and add
 // the id to SECTION_IDS in src/reports/engine/constants.js so a saved dashboard can hold it. Nothing else in the dashboard changes.
 import { tm } from '../../i18n/index.js';
+import AttentionView from './AttentionView.jsx';
 import OverviewView from './OverviewView.jsx';
 import WorkloadView from './WorkloadView.jsx';
 import SlaView from './SlaView.jsx';
@@ -19,6 +20,7 @@ import CoachingView from './CoachingView.jsx';
 import InsightsView from './InsightsView.jsx';
 
 export const REPORT_SECTIONS = [
+  { id: 'attention', label: tm('Needs attention now'), description: tm('The few tickets that need you most, each with one reason: breached, closest to breaking, waiting for approval, reassigned often, open longest.'), View: AttentionView },
   { id: 'overview', label: tm('Overview tiles'), description: tm('Open, due soon, breached, unassigned, stale, waiting, opened and resolved today.'), View: OverviewView },
   { id: 'workload', label: tm('Workload and ageing'), description: tm('Open work by person and group, ageing, stale and reassigned tickets.'), View: WorkloadView },
   { id: 'sla', label: tm('SLA risk radar'), description: tm('Breached and at-risk SLAs by owner and group, the ten closest to breaking.'), View: SlaView },

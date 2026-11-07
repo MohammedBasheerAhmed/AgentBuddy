@@ -4,12 +4,16 @@
 
 import { matchKey, rankSimilar, similarKeywords, similarQuery, textHas, withoutArabicArticle } from '../lib/similar.js';
 import { FIELDS_BY_KIND, LIMITS } from './allowlists.js';
-import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
+import { NOTE_TEXT, STATUS, absentColumns, confirmEmptyIsReallyEmpty, entry as accessEntry, hiddenFieldEntry, softRead, tm } from './access.js';
 import { isSensitiveTable, kindForTable } from './kinds.js';
 import { SYS_ID_RE, cleanText, disp, oneLine, parseSnTime, raw, stripHtml } from './util.js';
 
 const HOUR = 3600000;
-const SENSITIVE_NOTE = 'This record is in a sensitive table, so other records are not searched unless sensitive data is allowed.';
+// How many of the newest keyword matches are read and ranked, for look-alikes and for articles (a full page means older matches were not seen).
+const SIMILAR_READ = 30;
+const ARTICLE_READ = 15;
+const DUPLICATE_READ = 50;
+const SENSITIVE_NOTE = NOTE_TEXT.sensitiveOthers;
 
 // The columns of a candidate that name a person. They are read (display names only, no other table) so the people a look-alike
 // ticket is about are masked exactly wherever its wording or close notes mention them (src/itsm/reference.js puts them on the pack).
@@ -93,11 +97,18 @@ export function scoreHit({ item, shared, total, words }, pack) {
 }
 
 // Asked only with { routing: true }: where a look-alike went and how urgent it was (the "where similar tickets went" vote).
-const ROUTING_FIELDS = ['assignment_group', 'subcategory', 'priority'];
+//   assignment_group.active  W-15: a group that has been retired still wins a vote of old tickets, and a tip to send a ticket there is a wrong tip.
+//                            Walked from the group (a reference to sys_user_group; the policy guard checks that step: DOT_WALK_TABLES) in the SAME
+//                            read, so there is no new request. A key that does not come back (a column the user may not read arrives as a missing
+//                            key) is 'unknown', which is not 'inactive': the group stays in the vote, as it was.
+const ROUTING_FIELDS = ['assignment_group', 'assignment_group.active', 'subcategory', 'priority'];
+
+// 'true' | 'false' | '' (not told) for a walked flag.
+const flagOf = (row, column) => (raw(row?.[column]) === 'true' || raw(row?.[column]) === 'false' ? raw(row[column]) : '');
 
 function toHit(row, table, routing = false) {
   const extra = routing
-    ? { assignment_group: oneLine(disp(row.assignment_group), 100), subcategory: oneLine(disp(row.subcategory), 100), priority: oneLine(disp(row.priority), 40) }
+    ? { assignment_group: oneLine(disp(row.assignment_group), 100), assignment_group_active: flagOf(row, 'assignment_group.active'), subcategory: oneLine(disp(row.subcategory), 100), priority: oneLine(disp(row.priority), 40) }
     : {};
   return {
     ...extra,
@@ -136,7 +147,7 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
   const table = pack.table;
   if (isSensitiveTable(table, deps.sensitivePrefixes) && !allowSensitive) return { hits: [], keywords: [], access: [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)] };
   const keywords = searchKeywords(pack);
-  if (!keywords.length) return { hits: [], keywords, access: [accessEntry(table, STATUS.SKIPPED, 'The short description has no words worth searching for.')] };
+  if (!keywords.length) return { hits: [], keywords, access: [accessEntry(table, STATUS.SKIPPED, tm('The short description has no words worth searching for.'))] };
 
   let query = similarQuery(keywords, { excludeSysId: pack.sysId });
   if (resolvedOnly) {
@@ -144,7 +155,7 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
     query = `${conditions}^close_notesISNOTEMPTY^ORDERBY${order}`;
   }
   const fields = [...TICKET_FIELDS, ...(routing ? ROUTING_FIELDS : []), ...(BASE_TABLES.has(table) ? ['sys_class_name'] : [])];
-  const { rows, failure } = await softRead(deps, table, query, fields, { limit: 30, displayValue: true });
+  const { rows, failure } = await softRead(deps, table, query, fields, { limit: SIMILAR_READ, displayValue: true });
   if (failure) return { hits: [], keywords, access: [accessEntry(table, failure.status, failure.note)] };
 
   const own = String(pack.sysId).toLowerCase();
@@ -164,8 +175,9 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
     .slice(0, limit)
     .map((x) => x.hit);
 
-  // The ticket's own table is one the user can read, so "nothing similar" is a fact, not a hidden table.
-  return { hits, keywords, access: [accessEntry(table, hits.length ? STATUS.OK : STATUS.EMPTY)] };
+  // The ticket's own table is one the user can read, so "nothing similar" is not a hidden table. It is still only "found among what was read":
+  // truncated: the search stopped at the newest SIMILAR_READ matches (R-03, R-21), and a row rule may hide tickets the user cannot see.
+  return { hits, keywords, truncated: rows.length >= SIMILAR_READ, access: [accessEntry(table, hits.length ? STATUS.OK : STATUS.EMPTY)] };
 }
 
 // ---- Open duplicates -----------------------------------------------------------------------------------
@@ -173,7 +185,7 @@ export async function findSimilarTickets(pack, deps, { resolvedOnly = false, lim
 const DUPLICATE_FIELDS = ['sys_id', 'number', 'short_description', 'state', 'active', 'opened_at', 'assignment_group', 'cmdb_ci', 'business_service'];
 // What "the same thing" means for an outage, in the order they are checked.
 const DUPLICATE_KEYS = ['cmdb_ci', 'business_service'];
-const NO_KEYS_NOTE = 'The ticket has no configuration item or business service to compare.';
+const NO_KEYS_NOTE = tm('This ticket has no configuration item or business service to compare.');
 
 /** The look-back window in hours: 1 hour to 7 days, 24 when the value is not a number. */
 export function duplicateWindowHours(value) {
@@ -195,7 +207,7 @@ export function duplicateWindowHours(value) {
 export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit = 10, now = Date.now(), allowSensitive = false } = {}) {
   const table = pack.table;
   const hours = duplicateWindowHours(windowHours);
-  const result = (hits, access) => ({ hits, windowHours: hours, access });
+  const result = (hits, access, truncated = false) => ({ hits, windowHours: hours, truncated, access });
   if (isSensitiveTable(table, deps.sensitivePrefixes) && !allowSensitive) return result([], [accessEntry(table, STATUS.SKIPPED, SENSITIVE_NOTE)]);
   const sysId = String(pack.sysId || '').toLowerCase();
   // Only the columns this kind of record has (its ceiling): a request has neither, a case has a CI but no service.
@@ -206,7 +218,9 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
   const ownRead = await softRead(deps, table, `sys_id=${sysId}`, ['sys_id', ...columns], { limit: 1, displayValue: false });
   if (ownRead.failure) return result([], [accessEntry(table, ownRead.failure.status, ownRead.failure.note)]);
   const record = ownRead.rows.find((row) => raw(row.sys_id).toLowerCase() === sysId);
-  if (!record) return result([], [accessEntry(table, STATUS.ERROR, `Could not read ${table} again to find its configuration item and service.`)]);
+  if (!record) return result([], [accessEntry(table, STATUS.ERROR, NOTE_TEXT.error)]);
+  // The item or the service did not come back at all: the user may not read it, so "no other ticket on it" cannot be said (R-14).
+  if (absentColumns(record, columns).length) return result([], [hiddenFieldEntry(table)]);
   // Stored values only, and only when they ARE sys_ids: anything else stays out of the query.
   const keys = columns.map((c) => [c, raw(record[c]).trim().toLowerCase()]).filter(([, id]) => SYS_ID_RE.test(id));
   if (!keys.length) return result([], [accessEntry(table, STATUS.SKIPPED, NO_KEYS_NOTE)]);
@@ -215,10 +229,11 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
   const found = new Map();
   const failures = [];
   let read = false;
+  let truncated = false; // a full page: there may be more open tickets on the item than were read (a lower bound, said as "at least")
   for (const [field, id] of keys) {
     const query = `${field}=${id}^active=true^sys_id!=${sysId}^ORDERBYDESCopened_at`;
     // eslint-disable-next-line no-await-in-loop -- two small reads at most, kept sequential.
-    const { rows, failure } = await softRead(deps, table, query, DUPLICATE_FIELDS, { limit: 50, displayValue: true });
+    const { rows, failure } = await softRead(deps, table, query, DUPLICATE_FIELDS, { limit: DUPLICATE_READ, displayValue: true });
     if (failure) {
       failures.push(accessEntry(table, failure.status, failure.note));
       continue;
@@ -226,10 +241,11 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
     // A condition the instance ignored returns rows of other CIs; they are not duplicates of anything.
     const matching = rows.filter((row) => raw(row[field]).trim().toLowerCase() === id);
     if (matching.length < rows.length) {
-      failures.push(accessEntry(table, STATUS.ERROR, `Could not check ${table} by ${field}: the instance did not apply the filter, so its rows were not used.`));
+      failures.push(accessEntry(table, STATUS.ERROR, NOTE_TEXT.ignoredFilter));
       continue;
     }
     read = true;
+    if (rows.length >= DUPLICATE_READ) truncated = true;
     for (const row of matching) {
       const rowId = raw(row.sys_id).toLowerCase();
       const opened = parseSnTime(raw(row.opened_at));
@@ -255,7 +271,7 @@ export async function findOpenDuplicates(pack, deps, { windowHours = 24, limit =
     .slice(0, limit)
     .map(({ openedMs, ...hit }) => hit);
   // A read that worked is a fact (the record's own table is readable); otherwise say why not.
-  return result(hits, read ? [accessEntry(table, hits.length ? STATUS.OK : STATUS.EMPTY)] : failures);
+  return result(hits, read ? [accessEntry(table, hits.length ? STATUS.OK : STATUS.EMPTY)] : failures, truncated);
 }
 
 // ---- Knowledge -----------------------------------------------------------------------------------------
@@ -280,17 +296,19 @@ export function scoreArticle({ title, body }, keywords) {
 export async function searchKnowledge(pack, deps, { limit = 5, now = Date.now(), memo } = {}) {
   const source = 'kb_knowledge';
   const keywords = searchKeywords(pack, { extra: String(pack.fields?.description || '').slice(0, 300), max: 5 });
-  if (!keywords.length) return { hits: [], keywords, access: [accessEntry(source, STATUS.SKIPPED, 'The ticket has no words worth searching for.')] };
+  if (!keywords.length) return { hits: [], keywords, access: [accessEntry(source, STATUS.SKIPPED, tm('This ticket has no words worth searching for.'))] };
 
   const like = keywords.flatMap((w) => [`short_descriptionLIKE${w}`, `textLIKE${w}`]).join('^OR');
   const query = `workflow_state=published^${like}^ORDERBYDESCsys_updated_on`;
-  const fields = ['sys_id', 'number', 'short_description', 'text', 'sys_updated_on', 'kb_knowledge_base', 'view_count', 'sys_view_count', 'valid_to', 'author'];
-  const { rows, failure } = await softRead(deps, source, query, fields, { limit: 15, displayValue: true });
+  // (`active` is read with the rest so a retired article is dropped here too; it adds no read: R-10)
+  const fields = ['sys_id', 'number', 'short_description', 'text', 'sys_updated_on', 'kb_knowledge_base', 'view_count', 'sys_view_count', 'valid_to', 'author', 'active'];
+  const { rows, failure } = await softRead(deps, source, query, fields, { limit: ARTICLE_READ, displayValue: true });
   if (failure) return { hits: [], keywords, access: [accessEntry(source, failure.status, failure.note)] };
 
   const today = new Date(now).toISOString().slice(0, 10);
   const hits = rows
     .filter((row) => !raw(row.valid_to) || raw(row.valid_to).slice(0, 10) >= today)
+    .filter((row) => raw(row.active) !== 'false')
     .map((row) => {
       const body = stripHtml(disp(row.text));
       const title = cleanText(disp(row.short_description), LIMITS.shortDescription);
@@ -316,5 +334,6 @@ export async function searchKnowledge(pack, deps, { limit = 5, now = Date.now(),
     const seen = await confirmEmptyIsReallyEmpty(source, deps, memo);
     return { hits, keywords, access: [accessEntry(source, seen.status, seen.status === STATUS.EMPTY ? '' : seen.note)] };
   }
-  return { hits, keywords, access: [accessEntry(source, hits.length ? STATUS.OK : STATUS.EMPTY)] };
+  // (`truncated`: only the newest ARTICLE_READ matches were ranked, so "none matches" is "none among the newest": R-21)
+  return { hits, keywords, truncated: rows.length >= ARTICLE_READ, access: [accessEntry(source, hits.length ? STATUS.OK : STATUS.EMPTY)] };
 }

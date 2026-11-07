@@ -43,7 +43,7 @@ const KIND_SEVERITY = {
 
 // (English texts marked with tm(); each finding carries its advice through tr(), in the language of the panel)
 const ADVICE = {
-  SECRET: tm('This looks like a password, key or token. Never put credentials in a customer-visible message; share them through the approved secure channel.'),
+  SECRET: tm('This looks like a password or a secret key. Never put credentials in a customer-visible message; share them through the approved secure channel.'),
   URL_CREDENTIALS: tm('This link contains a username and password. Remove the credentials before sending.'),
   CARD: tm('This looks like a payment card number. Do not send card numbers; ask the customer to use the secure payment route.'),
   IBAN: tm('This looks like a bank account number. Check it belongs to the customer you are writing to and that it must be shared.'),
@@ -52,10 +52,10 @@ const ADVICE = {
   ADDRESS: tm('This looks like a postal address. Check it is the customer\'s own.'),
   EMPLOYEE_ID: tm('This looks like an employee or staff id. Check it is the customer\'s own.'),
   PHONE: tm('This looks like a phone number. Check it is the customer\'s own or a published support number.'),
-  EMAIL: tm('This email address is not one of the people on this record. Check you may share it with this customer.'),
+  EMAIL: tm('This email address is not one of the people on this ticket. Check you may share it with this customer.'),
   IP: tm('This looks like an IP address. Internal addresses are rarely useful to a customer.'),
   MAC: tm('This looks like a device (MAC) address. Check it is the customer\'s own device.'),
-  OTHER_PERSON: tm('This looks like the name of someone who is not on this record. Check you may mention them to this customer.'),
+  OTHER_PERSON: tm('This looks like the name of someone who is not on this ticket. Check you may mention them to this customer.'),
   INTERNAL_PHRASE: tm('This wording suggests the text was meant to stay internal. Move it to a work note or rephrase it for the customer.'),
 };
 

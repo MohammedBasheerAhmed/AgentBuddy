@@ -140,7 +140,7 @@ test('a table the person cannot read is left out and named; a scope with no usab
   assert.ok(some.tables.some((t) => t.table === 'sc_task' && t.status === 'denied'));
   const none = await run(handoverWorld({ denied: TABLES }));
   assert.equal(none.data.available, false);
-  assert.match(none.data.reason, /No ticket table can be read/);
+  assert.match(none.data.reason, /No ticket type can be read/);
   assert.deepEqual(resultTables(none), []);
 });
 

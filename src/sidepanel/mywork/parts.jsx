@@ -20,6 +20,14 @@ export function statusChip(item) {
   return item.state ? { text: item.state, tone: 'plain' } : null;
 }
 
+/**
+ * The chip of a row in the unassigned queue of my groups: only a ticket that is on hold or pending has one (its state, or "Waiting on
+ * customer"), so work that is not ready can be told from work that is. Nobody owns these tickets, so no reply and no "your" wording. Pure.
+ */
+export function groupChip(item) {
+  return item.work === 'on-hold' || item.work === 'waiting-customer' ? statusChip({ ...item, marker: undefined }) : null;
+}
+
 // A reply is the one state chip with a colour (someone is waiting for an answer); every other state is neutral.
 const CHIP = { reply: 'ab-chip-ok', quiet: 'ab-chip-neutral', plain: 'ab-chip-neutral' };
 
@@ -53,7 +61,7 @@ export const priorityShort = (display) => {
 export function Row({ page, item, number, title, dot = 'neutral', onOpen, children, after = null, className = '' }) {
   return (
     <li className={`ab-mw-row${className ? ` ${className}` : ''}`}>
-      <RecordLink page={page} item={item} onOpen={onOpen} className="ab-row ab-mw-link">
+      <RecordLink page={page} item={item} onOpen={onOpen} sameTab className="ab-row ab-mw-link">
         <span className={`ab-dot ab-dot-${dot}`} aria-hidden="true" />
         <span className="ab-row-main">
           <span className="ab-row-title ab-mw-head">
@@ -73,10 +81,11 @@ export function Row({ page, item, number, title, dot = 'neutral', onOpen, childr
  * One ticket: number and title; one status chip, the SLA (or how long it has been quiet) and the priority under them. A ticket of my
  * queue that is at risk (src/mywork/risk.js) leads that line with an amber "At risk" chip (the SLA-risk chip's colour) and ends the
  * row with one line that says why ("Reassigned 3 times · waiting on you 2 days").
- *   where: 'queue' | 'group' (the group queue shows the group and how long it has been waiting instead of the last update)
+ *   where: 'queue' | 'group' (the group queue shows the group and how long it has been waiting instead of the last update, and a status
+ *          chip only on a ticket that is on hold or pending, so work that is not ready can be told from work that is: audit 2026-11-07, F17)
  */
 export function TicketRow({ page, item, now, onOpen, where = 'queue' }) {
-  const chip = where === 'group' ? null : statusChip(item);
+  const chip = where === 'group' ? groupChip(item) : statusChip(item);
   const sla = slaText(item.sla, now);
   const risk = item.sla?.risk || 'none';
   const why = where !== 'group' && isAtRisk(item) ? riskLine(item.atRisk) : '';

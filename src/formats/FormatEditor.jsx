@@ -154,7 +154,7 @@ export default function FormatEditor({ feature, saved = null, source = 'default'
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(policyEntry(feature.id, candidate || {}), null, 2));
-      setStatus({ kind: 'ok', text: t('Copied. Your administrator can add it to the orgFormats list of the policy, so the whole team gets it.') });
+      setStatus({ kind: 'ok', text: t("Copied. Send it to your administrator: they can add it to your organisation's settings, so the whole team gets it.") });
     } catch {
       setStatus({ kind: 'danger', text: t('The browser did not copy that. Select the text under "Show the instructions this sends" instead.') });
     }

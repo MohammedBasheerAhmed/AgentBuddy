@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ShowMore } from '../../ui/primitives.jsx';
-import { stepsThatWorked } from '../../../insights/steps.js';
+import { problemFacts, stepsThatWorked } from '../../../insights/steps.js';
 import { errorCodesOf } from '../../../insights/errorCodes.js';
 import { solvedBy } from '../../../insights/solvedBy.js';
 import { agoText } from '../../../insights/time.js';
@@ -90,7 +90,7 @@ function ErrorCodeFact({ page, eff, record, table, codes, active }) {
             />
           </>
         )}
-        {data && !hits.length && readFully(data.access) && <p className="ab-hint">{t('No article or solved ticket mentions {code}.', { code: shown })}</p>}
+        {data && !hits.length && (readFully(data.access) ? <p className="ab-hint">{t('No article or solved ticket found that mentions {code}.', { code: shown })}</p> : <p className="ab-hint">{t('Nothing found that mentions {code}, but some could not be checked.', { code: shown })}</p>)}
         {data && <Notes access={data.access} />}
       </div>
     </div>
@@ -104,23 +104,34 @@ export default function StepsCard({ page, eff, record, active, setSummary, setAt
   const ticket = useTicketFacts({ page, record, eff, active });
   const pack = ticket.data?.pack || null;
   const codes = useMemo(() => errorCodesOf(pack), [pack]);
+  // A problem's own workaround and known-error mark come with the same read (F14).
+  const problem = useMemo(() => problemFacts(pack), [pack]);
   const lookOk = look.data && !look.error;
   const kbOk = kb.data && !kb.error;
   const { items } = useMemo(() => stepsThatWorked({ lookalikes: lookOk ? look.data.hits : [], articles: kbOk ? kb.data.hits : [] }), [look.data, kb.data, lookOk, kbOk]);
   const solved = solvedBy(lookOk ? look.data.hits : []);
   const done = Boolean(look.data || look.error) && Boolean(kb.data || kb.error);
+  // "None found" needs both searches to have seen everything: the solved tickets and the articles (R-08, R-09).
+  const allSeen = Boolean(lookOk) && Boolean(kbOk) && readFully(look.data?.access, kb.data?.access);
 
   // The line: the facts when there are some ("Error 0x800CCC0F found · solved 3 times before by Service Desk – Email"), else the list.
   const codeLine = codes.length ? t('Error {code} found', { code: isolate(codes[0].code) }) : '';
   const solvedLine = solved.enough ? (codeLine ? solved.after : solved.line) : '';
-  const factLine = [codeLine, solvedLine].filter(Boolean).join(' · ');
-  const listLine = done && (lookOk || kbOk) ? (items.length ? tn(items.length, '{n} fix from solved tickets and articles', '{n} fixes from solved tickets and articles') : t('None found')) : '';
+  const problemLine = problem ? (problem.workaround ? t('Workaround recorded') : problem.knownError ? t('Known error') : '') : '';
+  const factLine = [problemLine, codeLine, solvedLine].filter(Boolean).join(' · ');
+  const listLine = done && (lookOk || kbOk) ? (items.length ? tn(items.length, '{n} fix from solved tickets and articles', '{n} fixes from solved tickets and articles') : allSeen ? t('None found') : t('Could not check everything')) : '';
   useReport(setSummary, factLine || listLine);
   // A fix that worked before is good news; a code or a group to ask is plain information; none of it is nothing to report.
-  useReport(setAttention, done && (lookOk || kbOk) ? (items.length ? 'ok' : factLine ? '' : 'clear') : '');
+  useReport(setAttention, done && (lookOk || kbOk) ? (items.length || problem?.workaround ? 'ok' : factLine || !allSeen ? '' : 'clear') : '');
 
   return (
     <>
+      {problem && (
+        <dl className="ab-fix-kv ab-fix-fact" data-fact="workaround">
+          <dt>{problem.knownError ? t('Known error, workaround') : t('Workaround')}</dt>
+          <dd>{problem.workaround || (problem.hidden ? t('Not shown to you') : t('None recorded yet'))}</dd>
+        </dl>
+      )}
       {codes.length > 0 && <ErrorCodeFact page={page} eff={eff} record={record} table={pack?.table || record.table} codes={codes} active={active} />}
       {!items.length && <ReadState state={look.data ? kb : look} what={t('solved tickets and articles')} onRetry={() => (look.error ? look.reload() : kb.reload())} />}
       {items.length > 0 && (
@@ -134,7 +145,8 @@ export default function StepsCard({ page, eff, record, active, setSummary, setAt
           )}
         />
       )}
-      {done && !items.length && (lookOk || kbOk) && <p className="ab-hint">{t('No solved ticket or article with written steps matches this ticket yet.')}</p>}
+      {done && !items.length && (lookOk || kbOk) && <p className="ab-hint">{allSeen ? t('No solved ticket or article with written steps matches this ticket yet.') : t('No solved ticket or article with written steps found, but some could not be checked.')}</p>}
+      {done && !allSeen && (lookOk || kbOk) && <Notes access={[...(look.data?.access || []), ...(kb.data?.access || [])]} />}
       {solved.enough && (
         <dl className="ab-fix-kv ab-fix-fact" data-fact="solved-by">
           <dt>{t('Solved before by')}</dt>

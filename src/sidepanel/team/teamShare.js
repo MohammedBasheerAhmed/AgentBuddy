@@ -5,14 +5,15 @@
 //   live        how many Insights dashboards are on screen for this tab and instance (0: AI Assist reads the numbers itself)
 //   asOf        the dashboard's "as of" instant for its current load, so a read AI Assist makes asks the same questions (cache hits)
 //   refreshKey  bumps when the dashboard is refreshed, so AI Assist reads again too
-// Nothing here touches chrome.storage: closing the panel drops it all. One share per ServiceNow tab and instance.
+// Nothing here touches chrome.storage: closing the panel drops it all. One share per ServiceNow tab, instance and signed-in person: the
+// numbers read for one person are never what another is shown (audit of 2026-11-07, R-16).
 import { createLoadedStore } from '../../reports/ai/loaded.js';
 import { instanceKey } from '../../reports/dashboards.js';
 
 const shares = new Map();
 
-/** The share key for a page: its tab and its instance. */
-export const shareKey = (page) => `${page?.tabId ?? ''}|${instanceKey(page?.href)}`;
+/** The share key for a page: its tab, its instance and who is signed in (the user's id, the name when the page gave no id). */
+export const shareKey = (page) => `${page?.tabId ?? ''}|${instanceKey(page?.href)}|${String(page?.user?.userId || page?.user?.name || '').toLowerCase()}`;
 
 function createShare() {
   const listeners = new Set();

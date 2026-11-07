@@ -1,33 +1,28 @@
 // Plain-language reading of the state words ServiceNow shows ("Closed Complete", "Work in Progress", "Requested"...).
 // Shared by the request explainer and the resolution check. Pure: no I/O.
 //
-// Everything here works on DISPLAY values (what the person sees), because the stored numbers differ between releases and
-// between tables. A word that is not recognised never counts as closed or as an approval: unknown stays unknown.
+// What a state MEANS is decided in one place, src/domain/states.js (docs/states.md): the stored value by table first, then the words of
+// the label in English, German and Arabic. These functions only ask it the yes/no questions the checks need. They accept a state's text
+// alone ("Closed Complete") or an object { table, value, label, stage } when the caller has more. A state that is not recognised
+// never counts as closed or as an approval: unknown stays unknown.
 
 import { isolate, t } from '../i18n/index.js';
+import * as states from '../domain/states.js';
 
 const text = (v) => String(v ?? '').trim();
+const argsOf = (state) => (state && typeof state === 'object' ? state : { label: state });
 
-// Closed / finished states of requests, items, tasks, incidents, problems and cases.
-const FINISHED = /(^|[^a-z])(closed|cancel{1,2}ed|skipped|resolved|complete|completed|fulfilled|delivered|withdrawn|rejected)([^a-z]|$)/i;
-// ... and the ones among them that mean "it ended without being done".
-const NOT_DONE = /incomplete|cancel|skipped|reject|withdrawn|declin/i;
-
-/** Is this state text a finished one (closed, resolved, cancelled, complete...)? */
-export const isFinishedState = (state) => FINISHED.test(text(state));
+/** Is this state a finished one (closed, resolved, cancelled, complete...)? */
+export const isFinishedState = (state) => states.isFinishedState(argsOf(state));
 
 /**
  * 'done' (finished and fulfilled), 'ended' (closed without being done: cancelled, skipped, incomplete, rejected) or
  * '' (not finished, or not a state we recognise).
  */
-export function finishedKind(state) {
-  const s = text(state);
-  if (!FINISHED.test(s)) return '';
-  return NOT_DONE.test(s) ? 'ended' : 'done';
-}
+export const finishedKind = (state) => states.finishedKind(argsOf(state));
 
 /** On hold or pending (waiting for something outside the work itself)? */
-export const isHoldState = (state) => /(^|[^a-z])(on[ -]?hold|hold|pending|awaiting|waiting)([^a-z]|$)/i.test(text(state));
+export const isHoldState = (state) => states.isWaitingState(argsOf(state));
 
 /**
  * What an approval row or an approval column says: 'approved' | 'rejected' | 'pending' (asked, no answer yet) |
@@ -52,7 +47,7 @@ export function approvalKind(state) {
 export function isOpenItem(item) {
   if (item?.active === 'true') return true;
   if (item?.active === 'false') return false;
-  return !isFinishedState(item?.state);
+  return !isFinishedState({ table: item?.table, value: item?.stateValue, label: item?.state, stage: item?.stage });
 }
 
 /** "Beth Anglin in Desktop Support", "Desktop Support", "Beth Anglin" or '' for a task row. */

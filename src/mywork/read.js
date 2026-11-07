@@ -16,18 +16,21 @@
 //      only the author's login and the time, never the text. Compared with my login and the customer's (read on the ticket as a
 //      dot-walked column and kept here: it never goes back to the panel).
 //   5. APPROVALS waiting on me (sysapproval_approver, approver = me, state = requested) and the UNASSIGNED tickets of my groups
-//      (assignment group in my groups, nobody assigned, active), oldest first.
+//      (assignment group in my groups, nobody assigned, active). The group queue is read most urgent priority first (then oldest), so a
+//      new critical ticket is never lost behind older ones, and shown in the order of rankGroupQueue (src/mywork/rank.js): SLA breached,
+//      SLA at risk, then ready work before waiting, then priority, then age (audit of 2026-11-07, F17). No column is read for it that My
+//      work did not read already.
 // A lost session ends the whole read (the panel says "log in again"); any other failure is one plain access note, never raw API text.
 import { SYS_ID_RE, TABLE_RE, raw, disp, parseSnTime, oneLine } from '../context/util.js';
 import { classifyReadError, confirmEmptyIsReallyEmpty, STATUS } from '../context/access.js';
 import { readMyTeam } from '../reports/engine/scope.js';
 import { normalizeGroups } from '../reports/engine/reader.js';
 import { SLA_COLUMNS } from '../reports/myDay.js';
-import { columnsFor, customerColumn, vipColumn, accountColumn, tablesForProfiles, readDecision, pluralOf, singularOf } from './tables.js';
+import { columnsFor, customerColumn, vipColumn, accountColumn, riskColumnsFor, tablesForProfiles, readDecision, pluralOf, singularOf } from './tables.js';
 import { workState } from './states.js';
 import { mostPressingSla } from './sla.js';
 import { entriesByTicket, markerFor, windowStart, UNKNOWN_MARKER } from './markers.js';
-import { rankQueue } from './rank.js';
+import { rankQueue, rankGroupQueue } from './rank.js';
 import { say, tm } from '../reports/engine/say.js';
 
 export const LIMITS = Object.freeze({
@@ -89,6 +92,7 @@ export function failureOf(err, table) {
 }
 
 const capFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const bareCode = (s) => (/^[+-]?\d+$/.test(s) ? '' : s);
 
 /** One plain access line about `what` ("incidents", "SLAs"): never the API's own text. */
 export function accessNote(status, what, capitalised = capFirst(what)) {
@@ -202,8 +206,10 @@ function flagOf(value) {
  * One ticket row as My work keeps it. `type` is the table it was read from (labels, filters); `table` its own class (the link).
  * The "at risk" facts (src/mywork/risk.js) are there only when the row was read with them (my queue, src/context/specs/mywork.js):
  * reassignments and reopens (null when not read), vip (null when not known) and account (a case's account name, '' when not read).
+ * `asked`: the risk columns this read asked for. `factsUnread` counts those missing from the row (the key is absent, which is what a
+ * column the person may not read looks like): such a ticket may be at risk for a reason that could not be seen (audit of 2026-11-07, R-20).
  */
-export function itemOf(row, type) {
+export function itemOf(row, type, { asked = [] } = {}) {
   const cls = raw(row.sys_class_name).toLowerCase();
   const ci = raw(row.cmdb_ci).toLowerCase();
   const group = raw(row.assignment_group).toLowerCase();
@@ -217,9 +223,10 @@ export function itemOf(row, type) {
     number: oneLine(disp(row.number), 40),
     title: oneLine(disp(row.short_description), 160),
     priority: oneLine(disp(row.priority), 40),
-    state: oneLine(disp(row.state), 60),
+    // (a state with no label shown stands as its stored number; a number is not a word for a person, so the chip says nothing instead)
+    state: bareCode(oneLine(disp(row.state), 60)),
     holdReason: oneLine(disp(row.hold_reason), 60),
-    work: workState({ table: type, state: disp(row.state), stateValue: raw(row.state), holdReason: disp(row.hold_reason), holdReasonValue: raw(row.hold_reason) }),
+    work: workState({ table: type, state: disp(row.state), stateValue: raw(row.state), holdReason: disp(row.hold_reason), holdReasonValue: raw(row.hold_reason), stage: raw(row.stage) }),
     updatedAt: ms(row.sys_updated_on),
     openedAt: ms(row.opened_at),
     ci: SYS_ID_RE.test(ci) ? { id: ci, name: oneLine(disp(row.cmdb_ci), 80) } : null,
@@ -228,6 +235,7 @@ export function itemOf(row, type) {
     reopens: countOf(row.reopen_count),
     vip: vip ? flagOf(row[vip]) : null,
     account: account ? oneLine(disp(row[account]), 80) : '',
+    factsUnread: asked.filter((column) => !Object.hasOwn(row, column)).length,
     sla: null,
     marker: UNKNOWN_MARKER,
   };
@@ -271,8 +279,9 @@ async function readClasses(deps, counted, { query, order, cap, pageSize, group, 
         const got = await readPages(deps, table, `${query}${order}`, columnsFor(table, { group, risk, accounts }), { cap, pageSize, total, run });
         answered.push(table);
         const column = customerColumn(table);
+        const asked = risk ? riskColumnsFor(table, { accounts }) : [];
         for (const r of got.rows) {
-          const item = itemOf(r, table);
+          const item = itemOf(r, table, { asked });
           items.push(item);
           const login = column ? raw(r[column]).trim().toLowerCase() : '';
           if (login) logins.set(item.sysId, login);
@@ -327,7 +336,7 @@ const NO_JOURNAL = tm('Who wrote last is not visible to you, so "customer replie
 async function addMarkers(deps, items, logins, me, { run, limits }) {
   const targets = items.filter((i) => i.work !== 'resolved');
   if (!targets.length) return [];
-  if (!me) return [{ source: 'sys_journal_field', status: STATUS.SKIPPED, note: tm('Agent Buddy could not tell your user name, so "customer replied" and the follow-ups are not shown.') }];
+  if (!me) return [{ source: 'sys_journal_field', status: STATUS.SKIPPED, note: tm('Agent Buddy could not tell who you are, so "customer replied" and the follow-ups are not shown.') }];
   try {
     for (let i = 0; i < targets.length; i += limits.journalChunk) {
       const chunk = targets.slice(i, i + limits.journalChunk);
@@ -470,7 +479,7 @@ async function readGroupQueue(deps, userId, { profiles, policy, run, limits }) {
   const counted = await countByClass(deps, query, tablesForProfiles(profiles), run);
   const got = await readClasses(deps, counted, {
     query,
-    order: '^ORDERBYopened_at^ORDERBYnumber',
+    order: '^ORDERBYpriority^ORDERBYopened_at^ORDERBYnumber',
     cap: limits.groupPerClass,
     pageSize: limits.groupPerClass,
     group: true,
@@ -478,7 +487,8 @@ async function readGroupQueue(deps, userId, { profiles, policy, run, limits }) {
     run,
     max: limits.classes,
   });
-  const live = got.items.filter((i) => i.work !== 'resolved').sort((a, b) => (a.openedAt ?? Infinity) - (b.openedAt ?? Infinity) || a.number.localeCompare(b.number));
+  // (no SLA is known yet: the most urgent priority first, then the oldest; the SLAs come with the 100 kept, and rankGroupQueue orders them again)
+  const live = rankGroupQueue(got.items.filter((i) => i.work !== 'resolved'));
   const known = Object.values(got.totals);
   // (resolved-but-active tickets were counted and read, but nobody needs to pick them up)
   const total = known.reduce((n, t) => n + (Number.isFinite(t.total) ? t.total : t.shown), 0) - (got.items.length - live.length);
@@ -529,6 +539,9 @@ export async function readMyWork({ userId, userName = '' }, deps, { profiles = [
     addSlas(deps, [...queue.items.filter((i) => i.work !== 'resolved'), ...groups.items], { run, now, limits }),
     addMarkers(deps, queue.items, queue.logins, login, { run, limits }),
   ]);
+
+  // The unassigned tickets of my groups, now that their SLAs are known: breached first, then at risk, then ready work, priority, age.
+  groups.items = rankGroupQueue(groups.items);
 
   return {
     version: 1,

@@ -1,6 +1,7 @@
 // Pieces the report sections share: probing which tables a person can use, labelling states, ranking groups, and the
 // "how sure are we" notes (denominators, caps) every section reports the same way.
 import { raw, disp } from '../../context/util.js';
+import { classifyState, reportClassFor } from '../../domain/states.js';
 import { REPORT_TABLES, LIMITS, isSensitiveReportTable } from './constants.js';
 import { andQuery, buildQuery } from './queryBuilder.js';
 import { attempt } from './reader.js';
@@ -14,8 +15,9 @@ export const clampInt = (value, min, max, fallback) => {
 };
 
 // ---- States --------------------------------------------------------------------------------------------------------
-// Every table words its states differently ("In Progress", "Work in Progress", "Awaiting Info"). Reports group them by what
-// they mean, judged from the label the instance shows, so a customised state list still lands in the right column.
+// Every table words its states differently ("In Progress", "Work in Progress", "Awaiting Info"). Reports group them by what they mean:
+// by the stored value of the state for the ticket's own table, then by the words of the label the site shows (src/domain/states.js,
+// docs/states.md), so a renamed, translated or customised state list still lands in the right column.
 
 export const STATE_CLASSES = Object.freeze([
   { key: 'new', label: tm('New') },
@@ -27,13 +29,37 @@ export const STATE_CLASSES = Object.freeze([
   { key: 'other', label: tm('Other') },
 ]);
 
-export function stateClass(label) {
-  const text = String(label || '').trim();
-  if (/^(resolved|closed|complete|completed|cancell?ed|fixed|done)\b/i.test(text)) return 'resolved';
-  if (/\b(await\w*|pending|on hold|hold|wait\w*)\b/i.test(text)) return 'waiting';
-  if (/^(new|draft|requested|assess|authori[sz]e|scheduled)\b/i.test(text)) return 'new';
-  if (/\b(open|progress|work\w*|active|implement\w*|review|assigned|process\w*)\b/i.test(text)) return 'working';
-  return 'other';
+/**
+ * The report class of one state: 'new' | 'working' | 'waiting' | 'resolved' (finished, cancelled included, but still active) | 'other'.
+ * `table` and `value` (the stored value) make it exact; with the label alone the words decide.
+ */
+export function stateClass(label, { table = '', value = '' } = {}) {
+  return reportClassFor({ table, value, label });
+}
+
+// The plain word for a state that came back with no label (a stored number is not a word for a person): marked here, shown in the
+// panel's language by shown() where the row is drawn (the row says `plain`).
+const PLAIN_STATE = Object.freeze({
+  new: tm('New'),
+  working: tm('In progress'),
+  waiting: tm('On hold'),
+  resolved: tm('Resolved'),
+  closed: tm('Closed'),
+  cancelled: tm('Cancelled'),
+  unknown: tm('Unknown state'),
+});
+
+/**
+ * What to call a state in a breakdown: the label the site gave it; when there is none, or it is only the stored number, the plain word
+ * for what the state means (never the number). { name, plain }: `plain` is true for an engine word (shown() translates it), false for
+ * the site's own label or the '(none)' placeholder.
+ */
+export function stateName(key, table = '') {
+  const display = String(key?.display ?? '').trim();
+  const value = String(key?.value ?? '').trim();
+  if (display && !(display === value && /^[+-]?\d+$/.test(display))) return { name: display, plain: false };
+  if (!display && !value) return { name: tm('(none)'), plain: false };
+  return { name: PLAIN_STATE[classifyState({ table, value })], plain: true };
 }
 
 // ---- Tables --------------------------------------------------------------------------------------------------------
@@ -53,12 +79,12 @@ export function normalizeTables(input, { allowSensitive = false, sensitivePrefix
  * The states of a breakdown (groups by state of ACTIVE tickets) that mean "resolved, waiting to close". Pure.
  * { count, values, labels }: values are the stored state values, for a query that leaves them out or lists them.
  */
-export function resolvedStates(groups) {
-  const done = (groups || []).filter((g) => stateClass(g.keys[0]?.display) === 'resolved');
+export function resolvedStates(groups, table = '') {
+  const done = (groups || []).filter((g) => stateClass(g.keys[0]?.display, { table, value: g.keys[0]?.value }) === 'resolved');
   return {
     count: done.reduce((n, g) => n + g.count, 0),
     values: [...new Set(done.map((g) => g.keys[0].value).filter((v) => v !== ''))],
-    labels: [...new Set(done.map((g) => g.keys[0].display).filter(Boolean))],
+    labels: [...new Set(done.map((g) => stateName(g.keys[0], table).name).filter(Boolean))],
   };
 }
 
@@ -83,7 +109,7 @@ export function notResolved(values) {
  */
 export async function readOpenStates(reader, table, openQuery) {
   const states = await attempt(() => reader.groups(table, openQuery, ['state']), table);
-  const done = states.ok ? resolvedStates(states.value) : { count: 0, values: [], labels: [] };
+  const done = states.ok ? resolvedStates(states.value, table) : { count: 0, values: [], labels: [] };
   return { states, done, live: notResolved(done.values) };
 }
 
@@ -142,9 +168,9 @@ export function tableAccess(tables) {
 function statusNote(table, label, vis) {
   if (vis.status === 'ok') return '';
   if (vis.status === 'denied') return say(tm('{table}: not available to you.'), { table: label });
-  if (vis.status === 'hidden') return say(tm('{table}: you can see no rows in this table, so its numbers would prove nothing. It may be empty, or an access rule may hide it.'), { table: label });
-  if (vis.status === 'blocked') return say(tm('{table}: your organisation does not allow reports to read this table.'), { table: label });
-  return vis.note ? say(tm('{table}: could not be read ({note}).'), { table: label, note: vis.note }) : say(tm('{table}: could not be read.'), { table: label });
+  if (vis.status === 'hidden') return say(tm('{table}: you can see none of them, so its numbers would prove nothing. There may be none, or your role may not let you see them.'), { table: label });
+  if (vis.status === 'blocked') return say(tm('{table}: your organisation does not allow reports to read them.'), { table: label });
+  return say(tm('{table}: could not be read.'), { table: label });
 }
 
 // ---- Numbers -------------------------------------------------------------------------------------------------------
@@ -241,5 +267,14 @@ export function sectionResult(id, title, ctx, data, extra = {}) {
 }
 
 export const usableTables = (ctx) => ctx.tables.filter((t) => t.usable);
+
+/**
+ * Does a report with this scope ({ kind }) show one row PER PERSON of the team (Open work by person, SLA risk by owner)? Today every
+ * member of a group sees each member's workload, as the platform's own read rules allow, and a report on one's own tickets (scope
+ * "mine") has no other person. The owner has an open decision (audit of 2026-11-07, W-14): perhaps only the group's manager should see
+ * per-person rows. If so, this is the ONE place to say it: the Workload engine and the SLA radar's owner bars both ask it (the panel
+ * passes the scope kind it was given). Nothing is gated today.
+ */
+export const showsPersonRows = (scope) => scope?.kind !== 'mine';
 
 export { LIMITS };

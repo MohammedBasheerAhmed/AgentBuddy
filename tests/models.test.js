@@ -41,12 +41,12 @@ test('listModels: GET <address>/models with only the key; the gateway address is
 test('listModels: plain sentences for a missing key, a bad key, no list, no models, no network, and Anthropic', async () => {
   const gateway = resolveProviderConfig({ provider: 'openai', baseUrls: { openai: 'https://ai.corp.example/v1' } }, 'sk-gw');
   await assert.rejects(() => listModels(resolveProviderConfig({ provider: 'openai', baseUrls: { openai: 'https://ai.corp.example/v1' } }, ''), answer(200, {})), /Enter your key first/);
-  await assert.rejects(() => listModels(gateway, answer(401, '{}')), /ai\.corp\.example rejected the API key/);
-  await assert.rejects(() => listModels(gateway, answer(403, '{}')), /rejected the API key/);
-  await assert.rejects(() => listModels(gateway, answer(404, 'not found')), /does not give a list of its models \(answer 404\)\. Type the model name instead\./);
+  await assert.rejects(() => listModels(gateway, answer(401, '{}')), /ai\.corp\.example did not accept the AI key/);
+  await assert.rejects(() => listModels(gateway, answer(403, '{}')), /did not accept the AI key/);
+  await assert.rejects(() => listModels(gateway, answer(404, 'not found')), /does not give a list of its models\. Type the model name instead\./);
   await assert.rejects(() => listModels(gateway, answer(200, { data: [] })), /answered, but with no models/);
   await assert.rejects(() => listModels(gateway, answer(200, '<html>login</html>')), /answered, but with no models/);
-  await assert.rejects(() => listModels(gateway, async () => { throw new TypeError('Failed to fetch'); }), /Could not reach ai\.corp\.example/);
+  await assert.rejects(() => listModels(gateway, async () => { throw new TypeError('Failed to fetch'); }), /Could not reach the AI service at ai\.corp\.example/);
   await assert.rejects(() => listModels(resolveProviderConfig({ provider: 'anthropic' }, 'sk-ant'), answer(200, {})), /no list to load here/);
   // A server on this computer needs no key.
   const local = resolveProviderConfig({ provider: 'custom', baseUrls: { custom: 'http://localhost:11434/v1' } }, '');

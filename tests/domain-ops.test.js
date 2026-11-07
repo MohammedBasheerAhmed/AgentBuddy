@@ -159,7 +159,8 @@ test('HTTP 200 with no rows is "none that your user can see" (they can see the c
   const { answer } = await run(args, tables);
   assert.deepEqual(answer.cases, []);
   assert.equal(answer.access[0].status, 'empty');
-  assert.match(answer.access[0].note, /that your user can see/);
+  assert.match(answer.access[0].note, /that you can see/);
+  assert.doesNotMatch(answer.access[0].note, /your user/i);
 });
 
 test('an instance that ignores the account condition returns everybody\'s cases: none is used', async () => {
@@ -173,7 +174,7 @@ test('an instance that ignores the account condition returns everybody\'s cases:
   const { answer } = await run(args, tables, undefined, wrap);
   assert.deepEqual(answer.cases, []);
   assert.equal(answer.access[0].status, 'error');
-  assert.match(answer.access[0].note, /did not apply the filter/);
+  assert.match(answer.access[0].note, /did not narrow the results as asked/);
 });
 
 test('a lost session stops the read instead of looking like an empty account', async () => {
@@ -285,7 +286,7 @@ test('if the read fails the briefing still works and says the account\'s cases w
   assert.ok(!('accountCases' in out.related));
   assert.ok(!JSON.stringify(out.access).includes('user@example.com'), 'the error text is not copied');
   const parts = domainParts(out, { related: ['accountCases'] });
-  assert.match(parts.find((p) => p.field === 'data_not_available').text, /The account's other cases: could not be read/);
+  assert.match(parts.find((p) => p.field === 'data_not_available').text, /Customer service cases: could not be read/);
 });
 
 test('a lost session is not swallowed by enrich', async () => {

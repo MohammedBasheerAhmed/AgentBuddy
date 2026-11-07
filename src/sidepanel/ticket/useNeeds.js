@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildGlance } from '../../insights/glance.js';
 import { latestCallerMessage, needsTranslation, sinceLooked } from '../../insights/sinceLooked.js';
-import { LAST_VIEWED_KEY, chromeLastViewedStore, instanceOf, lastViewedAllowed } from '../../lib/lastViewed.js';
-import { SYS_ID_RE, TABLE_RE } from '../../context/util.js';
+import { LAST_VIEWED_KEY, chromeLastViewedStore, instanceOf, lastViewedAllowed, worthRemembering } from '../../lib/lastViewed.js';
+import { SYS_ID_RE } from '../../context/util.js';
 import { featureById } from '../../features/registry.js';
 import { TRANSLATE_ID } from '../../features/packs/translate.js';
 import { aiOffByPolicy } from '../../profiles/profiles.js';
 import { offeredFeatures } from './assist/actions/plan.js';
 import { useRecordRead, useTicketFacts } from './cards/data.js';
 import { needsNow } from './needsNow.js';
+import { getLanguage } from '../../i18n/index.js';
 
 // ---- "since you last looked": when the panel showed this ticket before ---------------------------------------------------------
 //
@@ -16,6 +17,20 @@ import { needsNow } from './needsNow.js';
 // (src/lib/lastViewed.js, which then keeps "now"), and kept while that record stays on screen. The screen drawn again for the same
 // record (another language, a part that failed and came back) does not read again, which would find the time just written.
 let shown = { key: '', previous: null, promise: Promise.resolve(null) };
+
+/**
+ * The key a record is remembered under, or '' when nothing is to be read or written: the policy turns it off, the page has no instance
+ * address, the page does not say who is signed in (whose time it would be is not known: R-17), or the page is not a ticket's (the table
+ * is not a ticket-like one and the form carried no number). The key is in memory only; the user id in it is never stored (storage
+ * keeps a hash: src/lib/lastViewed.js). Pure.
+ */
+export function lastViewedKey({ allowed, instance, record, extraPrefixes, userId = '' }) {
+  const table = String(record?.table || '');
+  const sysId = String(record?.sysId || '').toLowerCase();
+  const user = String(userId || '').toLowerCase();
+  const proven = typeof record?.number === 'string' && record.number.trim() !== '';
+  return allowed && instance && SYS_ID_RE.test(user) && SYS_ID_RE.test(sysId) && worthRemembering(table, { proven, extraPrefixes }) ? `${instance}|${user}|${table}|${sysId}` : '';
+}
 
 /** Forget the time held in memory (tests; "Clear everything" in Settings, through storage). */
 export function forgetLastViewed() {
@@ -34,7 +49,11 @@ export function useLastViewed({ page, record, eff }) {
   const instance = instanceOf(page?.href);
   const table = String(record?.table || '');
   const sysId = String(record?.sysId || '').toLowerCase();
-  const key = allowed && instance && TABLE_RE.test(table) && SYS_ID_RE.test(sysId) ? `${instance}|${table}|${sysId}` : '';
+  const extraPrefixes = eff?.policy?.sensitiveTablePrefixes;
+  const proven = typeof record?.number === 'string' && record.number.trim() !== '';
+  // Who is signed in (the page says; the store keeps only a short hash of it): "since you last looked" is the visit of THIS person.
+  const userId = String(page?.user?.userId || '').toLowerCase();
+  const key = lastViewedKey({ allowed, instance, record, extraPrefixes, userId });
   const [state, setState] = useState(() => ({ key: shown.key === key ? key : '', previous: shown.key === key ? shown.previous : null }));
 
   useEffect(() => {
@@ -44,7 +63,7 @@ export function useLastViewed({ page, record, eff }) {
       // The policy is asked again right before the store reads or writes (it may have changed since this record was opened).
       const store = chromeLastViewedStore({ enabled: () => allowedNow.current });
       const entry = { key, previous: null, promise: null };
-      entry.promise = (store ? store.seen({ instance, table, sysId }) : Promise.resolve(null))
+      entry.promise = (store ? store.seen({ instance, userId, table, sysId, proven, extraPrefixes }) : Promise.resolve(null))
         .catch(() => null)
         .then((previous) => {
           entry.previous = Number.isFinite(previous) ? previous : null;
@@ -106,7 +125,8 @@ const slasOf = (answer) => {
 export function useNeeds({ page, record, eff, header, headPhase, cards }) {
   const facts = useTicketFacts({ page, record, eff, active: false });
   const previous = useLastViewed({ page, record, eff });
-  const audit = useRecordRead({ page, record, eff, active: Number.isFinite(previous), op: 'journey' });
+  const language = getLanguage();
+  const audit = useRecordRead({ page, record, eff, active: Number.isFinite(previous), op: 'journey', args: { language }, name: `journey:${language}` });
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60000);

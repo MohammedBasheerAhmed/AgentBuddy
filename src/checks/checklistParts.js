@@ -40,7 +40,7 @@ export function checklistParts(pack) {
     const question = text(a?.question);
     const value = text(a?.value);
     // One line per answer: a multi-line answer is squeezed, so it cannot start a line that looks like another question.
-    if (question && value) lines.push(`- ${question.replace(/\s+/g, ' ')}: ${value.replace(/\s+/g, ' ')}`);
+    if (value) lines.push(`- ${(question || 'An answer').replace(/\s+/g, ' ')}: ${value.replace(/\s+/g, ' ')}`);
   }
   if (lines.length) parts.push({ label: 'Answers to the request questions', field: 'variables', text: lines.join('\n') });
   return parts;

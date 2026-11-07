@@ -67,7 +67,9 @@ export const PRESETS = Object.freeze([
     scope: { kind: 'groups' },
     tables: null,
     // Insights only. "Explain this dashboard" is under the Team screen's AI Assist half and explains these sections' numbers.
+    // "Needs attention now" comes first: what needs the lead, before the numbers.
     widgets: [
+      { type: 'section', section: 'attention' },
       { type: 'section', section: 'overview' },
       { type: 'section', section: 'workload' },
       { type: 'section', section: 'sla' },
@@ -85,6 +87,14 @@ export const PRESETS = Object.freeze([
   },
 ]);
 
+/**
+ * Sections a later version added to a ready-made dashboard. A dashboard saved before has none of them, so each is put at the front of
+ * that dashboard ONCE, and the state remembers it was offered (`offered`: section ids, nothing else): a person who removes it from
+ * their dashboard is not given it again. Configuration only, like the rest of what is stored.
+ */
+export const ADDED_SECTIONS = Object.freeze([{ section: 'attention', dashboard: 'preset-team' }]);
+const OFFERED_IDS = ADDED_SECTIONS.map((a) => a.section);
+
 function presetDashboard(preset, makeId) {
   return sanitizeDashboard({ ...preset, widgets: preset.widgets.map((w) => ({ ...w, id: makeId('w') })) }, makeId);
 }
@@ -100,7 +110,7 @@ export function defaultState(makeId = randomId, { lead = false, org = null } = {
   const presets = PRESETS.filter((p) => !own || nameKey(p.name) !== nameKey(own.name)).map((p) => presetDashboard(p, makeId));
   const dashboards = own ? [own, ...presets] : presets;
   const first = own || (lead ? dashboards.find((d) => d.id === 'preset-team') : null);
-  return { version: DASHBOARDS_VERSION, activeId: (first || dashboards[0]).id, dashboards };
+  return { version: DASHBOARDS_VERSION, activeId: (first || dashboards[0]).id, dashboards, offered: [...OFFERED_IDS] };
 }
 
 // ---- Cleaning ------------------------------------------------------------------------------------------------------
@@ -164,7 +174,16 @@ export function sanitizeState(stored, makeId = randomId, { lead = false, org = n
   }
   if (!dashboards.length) return { state: defaults(), status: 'corrupt' };
   const activeId = dashboards.some((d) => d.id === stored.activeId) ? stored.activeId : dashboards[0].id;
-  return { state: { version: DASHBOARDS_VERSION, activeId, dashboards }, status: 'ok' };
+  // What this version added to a ready-made dashboard, put there once (see ADDED_SECTIONS).
+  const offered = (Array.isArray(stored.offered) ? stored.offered : []).filter((id, i, all) => OFFERED_IDS.includes(id) && all.indexOf(id) === i);
+  for (const added of ADDED_SECTIONS) {
+    if (offered.includes(added.section)) continue;
+    offered.push(added.section);
+    const at = dashboards.findIndex((d) => d.id === added.dashboard);
+    if (at < 0 || dashboards[at].widgets.length >= CAPS.widgets || dashboards[at].widgets.some((w) => w.type === 'section' && w.section === added.section)) continue;
+    dashboards[at] = { ...dashboards[at], widgets: [sanitizeWidget({ type: 'section', section: added.section }, makeId), ...dashboards[at].widgets] };
+  }
+  return { state: { version: DASHBOARDS_VERSION, activeId, dashboards, offered }, status: 'ok' };
 }
 
 // ---- Changes (pure: each returns a new state) ----------------------------------------------------------------------

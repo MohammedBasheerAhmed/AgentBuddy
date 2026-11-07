@@ -40,7 +40,7 @@ test('saveCaps keeps what is not changed, cleans what is typed, and a reached da
     const err = await assertWithinCaps().catch((e) => e);
     assert.ok(err instanceof Error);
     assert.equal(err.code, 'BUDGET');
-    assert.match(err.message, /Daily tokens cap reached .* Agent Buddy settings > Usage and limits\./);
+    assert.match(err.message, /^Your daily AI limit is reached\. It resets tomorrow, or raise it in Settings > Usage and limits\.$/);
     assert.equal(errorReason(err), 'BUDGET');
 
     // Key checks ("Test connection") never count against a cap.

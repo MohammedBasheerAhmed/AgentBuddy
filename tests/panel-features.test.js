@@ -48,7 +48,8 @@ test('the check itself works: the offers the review found are reported', () => {
   const notes = featureById('resolution-notes');
   // (resolution-notes names the kinds of each of its boxes, so the check uses a copy with one box for every kind it lists)
   const oneBox = { ...notes, insert: { field: 'close_notes', label: 'x', fieldLabel: 'x' } };
-  assert.deepEqual(problemsOf([{ ...oneBox, kinds: [...notes.kinds, 'request'] }]), ['resolution-notes inserts into close_notes, which request records do not have on their ceiling']);
+  assert.deepEqual(problemsOf([{ ...oneBox, kinds: [...notes.kinds, 'knowledge'] }]), ['resolution-notes inserts into close_notes, which knowledge records do not have on their ceiling']);
+  // (a request has close_notes on its ceiling since audit 2026-11-07, F19: its Ready to resolve check reads it)
   // the article inserts are judged against the article form, wherever they are offered
   assert.deepEqual(problemsOf([{ ...featureById('kb-article-draft'), kinds: ['request'] }]), []);
   assert.deepEqual(problemsOf([{ id: 'x', kinds: ['incident'], insert: { field: 'impact_text', label: 'x' } }]), ['x inserts into impact_text, which incident records do not have on their ceiling']);

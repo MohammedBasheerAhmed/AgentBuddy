@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { instanceFetch, queryTable, readJson, READ_TIMEOUT_CODE, readTimeoutError } from '../src/content/tableApi.js';
-import { READ_CODE, READ_REASON, READ_TEXT, STATUS, classifyReadError, deniedReason, readFailureText, readReasonOf, softRead } from '../src/context/access.js';
+import { NOTE_TEXT, READ_CODE, READ_REASON, READ_TEXT, STATUS, classifyReadError, deniedReason, readFailureText, readReasonOf, softRead } from '../src/context/access.js';
 import { createInsightStore } from '../src/insights/cache.js';
 import { accessDeniedError } from './fixtures/sn-fakeDeps.js';
 
@@ -34,12 +34,15 @@ test('deniedReason: ACL wording is an ACL, access-policy wording is the organisa
     'Insufficient rights to query records - Field(s) present in the query do not have permission to be read',
     'Operation Failed - ACL Exception Read Failed due to security constraints',
     'User Not Authorized - Not permitted to read table: sys_audit',
+    // measured on dev364920, 2026-11-07 (docs/live-checks-2026-11-07.md): an ordinary role rule, not a REST API policy
+    'User Not Authorized - User is unauthorized to access table: sys_documentation',
+    // (and a bare "User Not Authorized" says nothing of a policy: a 403 that says neither is an ACL, build rule 9)
+    'User Not Authorized',
     'No read access to this record',
     '',
     'Forbidden',
   ]) assert.equal(deniedReason(text), READ_REASON.ACL, text);
   for (const text of [
-    'User Not Authorized',
     'User Not Authorized - Access to this API is restricted by a REST API access policy',
     'Request denied by API Access Policy "Table API for agents"',
     'Requires role snc_platform_rest_api_access',
@@ -47,20 +50,22 @@ test('deniedReason: ACL wording is an ACL, access-policy wording is the organisa
   ]) assert.equal(deniedReason(text), READ_REASON.POLICY, text);
 });
 
-test('a 403 from an access rule: ACCESS_DENIED, reason "acl", ServiceNow\'s words kept in the message (as before)', async () => {
+test('a 403 from an access rule: ACCESS_DENIED, reason "acl", a plain message; ServiceNow\'s words kept in `detail`', async () => {
   const err = await failureOf(answer(403, snError('Insufficient rights to query records', 'Field(s) present in the query do not have permission to be read')));
   assert.equal(err.code, 'ACCESS_DENIED');
   assert.equal(err.reason, READ_REASON.ACL);
   assert.equal(err.status, 403);
-  assert.match(err.message, /^Your user is not allowed to read this \(403\): Insufficient rights/);
+  assert.equal(err.message, 'Not available to you with your role.');
+  assert.match(err.detail, /failed \(403\): Insufficient rights/, 'the technical words are kept for whoever debugs it');
+  assert.doesNotMatch(err.message, /403|Table API|your user/i);
   const bare = await failureOf(answer(403, ''));
   assert.equal(bare.reason, READ_REASON.ACL, 'a 403 with no body is an access rule');
   const html = await failureOf(answer(403, '<html><body>Forbidden</body></html>'));
   assert.equal(html.code, 'ACCESS_DENIED', 'a 403 page is still a refusal, never "not data"');
 });
 
-test('a 403 from a REST API access policy or "User Not Authorized": ACCESS_DENIED, reason "policy", the fixed sentence', async () => {
-  for (const body of [snError('User Not Authorized'), snError('User Not Authorized', 'Access denied by REST API access policy'), { error: 'API access policy denied the request' }]) {
+test('a 403 from a REST API access policy: ACCESS_DENIED, reason "policy", the fixed sentence', async () => {
+  for (const body of [snError('User Not Authorized', 'Access denied by REST API access policy'), { error: 'API access policy denied the request' }]) {
     const err = await failureOf(answer(403, body));
     assert.equal(err.code, 'ACCESS_DENIED', JSON.stringify(body));
     assert.equal(err.reason, READ_REASON.POLICY, JSON.stringify(body));
@@ -97,7 +102,8 @@ test('a page instead of JSON (SSO step, maintenance, a proxy): SN_NOT_DATA, "sig
     const err = await failureOf(response);
     assert.equal(err.code, READ_CODE.NOT_DATA);
     assert.equal(err.reason, READ_REASON.NOT_DATA);
-    assert.equal(err.message, 'ServiceNow answered with a page instead of data: sign in again, or the instance may be under maintenance.');
+    assert.equal(err.message, READ_TEXT.notData);
+    assert.equal(err.message, 'ServiceNow did not send the information. Sign in again, or try later (it may be down for maintenance).');
   }
 });
 
@@ -115,11 +121,13 @@ test('a login page, a login redirect or a 401 is still the lost session (SESSION
   }
 });
 
-test('400 for a table or a column this instance does not have, and 404: reason "missing", ServiceNow\'s words kept', async () => {
+test('400 for a table or a column this instance does not have, and 404: reason "missing", a plain message; ServiceNow\'s words kept in `detail`', async () => {
   const table = await failureOf(answer(400, snError('Invalid table sn_customerservice_case')));
   assert.equal(table.reason, READ_REASON.MISSING);
   assert.equal(table.code, undefined);
-  assert.match(table.message, /failed \(400\): Invalid table sn_customerservice_case/);
+  assert.equal(table.message, NOTE_TEXT.missing);
+  assert.match(table.detail, /failed \(400\): Invalid table sn_customerservice_case/);
+  assert.doesNotMatch(table.message, /sn_customerservice_case|400/);
   const column = await failureOf(answer(400, snError('Invalid group by field: u_region')));
   assert.equal(column.reason, READ_REASON.MISSING);
   const gone = await failureOf(answer(404, ''));
@@ -128,7 +136,9 @@ test('400 for a table or a column this instance does not have, and 404: reason "
   assert.equal(query.reason, READ_REASON.ERROR, 'a bad request of another kind is an error, not "missing"');
   const boom = await failureOf(answer(500, snError('java.lang.NullPointerException')));
   assert.equal(boom.reason, READ_REASON.ERROR);
-  assert.match(boom.message, /failed \(500\): java\.lang\.NullPointerException/);
+  assert.equal(boom.message, NOTE_TEXT.error, 'a failure of any other kind: one plain clause and a next step');
+  assert.match(boom.detail, /failed \(500\): java\.lang\.NullPointerException/);
+  assert.doesNotMatch(boom.message, /500|NullPointer|Table API/);
 });
 
 test('a time-out carries its reason too', () => {
@@ -164,17 +174,18 @@ test('instanceFetch retries a 429 twice and then answers with it; a 403 is never
 
 test('classifyReadError: each reason becomes the right status, a fixed note and the reason', async () => {
   const of = async (response) => classifyReadError(await failureOf(response), 'task_sla');
-  assert.deepEqual(await of(answer(403, snError('User Not Authorized'))), { status: STATUS.DENIED, note: READ_TEXT.policy, reason: READ_REASON.POLICY });
-  assert.deepEqual(await of(answer(403, snError('Insufficient rights to query records'))), { status: STATUS.DENIED, note: 'Your user cannot read task_sla.', reason: READ_REASON.ACL });
+  assert.deepEqual(await of(answer(403, snError('User Not Authorized', 'Access denied by REST API access policy'))), { status: STATUS.DENIED, note: READ_TEXT.policy, reason: READ_REASON.POLICY });
+  assert.deepEqual(await of(answer(403, snError('User Not Authorized'))), { status: STATUS.DENIED, note: NOTE_TEXT.denied, reason: READ_REASON.ACL }, 'a bare "User Not Authorized" is the usual "no": an ACL');
+  assert.deepEqual(await of(answer(403, snError('Insufficient rights to query records'))), { status: STATUS.DENIED, note: NOTE_TEXT.denied, reason: READ_REASON.ACL });
   assert.deepEqual(await of(answer(429, '')), { status: STATUS.ERROR, note: READ_TEXT.rateLimited, reason: READ_REASON.RATE_LIMITED });
   assert.deepEqual(await of(answer(503, '')), { status: STATUS.ERROR, note: READ_TEXT.unavailable, reason: READ_REASON.UNAVAILABLE });
   assert.deepEqual(await of(answer(200, '<html></html>')), { status: STATUS.ERROR, note: READ_TEXT.notData, reason: READ_REASON.NOT_DATA });
-  assert.deepEqual(await of(answer(400, snError('Invalid table task_sla'))), { status: STATUS.SKIPPED, note: 'task_sla is not on this instance.', reason: READ_REASON.MISSING });
+  assert.deepEqual(await of(answer(400, snError('Invalid table task_sla'))), { status: STATUS.SKIPPED, note: NOTE_TEXT.missing, reason: READ_REASON.MISSING });
   const column = await of(answer(400, snError('Invalid group by field: u_region')));
   assert.equal(column.status, STATUS.SKIPPED, 'a missing column is left out quietly as well');
   assert.deepEqual(classifyReadError(readTimeoutError(), 'task_sla'), { status: STATUS.ERROR, note: READ_TEXT.timeout, reason: READ_REASON.TIMEOUT });
-  // An error that does not say why (a test fake, an older path) is classified as before, with no reason added.
-  assert.deepEqual(classifyReadError(accessDeniedError('task_sla'), 'task_sla'), { status: 'denied', note: 'Your user cannot read task_sla.' });
+  // An error that does not say why (a test fake, an older path) is classified from its words, and now carries the reason too.
+  assert.deepEqual(classifyReadError(accessDeniedError('task_sla'), 'task_sla'), { status: 'denied', note: NOTE_TEXT.denied, reason: READ_REASON.ACL });
 });
 
 test('softRead turns a refusal into a failure with its reason and throws nothing but a lost session or a cancel', async () => {
@@ -190,7 +201,8 @@ test('readReasonOf finds the reason again from what reaches the panel: { message
     // src/lib/messages.js toWireError: only the message and the code cross; ask.js makes a new Error of them.
     return Object.assign(new Error(err.message), { code: err.code || '' });
   };
-  assert.equal(readReasonOf(await wire(answer(403, snError('User Not Authorized')))), READ_REASON.POLICY);
+  assert.equal(readReasonOf(await wire(answer(403, snError('User Not Authorized', 'Access denied by REST API access policy')))), READ_REASON.POLICY);
+  assert.equal(readReasonOf(await wire(answer(403, snError('User Not Authorized')))), READ_REASON.ACL);
   assert.equal(readReasonOf(await wire(answer(403, snError('Insufficient rights to query records')))), READ_REASON.ACL);
   assert.equal(readReasonOf(await wire(answer(429, ''))), READ_REASON.RATE_LIMITED);
   assert.equal(readReasonOf(await wire(answer(503, ''))), READ_REASON.UNAVAILABLE);
@@ -204,11 +216,13 @@ test('readReasonOf finds the reason again from what reaches the panel: { message
     const f = classifyReadError(await failureOf(response), 'task_sla');
     return { source: 'task_sla', status: f.status, note: f.note };
   };
-  assert.equal(readReasonOf(await entryOf(answer(403, snError('User Not Authorized')))), READ_REASON.POLICY);
+  assert.equal(readReasonOf(await entryOf(answer(403, snError('User Not Authorized', 'Access denied by REST API access policy')))), READ_REASON.POLICY);
+  assert.equal(readReasonOf(await entryOf(answer(403, snError('User Not Authorized')))), READ_REASON.ACL);
   assert.equal(readReasonOf(await entryOf(answer(429, ''))), READ_REASON.RATE_LIMITED);
   assert.equal(readReasonOf(await entryOf(answer(200, '<html></html>'))), READ_REASON.NOT_DATA);
   assert.equal(readReasonOf({ source: 'task_sla', status: 'denied', note: 'Your user cannot read task_sla.' }), READ_REASON.ACL);
-  assert.equal(readReasonOf({ source: 'x', status: 'skipped', note: 'x is not on this instance.' }), READ_REASON.MISSING);
+  assert.equal(readReasonOf({ source: 'x', status: 'skipped', note: NOTE_TEXT.missing }), READ_REASON.MISSING);
+  assert.equal(readReasonOf({ source: 'x', status: 'empty-or-hidden', note: NOTE_TEXT.hidden }), READ_REASON.HIDDEN);
   // A whole read of a table this instance does not have: ServiceNow's words cross with the message.
   assert.equal(readReasonOf(await wire(answer(400, snError('Invalid table sn_customerservice_case')))), READ_REASON.MISSING);
   assert.equal(readReasonOf(await wire(answer(400, snError('Invalid group by field: u_region')))), READ_REASON.MISSING);
@@ -219,17 +233,18 @@ test('readReasonOf finds the reason again from what reaches the panel: { message
 test('readFailureText: one plain sentence per reason; \'\' when the caller\'s own words are better', () => {
   const said = (failure, thing) => readFailureText(failure, { thing });
   assert.equal(said({ code: 'ACCESS_DENIED', message: 'Your user is not allowed to read this (403).' }, 'Earlier tickets'), 'Earlier tickets: not available to you with your role.');
-  assert.equal(said({ code: 'ACCESS_DENIED', message: READ_TEXT.policy }, 'SLAs'), 'SLAs: your organisation blocks this kind of read for your role. Ask your ServiceNow admin.');
+  assert.equal(said({ code: 'ACCESS_DENIED', message: READ_TEXT.policy }, 'SLAs'), 'SLAs: not available to you. Your organisation has restricted it. Ask your ServiceNow admin if you need it.');
   assert.equal(said({ code: READ_CODE.RATE_LIMITED }), 'ServiceNow is limiting requests. Try again in a minute.');
   assert.equal(said({ code: READ_CODE.UNAVAILABLE }), 'ServiceNow is busy or under maintenance. Try again in a few minutes.');
-  assert.equal(said({ code: READ_CODE.NOT_DATA }), 'ServiceNow answered with a page instead of data: sign in again, or the instance may be under maintenance.');
+  assert.equal(said({ code: READ_CODE.NOT_DATA }), 'ServiceNow did not send the information. Sign in again, or try later (it may be down for maintenance).');
   assert.equal(said({ code: 'SN_TIMEOUT' }), 'ServiceNow did not answer in time. Try again in a moment.');
   assert.equal(said({ code: 'SESSION_EXPIRED' }), READ_TEXT.session);
-  assert.equal(said({ reason: 'missing' }, 'Chats'), 'Chats: not on this ServiceNow instance.');
+  assert.equal(said({ reason: 'missing' }, 'Chats'), 'Chats: does not exist on this ServiceNow site.');
+  assert.equal(said({ status: 'empty-or-hidden' }, 'Chats'), 'Chats: you can see none at all, so Agent Buddy cannot tell whether there are none or your role hides them.');
   assert.equal(said({ code: 'NOT_FOUND' }, 'This ticket'), 'This ticket: not available to you.');
   assert.equal(said({ code: 'BLOCKED_TABLE' }, 'SLAs'), 'SLAs: your organisation does not let Agent Buddy read this.');
   assert.equal(said({ code: 'ACCESS_DENIED' }), 'This: not available to you with your role.', 'no thing named: "This"');
-  assert.equal(said(new Error('boom')), '');
+  assert.equal(said(new Error('boom'), 'Chats'), 'Chats: could not be read just now. Try again in a moment.', 'any other failure: one plain clause and a next step');
   assert.equal(said({ status: 'ok' }), '');
   // The panel's own t() is used when it is given (the Arabic is tested with the cards).
   assert.equal(readFailureText({ code: READ_CODE.RATE_LIMITED }, { translate: (text) => `[${text}]` }), `[${READ_TEXT.rateLimited}]`);

@@ -375,11 +375,23 @@ and key (same header size and layout; both verify and give the same id) and `tes
 The install on a managed computer and the update poll were **not** tried: do that with the pilot above and tell us what the browser
 says if it refuses.
 
+### Automated run in Edge
+
+Edge is Chromium: the same `dist/` build, and the end-to-end suite runs in it with the same harness (`npm run e2e:edge`, `e2e/edge.js`).
+It finds Edge in the usual places on Windows, macOS and Linux, or from `EDGE_PATH`; nothing is downloaded. First full run, 2026-11-07, Edge
+156 on Windows: 1,244 checks passed, none failed (the same one known warning as Chrome: the form in a shadow-DOM frame is filled through
+the page). Like the Chrome run it cannot drive the real side panel, the toolbar button or the keyboard shortcuts, so the panel-only-on-added-sites
+rule (`docs/panel-scope.md`) still needs the hand steps, in Edge too (`docs/live-questions/edge.md`).
+
 ## Firefox
 
 Agent Buddy for Firefox is the same extension, built for Firefox: `node build.js --browser firefox` writes `dist-firefox/`, and
 `node build.js --browser firefox --enterprise enterprise/<name>.json` writes `dist-firefox-enterprise/`. Its add-on id is
 `agentbuddy@agentbuddy`. Firefox knows the add-on by that id, and every Firefox policy names it.
+
+Firefox shows its sidebar next to every tab of the window and does not let an extension close it by itself. Agent Buddy cannot, as it does in
+Chrome and Edge, keep the panel to ServiceNow tabs. The toolbar button opens and closes the sidebar; close it when you move to a page that is
+not ServiceNow. See `docs/panel-scope.md`.
 
 ### Which Firefox
 

@@ -165,7 +165,7 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
       if (mine === asked.current) setSample({ phase: 'ready', result, error: '' });
     } catch (err) {
       if (mine !== asked.current) return;
-      setSample({ phase: 'error', result: null, error: err.code === 'SESSION_EXPIRED' ? t('Your ServiceNow session has expired. Log in again, then try again.') : shownText(err.message) || t('The sample could not be read.') });
+      setSample({ phase: 'error', result: null, error: err.code === 'SESSION_EXPIRED' ? t('You are signed out of ServiceNow. Sign in again, then try again.') : shownText(err.message) || t('The sample could not be read.') });
     }
   }
 
@@ -245,7 +245,7 @@ export function CoachingTool({ env, eff, needs, bare = false }) {
         </AiButton>
       </div>
       {!aiReady && <AiKeyLine eff={eff} />}
-      {sample.phase === 'reading' && <p className="ab-note" role="status">{t('Reading the sample with your session…')}</p>}
+      {sample.phase === 'reading' && <p className="ab-note" role="status">{t('Reading the sample as you…')}</p>}
       {sample.phase === 'error' && <ErrorNote error={sample.error} onRetry={pick} />}
       <CoachingSample result={sample.result} dayLabel={dayLabel} />
 

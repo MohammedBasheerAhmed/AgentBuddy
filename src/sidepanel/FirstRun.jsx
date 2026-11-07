@@ -24,7 +24,8 @@ function ProfilesStep({ page, eff, primary }) {
       live = false;
     };
   }, [enabled, page?.tabId]);
-  return <ProfilePicker eff={eff} roles={Array.isArray(page?.user?.roles) ? page.user.roles : []} hints={hints} onSave={saveSettings} primary={primary} idBase="ab-firstrun-prof" />;
+  // (roles: the page's list, or null when it could not say: unknown is not "no roles", and the suggestion then stays IT, profiles.js rolesState)
+  return <ProfilePicker eff={eff} roles={Array.isArray(page?.user?.roles) ? page.user.roles : null} hints={hints} onSave={saveSettings} primary={primary} idBase="ab-firstrun-prof" />;
 }
 
 // Set up AI, or skip it: Agent Buddy is useful without AI (every Insights half), so the panel does not insist.

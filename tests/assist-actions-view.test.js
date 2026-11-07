@@ -91,12 +91,12 @@ test('the state decides the filled row: a new ticket the summary, a resolved one
 
 test('a reason that stops every action is said once, above them; a reason for one action is on that action', () => {
   const blocked = renderToStaticMarkup(<ActionGroups page={page} eff={eff({ policy: { blockedTables: ['incident'] } })} record={rec('incident')} header={head('In Progress')} aiReady onRun={() => {}} />);
-  assert.equal(count(blocked, /does not allow Agent Buddy to use incident records/g), 1);
+  assert.equal(count(blocked, /does not allow Agent Buddy to use incidents/g), 1);
   const hr = renderToStaticMarkup(
     <ActionGroups page={page} eff={eff({ values: { profiles: ['hr'] }, policy: { allowHrContent: true, aiProvider: 'openai' } })} record={rec('hr_case', 'sn_hr_core_case')} header={head('Work in Progress')} aiReady onRun={() => {}} />
   );
-  assert.match(hr, /HR records need Strict privacy mode/);
-  assert.equal(count(hr, /HR records need Strict privacy mode/g), 1, 'never the same sentence twice');
+  assert.match(hr, /HR tickets need Strict privacy mode/);
+  assert.equal(count(hr, /HR tickets need Strict privacy mode/g), 1, 'never the same sentence twice');
   // One action that needs Strict: on its own row, which stays (the slot is its), disabled.
   const strictReply = { ...featureById('reply-draft'), requires: { minMode: 'strict' } };
   const plan = actionPlan({ record: rec('incident'), header: head('In Progress'), eff: eff(), features: [featureById('record-summary'), strictReply] });
@@ -108,12 +108,12 @@ test('a reason that stops every action is said once, above them; a reason for on
 
 test('a catalog task warns under the reply that the requester does not see its comments', () => {
   const markup = renderToStaticMarkup(<ActionGroups page={page} eff={eff()} record={rec('catalog_task', 'sc_task')} header={head('Work in Progress')} aiReady onRun={() => {}} />);
-  assert.match(markup, /class="ab-act-caution">The requester does not see comments on a catalog task/);
+  assert.match(markup, /class="ab-act-caution">The requester may not see comments on a catalog task/);
 });
 
 test('nothing fits the record: said in words; only actions of the rest: no rows (All tools has them)', () => {
   const none = renderToStaticMarkup(<FocusActions plan={{ total: 0, five: [], rest: [], items: [], block: '', primary: '' }} eff={eff()} aiReady onRun={() => {}} />);
-  assert.match(none, /No AI actions fit this record/);
+  assert.match(none, /No AI actions fit this ticket/);
   const kb = actionPlan({ record: rec('knowledge', 'kb_knowledge'), header: null, eff: eff({ values: { profiles: ['km'] } }) });
   const rest = renderToStaticMarkup(<FocusActions plan={kb} eff={eff()} aiReady onRun={() => {}} />);
   assert.equal(count(rest, /<button/g), 0);

@@ -1,7 +1,7 @@
 # Live questions: Edge on a real instance
 
 Edge runs the same package as Chrome (`dist/`; one build, `scripts/lib/browsers.js`) and the same code paths: the side panel, the
-service worker, the sender check (`chrome-extension://<id>`). No automated run uses Edge. The questions below were written in
+service worker, the sender check (`chrome-extension://<id>`). An automated run in Edge covers everything but the real side panel, the toolbar button and the keyboard shortcuts (`npm run e2e:edge`; the first full run, Edge 156, 2026-11-07, passed 1,244 checks). The questions below were written in
 other files, wherever a feature met Edge; they are gathered here so one walk-through in Edge answers them all. Each links back to the
 question with the full detail (what was assumed, how to check, what to change). Answer them in the other file, or here with the
 number.
@@ -33,6 +33,8 @@ Edge version (`edge://version`).
 10. **The file chooser from the side panel** ("Load a layout file"). `reports.md` 39.
 11. **A snippet file is saved** from the side panel into the downloads folder. `compose.md` 31.
 12. **Checklist ticks in session storage** in the side panel. `compose.md` 24.
+13. **The panel only on the sites you added.** `sidePanel.setOptions` with a `tabId`, `getOptions` and `open` behave as in Chrome; the
+    seven hand steps of `docs/panel-scope.md`, with ifBash.com as the page that must not show the panel. `audit-1107-panel.md` 12.
 
 ## C. Keyboard shortcuts
 

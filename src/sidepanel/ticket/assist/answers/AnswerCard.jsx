@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SafeText } from '../../../../render/SafeText.jsx';
 import { AiBadge } from '../../../ui/primitives.jsx';
 import { Icon } from '../../../ui/icons.jsx';
-import { applyFieldStates, choicesOf, insertTargets, readFieldStates, reviewInsert } from '../../../insertFlow.js';
+import { applyFieldStates, choicesOf, insertTargets, readFieldStates, recheckDelay, reviewInsert, sameStates } from '../../../insertFlow.js';
 import { useInsertActions } from '../../../useInsertActions.js';
 import InsertFindings, { InsertNote } from '../../../InsertFindings.jsx';
 import { useCloseWell } from '../../cards/ResolveCard.jsx';
@@ -65,7 +65,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
 
   const wrongRecord = Boolean(answer.source?.expect) && !matchesExpect(answer.source.expect, currentFromPage(page));
   // (keyed on what the targets depend on, not on the page object, so the form is not asked again on every render)
-  const baseTargets = useMemo(() => insertTargets(base, { record, page }), [base, record?.kind, page.surface, page.record?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  const baseTargets = useMemo(() => insertTargets(base, { record, page }), [base, record?.kind, record?.requesterCanRead, page.surface, page.record?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const targets = useMemo(() => applyFieldStates(baseTargets, states), [baseTargets, states]);
   // Prepare to close (round 4): the facts of the Close well row (no AI; shared reads, made only while this answer is open) and the
   // close code's box, which the check before the click asks about too.
@@ -75,23 +75,35 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   const codeBase = useMemo(() => (isClose && CODE_KINDS.includes(kind) ? codeTargetFor({ kind, surface: page.surface }) : null), [isClose, kind, page.surface]);
   const askTargets = useMemo(() => (codeBase ? [...baseTargets, codeBase] : baseTargets), [baseTargets, codeBase]);
   const codeTarget = useMemo(() => (codeBase ? applyFieldStates([codeBase], states)[0] : null), [codeBase, states]);
-  const primary = answerPrimary(answer, record?.kind);
   const choices = useMemo(() => choicesOf(base, plain), [base, plain]);
   // An AI email draft (AI9): its subject and body, and the email form of the ticket it was written for, where it is inserted.
   const email = useMemo(() => (isEmailFeature(base) ? parseEmailDraft(plain) : null), [base, plain]);
   const emailTicket = email ? answer.source?.expect || (record?.table && record?.sysId ? { table: record.table, sysId: record.sysId } : null) : null;
   const emailUrl = emailTicket ? emailFormUrl(page.href, emailTicket) : '';
 
-  // Before the click: is each box on this form, and can it be typed into? Asked again when the page changes. Fail-soft (insertFlow).
+  // Before the click: is each box on this form, and can it be typed into? Asked again when the ticket or the form changes (not on every
+  // change of the address: a Workspace changes it with each tab it opens, S23). Fail-soft (insertFlow). On a Workspace or portal page
+  // that has no box to fill yet, or a composer set to the other kind of note, it is asked again every few seconds, because the person
+  // can open the Notes tab or switch the composer on the page and nothing here would otherwise notice.
+  const ticketKey = `${page.record?.table || page.newRecord?.table || ''}:${page.record?.sysId || ''}`;
   useEffect(() => {
     if (!open || wrongRecord || !baseTargets.length) return undefined;
     let cancelled = false;
-    readFieldStates(page, askTargets, read, answer.source?.expect || null).then((s) => !cancelled && setStates(s));
+    let timer = 0;
+    const ask = () =>
+      readFieldStates(page, askTargets, read, answer.source?.expect || null).then((s) => {
+        if (cancelled) return;
+        setStates((before) => (sameStates(before, s) ? before : s));
+        const again = recheckDelay(s);
+        if (again) timer = setTimeout(ask, again);
+      });
+    ask();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the tab and address, not the page object, so the form is not asked again on every render
-  }, [open, wrongRecord, askTargets, page.tabId, page.href, answer.source]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the tab and the ticket, not the page object, so the form is not asked again on every render
+  }, [open, wrongRecord, askTargets, page.tabId, ticketKey, page.formStamp, answer.source]); // formStamp: the form was saved, so a box may now be locked
 
   const config = resolveProviderConfig(eff.values, eff.apiKey);
   const ref = sourceFromPack(answer.lastPack) ? answer.lastPack : auditRefFromPage(page);
@@ -111,6 +123,9 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
   // sections around them, and what one Insert does here.
   const closeNotes = useMemo(() => (isClose ? notesOf(plain) : ''), [isClose, plain]);
   const first = targets[0] || null;
+  // Copy leads when the page was searched and its box is not there (or a composer is set to the other kind of note): Insert is then off
+  // and the line under the buttons says why (audit of 2026-11-07, S4, W-12).
+  const primary = first?.copyFirst ? 'copy' : answerPrimary(answer, record?.kind);
   const plan = useMemo(
     () => (isClose ? closePlan({ kind, surface: page.surface, vote: closeWell.vote, notes: first, code: codeTarget, form: states?.known ? states.form : 'none' }) : null),
     [isClose, kind, page.surface, closeWell.vote, first, codeTarget, states]
@@ -227,9 +242,11 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
     ? ''
     : email && emailUrl
       ? t('Open the email form to insert the subject and body there. Nothing is sent until you press Send.')
-      : primary === 'insert' && first
-        ? first.blocked || (isClose && plan?.line) || `${first.where} ${first.next}`
-        : t('AI can be wrong: check it before you use it.');
+      : first?.copyFirst
+        ? first.blocked
+        : primary === 'insert' && first
+          ? first.blocked || (isClose && plan?.line) || `${first.where} ${first.next}`
+          : t('AI can be wrong: check it before you use it.');
   const question = answer.meta?.question || '';
   // What the request was made without (the pipeline's list, src/features/parts.js; else the pack's own access entries).
   const gapsLine = Array.isArray(answer.lastPack?.madeWithout) ? madeWithoutText(answer.lastPack.madeWithout) : madeWithoutLine(answer.lastPack?.gaps);
@@ -361,7 +378,7 @@ export default function AnswerCard({ answer, open, onToggle, page, eff, record, 
                 </>
               )}
               {targets.length > 0 && (
-                <button type="button" className="ab-menu-item" disabled={inserting || wrongRecord} onClick={() => startEdit(first)}>
+                <button type="button" className="ab-menu-item" disabled={inserting || wrongRecord || Boolean(first?.copyFirst)} title={first?.copyFirst ? first.blocked : ''} onClick={() => startEdit(first)}>
                   {t('Edit before inserting')}
                 </button>
               )}

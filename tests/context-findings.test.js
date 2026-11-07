@@ -118,7 +118,8 @@ test('kb_use: a table with neither column is not used, and the reason says so', 
   const out = await readArticleLinks([TICKET_A], deps, {});
   assert.equal(out.sources[1].usable, false);
   assert.equal(out.sources[1].status, 'error');
-  assert.match(out.sources[1].note, /neither a task_id nor a task column/);
+  assert.match(out.sources[1].note, /stores article links differently/);
+  assert.doesNotMatch(out.sources[1].note, /task_id|kb_use/);
   assert.equal(deps.callsTo('kb_use').length, 1, 'no query was built on a column the table does not have');
 });
 

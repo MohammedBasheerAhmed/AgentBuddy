@@ -6,9 +6,10 @@
 
 import { packToParts } from '../features/parts.js';
 import { finishedKind, isOpenItem, ownerOf } from './states.js';
+import { approvalChase } from './approvalChase.js';
 import { describeApproval, requestStatus, taskLine } from './requestStatus.js';
 import { inEnglish } from './inEnglish.js';
-import { t } from '../i18n/index.js';
+import { isolate, t } from '../i18n/index.js';
 
 const text = (v) => String(v ?? '').trim();
 const factLabels = () => [
@@ -22,6 +23,24 @@ const factLabels = () => [
 ];
 
 const accessEntryFor = (pack, source) => (pack?.access || []).find((e) => e?.source === source) || null;
+
+/**
+ * The one line that says who a request is for and what was ordered: "For Abel Tuter · Standard Laptop · Quantity 2" (audit of 2026-11-07,
+ * F3). The quantity is said only when it is more than one; a part the pack does not carry (or could not read) is left out, never
+ * guessed. '' when there is nothing to say.
+ */
+export function forLine(pack) {
+  const f = pack?.fields || {};
+  const who = text(f.requested_for);
+  const item = text(f.cat_item);
+  const quantity = Number.parseInt(text(f.quantity), 10);
+  const parts = [
+    who && t('For {name}', { name: isolate(who) }),
+    item && isolate(item),
+    Number.isFinite(quantity) && quantity > 1 && t('Quantity {n}', { n: quantity }),
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
 
 /** The answers table: { available, rows: [{ question, value, hidden }], note }. */
 export function answersModel(pack) {
@@ -94,10 +113,15 @@ export function chainModel(pack, { currentNumber = '' } = {}) {
  */
 export function buildRequestView(pack, { currentNumber = '', now = Date.now() } = {}) {
   const facts = factLabels().map(([key, label]) => [label, text(pack?.fields?.[key])]).filter(([, value]) => value);
+  const status = requestStatus(pack, { now });
   return {
     number: text(pack?.fields?.number) || text(pack?.number),
     title: text(pack?.fields?.short_description),
-    status: requestStatus(pack, { now }),
+    status,
+    // Who it waits on and for how long (wave 6): only while the status itself is an approval wait, so a rejection or a finished request is never
+    // dressed as one. null when no approval row is waiting (the status line says what it can).
+    waiting: status.state === 'approval' ? approvalChase(pack, { now }) : null,
+    forLine: forLine(pack),
     facts,
     answers: answersModel(pack),
     approvals: approvalsModel(pack),

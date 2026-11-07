@@ -61,8 +61,8 @@ test('the request refuses what it should, with a sentence a person can act on', 
   bad({ toMs: NOW + 3 * DAY }, /cannot be in the future/);
   bad({ fromMs: NOW - 120 * DAY }, /at most 92 days/);
   bad({ fromMs: NOW - 400 * DAY, toMs: NOW - 380 * DAY }, /last twelve months/);
-  bad({ tables: ['incident', 'sn_hr_core_case'] }, /HR case tables are never used/);
-  bad({ tables: ['SN_HR_Core_Task'] }, /HR case tables are never used/);
+  bad({ tables: ['incident', 'sn_hr_core_case'] }, /HR cases are never used/);
+  bad({ tables: ['SN_HR_Core_Task'] }, /HR cases are never used/);
   assert.equal(request({ toMs: NOW + 3600000 }).toMs, NOW, 'a last day that is still today is cut to now');
   assert.throws(() => normalizeCoachingRequest(null), /Pick one group/);
 });
@@ -376,8 +376,8 @@ test('a group that cannot be seen, and a blocked table, stop the read with a rea
 });
 
 test('HR tables are refused by name and are not in the list of tables the read can use', async () => {
-  assert.throws(() => request({ tables: ['sn_hr_core_case'] }), /HR case tables are never used/);
-  await assert.rejects(() => readCoachingSample({ ...request(), tables: ['sn_hr_core_case'] }, { deps: coachingWorld().deps, userId: USER }), /HR case tables are never used/);
+  assert.throws(() => request({ tables: ['sn_hr_core_case'] }), /HR cases are never used/);
+  await assert.rejects(() => readCoachingSample({ ...request(), tables: ['sn_hr_core_case'] }, { deps: coachingWorld().deps, userId: USER }), /HR cases are never used/);
   const inst = coachingWorld();
   await read(inst, { tables: undefined });
   assert.ok(inst.calls.every((c) => !/^sn_hr_/.test(c.table)));
@@ -449,7 +449,7 @@ test('coachingSample is registered, checks every argument, and needs to know who
   const ops = createReportOps({ deps: inst.deps, getSession: async () => ({ userId: USER }), runtime: createRuntime() });
   const args = { groupId: GROUP_A, fromMs: NOW - 5 * DAY, toMs: NOW - 1000, sample: 3 };
   await assert.rejects(() => ops.coachingSample({ ...args, groupId: 'x' }), /Pick one group/);
-  await assert.rejects(() => ops.coachingSample({ ...args, tables: ['sn_hr_core_case'] }), /HR case tables are never used/);
+  await assert.rejects(() => ops.coachingSample({ ...args, tables: ['sn_hr_core_case'] }), /HR cases are never used/);
   await assert.rejects(() => ops.coachingSample({ ...args, fromMs: NOW - 200 * DAY }), /at most 92 days/);
   await assert.rejects(() => ops.coachingSample({}), /Pick one group/);
   assert.equal(inst.calls.length, 0, 'a bad request reads nothing');

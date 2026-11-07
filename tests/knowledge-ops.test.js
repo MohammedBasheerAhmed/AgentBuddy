@@ -187,5 +187,5 @@ test('chatOverview: unreadable chat tables are reported, not hidden behind an em
   assert.equal(out.overview.count, 0);
   const entry = out.access.find((a) => a.source === 'chat');
   assert.equal(entry.status, 'denied');
-  assert.match(entry.note, /No chat messages are available to you/);
+  assert.match(entry.note, /You cannot see the chat messages/);
 });

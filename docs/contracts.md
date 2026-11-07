@@ -155,6 +155,9 @@ GET-only through the context engine or src/content/tableApi.js; validate every a
 `SYS_ID_RE`); never return more than the person's own session could read. The panel calls it with `read(tabId, 'opName', args)`
 (src/sidepanel/ask.js).
 
+`deps.readTableMeta(table, columns)` (from `createLiveDeps`; absent in table fakes) returns `{ [column]: { label, choices: [{ value, label }] } }`.
+Call it through `readChoiceLabels(deps, table, columns)`, never the choice table. `readFieldHistory(record, deps, memo)` no longer takes a language.
+
 ### Panel screens
 
 - Screens (src/sidepanel/App.jsx): Ticket (`ticket/TicketView.jsx`), and My work, Team, Write and Knowledge (`mywork/`, `team/`,
@@ -201,6 +204,18 @@ may assume `g_form` or `g_user` exists.
 - `{ field, value, label, mode, expect } -> { ok, method?, label?, reason? }`. `expect` is `{ table, sysId }`, `{ table, newRecord: true }`
   or `{ email: true, table, sysId }`; a mismatch answers `reason: 'wrong-record'` and nothing is written. `label` in the answer is the
   box that was used (Workspace and portal).
+- Added by the Workspace work of the 2026-11-07 audit: the answer may carry `modeUnread: true` (a Workspace composer that serves both
+  Work notes and customer comments, whose switch the page could not read: the text went in and the panel tells the person to check the
+  box), and a refusal may be `reason: 'wrong-mode'` (the composer is set to the other kind of note: nothing is written) or
+  `reason: 'unreachable'` (the search for the box ran out of its time budget before it found anything, so the box is "too big to search",
+  not "absent").
+- READ `insertTargets` (`src/content/fill.js`) answers per field a `state` plus, on Workspace and portal pages, `gaps` (`{ field:
+  'absent' | 'ambiguous' | 'too-big' }`: why a box is not there to fill) and `modes` (`{ field: 'match' | 'other' | 'unread' }`: what a
+  composer is set to). The panel (`insertFlow.js applyFieldStates`) turns a gap or a mode of `other` into `blocked` + `copyFirst`:
+  Insert off, Copy leads, one plain line says why.
+- Page bridge action `watchInsert`: LOOKS at the box the last insert wrote to and says whether it was emptied or removed since (a Post,
+  a Send, a Save that draws the form again); it writes and clicks nothing. `getFormMeta` answers `frameIsList: true` when the form frame
+  shows a list, so no ticket is open there.
 
 **Part columns** (`src/features/partColumns.js`)
 - Every derived part `field` (linked_incidents, child_tasks, account_cases, ...) is mapped to the ServiceNow columns it carries, so
@@ -277,7 +292,7 @@ what). The contracts that cross areas:
 
 - **Work profiles** (`src/profiles/profiles.js`): `shownFor(itemProfiles, eff)` decides what is shown (never what is allowed);
   `profilesOfFeature(feature)` (a feature may carry `profiles`), `screensFor(eff)`, `missingProfileFor(kind, eff)`, `aiAvailable(eff)`,
-  `aiOffByPolicy(eff)`. Settings: `profiles`, `profilesConfirmed`, `showEverything`, `aiSkipped`, `halves`, `followUpDays`. Policy:
+  `aiOffByPolicy(eff)`. Settings: `profiles`, `profilesConfirmed`, `profilesFor` (a one-way hash of who confirmed them), `showEverything`, `aiSkipped`, `halves`, `followUpDays`. Policy:
   `aiEnabled`, `disabledSections`, `allowedProfiles`, `lockedProfiles`, `orgSnippets`, `orgFormats`, `internalPhrases`, `defaultDashboard` (a saved
   layout file; `orgDashboard`, `offerOrgDashboard`, `addOrgDashboard` in `src/reports/dashboards.js`), `priorityAccounts` (account
   names; `isPriorityAccount` in `src/insights/priorityAccount.js`).
@@ -343,12 +358,20 @@ only in `src/lib/platform.js` (run time) and `scripts/lib/browsers.js` (manifest
 ```js
 browserApi(scope = globalThis)        // `browser` when it really is the extension API (Firefox, Safari), else `chrome`; null when neither
 panelKind(api)                         // 'side-panel' (Chrome, Edge) | 'sidebar' (Firefox) | 'none' (Safari for now)
-openPanel(api, tabId) → Promise<void>  // asks the browser NOW, before it returns: call it before your first await. Resolves when the
-                                       // panel is open. Firefox: from a click on the page the sidebar cannot open; resolves only if it
-                                       // is open already, else rejects. 'none': rejects
-wireToolbarButton(api) → kind          // once, at the top level of the background script (Firefox wakes the event page only for a
-                                       // listener added while it starts). Chrome, Edge: setPanelBehavior; Firefox: the click toggles
-                                       // the sidebar; a second call adds nothing
+openPanel(api, tabId, { enable }) → Promise<void>  // asks the browser NOW, before it returns: call it before your first await. Resolves
+                                       // when the panel is open. `enable: true` (a page that looks like an un-added ServiceNow address)
+                                       // also switches the panel on for that tab, in the same turn, without awaiting. Chrome, Edge: a tab
+                                       // whose panel is off refuses. Firefox: from a click on the page the sidebar cannot open; resolves
+                                       // only if it is open already, else rejects. 'none': rejects
+wireToolbarButton(api, onClick?) → kind  // once, at the top level of the background script (Firefox wakes the event page only for a
+                                       // listener added while it starts). Chrome, Edge: openPanelOnActionClick is OFF and `onClick(tab)` gets
+                                       // the click (src/background/panelScopeWire.js decides: open, enable and open, or Settings); Firefox: the
+                                       // click toggles the sidebar; a second call adds nothing
+PANEL_PAGE                             // 'sidepanel.html': the page every per-tab panel uses
+canScopePanel(api) → boolean           // true when the browser has a per-tab panel switch (sidePanel.setOptions): Chrome, Edge
+setPanelDefault(api, enabled)          // the default for every tab; src/background/panelScopeWire.js sets it to false at every start
+setPanelForTab(api, tabId, enabled)    // { tabId, path: PANEL_PAGE, enabled }: on only for tabs on an added site
+panelEnabledFor(api, tabId) → boolean  // what the browser has for that tab now (getOptions)
 extensionUrlOrigin(url) → string       // 'chrome-extension://<id>', 'moz-extension://<uuid>', 'safari-web-extension://<uuid>', or ''
                                        // (any other scheme, a port, a user name, a host that is not an extension id)
 extensionOrigin(runtime) → string      // the origin of this extension's own pages, from runtime.getURL(''); '' when unknown
@@ -384,3 +407,29 @@ senderOrigin(sender) → string                    // sender.origin, else the or
 - `bundleOptions(rootDir, browser)` (`scripts/lib/entries.js`) compiles for that family's target. `node build.js --browser <id>`,
   `scripts/check-compile.js` (every family), `scripts/repro-check.js --browser <id>` and `scripts/package.js` read the table, so a new
   family is one entry there plus, if its manifest differs, one function like `firefoxManifest()`.
+
+## Additions from the access audit (2026-11-07)
+
+How the engine says what it could not see (`src/context`). Every one of these is optional and absent when everything was readable.
+
+- `ContextPack.unreadable: string[]` names the columns of the record that did not come back (the key is missing from the row, or a
+  reference has an id and no name). An empty column comes back as an empty value, is dropped, and is NOT listed here. Readers such as
+  Missing details, the header, routing, request status and the close checks must not say "No description" or "Nobody is named" of a
+  column in this list: they say the panel could not read it.
+- `access[]` entries gain `reason: 'hidden-field'` (`READ_REASON.HIDDEN_FIELD`: a column the read needed is not in the record the
+  instance returned, so the person may not read it) and, on the journal entry, `partial: true`, `workNotesHidden: true` and
+  `commentsHidden: true` (the journal came back without the internal notes, or without the comments, that the columns say exist).
+  Their notes are fixed sentences with no table name; the panel words an entry with `readFailureText(entry, { thing })`
+  (`src/context/access.js`). An absence ("none", "no", a green state) is shown only when the read for it finished (`ok`, or `empty`
+  with the table confirmed visible); otherwise the card says it could not check.
+- The results of `history` (earlier tickets of the caller) and `similar` (look-alikes) gain `truncated: boolean`: more rows exist than
+  were read, or a row rule may hide some from this person, so a count of them is "at least", never exact.
+- `disp()` (`src/context/util.js`) never returns a sys_id. A reference the person cannot read has no name, and the panel says
+  "a person you cannot see" or "not shown to you".
+- Caches are keyed by the signed-in person (`page.user.userId`) and are cleared when the person changes; "since you last looked"
+  (`src/lib/lastViewed.js`) is kept per instance and per one-way hash of the user id (`docs/build-rules.md`, rule 7).
+- `page.user.roles` is a list, an empty list, or `null` (unknown: a portal, a Workspace without `g_user`). Unknown is never "none"
+  (`src/page/bridge.js`, `src/profiles/profiles.js withProfiles`). After every `FILL_FIELD` the bridge reads the box back; a value
+  that did not take is answered as locked (`state: 'locked'`), never as inserted.
+- The header read (`readHeader`, `src/content/header.js`) gains `titleHidden: true` when the title was not asked for (a sensitive
+  ticket) or did not come back; the header says "title not shown to you" and never treats it as an empty title.

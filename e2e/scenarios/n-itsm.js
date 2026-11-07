@@ -119,6 +119,11 @@ module.exports = {
         await p.waitForSelector('.ab-acts', { timeout: 15000 });
         await ctx.sleep(500);
       }
+      if (kind === 'problem') {
+        // F14 (audit of 2026-11-07): the glance counts the incidents linked to a problem, and says it is what the person can see
+        const linked = await waitForText(p, /2 linked incidents that you can see/, { timeout: 15000 }).then(() => true, () => false);
+        t.check('problem: the glance says how many incidents are linked, as far as you can see (F14)', linked);
+      }
       const titles = await actionTitles(p);
       const want = EXPECT[kind];
       const got = ITSM_TITLES.filter((x) => titles.includes(x));

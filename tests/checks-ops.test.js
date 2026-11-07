@@ -203,7 +203,7 @@ test('problem link: not asked for other tables, "unknown" when the incident cann
   assert.equal(sctask.links.problem.status, 'na');
   const denied = await facts({ incident: [{ sys_id: v(INC) }] }, { denied: ['incident'] });
   assert.equal(denied.links.problem.status, 'unknown');
-  assert.match(denied.links.problem.note, /cannot read the problem link/);
+  assert.match(denied.links.problem.note, /cannot see whether a problem is linked/);
   const missing = await facts({ incident: [] });
   assert.equal(missing.links.problem.status, 'unknown');
 });
@@ -215,23 +215,26 @@ test('knowledge link: the kb_use table counts too; a table that ignores the filt
   // ServiceNow would ignore and answer with every row) and nothing is believed.
   const leaky = await facts({ incident: [{ sys_id: v(INC) }], m2m_kb_task: [], kb_use: [{ sys_id: v('u1'), other: v('x') }] });
   assert.equal(leaky.links.knowledge.status, 'unknown');
-  assert.match(leaky.links.knowledge.note, /kb_use has neither a task_id nor a task column/);
+  assert.match(leaky.links.knowledge.note, /article links could not be checked/);
+  assert.doesNotMatch(leaky.links.knowledge.note, /kb_use|task_id/);
   // A table that has the column but ignores the condition anyway (answers with another ticket's row) is not believed either.
   const INC2 = 'f'.repeat(32);
   const ignoring = fakeDeps({ incident: [{ sys_id: v(INC) }], m2m_kb_task: [], kb_use: [{ sys_id: v('u1'), task_id: v(INC2) }] });
   const answering = { ...ignoring, queryTable: (table, query, ...rest) => ignoring.queryTable(table, table === 'kb_use' ? '' : query, ...rest) };
   const wrong = await makeChecksOps({ callPage: bridge({ meta: null }).callPage }).resolutionFacts({ ...rec }, ctx(answering));
   assert.equal(wrong.links.knowledge.status, 'unknown');
-  assert.match(wrong.links.knowledge.note, /did not apply the filter/);
+  assert.match(wrong.links.knowledge.note, /did not narrow the results as asked/);
 });
 
 test('knowledge link: "none" only when the user can see rows of the table at all', async () => {
   const hidden = await facts({ incident: [{ sys_id: v(INC) }] }, { hidden: ['m2m_kb_task', 'kb_use'] });
   assert.equal(hidden.links.knowledge.status, 'unknown');
-  assert.match(hidden.links.knowledge.note, /sees no rows/);
+  assert.match(hidden.links.knowledge.note, /you can see none of the links at all/);
+  assert.doesNotMatch(hidden.links.knowledge.note, /m2m_kb_task|kb_use|your user/i);
   const denied = await facts({ incident: [{ sys_id: v(INC) }] }, { denied: ['m2m_kb_task', 'kb_use'] });
   assert.equal(denied.links.knowledge.status, 'unknown');
-  assert.match(denied.links.knowledge.note, /cannot read m2m_kb_task/);
+  assert.match(denied.links.knowledge.note, /cannot see which articles are linked/);
+  assert.equal(denied.links.knowledge.note.split('cannot see which articles are linked').length, 2, 'two tables that fail the same way say it once');
   const missingTable = await facts({ incident: [{ sys_id: v(INC) }] }, { errors: { m2m_kb_task: new Error('Invalid table m2m_kb_task'), kb_use: new Error('Invalid table kb_use') } });
   assert.equal(missingTable.links.knowledge.status, 'unknown');
   // One table readable and empty is enough to say "none"; the other one being hidden is noted but does not hide the answer.
@@ -288,7 +291,8 @@ test('requestTarget: no readable item means the task on its own, with the reason
   assert.match(none.note, /no requested item you can see.*on its own/);
   const denied = await ops.requestTarget({ table: 'sc_task', sysId: TASK }, ctx(fakeDeps({ sc_task: [] }, { denied: ['sc_task'] })));
   assert.equal(denied.table, 'sc_task');
-  assert.match(denied.note, /cannot read sc_task/);
+  assert.match(denied.note, /cannot see the requested item this task belongs to.*on its own/);
+  assert.doesNotMatch(denied.note, /sc_task|your user/i);
   // A row for another task (a filter that was ignored) is not used.
   const other = await ops.requestTarget({ table: 'sc_task', sysId: TASK }, ctx(fakeDeps({ sc_task: [{ sys_id: v('9'.repeat(32)), request_item: v(RITM) }] }, { ignoreUnknownColumns: false })));
   assert.equal(other.table, 'sc_task');

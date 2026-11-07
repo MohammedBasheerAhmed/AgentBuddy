@@ -16,11 +16,27 @@
 // the table is put on UTC first (see "Two clocks"), so the two are ordered on one clock.
 
 import { LIMITS } from './allowlists.js';
-import { STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead } from './access.js';
+import { NOTE_TEXT, STATUS, confirmEmptyIsReallyEmpty, entry as accessEntry, softRead, tm } from './access.js';
 import { foldText } from './identity.js';
 import { clipText, formatSnTime, journalText, oneLine, parseSnTime, raw } from './util.js';
 
 export const JOURNAL_SOURCE = 'journal';
+
+// What the notes' access entry says. Fixed sentences without the name of a table or "your user": they are drawn in the panel (and the
+// Check tab puts them in a line), so they are marked for the Arabic catalogue.
+const JOURNAL_NOTE = Object.freeze({
+  fromRecord: tm('Some notes could not be read the usual way, so they were read from the ticket itself. Times are in your time zone.'),
+  mixed: tm('Some notes were read from the ticket itself.'),
+  localTimes: tm('Their times are in your time zone, so their order among the other notes may be off by a few hours.'),
+  newest: tm('Showing the newest {n} entries.'),
+  hiddenAndEmpty: tm('You cannot read the notes and comments, and the ticket itself shows none, so there may be notes you cannot see.'),
+  denied: tm('You cannot read the notes and comments of this ticket.'),
+  none: tm('No notes or comments that you can see.'),
+  // The ticket's own work notes did not come back and none were found another way: some internal notes may exist that this user cannot read.
+  workNotesHidden: tm('Some internal notes may be hidden from you.'),
+  commentsHidden: tm('Some comments to the customer may be hidden from you.'),
+  maybeHidden: tm('No notes or comments were found. You may not be able to read them, so this does not prove there are none.'),
+});
 export const JOURNAL_RECORD_FIELDS = Object.freeze(['comments', 'work_notes']);
 
 // ---- Parsing the display string -------------------------------------------------------------------
@@ -211,7 +227,7 @@ function entriesFromRows(rows) {
  *   access[0].strategy: 'sys_journal_field' | 'record-fields' | 'mixed' | 'none'; access[0].localTimes: on 'mixed', the type whose
  *   times stayed in the reader's time zone (see isLocalTime), when it could not be put on UTC.
  */
-export async function readJournal({ table, sysId, recordText = null }, deps, { max = LIMITS.journalEntries, memo } = {}) {
+export async function readJournal({ table, sysId, recordText = null, hiddenColumns = [] }, deps, { max = LIMITS.journalEntries, memo } = {}) {
   const query = `name=${table}^element_id=${sysId}^elementINcomments,work_notes^ORDERBYDESCsys_created_on`;
   const fields = ['element', 'value', 'sys_created_on', 'sys_created_by', 'element_id'];
   const { rows: found, failure } = await softRead(deps, 'sys_journal_field', query, fields, { limit: max + 1, displayValue: false });
@@ -256,42 +272,51 @@ export async function readJournal({ table, sysId, recordText = null }, deps, { m
   const entries = ordered.slice(-max);
 
   if (!entries.length) {
-    const access = await emptyAccess({ failure, mismatched, recordFieldsRead: recordText !== null }, deps, memo);
+    const access = await emptyAccess({ failure, mismatched, recordFieldsRead: recordText !== null, hiddenColumns }, deps, memo);
     return { entries, loginNames: [], access: [access] };
   }
 
   const notes = [];
   if (strategy === 'record-fields') {
-    const why = failure ? 'could not be read by your user' : mismatched ? 'answered with other records' : 'showed no entries';
-    notes.push(`The journal table ${why}, so notes were read from the record's own comments and work notes fields. Times are in your time zone.`);
+    notes.push(JOURNAL_NOTE.fromRecord);
   } else if (strategy === 'mixed') {
     // (The table answered for this record, with entries of the other column only.)
-    const column = fromText === 'comment' ? 'comments' : 'work notes';
-    notes.push(`The journal table showed no ${column} for this record, so they were read from the record's own ${column} field.`);
-    if (localTimes.length) notes.push('Their times are in your time zone, so their order among the other notes may be off by a few hours.');
+    notes.push(JOURNAL_NOTE.mixed);
+    if (localTimes.length) notes.push(JOURNAL_NOTE.localTimes);
   }
-  if (ordered.length > max) notes.push(`Showing the newest ${max} entries.`);
+  if (ordered.length > max) notes.push(JOURNAL_NOTE.newest.replace('{n}', String(max)));
+  // The record's own work_notes column did not come back (a field the user may not read) and no work note was found another way: say
+  // that some may be hidden (R-18). Known only from that; nothing is said when the column simply came back empty.
+  const workNotesHidden = hiddenColumns.includes('work_notes') && !entries.some((e) => e.type === 'work_note');
+  if (workNotesHidden) notes.push(JOURNAL_NOTE.workNotesHidden);
+  // The same for the comments to the customer: "no messages to or from the customer" is not known when that column did not come back (R-19).
+  const commentsHidden = hiddenColumns.includes('comments') && !entries.some((e) => e.type === 'comment');
+  if (commentsHidden) notes.push(JOURNAL_NOTE.commentsHidden);
   const loginNames = strategy === 'record-fields' ? [] : [...new Set(entries.map((e) => e.by).filter((by) => by && !/\s/.test(by)))];
   // `more`: older entries exist and were not read. The AI request says so (src/features/parts.js, notAvailable), so a summary does not
   // take the newest entries for the whole story. `localTimes`: see isLocalTime.
-  const extra = { strategy, ...(localTimes.length ? { localTimes } : {}), ...(ordered.length > max ? { more: true } : {}) };
+  const extra = { strategy, ...(localTimes.length ? { localTimes } : {}), ...(ordered.length > max ? { more: true } : {}), ...(workNotesHidden ? { workNotesHidden: true } : {}), ...(commentsHidden ? { commentsHidden: true } : {}) };
   return { entries, loginNames, access: [accessEntry(JOURNAL_SOURCE, STATUS.OK, notes.join(' '), extra)] };
 }
 
 // Nothing was found by either route: say whether that is a fact or only what this user can see.
-async function emptyAccess({ failure, mismatched, recordFieldsRead }, deps, memo) {
+async function emptyAccess({ failure, mismatched, recordFieldsRead, hiddenColumns = [] }, deps, memo) {
   const none = { strategy: 'none' };
   if (failure?.status === STATUS.DENIED) {
     return recordFieldsRead
-      ? accessEntry(JOURNAL_SOURCE, STATUS.EMPTY_OR_HIDDEN, "Your user cannot read the journal table and the record's own comments and work notes are empty, so there may be notes this user cannot see.", none)
-      : accessEntry(JOURNAL_SOURCE, STATUS.DENIED, 'Your user cannot read the notes and comments of this record.', none);
+      ? accessEntry(JOURNAL_SOURCE, STATUS.EMPTY_OR_HIDDEN, JOURNAL_NOTE.hiddenAndEmpty, none)
+      : accessEntry(JOURNAL_SOURCE, STATUS.DENIED, JOURNAL_NOTE.denied, none);
   }
   if (failure) return accessEntry(JOURNAL_SOURCE, failure.status, failure.note, none);
-  if (mismatched) return accessEntry(JOURNAL_SOURCE, STATUS.ERROR, 'The journal table answered with other records, so it was not used.', none);
+  if (mismatched) return accessEntry(JOURNAL_SOURCE, STATUS.ERROR, NOTE_TEXT.ignoredFilter, none);
   const seen = await confirmEmptyIsReallyEmpty('sys_journal_field', deps, memo);
-  if (seen.status === STATUS.EMPTY) return accessEntry(JOURNAL_SOURCE, STATUS.EMPTY, 'This record has no notes or comments.', none);
+  // Both note columns of the ticket itself are missing from the record (not empty): the user may not read them, so "none" is not known.
+  if (seen.status === STATUS.EMPTY && recordFieldsRead && JOURNAL_RECORD_FIELDS.every((name) => hiddenColumns.includes(name))) {
+    return accessEntry(JOURNAL_SOURCE, STATUS.EMPTY_OR_HIDDEN, JOURNAL_NOTE.hiddenAndEmpty, none);
+  }
+  if (seen.status === STATUS.EMPTY) return accessEntry(JOURNAL_SOURCE, STATUS.EMPTY, JOURNAL_NOTE.none, none);
   if (seen.status === STATUS.EMPTY_OR_HIDDEN) {
-    return accessEntry(JOURNAL_SOURCE, STATUS.EMPTY_OR_HIDDEN, 'No notes or comments were found. Your user may not be able to read notes on this table, so this does not prove there are none.', none);
+    return accessEntry(JOURNAL_SOURCE, STATUS.EMPTY_OR_HIDDEN, JOURNAL_NOTE.maybeHidden, none);
   }
   return accessEntry(JOURNAL_SOURCE, seen.status, seen.note, none);
 }

@@ -438,6 +438,8 @@ a.ab-stack-link { display: block; }
 .ab-tlist-row:first-child { padding-top: 4px; }
 .ab-tlist-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-width: 0; overflow-wrap: anywhere; }
 .ab-tlist-number { font-family: var(--ab-mono); font-size: var(--ab-text-md); font-weight: 500; }
+/* A ticket number that is a link or a button is a target of its own: at least 24 px tall (the accessibility audit, scenario zz) */
+a.ab-tlist-number, button.ab-tlist-number { display: inline-flex; align-items: center; min-height: 24px; }
 .ab-tlist-title { color: var(--ab-fg); font-weight: 500; }
 .ab-tlist-meta { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
 .ab-tlist-wrap > .ab-showmore { margin-inline-start: -10px; }

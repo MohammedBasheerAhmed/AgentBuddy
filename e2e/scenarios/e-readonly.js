@@ -1,5 +1,6 @@
 // e. Read-only proof and network proof, over EVERYTHING the earlier scenarios did:
-//    - the instance saw only GETs, only to /api/now/table or /api/now/stats, always with the session token
+//    - the instance saw only GETs, only to /api/now/table, /api/now/stats or /api/now/ui/meta (the words of a table's columns), always with
+//      the session token
 //    - the AI server saw only chat completions, sent from the extension's own page, never containing raw personal data
 //    - nothing else was contacted by any page, content script or the service worker
 //    - no unexpected errors, no unexpected tabs, the shipped manifest untouched
@@ -61,7 +62,7 @@ module.exports = {
     t.check('the instance recorded requests from the browser', reqs.length > 20 && api.length > 10, `${reqs.length} requests, ${api.length} API reads`);
     t.check('EVERY request the instance saw was a GET', reqs.every((r) => r.method === 'GET'), [...new Set(reqs.map((r) => r.method))].join(','));
     t.check('no request was refused as a write (no 405 in the log)', reqs.every((r) => r.status !== 405));
-    t.check('the only API paths used are /api/now/table/<t> and /api/now/stats/<t>', api.every((r) => /^\/api\/now\/(table|stats)\/[a-z0-9_]+$/.test(r.path)), [...new Set(api.map((r) => r.path.replace(/[^/]+$/, '*')))].join(' '));
+    t.check('the only API paths used are /api/now/table/<t>, /api/now/stats/<t> and /api/now/ui/meta/<t>', api.every((r) => /^\/api\/now\/(table|stats|ui\/meta)\/[a-z0-9_]+$/.test(r.path)), [...new Set(api.map((r) => r.path.replace(/[^/]+$/, '*')))].join(' '));
     t.check('every API read carried the session token (never an unauthenticated call)', api.every((r) => r.tokenOk));
     t.check('every API read was a same-origin fetch from the page itself (content script)', api.every((r) => r.site === 'same-origin'), [...new Set(api.map((r) => r.site))].join(','));
     t.check('no script, ajax or processor endpoint was touched', reqs.every((r) => !/sys\.scripts|xmlhttp|processor|sys_script|angular/.test(r.path)));
@@ -127,9 +128,11 @@ module.exports = {
     const withoutLastViewed = JSON.stringify({ ...allStored, local: localRest });
     const stored = findLeaks(withoutLastViewed, data);
     t.check('chrome.storage (local, session, sync) holds no ticket data: no names, emails, phones, cards, passwords or ticket text', stored.critical.length === 0 && stored.gaps.length === 0 && !/disconnecting|Printer offline|Issue:|recurring VPN|Ignore all previous/.test(withoutLastViewed) && !withoutLastViewed.includes(data.INCIDENT_ID), [...stored.critical, ...stored.gaps.map((g) => g.value)].join(' | '));
-    const lastViewedShape = (lv) => !lv || (lv.v === 1 && Object.keys(lv).sort().join() === 'instances,v' && Object.entries(lv.instances || {}).every(([origin, map]) => /^https?:\/\/[^/\s]+$/.test(origin) && Object.entries(map || {}).every(([id, e]) => /^[0-9a-f]{32}$/.test(id) && Object.keys(e || {}).sort().join() === 'at,table' && /^[a-z0-9_]+$/.test(e.table) && !Number.isNaN(Date.parse(e.at)))));
+    // (Audit of 2026-11-07, R-17: version 2 keeps the list per instance AND per signed-in person, the person as a 16-character one-way
+    // code after the origin: "https://host|3f9c0a1b7d5e2c48". The user id itself must not be there.)
+    const lastViewedShape = (lv) => !lv || (lv.v === 2 && Object.keys(lv).sort().join() === 'instances,v' && Object.entries(lv.instances || {}).every(([origin, map]) => /^https?:\/\/[^/\s|]+\|[0-9a-f]{16}$/.test(origin) && Object.entries(map || {}).every(([id, e]) => /^[0-9a-f]{32}$/.test(id) && Object.keys(e || {}).sort().join() === 'at,table' && /^[a-z0-9_]+$/.test(e.table) && !Number.isNaN(Date.parse(e.at)))));
     const lvLeaks = findLeaks(JSON.stringify(lastViewed || {}), data);
-    t.check('the last-viewed list (build rule 7 exception) holds only sys_ids, table names and times: no number, title, text or names', lastViewedShape(lastViewed) && lvLeaks.critical.length === 0 && lvLeaks.gaps.length === 0, JSON.stringify(lastViewed || {}).slice(0, 240));
+    t.check('the last-viewed list (build rule 7 exception) holds only sys_ids, table names, times and a one-way code for the person: no number, title, text, names or user id', lastViewedShape(lastViewed) && lvLeaks.critical.length === 0 && lvLeaks.gaps.length === 0 && !JSON.stringify(lastViewed || {}).includes(inst.user.sysId), JSON.stringify(lastViewed || {}).slice(0, 240));
     t.info(`storage keys: ${Object.keys(JSON.parse(everythingStored).local).join(', ')}`);
     // The one IndexedDB database allowed is the key vault, and it may hold AI keys (plain or encrypted) and nothing else.
     const webStorage = await ctx.ext(async () => ({ local: localStorage.length, session: sessionStorage.length, idb: (await indexedDB.databases()).filter((d) => d.name !== 'agentbuddy_vault').length, caches: (await caches.keys()).length }));

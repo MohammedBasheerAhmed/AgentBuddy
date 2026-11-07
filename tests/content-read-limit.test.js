@@ -36,7 +36,7 @@ test('a read that does not answer stops after about 20 seconds with a named reas
   assert.equal(clock.timers[0].ms, 20000);
   assert.equal(given.aborted, false);
   clock.fire();
-  await assert.rejects(pending, (err) => err.code === READ_TIMEOUT_CODE && /^ServiceNow did not answer within 20 seconds\. It may be busy: try again in a moment\.$/.test(err.message));
+  await assert.rejects(pending, (err) => err.code === READ_TIMEOUT_CODE && err.message === 'ServiceNow did not answer in time. Try again in a moment.');
   assert.equal(given.aborted, true, 'a read with no signal of its own is really stopped');
 });
 
@@ -103,7 +103,7 @@ test('after a 401 the kept session token is dropped: the next read takes the new
     sent.push(init.headers['X-UserToken']);
     return { ok: status === 200, status, headers: { get: () => null }, redirected: false, url: String(url), text: async () => (status === 200 ? JSON.stringify({ result: [] }) : '') };
   };
-  await assert.rejects(queryTable('incident', 'active=true', ['number']), (err) => err.code === 'SESSION_EXPIRED' && /Sign in to ServiceNow again/.test(err.message));
+  await assert.rejects(queryTable('incident', 'active=true', ['number']), (err) => err.code === 'SESSION_EXPIRED' && err.message === 'You are signed out of ServiceNow. Sign in again, then try again.');
   token = 'tokenBBBBBBBBBBBBBBBBBBBBBBBBBB'; // the person signed in again: the page has a new token
   status = 200;
   await queryTable('incident', 'active=true', ['number']);

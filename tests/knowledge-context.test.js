@@ -179,7 +179,8 @@ test('the list: published articles of one knowledge base only, titles and counts
   assert.deepEqual(call.fields, [...KB_LIST_FIELDS]);
   assert.ok(!call.fields.includes('text'));
   assert.ok(call.options.limit <= 300);
-  assert.equal(call.query, `workflow_state=published^kb_knowledge_base=${KB_IT}^ORDERBYDESCsys_updated_on`);
+  // (Wave 6: the second sort key is a tie-break, so a run of articles changed in the same second pages without overlaps or gaps.)
+  assert.equal(call.query, `workflow_state=published^kb_knowledge_base=${KB_IT}^ORDERBYDESCsys_updated_on^ORDERBYDESCsys_id`);
   // newest first
   const updated = articles.map((a) => a.updated);
   assert.deepEqual(updated, [...updated].sort().reverse());
@@ -189,9 +190,10 @@ test('the list: a category narrows it further; with neither, nothing is read', a
   const deps = fakeDeps(kbTables());
   const narrowed = await readKnowledgeList({ knowledgeBase: KB_IT, category: CAT_VPN }, deps, {});
   assert.deepEqual(narrowed.articles.map((a) => a.number).sort(), ['KB0000001', 'KB0000002', 'KB0000003']);
+  const before = deps.callsTo('kb_knowledge').length;
   const none = await readKnowledgeList({}, deps, {});
   assert.deepEqual([none.articles, none.access[0].status], [[], 'skipped']);
-  assert.equal(deps.callsTo('kb_knowledge').length, 1, 'the empty scope made no read');
+  assert.equal(deps.callsTo('kb_knowledge').length, before, 'the empty scope made no read');
 });
 
 test('the list is capped at 300 rows and says when more existed', async () => {
@@ -202,7 +204,10 @@ test('the list is capped at 300 rows and says when more existed', async () => {
   assert.equal(out.articles.length, 300);
   assert.equal(out.truncated, true);
   assert.equal(out.total, 350);
-  assert.match(out.access[0].note, /300 most recently changed articles were compared \(of 350\)/);
+  // (Wave 6: "Only the N most recently changed articles were compared (of M)" is the panel's sentence now, with the number compared
+  // across ALL pages; the list says where to go on.)
+  assert.equal(out.next, 300, 'the next page starts where this window ended');
+  assert.equal(out.access[0].note, '');
   assert.equal(deps.callsTo('kb_knowledge')[0].options.limit, 300);
   assert.equal((await readKnowledgeList({ knowledgeBase: KB_IT }, deps, { max: 5000 })).articles.length, 300, 'a larger max is clamped');
 });
@@ -220,7 +225,7 @@ test('the list: an instance that ignores the filter, a denied table, a hidden ta
   const ignoring = { queryTable: async () => [{ sys_id: v(id(1)), number: v('KB1'), short_description: v('x'), workflow_state: v('published'), kb_knowledge_base: v(KB_HR, 'HR') }] };
   const out = await readKnowledgeList({ knowledgeBase: KB_IT }, ignoring, {});
   assert.equal(out.articles.length, 0);
-  assert.match(out.access[0].note, /did not apply/);
+  assert.match(out.access[0].note, /did not narrow the results as asked/);
   assert.equal((await readKnowledgeList({ knowledgeBase: KB_IT }, fakeDeps(tables, { denied: ['kb_knowledge'] }), {})).access[0].status, 'denied');
   assert.equal((await readKnowledgeList({ knowledgeBase: KB_IT }, fakeDeps(tables, { hidden: ['kb_knowledge'] }), {})).access[0].status, 'empty-or-hidden');
   const emptyScope = await readKnowledgeList({ knowledgeBase: id(0x5555) }, fakeDeps(tables), {});
@@ -279,7 +284,7 @@ test('resolved tickets: truncation is reported; a date filter the instance ignor
   const all = { queryTable: async () => ignoring.incident.map((r) => ({ ...r })) };
   const filtered = await readResolvedTickets({ days: 60, tables: ['incident'] }, all, { now: NOW });
   assert.deepEqual(filtered.tickets.map((t) => t.number), ['NEW']);
-  assert.match(filtered.access[0].note, /did not apply the date filter/);
+  assert.match(filtered.access[0].note, /did not apply the date range as asked/);
 
   assert.equal((await readResolvedTickets({ tables: ['incident'] }, fakeDeps({}, { denied: ['incident'] }), { now: NOW })).access[0].status, 'denied');
   assert.equal((await readResolvedTickets({ tables: ['incident'] }, fakeDeps({}, { hidden: ['incident'] }), { now: NOW })).access[0].status, 'empty-or-hidden');
@@ -347,7 +352,7 @@ test('links: a table without the task column answers with every row; those rows 
   const out = await readArticleLinks([incidentId(1)], deps, {});
   assert.equal(out.known, false);
   assert.equal(out.linked.size, 0);
-  assert.ok(out.sources.every((s) => s.status === 'error' && /did not apply the task(_id)? filter/.test(s.note)));
+  assert.ok(out.sources.every((s) => s.status === 'error' && /did not narrow the results as asked/.test(s.note)));
 });
 
 test('links: nothing asked, nothing read; bad ids are dropped before they reach a query', async () => {

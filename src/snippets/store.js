@@ -229,7 +229,7 @@ export function importSnippets(jsonText, existing, options) {
   try {
     data = JSON.parse(jsonText);
   } catch {
-    result.errors.push(t('This is not a valid JSON file.'));
+    result.errors.push(t('This is not a snippet file from Agent Buddy.'));
     return result;
   }
   const entries = Array.isArray(data) ? data : data && typeof data === 'object' && Array.isArray(data.snippets) ? data.snippets : null;

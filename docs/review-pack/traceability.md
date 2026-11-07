@@ -16,6 +16,7 @@ or when this file is out of date.
 | security.md 4 | Customer-visible text | One review (src/safeSend/review.js) runs on text before it is put into a form field, for the field it goes into (FILLABLE_FIELDS in src/lib/fillable.js says which fields the customer or a reader can ... | `tests/insert-review.test.js`, `tests/insert-flow.test.js`, `tests/safesend.test.js` | ok |
 | security.md 4 | What Insert can write | The content script accepts only the columns in FILLABLE_FIELDS (comments, work notes, close notes, description, short description, cause notes, workaround, the article body, the email body and ... | `tests/insert-fillable.test.js`, `tests/insert-content-fill.test.js` | ok |
 | security.md 4 | HTML fields | The knowledge article body is an HTML field. | `tests/insert-fillable.test.js`, `tests/insert-end-to-end.test.js`, `tests/portal-bridge.test.js` | ok |
+| security.md 4 | Workspace box checks | The page bridge only LOOKS: getFieldStates (is the box there, what is its composer set to), watchInsert (was the box of the last insert emptied) and the save-label lists read the page and click ... | none named | no automated test |
 | security.md 4 | Insert is bound to the record | Every FILL_FIELD carries the record the text was written for ({ table, sysId }, { table, newRecord: true } for a blank form, or the email client of that record). | `tests/insert-content-fill.test.js`, `tests/insert-flow.test.js`, `tests/insert-end-to-end.test.js` | ok |
 | security.md 4 | Workspace insert | Without g_form the bridge writes only into a visible, enabled text control whose name or label is an exact match ("Description" is not "Short description"; "Work notes (internal)" is "Work notes"), ... | `tests/portal-bridge.test.js` | ok |
 | security.md 4 | Rewrite and Notes obey the table policy | A rewrite or notes run carries the real table of the page the person is on and the form field the text came from, so blockedTables, the HR gate, blockedFields and the Strict-mode HR rule apply exactly ... | `tests/insert-compose-pack.test.js` | ok |
@@ -64,4 +65,4 @@ or when this file is out of date.
 | stride.md | E3 | Agent Buddy acts beyond the person's ServiceNow rights | `tests/readonly.test.js`, `tests/context-access.test.js` | ok |
 | stride.md | E4 | Code in a ServiceNow page reaches the AI key or the provider layer | `tests/readonly.test.js`, `tests/keystore.test.js` | ok |
 
-57 rows; 75 distinct test files named; 0 rows name a missing file.
+58 rows; 75 distinct test files named; 0 rows name a missing file.

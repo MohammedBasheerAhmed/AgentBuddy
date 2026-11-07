@@ -74,7 +74,7 @@ export function settingsMenu(page, eff) {
   return [
     { id: 'h-appearance', label: t('Appearance'), icon: 'sun' },
     { id: 'h-language', label: t('Language'), icon: 'globe' },
-    { id: 'h-instances', label: t('ServiceNow instances'), icon: 'monitor' },
+    { id: 'h-instances', label: t('ServiceNow sites'), icon: 'monitor' },
     { id: 'h-profiles', label: t('What you work on'), icon: 'ticket' },
     { id: 'h-followup', label: t('My work'), icon: 'inbox' },
     { id: 'h-shortcuts', label: t('Keyboard shortcuts'), icon: 'keyboard' },
@@ -94,7 +94,7 @@ export function AiAssistPage({ eff, reload, epoch }) {
     return (
       <section className="ab-section ab-set-section" aria-labelledby="h-ai-off">
         <SectionHead id="h-ai-off" title={t('AI is switched off')}>
-          {t('Your organisation has switched off AI in Agent Buddy. Everything under Insights still works: facts, lists, checks and templates, read from ServiceNow with your own session. Nothing is sent anywhere.')}
+          {t('Your organisation has switched off AI in Agent Buddy. Everything under Insights still works: facts, lists, checks and templates, read from ServiceNow as you. Nothing is sent anywhere.')}
         </SectionHead>
       </section>
     );
@@ -102,7 +102,7 @@ export function AiAssistPage({ eff, reload, epoch }) {
   return (
     <>
       <p className="ab-sub ab-page-intro">
-        {t('AI Assist writes summaries, replies and notes with the AI provider you choose. Personal data is masked first, and you can see what is sent.')}
+        {t('AI Assist writes summaries, replies and notes with the AI service you choose. Personal data is masked first, and you can see what is sent.')}
         {eff.values.aiSkipped ? ` ${t('You chose to skip AI for now: untick it under Basics, "What you work on", to use it.')}` : ''}
       </p>
       <ProviderSection eff={eff} reload={reload} />
@@ -380,7 +380,7 @@ export function SettingsPages({ eff, reload, epoch = 0, onCleared = () => {}, in
           <DiagnosticsSection eff={eff} />
           <section className="ab-section ab-set-section" aria-labelledby="h-leaves">
             <SectionHead id="h-leaves" title={t('What leaves your computer')}>
-              {t('Only two things: reads from your own ServiceNow instance, and the masked text sent to the AI address you chose. Agent Buddy has no server, no analytics and no tracking. It never saves or changes a ServiceNow record by itself: when you choose Insert it fills the field on the open form and you press Save.')}
+              {t('Only two things: reads from your own ServiceNow site, and the masked text sent to the AI address you chose. Agent Buddy has no server, no analytics and no tracking. It never saves or changes a ticket by itself: when you choose Insert it fills the field on the open form and you press Save.')}
             </SectionHead>
           </section>
         </div>

@@ -4,7 +4,16 @@
 // When sys_user cannot be read the display names stay and the emails are left out; the pack's `access` says so.
 
 import { LIMITS } from './allowlists.js';
-import { STATUS, entry as accessEntry, softRead } from './access.js';
+import { STATUS, entry as accessEntry, softRead, tm } from './access.js';
+
+// What the people lookup says (fixed sentences without a table name; marked for the Arabic catalogue).
+const PEOPLE_NOTE = Object.freeze({
+  denied: tm('You cannot read the details of the people on this ticket, so email addresses are not included.'),
+  none: tm('The details of the people on this ticket could not be read, so email addresses are not included.'),
+  noEmail: tm('{n} of {total} people have no email address that you can read.'),
+  // The email column did not come back for these people (a field the user may not read), which is not the same as an empty one.
+  emailHidden: tm('{n} of {total} people have an email address that you cannot read.'),
+});
 import { SYS_ID_RE, disp, oneLine, raw } from './util.js';
 
 /** Record columns that hold a person, and the role each one plays. */
@@ -18,6 +27,8 @@ export const PERSON_FIELDS = Object.freeze({
   requested_by: 'requested_by',
   subject_person: 'subject_person',
   opened_for: 'opened_for',
+  // A catalog task's requester, walked from its requested item (src/context/specs/fit.js): the same role as on the item itself.
+  'request_item.requested_for': 'requested_for',
 });
 
 // A customer contact is a sys_user row too (customer_contact extends it); a consumer lives in its own table.
@@ -48,6 +59,9 @@ export function splitName(name) {
 const personFrom = (role, base, row) => {
   const name = oneLine(row?.name || base.name || '', 100);
   const guess = splitName(name);
+  // A person known by id whose user row did not come back with its email column (or at all): the email may exist and be hidden from
+  // this user. An empty column is an empty email; a missing one is not (R-14).
+  const emailUnreadable = Boolean(base.sysId) && (!row || !Object.hasOwn(row, 'email'));
   return {
     role,
     name,
@@ -55,6 +69,7 @@ const personFrom = (role, base, row) => {
     sysId: base.sysId || '',
     firstName: oneLine(row?.first_name || guess.firstName, 60),
     lastName: oneLine(row?.last_name || guess.lastName, 60),
+    ...(emailUnreadable ? { emailUnreadable: true } : {}),
   };
 };
 
@@ -80,9 +95,9 @@ export async function resolvePeople({ refs = [], logins = [], names = [] }, deps
     // eslint-disable-next-line no-await-in-loop -- one or two small reads, kept sequential.
     const { rows, failure } = await softRead(deps, table, clauses.join('^OR'), USER_FIELDS, { limit: ids.length + byLogin.length + 5, displayValue: false });
     if (failure) {
-      access.push(accessEntry(table, failure.status, failure.status === STATUS.DENIED ? `Your user cannot read ${table}, so email addresses are not included.` : failure.note));
+      access.push(accessEntry(table, failure.status, failure.status === STATUS.DENIED ? PEOPLE_NOTE.denied : failure.note));
     } else if (!rows.length) {
-      access.push(accessEntry(table, STATUS.DENIED, `No ${table} rows could be read for the people on this record, so email addresses are not included.`));
+      access.push(accessEntry(table, STATUS.DENIED, PEOPLE_NOTE.none));
     } else {
       access.push(accessEntry(table, STATUS.OK));
     }
@@ -121,10 +136,13 @@ export async function resolvePeople({ refs = [], logins = [], names = [] }, deps
   });
   names.forEach((name) => add(personFrom('journal_author', { name, sysId: '' }, null), true));
 
-  const withoutEmail = people.filter((p) => !p.email).length;
+  const hiddenEmail = people.filter((p) => p.emailUnreadable).length;
+  const withoutEmail = people.filter((p) => !p.email && !p.emailUnreadable).length;
   const userAccess = access.find((a) => a.source === 'sys_user');
-  if (userAccess?.status === STATUS.OK && withoutEmail) {
-    userAccess.note = `${withoutEmail} of ${people.length} people have no email address your user can read.`;
+  if (userAccess?.status === STATUS.OK && (hiddenEmail || withoutEmail)) {
+    // "partial": the read worked, but not everything about these people could be seen. The cards print it (src/sidepanel/ticket/cards/bits.jsx).
+    userAccess.note = (hiddenEmail ? PEOPLE_NOTE.emailHidden : PEOPLE_NOTE.noEmail).replace('{n}', String(hiddenEmail || withoutEmail)).replace('{total}', String(people.length));
+    if (hiddenEmail) userAccess.partial = true;
   }
   return { people, access, namesByLogin };
 }

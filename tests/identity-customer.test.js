@@ -105,7 +105,8 @@ test('P3.1 resolve check: an Arabic, Cyrillic or CJK customer who wrote last is 
   // HR: the employee the case is for, or the person it is about
   for (const role of ['opened_for', 'subject_person']) {
     const hr = customerCheck({ ...resolvePack({ role, name: 'Fatima Noor' }), kind: 'hr_case', table: 'sn_hr_core_case' });
-    assert.equal(hr.title, 'The customer wrote the last message', role);
+    // (F11: the person an HR case is for is the employee, not "the customer")
+    assert.equal(hr.title, 'The employee wrote the last message', role);
   }
   // a login that matches no one is not taken for an agent
   assert.equal(customerCheck(resolvePack({ role: 'caller', name: ARABIC }, 'x123456')).title, 'Could not tell who wrote the last message');
@@ -221,7 +222,7 @@ test('P3.7 journal: a column read from the record\'s text next to one from the t
   ]);
   assert.equal(access[0].strategy, 'mixed');
   assert.equal(access[0].localTimes, undefined);
-  assert.match(access[0].note, /showed no work notes for this record, so they were read from the record's own work notes field\.$/);
+  assert.match(access[0].note, /^Some notes were read from the ticket itself\./);
   assert.doesNotMatch(access[0].note, /showed no entries|Times are in your time zone/);
   assert.equal(isLocalTime(entries[1], access), false);
 });
@@ -286,7 +287,7 @@ test('P3.28 journey: a long field history keeps its newest 60 changes, oldest fi
     newvalue: String(((i + 1) % 4) + 1),
     sys_created_on: utc(start + i * H),
   }));
-  const deps = fakeDeps({ sys_audit: rows, sys_choice: [], sys_user_group: [] });
+  const deps = fakeDeps({ sys_audit: rows, sys_user_group: [] });
   const history = await readFieldHistory({ table: 'incident', sysId: ID }, deps);
   assert.equal(history.changes.length, 60);
   assert.equal(history.changes[0].atUtc, utc(start + 10 * H), 'the ten oldest are the ones left out');

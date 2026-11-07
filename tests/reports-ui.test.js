@@ -214,7 +214,7 @@ test('the widget frame: loading, error, denominators; what could not be read is 
   assert.match(markup, /SLA counts cover 40 active SLAs/);
   const notes = dashboardNotes([{ id: 'w1', section: 'overview', result: r2 }, { id: 'w2', section: 'sla', result: r2 }], ['w1', 'w2']);
   assert.ok(notes.includes('Problems: not available to you.'));
-  assert.ok(notes.some((n) => /Catalog tasks: you can see no rows in this table/.test(n)));
+  assert.ok(notes.some((n) => /Catalog tasks: you can see none of them/.test(n)));
   assert.equal(notes.length, new Set(notes).size, 'each note once, however many widgets carry it');
   assert.match(markup, /BODY/);
   assert.ok(r.data.tiles.length > 0);
@@ -260,7 +260,7 @@ test('scope bar: the three scopes, chosen groups with a safe remove, and tables 
   assert.match(markup, /Service Desk/);
   assert.match(markup, /aria-label="Remove Service Desk"[^>]*disabled/, 'the last chosen group cannot be removed');
   assert.match(markup, /Not available to you/);
-  assert.match(markup, /No rows visible to you/);
-  assert.match(markup, /Tables: 1 of 1 available/);
+  assert.match(markup, /None visible to you/);
+  assert.match(markup, /Ticket types: 1 of 1 available/);
   assertClean(markup, 'scope bar');
 });

@@ -91,8 +91,8 @@ test('a record whose conversation cannot be found is tried against the message t
   assert.deepEqual(result.entries, []);
   assert.equal(result.access.length, 1);
   assert.equal(result.access[0].status, 'empty-or-hidden');
-  assert.match(result.access[0].note, /No chat messages are available to you/);
-  assert.match(result.access[0].note, /does not prove the chat is empty/);
+  assert.match(result.access[0].note, /You cannot see the chat messages/);
+  assert.match(result.access[0].note, /the chat may not be empty/);
   assert.equal(result.access[0].strategy, 'none');
   assert.ok(deps.callsTo('sys_cs_message').some((c) => c.query.startsWith(`interactionIN${INTERACTION_ID}`)), 'the direct recipe was tried');
 });
@@ -101,8 +101,9 @@ test('denied, hidden and failing tables degrade into access, never into an excep
   const denied = (await readChat(interaction, chatTables(), { denied: ['sys_cs_conversation', 'live_group_profile', 'sys_cs_message'] })).result;
   assert.deepEqual(denied.entries, []);
   assert.equal(denied.access[0].status, 'denied');
-  assert.match(denied.access[0].note, /No chat messages are available to you/);
-  assert.match(denied.access[0].note, /sys_cs_conversation/);
+  assert.match(denied.access[0].note, /You cannot see the chat messages/);
+  assert.doesNotMatch(denied.access[0].note, /sys_cs_|live_|your user/i, 'the sentence names no table');
+  assert.ok(denied.access[0].tried.includes('sys_cs_conversation: denied'), 'what each place answered stays in `tried`, which is never drawn');
 
   const hidden = (await readChat(interaction, chatTables(), { hidden: ['sys_cs_conversation', 'live_group_profile', 'sys_cs_message'] })).result;
   assert.equal(hidden.access[0].status, 'empty-or-hidden');
@@ -114,7 +115,8 @@ test('denied, hidden and failing tables degrade into access, never into an excep
   // Only the message table is denied: the conversation was found, the messages could not be read.
   const half = (await readChat(interaction, chatTables(), { denied: ['sys_cs_message'] })).result;
   assert.equal(half.access[0].status, 'denied');
-  assert.match(half.access[0].note, /Your user cannot read sys_cs_message/);
+  assert.match(half.access[0].note, /You cannot see the chat messages/);
+  assert.doesNotMatch(half.access[0].note, /sys_cs_|your user/i);
 });
 
 test('a table without the link column answers with EVERY row: none of them is used, and the note says why', async () => {
@@ -124,8 +126,8 @@ test('a table without the link column answers with EVERY row: none of them is us
   const { result } = await readChat(interaction, tables);
   assert.deepEqual(result.entries, []);
   assert.equal(result.access[0].status, 'empty-or-hidden');
-  assert.match(result.access[0].note, /sys_cs_conversation has no interaction column/);
-  assert.match(result.access[0].note, /sys_cs_message has no interaction column/);
+  assert.match(result.access[0].note, /You cannot see the chat messages/);
+  assert.ok(result.access[0].tried.includes('sys_cs_conversation: empty-or-hidden') && result.access[0].tried.includes('sys_cs_message: empty-or-hidden'));
 });
 
 test('rows that belong to other conversations mean the filter was ignored: an error, and none of them is used', async () => {
@@ -141,7 +143,8 @@ test('rows that belong to other conversations mean the filter was ignored: an er
   const result = await readChatMessages(interaction, deps);
   assert.deepEqual(result.entries, []);
   assert.equal(result.access[0].status, 'error');
-  assert.match(result.access[0].note, /did not apply the filter|messages of other conversations/);
+  assert.equal(result.access[0].note, 'Could not be read just now. Try again in a moment.');
+  assert.doesNotMatch(result.access[0].note, /sys_cs_|filter|other conversations/);
   assert.ok(!JSON.stringify(result).includes('NOT THIS CHAT'));
 });
 
@@ -214,7 +217,7 @@ test('chat tables that cannot be read leave the rest of the pack intact and say 
   assert.equal(pack.people.length, 2, 'the customer and the agent from the record are still known');
   const entry = pack.access.find((a) => a.source === 'chat');
   assert.equal(entry.status, 'denied');
-  assert.match(entry.note, /No chat messages are available to you/);
+  assert.match(entry.note, /You cannot see the chat messages/);
 });
 
 test('a chat feature with notes switched off reads no messages at all', async () => {

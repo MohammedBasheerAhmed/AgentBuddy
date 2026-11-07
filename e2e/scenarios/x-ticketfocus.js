@@ -77,7 +77,11 @@ module.exports = {
     t.check('Insights shows five rows, one per pain point, in order', JSON.stringify(g.map((x) => x.id)) === JSON.stringify(PAINS), JSON.stringify(g.map((x) => x.id)));
     t.check('...named for the pain point: Understand the ticket, Find the fix, Same caller, Reply, Close well', JSON.stringify(g.map((x) => x.title)) === JSON.stringify(['Understand the ticket', 'Find the fix', 'Same caller', 'Reply', 'Close well']), JSON.stringify(g.map((x) => x.title)));
     t.check('...each with a one-line answer, all folded', g.filter((x) => x.line).length >= 4 && g.every((x) => !x.open), JSON.stringify(g.map((x) => [x.id, x.line])));
-    const count = await p.evaluate(() => document.querySelector('[role=tab][id$="-half-tab-insights"]')?.innerText.replace(/\D+/g, '') || '0');
+    const tabCount = () => p.evaluate(() => document.querySelector('[role=tab][id$="-half-tab-insights"]')?.innerText.replace(/\D+/g, '') || '0');
+    // A row finishes loading after the first read (the dots and the tab's number are two reads): wait for them to agree, then judge.
+    await ctx.waitUntil('the number on the Insights tab to match the rows that need a look', async () => Number(await tabCount()) === (await groups(p)).filter((x) => x.dot).length, { timeout: 8000 }).catch(() => {});
+    g = await groups(p);
+    const count = await tabCount();
     t.check('the number on the Insights tab counts the rows that need a look', Number(count) === g.filter((x) => x.dot).length, JSON.stringify({ count, dots: g.filter((x) => x.dot).map((x) => x.id) }));
     t.check('the Insights half carries no AI mark', (await p.evaluate(() => [...document.querySelectorAll('[id$="-half-panel-insights"] .ab-ai-badge')].filter((e) => e.getClientRects().length > 0).length)) === 0);
 

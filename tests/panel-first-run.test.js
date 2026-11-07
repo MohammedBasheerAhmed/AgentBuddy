@@ -125,7 +125,7 @@ test('a page that does not look like ServiceNow: said so, with a small "Turn on 
   await click(ui.button('Turn on anyway'));
   assert.ok(ui.text().includes(REFUSED_TEXT));
   assert.match(REFUSED_TEXT, /choose Allow/);
-  assert.match(REFUSED_TEXT, /IT team may block it/);
+  assert.match(REFUSED_TEXT, /your organisation may block it: ask your administrator/);
   await ui.unmount();
 
   // A custom domain that IS ServiceNow (g_ck on the page): the normal button.
@@ -204,7 +204,7 @@ test('after the first run: a page that is not on gets "Not turned on for this pa
   assert.ok(!/My day|My work/.test(ui.$('section h2').textContent));
   await ui.rerender(<SetupView page={off('')} eff={fresh} />);
   assert.match(ui.text(), /Not turned on for this page/, 'a tab whose address cannot be seen: the help is here, never in the card');
-  assert.match(ui.text(), /Open your ServiceNow instance in this tab/);
+  assert.match(ui.text(), /Open your ServiceNow site in this tab/);
   await ui.unmount();
 });
 

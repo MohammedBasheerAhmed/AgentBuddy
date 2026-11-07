@@ -104,7 +104,7 @@ export default function ScopeBar({ scope, tables, selected, context, tabId, bloc
       {showPicker && <GroupPicker tabId={tabId} blocked={blocked} chosen={chosen} myGroups={context?.groups} onAdd={add} />}
 
       <details className="ab-details">
-        <Summary>{selected.length ? t('Tables: {n} of {total} available', { n: selected.length, total: tables.filter((x) => x.usable).length }) : t('Tables: none available')}</Summary>
+        <Summary>{selected.length ? t('Ticket types: {n} of {total} available', { n: selected.length, total: tables.filter((x) => x.usable).length }) : t('Ticket types: none available')}</Summary>
         <ul className="ab-table-list">
           {tables.map((tbl) => (
             <li key={tbl.table}>
@@ -112,7 +112,7 @@ export default function ScopeBar({ scope, tables, selected, context, tabId, bloc
                 <input type="checkbox" checked={selectedSet.has(tbl.table)} disabled={!tbl.usable || !canEdit} onChange={() => toggle(tbl.table)} />
                 <span>
                   {shown(tbl.label)}
-                  {!tbl.usable && <span className="ab-hint"> {tbl.status === 'denied' ? t('Not available to you') : tbl.status === 'hidden' ? t('No rows visible to you') : tbl.status === 'blocked' ? t('Turned off by your organisation') : t('Could not be read')}</span>}
+                  {!tbl.usable && <span className="ab-hint"> {tbl.status === 'denied' ? t('Not available to you') : tbl.status === 'hidden' ? t('None visible to you') : tbl.status === 'blocked' ? t('Turned off by your organisation') : t('Could not be read')}</span>}
                 </span>
               </label>
             </li>

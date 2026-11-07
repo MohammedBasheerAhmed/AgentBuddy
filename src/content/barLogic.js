@@ -150,7 +150,7 @@ export const isGone = (err) => /Extension context invalidated|Receiving end does
 
 /** What to tell the person after a click: '' when the panel opened and has taken over. */
 export function launchNotice(answer) {
-  if (answer?.error) return String(answer.error.message || t('Agent Buddy could not do that.'));
+  if (answer?.error) return String(answer.error.message || t('Agent Buddy could not do that. Open the ticket and try again.'));
   if (answer?.opened === false) return t('Click the Agent Buddy button in your browser toolbar. The action starts in the panel.');
   return '';
 }

@@ -4,17 +4,26 @@
 //   1) A classic form knows exactly which record it shows (the page bridge's getFormMeta).
 //   2) Workspaces, Next Experience and portals: the address, read afresh on every request.
 //
+// Either way the page must be a TICKET page (audit of 2026-11-07, part 2): a form or an address that names a table is not a record to
+// work on unless the table is a ticket-like one (src/context/kinds.js isTicketTable: the kinds the product knows, the families of
+// the organisation's policy) or the live form proves it (g_form answers with a number). A UI page, a script, a user, the home page
+// are "no record": nothing is read for them, the panel shows the plain "Open a ticket" help and the bar stays away.
+//
 // Two small reads can be needed, both through the policy guard: the sys_id of a number (an address that carries only a number) and
 // the real class of a record opened through the base class `task`. A number is the same record whatever page it is on, and a sys_id
 // is always of the same class, so these answers are the only things remembered between requests (bounded: a portal tab open all week
 // does not grow them without end). A lookup that found nothing is not asked again for 30 seconds: the panel asks every few seconds,
 // the bar every two.
-import { kindForTable, parseRecordRef } from '../context/kinds.js';
+import { isTicketTable, kindForTable, parseNewRecordRef, parseRecordRef } from '../context/kinds.js';
 import { resolveRealClass } from '../context/pack.js';
 import { SYS_ID_RE, TABLE_RE, raw } from '../context/util.js';
 
 const MISS_MS = 30000;
 const MAX_REMEMBERED = 200;
+const MAX_NUMBER_CHARS = 40;
+
+// What the form said is the number of its record: text, trimmed, short. Anything else is no number (the page world is untrusted).
+const cleanNumber = (value) => (typeof value === 'string' ? value.trim().slice(0, MAX_NUMBER_CHARS) : '');
 
 /**
  * @param {{
@@ -54,6 +63,14 @@ export function makeRecordResolver({ guardedDeps, formMeta, now = () => Date.now
     return found.table;
   }
 
+  // Is a page of this table a ticket page? A table the product knows, or a family of the organisation's policy (asked only for a table
+  // this build does not know), or a form that proved it with a number. `number`: what the live form said, '' when there is no form.
+  async function ticketLike(table, number, policy) {
+    if (cleanNumber(number) || isTicketTable(table)) return true;
+    const guarded = await guardedDeps(policy).catch(() => null);
+    return isTicketTable(table, { extraPrefixes: guarded?.sensitivePrefixes });
+  }
+
   // The sys_id of a number, or ''. The row must carry the number asked for: ServiceNow ignores a condition on a column the table does
   // not have and answers with its first row, which is some other record.
   async function sysIdOfNumber(table, number, policy) {
@@ -70,27 +87,56 @@ export function makeRecordResolver({ guardedDeps, formMeta, now = () => Date.now
     return numberCache.get(key) || '';
   }
 
+  // The record for a table and a sys_id, with the real class of a record opened through `task`. The table that ends up in the record
+  // must pass the gate too: a record opened through `task` whose real class is a table nobody listed (and whose form said no number)
+  // is not one the panel works on either, the same as when that table is named in an address.
+  async function recordFor(asked, sysId, number, policy) {
+    const table = await realClassOf(asked, sysId, policy);
+    if (table !== asked && !(await ticketLike(table, number, policy))) return null;
+    return { table, sysId, number, kind: kindForTable(table) };
+  }
+
   /**
    * { table, sysId, number, kind } of the record the page shows, or null.
    * `known`: the form's description when the caller has already asked the page for it (pageState asks once for everything).
    * `policy`: the panel's, sent with PAGE_STATE and READ; the bar and Insert send none (the managed policy applies on its own).
    */
   async function resolveRecord(href, known, policy) {
-    // 1) The classic form knows exactly which record it shows.
+    // 1) The classic form knows exactly which record it shows. A form of a table that is not a ticket's and has no number (a widget
+    //    or a UI page that carries a g_form of its own) is not a record; the address may still name one, so it is looked at next.
     const meta = known === undefined ? await formMeta() : known;
+    // The classic shell's frame has moved on to a list while the address still names the form before it: no ticket is open (audit of
+    // 2026-11-07, S8; the page bridge says so only when the frame itself is a list without a form).
+    if (meta?.frameIsList === true) return null;
     if (meta?.table && SYS_ID_RE.test(meta.sysId || '') && !meta.isNewRecord && TABLE_RE.test(meta.table)) {
-      const table = await realClassOf(meta.table, meta.sysId, policy);
-      return { table, sysId: meta.sysId, number: meta.number || '', kind: kindForTable(table) };
+      const formNumber = cleanNumber(meta.number);
+      if (await ticketLike(meta.table, formNumber, policy)) return recordFor(meta.table, meta.sysId, formNumber, policy);
     }
-    // 2) Workspaces, Next Experience and portals: the address (read afresh on every request).
-    const ref = parseRecordRef(href);
-    if (!ref || !TABLE_RE.test(ref.table || '')) return null;
+    // 2) Workspaces, Next Experience and portals: the address (read afresh on every request). Only a ticket's table counts, so a
+    //    number in the address of /ui_page.do or /home.do is not looked up in a table named after the page.
+    const ref = parseRecordRef(href, { anyTable: true });
+    if (!ref || !TABLE_RE.test(ref.table || '') || !(await ticketLike(ref.table, '', policy))) return null;
     let { sysId } = ref;
     const { number } = ref;
     if (!sysId && number) sysId = await sysIdOfNumber(ref.table, number, policy);
     if (!SYS_ID_RE.test(sysId || '')) return null;
-    const table = await realClassOf(ref.table, sysId, policy);
-    return { table, sysId, number: number || '', kind: kindForTable(table) };
+    return recordFor(ref.table, sysId, number || '', policy);
+  }
+
+  /**
+   * { table, kind } of the BLANK form the page shows (a new incident, a new article), or null. The form says so itself through
+   * g_form (classic, and Next Experience where the bridge reaches its frame); otherwise the address does (sys_id=-1). Only a ticket's
+   * table counts, as for a saved record: "For a new ui page form" is no help to anybody.
+   * `known` and `policy` as for resolveRecord.
+   */
+  async function resolveNewRecord(href, known, policy) {
+    const meta = known === undefined ? await formMeta() : known;
+    if (meta?.frameIsList === true) return null;
+    if (meta?.isNewRecord && TABLE_RE.test(meta.table || '') && (await ticketLike(meta.table, meta.number, policy))) return { table: meta.table, kind: kindForTable(meta.table) };
+    if (meta?.table && meta.isNewRecord === false) return null; // the form on the page is a saved record
+    const fromAddress = parseNewRecordRef(href, { anyTable: true });
+    if (!fromAddress || !(await ticketLike(fromAddress.table, '', policy))) return null;
+    return { table: fromAddress.table, kind: kindForTable(fromAddress.table) };
   }
 
   /** Forget everything looked up (the content script retires). */
@@ -101,5 +147,5 @@ export function makeRecordResolver({ guardedDeps, formMeta, now = () => Date.now
     classMisses.clear();
   }
 
-  return { resolveRecord, clear };
+  return { resolveRecord, resolveNewRecord, clear };
 }

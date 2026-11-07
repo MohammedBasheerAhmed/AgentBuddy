@@ -27,6 +27,14 @@ export const RISK_LIMITS = Object.freeze({
   waitingDays: 2, // whole days since the customer's word that nobody answered
 });
 
+/**
+ * How many of my open tickets have a risk fact that could not be read (`factsUnread`, src/mywork/read.js itemOf). Their "At risk" mark
+ * (or its absence) rests on less than the rule asks for, so the screen says so. A resolved ticket is never at risk: it is not counted.
+ */
+export function ticketsWithUnreadFacts(items) {
+  return (Array.isArray(items) ? items : []).filter((i) => i && i.work !== 'resolved' && Number.isInteger(i.factsUnread) && i.factsUnread > 0).length;
+}
+
 export const REASON_ORDER = Object.freeze(['reopened', 'reassigned', 'waiting', 'sla', 'vip', 'account']);
 
 const isCount = (n) => typeof n === 'number' && Number.isInteger(n) && n >= 0;

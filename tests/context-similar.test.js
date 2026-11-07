@@ -193,7 +193,7 @@ test('rows of other CIs are not duplicates when the instance ignored the conditi
   const { hits, access } = await findOpenDuplicates(pack, ignoring, { now: NOW });
   assert.deepEqual(hits, []);
   assert.equal(access[0].status, 'error');
-  assert.match(access[0].note, /did not apply the filter/);
+  assert.match(access[0].note, /did not narrow the results as asked/);
 });
 
 test('open duplicates: a CI name with a caret in it never reaches a query (names are not used at all)', async () => {

@@ -105,6 +105,34 @@ export function rankQueue(items, now) {
   return [...g.now, ...g.waiting, ...g.resolved];
 }
 
+// ---- the unassigned queue of my groups ---------------------------------------------------------------------------------------------
+
+// 0 for an SLA that has run out, 1 for one that is nearly used up, 2 for the rest (running well, paused, or none to show).
+const slaTier = (item) => ({ breached: 0, 'at-risk': 1 })[item?.sla?.risk] ?? 2;
+
+// A ticket on hold or pending cannot be worked now: ready work goes first (0), waiting work after it (1).
+const readiness = (item) => (item?.work === 'waiting-customer' || item?.work === 'on-hold' ? 1 : 0);
+
+/**
+ * The order of the tickets nobody has picked up yet (audit of 2026-11-07, F17): what a person who is looking for work should take first.
+ * An SLA that has run out, then one that is nearly used up, then (inside the same SLA state) work that is ready before work that is on
+ * hold or pending, then the more urgent priority, then the one that has waited longest, then the number. Only columns My work already
+ * reads: the SLA (src/mywork/sla.js), the state, the priority and the opening time. Without an SLA read (the first ordering, before the
+ * SLAs are known) the SLA state is the same for every ticket and the order is readiness, priority, age.
+ */
+export function compareGroupQueue(a, b) {
+  return (
+    slaTier(a) - slaTier(b) ||
+    readiness(a) - readiness(b) ||
+    priorityRank(a.priority) - priorityRank(b.priority) ||
+    (Number.isFinite(a.openedAt) ? a.openedAt : Infinity) - (Number.isFinite(b.openedAt) ? b.openedAt : Infinity) ||
+    String(a.number).localeCompare(String(b.number))
+  );
+}
+
+/** The unassigned tickets in the order of compareGroupQueue (a new array). */
+export const rankGroupQueue = (items) => [...(items || [])].sort(compareGroupQueue);
+
 // ---- filters ------------------------------------------------------------------------------------------------------------------
 
 /** Does an item pass the filter chip `id` ('' = no filter)? */

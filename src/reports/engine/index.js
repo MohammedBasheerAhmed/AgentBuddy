@@ -13,11 +13,13 @@ import { slaSection, slaTables } from './sla.js';
 import { qualitySection, qualityTables } from './quality.js';
 import { fulfilmentSection, fulfilmentTables } from './fulfilment.js';
 import { handoverSection, handoverTables } from './handover.js';
+import { attentionSection, attentionTables } from './attention.js';
 import { runBuilder, builderTables } from './builder.js';
 import { localOffset, quantize } from './time.js';
 import { tm } from './say.js';
 
 export const SECTIONS = Object.freeze({
+  attention: { title: tm('Needs attention now'), run: attentionSection, tables: attentionTables },
   overview: { title: tm('Overview'), run: overviewSection, tables: overviewTables },
   workload: { title: tm('Workload and ageing'), run: workloadSection, tables: workloadTables },
   sla: { title: tm('SLA risk radar'), run: slaSection, tables: slaTables },

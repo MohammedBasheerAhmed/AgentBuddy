@@ -38,7 +38,7 @@ const OPENAI_STOP = { length: 'max_tokens', content_filter: 'content_filter', to
 export function fromOpenAIResponse(data, who = t('The AI service')) {
   const choice = data?.choices?.[0];
   const message = choice?.message;
-  if (!message) throw new AiError(t('{who} sent an answer without a message. Check the address and the model in Settings.', { who }), 'BAD_ANSWER');
+  if (!message) throw new AiError(t('{who} sent an answer without any text. Check the AI address and the model in Settings.', { who }), 'BAD_ANSWER');
   const toolCalls = (message.tool_calls || []).map((c) => ({
     id: c.id,
     name: c.function?.name,
@@ -53,7 +53,7 @@ export function fromOpenAIResponse(data, who = t('The AI service')) {
     if (stopReason === 'content_filter') throw new AiError(t('{who} stopped the answer with its content filter. Change the text, or ask your administrator about the filter.', { who }), 'CONTENT_FILTER', billed);
     // A reasoning model can spend the whole output limit thinking and return nothing.
     if (stopReason === 'max_tokens') throw new AiError(t('The answer was cut short before any text came back. Try again with less text, or choose a model with a larger output limit.'), 'CUT_SHORT', billed);
-    if (typeof message.refusal === 'string' && message.refusal) throw new AiError(t('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.'), 'REFUSED', billed);
+    if (typeof message.refusal === 'string' && message.refusal) throw new AiError(t('The AI declined this request. Rephrase it, or choose a different model in Settings.'), 'REFUSED', billed);
     throw new AiError(t('{who} sent an empty answer. Try again.', { who }), 'EMPTY_ANSWER', billed);
   }
   return {
@@ -107,13 +107,8 @@ export function fromAnthropicResponse(data) {
     // stop_details is only filled for a refusal; its category is a short word such as "cyber" (never request text).
     const raw = data.stop_details?.category;
     const category = typeof raw === 'string' && /^[a-z_]{1,40}$/.test(raw) ? raw : '';
-    throw new AiError(
-      category
-        ? t('The model declined this request ({category}). Rephrase it or try a different model in Agent Buddy settings.', { category })
-        : t('The model declined this request. Rephrase it or try a different model in Agent Buddy settings.'),
-      'REFUSED',
-      billed
-    );
+    // (the category goes on the error for the audit log and support, not into the sentence a person reads)
+    throw new AiError(t('The AI declined this request. Rephrase it, or choose a different model in Settings.'), 'REFUSED', category ? { ...billed, category } : billed);
   }
   const blocks = Array.isArray(data?.content) ? data.content : [];
   const content = blocks

@@ -19,9 +19,11 @@ Everything here fails soft today: a read that is refused or empty is said as suc
    If refused, the journey shows the counters (`reassignment_count`, `reopen_count`), the conversation and the SLA events, and says the
    group path is not readable. *If it is readable on most instances:* nothing to change. *If `sys_history_line` is readable instead:*
    add it as a second source in `readFieldHistory`.
-4. **Choice labels for state and priority (N24).** `sys_choice` rows `name IN <table>,task`, `element IN state,priority`, `language=en`.
-   *Check* readability and whether non-English instances need the session language instead of `en`. Fallbacks: the base priority
-   labels and the base incident states; anything else shows "State 6".
+4. **Choice labels for state and priority (N24).** **Answered live 2026-11-07** (`docs/live-checks-2026-11-07.md`): a plain agent cannot read
+   `sys_choice` in any query shape (403), so the labels now come from `GET /api/now/ui/meta/<table>` (`readTableMeta`: each column's
+   `label` and `choices`, in the person's own language; works for a plain agent and for a user with no role). Fallback chain: that answer,
+   then the ticket's own display value for the value it holds now, then "State changed" (never "State 6"). *Still to check:* whether retired
+   choices are listed, a fulfiller without `itil`, and the Arabic labels.
 5. **Group names (N24).** `sys_user_group.name` by sys_id. A group the user cannot read shows as "a group you cannot see".
 6. **reassignment_count / reopen_count.** `reassignment_count` is assumed on every task table (case, problem, requested item, catalog
    task, task: added to those ceilings by `src/context/specs/insights.js`); `reopen_count` only on incident. *Check* a case and a
@@ -58,9 +60,9 @@ Everything here fails soft today: a read that is refused or empty is said as suc
     change and a problem open in the workspace. *If a table has no workspace page:* add it to `CLASSIC_ONLY` in `openRecord.js`.
 14. **New tab next to the ticket.** From the Ticket screen a plain click opens the record with `chrome.tabs.create` right after the
     ticket's tab (`openerTabId`), so the ticket and any unsaved typing stay. *Check* in Chrome and Edge, and with tab groups.
-15. **"Copy link" for an article (N3).** Classic and Workspace: `<instance>/kb_view.do?sysparm_article=KB...`; on a portal
-    `<portal>?id=kb_article_view&sysparm_article=KB...`. *Check* that a customer without the classic UI is sent to the portal article,
-    and which portal the instance's customers use (Employee Center `/esc` vs Service Portal `/sp`).
+15. **"Copy link" for an article (N3).** One address on every surface: `<instance>/kb_view.do?sysparm_article=KB...`
+    (`src/lib/snLinks.js`; the portal variants went in the 2026-11-07 audit). *Check* that a customer without the classic UI can open
+    it, and which portal the instance's customers use (Employee Center `/esc` vs Service Portal `/sp`); see `audit-1107-links.md`.
 16. **"Open the email form" (N20).** The classic email client (`email_client.do`), in a new tab. Workspaces have their own composer;
     *check* whether agents there prefer the Workspace composer and whether `email_client.do` is allowed for them.
 

@@ -5,11 +5,16 @@ import { shown, shownList, placeholderName } from '../src/reports/shown.js';
 import { say } from '../src/reports/engine/say.js';
 import { runReport, createRuntime, resultTables } from '../src/reports/engine/index.js';
 import { AR_REPORTS } from '../src/i18n/ar/reports.js';
+import { AR_LABELS } from '../src/i18n/ar/labels.js';
+import { registerCatalogue } from '../src/i18n/index.js';
 import { fakeInstance, USER, GROUP_A, NOW } from './reports-fixtures.js';
 
 // The reports engine runs in the ServiceNow page and writes English only (src/reports/engine/say.js); the panel shows its texts in the
 // language of the person through shown() (src/reports/shown.js), which finds the Arabic by the English text. These tests keep the two
 // in step: a text the engine writes that has no Arabic would show in English, and nothing else would notice.
+
+// (the texts of src/i18n/ar/labels.js are part of the catalogue once src/i18n/ar/index.js lists them; this test needs only them)
+registerCatalogue('ar', AR_LABELS);
 
 test.afterEach(() => setLanguage('en'));
 
@@ -23,14 +28,14 @@ test('in English shown() gives the text back and say() fills the names', () => {
 
 test('shown() finds the Arabic of an exact text, of a text with numbers, and of a note that names a table', () => {
   setLanguage('ar');
-  assert.equal(shown('Some tables could not be counted'), AR_REPORTS['Some tables could not be counted']);
+  assert.equal(shown('Some ticket types could not be counted'), AR_LABELS['Some ticket types could not be counted']);
   assert.equal(shown('No update in 3+ days'), t('No update in {days}+ days', { days: 3 }));
   assert.equal(shown('Incidents: SLA information is not available to you.'), `${AR_REPORTS.Incidents}: ${AR_REPORTS['SLA information is not available to you.']}`);
   // a text that is built from other texts: a title, a hint with a sentence added, two notes one after the other
   assert.equal(shown('Incidents: number of tickets by state'), t('{table}: {measure} by {groupBy}', { table: AR_REPORTS.Incidents, measure: AR_REPORTS['Number of tickets'], groupBy: AR_REPORTS.State }));
-  assert.equal(shown('Tickets that are still active. Some tables could not be counted.'), `${AR_REPORTS['Tickets that are still active']}. ${AR_REPORTS['Some tables could not be counted']}.`);
-  assert.match(shown('3 of the chosen groups do not exist on this instance, so they are left out. Choose groups again. No longer active: A, B.'), /[؀-ۿ]/);
-  assert.ok(!/Choose groups again/.test(shown('3 of the chosen groups do not exist on this instance, so they are left out. Choose groups again. No longer active: A, B.')));
+  assert.equal(shown('Tickets that are still active. Some ticket types could not be counted.'), `${AR_REPORTS['Tickets that are still active']}. ${AR_LABELS['Some ticket types could not be counted']}.`);
+  assert.match(shown('3 of the chosen groups do not exist on this ServiceNow site, so they are left out. Choose groups again. No longer active: A, B.'), /[؀-ۿ]/);
+  assert.ok(!/Choose groups again/.test(shown('3 of the chosen groups do not exist on this ServiceNow site, so they are left out. Choose groups again. No longer active: A, B.')));
 });
 
 test('a word that is a button in one place and a label above a count in another has its own Arabic', () => {

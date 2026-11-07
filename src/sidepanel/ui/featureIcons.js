@@ -60,6 +60,7 @@ const CARD_ICONS = {
   journey: 'clock',
   resolve: 'checkCircle',
   outage: 'monitor',
+  fulfilled: 'list',
 };
 
 /** The icon name for an Insights card id; a plain chevron for one this table does not know (never the AI spark: a card sends nothing). */

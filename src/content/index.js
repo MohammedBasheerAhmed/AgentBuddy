@@ -16,9 +16,7 @@
 import { MSG, toWireError } from '../lib/messages.js';
 import { tryCallPage, callPage } from './pageBridge.js';
 import { getSessionUser } from './sessionToken.js';
-import { queryTable } from './tableApi.js';
-import { parseNewRecordRef, kindForTable } from '../context/kinds.js';
-import { TABLE_RE } from '../context/util.js';
+import { clearTableMeta, queryTable } from './tableApi.js';
 import { makeRecordResolver } from './recordResolver.js';
 import { handleRead } from './reads.js';
 import { readHeader } from './header.js';
@@ -26,6 +24,7 @@ import { portalInfo, surfaceOf } from '../context/surface.js';
 import { contentMessageAction } from '../lib/senderCheck.js';
 import { extensionIdentity } from '../lib/platform.js';
 import { handleFillField } from './fill.js';
+import { isSaveLabel } from './saveLabels.js';
 import { policyGuard } from './policyGuard.js';
 import { startBar } from './bar.js';
 import { SUPPORTED, setLanguage } from '../i18n/index.js';
@@ -72,6 +71,7 @@ if (decision !== 'skip') {
     document.removeEventListener('click', onPress, true);
     document.removeEventListener('keydown', onKey, true);
     records.clear();
+    clearTableMeta(); // the words of the tables' columns belong to the person who was signed in
     bar?.stop();
   }
   // A newer copy arrived. Only a copy whose extension context is gone steps down: a page script can send the same event, and must not
@@ -83,35 +83,40 @@ if (decision !== 'skip') {
 
   // A blank form (new incident, new article...): there is no record yet, but the table is known. The form says so through g_form
   // (classic, and Next Experience where the bridge reaches the form's frame); otherwise the address does (sys_id=-1), which covers a
-  // Next Experience form whose frame the bridge cannot reach (yet) and a Workspace's /record/<table>/-1.
-  async function newRecordState(known) {
-    const meta = known === undefined ? await tryCallPage('getFormMeta') : known;
-    if (meta?.isNewRecord && TABLE_RE.test(meta.table || '')) return { table: meta.table, kind: kindForTable(meta.table) };
-    if (meta?.table && meta.isNewRecord === false) return null; // the form on the page is a saved record
-    const fromAddress = parseNewRecordRef(location.href);
-    return fromAddress ? { table: fromAddress.table, kind: kindForTable(fromAddress.table) } : null;
-  }
+  // Next Experience form whose frame the bridge cannot reach (yet) and a Workspace's /record/<table>/-1. Only a ticket's table counts
+  // (src/content/recordResolver.js resolveNewRecord): a blank form of a UI page is not "a new ui page form" to write about.
+  const newRecordState = (known, policy) => records.resolveNewRecord(location.href, known, policy);
 
   // "The form was saved" (TRACKER.md N1): the panel reads the ticket's header again when formStamp changes. A classic form (and the
   // form frame of Next Experience) reloads on Save, so the time its document was loaded changes. A Workspace saves without a reload,
-  // so a press of its own Save (or Update, Resolve, Submit; Ctrl+S) is counted. Only the count is kept, nothing about the page or the
-  // record, and the listeners only look: they never stop, change or start anything.
+  // so a press of its own Save (or Update, Resolve, Submit, Post, Send...; Ctrl+S, Ctrl+Enter) is counted. A portal sends a comment the same
+  // way (S20). The labels are English and Arabic (src/content/saveLabels.js); a second sign that needs no label at all is the page
+  // bridge's watchInsert (the box an insert wrote to was emptied or replaced: a Post, a Send, a Save that draws the form again), counted
+  // once per insert in pageState. Only the count is kept, nothing about the page or the record, and the listeners only look: they never
+  // stop, change or start anything.
   let saves = 0;
-  const SAVE_LABEL_RE = /^(save|update|save and close|resolve|submit)$/i;
-  const labelOf = (el) => String(el.getAttribute?.('aria-label') || el.getAttribute?.('label') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  let emptiedInsert = 0; // the insert (its number from the page) whose emptied box was counted already
+  const labelOf = (el) => String(el.getAttribute?.('aria-label') || el.getAttribute?.('label') || (String(el.tagName || '').toLowerCase() === 'input' ? el.value : '') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const savesHere = () => {
+    const surface = surfaceOf(location.href);
+    return surface === 'workspace' || surface === 'portal';
+  };
   function onPress(event) {
-    if (surfaceOf(location.href) !== 'workspace') return;
+    if (!savesHere()) return;
     const path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
     for (const el of path.slice(0, 8)) {
       if (!el || el.nodeType !== 1) continue;
       const tag = String(el.tagName || '').toLowerCase();
-      if (tag !== 'button' && el.getAttribute?.('role') !== 'button' && !tag.startsWith('now-button')) continue;
-      if (SAVE_LABEL_RE.test(labelOf(el))) saves += 1;
+      const submitInput = tag === 'input' && /^(submit|button)$/.test(String(el.type || '').toLowerCase()); // (a button made from an input)
+      if (tag !== 'button' && !submitInput && el.getAttribute?.('role') !== 'button' && !tag.startsWith('now-button')) continue;
+      if (isSaveLabel(labelOf(el))) saves += 1;
       return; // the nearest button is the one pressed
     }
   }
   function onKey(event) {
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && String(event.key || '').toLowerCase() === 's' && surfaceOf(location.href) === 'workspace') saves += 1;
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || !savesHere()) return;
+    const key = String(event.key || '').toLowerCase();
+    if (key === 's' || key === 'enter') saves += 1;
   }
   document.addEventListener('click', onPress, true);
   document.addEventListener('keydown', onKey, true);
@@ -125,8 +130,13 @@ if (decision !== 'skip') {
     // (the reads made here, "who is Me" in sys_user, a number's sys_id and a task's real class, go through the policy guard like every
     // other read, with the panel's policy merged in as for READ: the managed policy stays the floor, the panel's can only add to it)
     const guarded = await policyGuard.deps({ queryTable }, policy).catch(() => null);
-    const meta = await tryCallPage('getFormMeta'); // asked once, for the record, a blank form and the save stamp alike
-    const [record, session, newRecord] = await Promise.all([resolveRecord(href, meta, policy).catch(() => null), guarded ? getSessionUser(guarded).catch(() => null) : null, newRecordState(meta).catch(() => null)]);
+    const [meta, watch] = await Promise.all([tryCallPage('getFormMeta'), tryCallPage('watchInsert')]); // meta: asked once, for the record, a blank form and the save stamp alike
+    // The box an insert wrote to was emptied or taken off the page: counted once, like a press of Save (the page's word, a plain number and a flag).
+    if (watch && Number.isSafeInteger(watch.n) && watch.n > 0 && watch.gone === true && watch.n !== emptiedInsert) {
+      emptiedInsert = watch.n;
+      saves += 1;
+    }
+    const [record, session, newRecord] = await Promise.all([resolveRecord(href, meta, policy).catch(() => null), guarded ? getSessionUser(guarded).catch(() => null) : null, newRecordState(meta, policy).catch(() => null)]);
     const surface = surfaceOf(href);
     const portal = surface === 'portal' ? portalInfo(href) : null;
     return {

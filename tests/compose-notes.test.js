@@ -203,12 +203,13 @@ test('only on a blank incident or case form, with a reason otherwise', () => {
   const none = planFill(values, null);
   assert.equal(none.canFill, false);
   assert.deepEqual(none.fields, []);
-  assert.match(none.reason, /blank ticket form/);
+  assert.match(none.reason, /Fill works on a new, empty incident or case form/);
   assert.equal(planFill(values, undefined).canFill, false);
   assert.equal(planFill(values, 'incident').canFill, false);
   const kb = planFill(values, { table: 'kb_knowledge', kind: 'knowledge' });
   assert.equal(kb.canFill, false);
-  assert.match(kb.reason, /kb_knowledge/);
+  assert.match(kb.reason, /is not an incident or case form/);
+  assert.doesNotMatch(kb.reason, /kb_knowledge/, 'the form is not named by its table');
   assert.deepEqual(kb.fields, []);
   assert.equal(planFill(values, { table: 'change_request', kind: 'change' }).canFill, false);
   assert.equal(planFill(values, { table: 'sn_customerservice_case', kind: 'case' }).canFill, true);

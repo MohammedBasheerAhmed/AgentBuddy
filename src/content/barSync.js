@@ -68,7 +68,8 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
       return ended ? { ...NOTHING, status: ended } : NOTHING;
     }
     if (needsAsk({ table: record.table, lastTable: table, lastAt: askedAt, now: at })) {
-      const answer = await ask({ type: MSG.BAR_ACTIONS, table: record.table }, at);
+      // `proven`: the page's own form has a record number, so a custom task table (u_*, x_*) is a ticket too (src/background/bar.js).
+      const answer = await ask({ type: MSG.BAR_ACTIONS, table: record.table, ...(record.number ? { proven: true } : {}) }, at);
       if (!answer) return { ...NOTHING, status: ended };
       // An error answer (the bar is not allowed for this table) means: show nothing for it.
       if (answer.error) actions = [];
@@ -80,7 +81,7 @@ export function createBarSync({ send, resolveRecord, now = Date.now, onSiteOff =
       askedAt = at;
       if (barOn !== true) return NOTHING;
     }
-    const shown = { table: record.table, sysId: record.sysId };
+    const shown = { table: record.table, sysId: record.sysId, ...(record.number ? { proven: true } : {}) };
     const said = language ? { language, theme } : {};
     return actions.length ? { status: 'shown', record: shown, actions, ...said } : { ...NOTHING, record: shown, ...said };
   }

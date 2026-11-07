@@ -166,3 +166,15 @@ test('actions from the worker are checked before they reach the page', async () 
   const { sync } = setup({ worker: (m) => (m.table ? { bar: true, actions: [{ id: 'Bad Id', label: 'x' }, { id: 'ok-id', label: 'y'.repeat(61) }, { id: 'reply-draft', label: 'Draft a reply' }, 1, null] } : on(m)) });
   assert.deepEqual((await sync.tick()).actions, [{ id: 'reply-draft', label: 'Draft a reply', ai: true }]);
 });
+
+test('a record whose form has a number says so (`proven`), so a custom task table keeps the bar; without a number nothing extra is sent', async () => {
+  const custom = { table: 'u_facilities_request', sysId: SYS, number: 'FAC0001234' };
+  const withNumber = setup({ worker: on, record: custom });
+  const shown = await withNumber.sync.tick();
+  assert.deepEqual(withNumber.calls.sent.at(-1), { type: MSG.BAR_ACTIONS, table: 'u_facilities_request', proven: true });
+  assert.equal(shown.record.proven, true, 'the shown record carries it, so the launch message can too');
+  const plain = setup({ worker: on, record: { table: 'u_facilities_request', sysId: SYS } });
+  const unproven = await plain.sync.tick();
+  assert.deepEqual(plain.calls.sent.at(-1), { type: MSG.BAR_ACTIONS, table: 'u_facilities_request' });
+  assert.equal('proven' in unproven.record, false);
+});

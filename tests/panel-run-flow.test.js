@@ -202,11 +202,11 @@ test('an answer that arrives after the run was dropped is not shown (the request
 });
 
 test('a provider error is reported (and audited as an error); after the run was dropped it is silent', async () => {
-  const boom = { deps: { sendChat: async () => { throw new Error('The AI provider rejected the API key.'); } } };
+  const boom = { deps: { sendChat: async () => { throw new Error('The AI service did not accept the AI key.'); } } };
   const w = world(boom);
   const out = await sendFlow(sendArgs(w, await ready(w)));
   assert.equal(out.status, 'failed');
-  assert.equal(out.error.message, 'The AI provider rejected the API key.');
+  assert.equal(out.error.message, 'The AI service did not accept the AI key.');
   assert.equal(w.audits.at(-1).outcome, 'error');
   assert.equal(w.audits.at(-1).reason, 'BAD_KEY');
 

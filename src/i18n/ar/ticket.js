@@ -23,12 +23,9 @@ const AR_TICKET_PANEL = {
   'No answers are recorded for this item.': 'لا توجد إجابات مسجلة لهذا العنصر.',
   Approvals: 'الموافقات',
   'The approvals could not be read, so they are not shown.': 'تعذرت قراءة الموافقات، لذلك لا تظهر.',
-  'No approvals are recorded.': 'لا توجد موافقات مسجلة.',
   '{title} could not be read, so they are not shown.': 'تعذرت قراءة {title}، لذلك لا تظهر.',
-  'None recorded.': 'لا يوجد شيء مسجل.',
   '(this one)': '(هذا العنصر)',
   'not assigned': 'غير مسند',
-  'Something went wrong.': 'حدث خطأ ما.',
 
   'Uses AI. Masked text goes to the AI you chose, after a preview.': 'يستخدم الذكاء الاصطناعي. يرسل النص بعد إخفاء البيانات الشخصية إلى الذكاء الاصطناعي الذي اخترته، بعد المعاينة.',
   Done: 'تم',
@@ -42,7 +39,6 @@ const AR_TICKET_PANEL = {
 
   '{list} and {last}': '{list} و{last}',
   ', ': '، ',
-  'That action is not available for this record.': 'هذا الإجراء غير متاح لهذا السجل.',
 
   'Earlier tickets from this person': 'تذاكر سابقة من هذا الشخص',
   Refresh: 'تحديث',
@@ -65,7 +61,6 @@ const AR_TICKET_PANEL = {
   'chat ended': 'انتهت المحادثة',
   'chat open': 'المحادثة مفتوحة',
   'The customer has been waiting {time} for an answer.': 'العميل ينتظر الرد منذ {time}.',
-  'This instance does not say who sent each message, so waiting time cannot be worked out.': 'لا توضح هذه النسخة من ServiceNow من أرسل كل رسالة، لذلك يتعذر حساب وقت الانتظار.',
   Lasted: 'المدة',
   'First reply after': 'أول رد بعد',
   'Taking part': 'المشاركون',
@@ -105,7 +100,6 @@ const AR_TICKET_PANEL = {
   'Sends masked text to {where}. You see it first.': 'يرسل النص بعد إخفاء البيانات الشخصية إلى {where}. تراه أولا.',
   'Sends masked text to your AI. You see it first.': 'يرسل النص بعد إخفاء البيانات الشخصية إلى الذكاء الاصطناعي لديك. تراه أولا.',
   'AI actions': 'إجراءات الذكاء الاصطناعي',
-  'No AI actions fit this record. Insights still has what can be read here.': 'لا توجد إجراءات للذكاء الاصطناعي مناسبة لهذا السجل. تبقى الرؤى تعرض ما يمكن قراءته هنا.',
   Start: 'ابدأ',
 
   // ---- the Ticket screen (the 2026-11-05 layout): the ticket at the top, the side rail, the Insights rows (what needs you now first) ----
@@ -136,12 +130,8 @@ const AR_TICKET_PANEL = {
   'Suggested for wrapping up': 'مقترح لإنهائها',
   'Suggested for a closed ticket': 'مقترح لتذكرة مغلقة',
   Suggested: 'مقترح',
-  'The requester does not see comments on a catalog task. Use the requested item to reach them.': 'لا يرى مقدّم الطلب التعليقات على مهمة الكتالوج. استخدم العنصر المطلوب للوصول إليه.',
-  'Comments on a task may not reach the customer. Check who can see them.': 'قد لا تصل التعليقات على المهمة إلى العميل. تحقق ممن يستطيع رؤيتها.',
-  'Your organisation does not allow Agent Buddy to use {table} records with AI. Insights still works.': 'لا تسمح مؤسستك لـ Agent Buddy باستخدام سجلات {table} مع الذكاء الاصطناعي. تبقى الرؤى تعمل.',
+  'The requester may not see comments on a catalog task. Use the requested item to reach them.': 'قد لا يرى مقدّم الطلب التعليقات على مهمة الكتالوج. استخدم العنصر المطلوب للوصول إليه.',
   'HR case content is not sent to an AI unless your organisation allows it. Insights still works.': 'لا يرسل محتوى حالات الموارد البشرية إلى الذكاء الاصطناعي ما لم تسمح مؤسستك بذلك. تبقى الرؤى تعمل.',
-  'HR case content can only go to an AI your organisation has approved. Ask your administrator.': 'لا يرسل محتوى حالات الموارد البشرية إلا إلى ذكاء اصطناعي اعتمدته مؤسستك. اسأل مسؤول النظام.',
-  'HR records need {mode} privacy mode (or stricter). Change it in Settings.': 'تتطلب سجلات الموارد البشرية وضع الخصوصية: {mode} (أو أشد). غيّره من الإعدادات.',
   'Switched off by your organisation.': 'أوقفتها مؤسستك.',
   'Needs {mode} privacy mode. Change it in Settings.': 'يتطلب وضع الخصوصية: {mode}. غيّره من الإعدادات.',
 
@@ -231,7 +221,7 @@ const AR_TICKET_PANEL = {
     '{number}: {n} إجابة جاهزة.',
     '{number}: {n} إجابة جاهزة.'
   ),
-  'Reading the ticket with your session…': 'جار قراءة التذكرة بجلستك…',
+  'Reading the ticket as you…': 'جار قراءة التذكرة باسمك…',
   'Stop waiting': 'أوقف الانتظار',
   'Open Settings': 'افتح الإعدادات',
   Dismiss: 'تجاهل',
@@ -308,7 +298,6 @@ const AR_TICKET_PANEL = {
   'now with {group}': 'عند {group} حاليا',
   'about {when}': 'نحو {when}',
   'No dated events could be read for this ticket.': 'تعذرت قراءة أي أحداث مؤرخة لهذه التذكرة.',
-  'Reading the field history…': 'جار قراءة سجل تغييرات الحقول…',
   'Reassigned {n} time|Reassigned {n} times': pl(
     'جرت إعادة إسنادها {n} مرة',
     'جرت إعادة إسنادها {n} مرة',
@@ -328,7 +317,6 @@ const AR_TICKET_PANEL = {
   'No matching articles': 'لا توجد مقالات مطابقة',
   'knowledge articles': 'المقالات المعرفية',
   'Copy link': 'انسخ الرابط',
-  "Copy the article's address to share it with the customer": 'انسخ عنوان المقال لمشاركته مع العميل',
   'No published article matches the words of this ticket. Try the Knowledge screen to search yourself.': 'لا يوجد مقال منشور يطابق كلمات هذه التذكرة. جرّب شاشة المعرفة للبحث بنفسك.',
   '{n} matching article|{n} matching articles': pl('{n} مقالات مطابقة', '{n} مقال مطابق', '{n} مقالان مطابقان', '{n} مقالات مطابقة', '{n} مقالا مطابقا', '{n} مقال مطابق'),
   '{n} with a workaround': '{n} لها حل بديل',
@@ -343,7 +331,6 @@ const AR_TICKET_PANEL = {
   '{n} open problem|{n} open problems': pl('{n} مشكلات مفتوحة', '{n} مشكلة مفتوحة', '{n} مشكلتان مفتوحتان', '{n} مشكلات مفتوحة', '{n} مشكلة مفتوحة', '{n} مشكلة مفتوحة'),
   '{n} to ask about: {list}': '{n} للسؤال عنها: {list}',
   'Nothing obvious missing': 'لا شيء ناقص بشكل واضح',
-  'The text of this record is not read (a sensitive record), so only the fields are checked.': 'لا يقرأ نص هذا السجل (سجل حساس)، لذلك تفحص الحقول فقط.',
   'The key details are there: a configuration item, a description with the error, who is affected and how to reach them.': 'التفاصيل الأساسية موجودة: عنصر التهيئة، ووصف فيه الخطأ، ومن المتأثر، وكيف تصل إليه.',
   '{line}. This may be one outage: check for a parent incident before working it alone.': '{line}. قد يكون هذا انقطاعا واحدا: تحقق من وجود حادثة أصلية قبل أن تعالج هذه التذكرة وحدك.',
   '{threshold} or more in {hours} hours counts as a possible outage.': '{threshold} أو أكثر خلال {hours} س تعد انقطاعا محتملا.',
@@ -383,7 +370,6 @@ const AR_TICKET_PANEL = {
     '{n} حل من التذاكر المحلولة والمقالات'
   ),
   'Insights works without a key.': 'تعمل الرؤى دون مفتاح.',
-  'Nothing to show for this kind of record yet.': 'لا شيء لعرضه لهذا النوع من السجلات بعد.',
   'Your organisation has switched AI Assist off.': 'أوقفت مؤسستك مساعد الذكاء الاصطناعي.',
   'Set up AI Assist in Settings to use this action.': 'أعد مساعد الذكاء الاصطناعي من الإعدادات لاستخدام هذا الإجراء.',
   'An answer is on its way. Choose the action again when it has arrived.': 'الإجابة في الطريق. اختر الإجراء مرة أخرى عند وصولها.',

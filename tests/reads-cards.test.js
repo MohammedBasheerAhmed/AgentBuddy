@@ -6,8 +6,11 @@ import { Notes, ReadState, accessLines } from '../src/sidepanel/ticket/cards/bit
 import ErrorNote from '../src/sidepanel/ErrorNote.jsx';
 import { READ_CODE, READ_TEXT, classifyReadError } from '../src/context/access.js';
 import { readJson } from '../src/content/tableApi.js';
-import { setLanguage } from '../src/i18n/index.js';
+import { registerCatalogue, setLanguage } from '../src/i18n/index.js';
 import { AR_READS } from '../src/i18n/ar/reads.js';
+import { AR_NOTES } from '../src/i18n/ar/notes.js';
+
+registerCatalogue('ar', AR_NOTES); // (the same texts the catalogue index adds; harmless when it already has them)
 
 // Round 4, Phase 0 (docs/round4.md, agent B): what the Insights cards show when the instance refused or limited a read. A refusal is a
 // plain line with no "Try again" (trying again cannot change it); the instance limiting or answering with a page is a calm note WITH
@@ -25,15 +28,15 @@ test('a 403 from an access rule: "not available to you with your role", a plain 
 
 test('a 403 from the organisation\'s restriction: says so and sends the person to the ServiceNow admin', () => {
   const markup = html(ReadState, { state: failed(wire(READ_TEXT.policy, 'ACCESS_DENIED')), what: 'SLAs', onRetry: () => {} });
-  assert.equal(markup, '<p class="ab-hint ab-reads-refused">SLAs: your organisation blocks this kind of read for your role. Ask your ServiceNow admin.</p>');
+  assert.equal(markup, '<p class="ab-hint ab-reads-refused">SLAs: not available to you. Your organisation has restricted it. Ask your ServiceNow admin if you need it.</p>');
 });
 
 test('429, 503 and a page instead of data: a calm note in plain words, with "Try again"', () => {
   const cases = [
     [wire(READ_TEXT.rateLimited, READ_CODE.RATE_LIMITED), 'ServiceNow is limiting requests. Try again in a minute.'],
     [wire(READ_TEXT.unavailable, READ_CODE.UNAVAILABLE), 'ServiceNow is busy or under maintenance. Try again in a few minutes.'],
-    [wire(READ_TEXT.notData, READ_CODE.NOT_DATA), 'ServiceNow answered with a page instead of data: sign in again, or the instance may be under maintenance.'],
-    [wire('ServiceNow did not answer within 20 seconds. It may be busy: try again in a moment.', 'SN_TIMEOUT'), 'ServiceNow did not answer in time. Try again in a moment.'],
+    [wire(READ_TEXT.notData, READ_CODE.NOT_DATA), 'ServiceNow did not send the information. Sign in again, or try later (it may be down for maintenance).'],
+    [wire('ServiceNow did not answer in time. Try again in a moment.', 'SN_TIMEOUT'), 'ServiceNow did not answer in time. Try again in a moment.'],
   ];
   for (const [error, text] of cases) {
     const markup = html(ReadState, { state: failed(error), what: 'knowledge articles', onRetry: () => {} });
@@ -46,7 +49,7 @@ test('429, 503 and a page instead of data: a calm note in plain words, with "Try
 
 test('a lost session and any other failure stay an error with "Try again"; the record not there and a blocked table as before', () => {
   const session = html(ReadState, { state: failed(wire(READ_TEXT.session, 'SESSION_EXPIRED')), what: 'this ticket', onRetry: () => {} });
-  assert.match(session, /^<div class="ab-note ab-note-danger ab-errnote" role="alert"><p class="ab-errnote-text">Your ServiceNow session has expired\./);
+  assert.match(session, /^<div class="ab-note ab-note-danger ab-errnote" role="alert"><p class="ab-errnote-text">You are signed out of ServiceNow\. Sign in again, then try again\./);
   const other = html(ReadState, { state: failed(wire('')), what: 'this ticket', onRetry: () => {} });
   assert.match(other, /ab-note-danger[^>]*role="alert"><p class="ab-errnote-text">This ticket could not be read\.<\/p>/);
   assert.equal(html(ReadState, { state: failed(wire('x', 'NOT_FOUND')), what: 'the request' }), '<p class="ab-hint ab-reads-refused">The request: not available to you.</p>');
@@ -67,16 +70,16 @@ test('the notes under a card: the organisation\'s restriction once for every rea
   };
   const answer = (status, body = '') => ({ ok: false, status, redirected: false, url: '', headers: { get: () => null }, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) });
   const access = [
-    await entryFor('task_sla', answer(403, { error: { message: 'User Not Authorized' } })),
+    await entryFor('task_sla', answer(403, { error: { message: 'User Not Authorized', detail: 'Access denied by REST API access policy' } })),
     { source: 'kb_use', status: 'denied', note: 'Your user cannot read kb_use.' },
-    await entryFor('sysapproval_approver', answer(403, { error: { message: 'User Not Authorized' } })),
+    await entryFor('sysapproval_approver', answer(403, { error: { message: 'User Not Authorized', detail: 'Access denied by REST API access policy' } })),
     await entryFor('problem', answer(429)),
     await entryFor('change_request', answer(429)),
     { source: 'm2m_kb_task', status: 'ok', note: '' },
     await entryFor('x_missing', answer(400, { error: { message: 'Invalid table x_missing' } })),
   ];
   assert.deepEqual(accessLines(access), [
-    'SLAs, Approvals: your organisation blocks this kind of read for your role. Ask your ServiceNow admin.',
+    'SLAs, Approvals: not available to you. Your organisation has restricted it. Ask your ServiceNow admin if you need it.',
     'Article links: You cannot read article links.',
     'ServiceNow is limiting requests. Try again in a minute.',
   ]);
@@ -96,11 +99,11 @@ test('in Arabic: every new sentence is shown from the catalogue, the thing kept 
   setLanguage('ar');
   try {
     const policy = html(ReadState, { state: failed(wire(READ_TEXT.policy, 'ACCESS_DENIED')), what: 'x' });
-    assert.ok(policy.includes(AR_READS['{thing}: your organisation blocks this kind of read for your role. Ask your ServiceNow admin.'].replace('{thing}', 'X')));
+    assert.ok(policy.includes(AR_NOTES['{thing}: not available to you. Your organisation has restricted it. Ask your ServiceNow admin if you need it.'].replace('{thing}', 'X')));
     const limited = html(ReadState, { state: failed(wire(READ_TEXT.rateLimited, READ_CODE.RATE_LIMITED)), what: 'x', onRetry: () => {} });
     assert.ok(limited.includes(AR_READS['ServiceNow is limiting requests. Try again in a minute.']));
     const session = html(ReadState, { state: failed(wire(READ_TEXT.session, 'SESSION_EXPIRED')), what: 'x' });
-    assert.ok(session.includes(AR_READS[READ_TEXT.session]), 'the session message is translated now too');
+    assert.ok(session.includes(AR_NOTES[READ_TEXT.session]), 'the session message is translated now too');
     for (const [english, arabic] of Object.entries(AR_READS)) {
       assert.ok(/[؀-ۿ]/.test(arabic), english);
       assert.deepEqual(arabic.match(/\{[a-z]+\}/gi) || [], english.match(/\{[a-z]+\}/gi) || [], english);

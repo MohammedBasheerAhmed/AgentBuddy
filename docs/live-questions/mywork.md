@@ -17,9 +17,10 @@ end-to-end run uses the fake instance (`e2e/fakeInstance.js`). Check each as a N
    200 per class (then "Showing 200 of 340. Open the full list"). Assumed: `sysparm_offset` paging is stable enough with that order (rows
    are de-duplicated by sys_id). Check with an agent who has more than 100 open incidents.
 3. **State labels.** Read with display values from each class's own table, because the `task` table's state choices differ (incident
-   3 = On Hold would show as "Closed Complete" on `task`). Assumed meanings (`src/mywork/states.js`): display words first ("Resolved",
-   "On Hold", "Awaiting Info", "Pending", "Suspended", "Awaiting Acceptance"), then the base values incident 3/6/7, case 3/6, problem
-   106/107, hold reason 1 = Awaiting Caller. Check the words on a customised instance; a word that is not recognised counts as live work.
+   3 = On Hold would show as "Closed Complete" on `task`). Meanings now come from ONE classifier (`src/domain/states.js`, the table in `docs/states.md`): the stored value
+   for the table first for incident, problem, change and the task family, the label words (English, German, Arabic) for the other
+   tables and for a value it does not know, hold reason 1 = Awaiting Caller. Check the values on a customised instance
+   (`audit-1107-states.md`); a state it cannot place counts as live work.
 4. **Resolved but active.** Assumed: a resolved incident or case stays `active=true` until it auto-closes, so it shows in "Resolved,
    awaiting closure". Check on the instance's auto-close setting (`glide.ui.autoclose.time`).
 5. **`hold_reason` on requested items, catalog tasks and cases.** Asked for on those tables too; the Table API ignores a column a table

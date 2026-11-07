@@ -31,7 +31,7 @@ async function guarded(raw, tables = buildInstance(), behaviour) {
   return { fake, deps };
 }
 
-const refused = (table) => (e) => e.code === 'BLOCKED_TABLE' && e.message === `Your organisation does not allow Agent Buddy to read ${table} records.`;
+const refused = (table) => (e) => e.code === 'BLOCKED_TABLE' && e.message === 'Your organisation does not allow Agent Buddy to read this.' && e.table === table;
 
 // ---- The policy is loaded once per 30 seconds -------------------------------------------------------------------------------
 
@@ -113,8 +113,10 @@ test('aggregate is guarded when the deps have it, and a table name is made safe 
   await assert.rejects(() => deps.aggregate('sys_user', { groupBy: ['name'] }), refused('sys_user'));
   await deps.aggregate('incident', { query: 'active=true' });
   assert.deepEqual(calls, [['aggregate', 'incident']]);
-  assert.equal(blockedError('sys_user"><img src=x>').message, 'Your organisation does not allow Agent Buddy to read sys_userimgsrcx records.');
-  assert.equal(blockedError('').message, 'Your organisation does not allow Agent Buddy to read that table records.');
+  assert.equal(blockedError('sys_user"><img src=x>').table, 'sys_userimgsrcx');
+  assert.equal(blockedError('sys_user"><img src=x>').message, 'Your organisation does not allow Agent Buddy to read this.');
+  assert.equal(blockedError('').message, 'Your organisation does not allow Agent Buddy to read this.');
+  assert.equal(blockedError('').table, 'that table');
 });
 
 test('a table reached through a dot-walked column is refused too (the variable answers go through sc_item_option and item_option_new)', async () => {
@@ -197,7 +199,8 @@ test('classifyReadError: BLOCKED_TABLE is "blocked", with the organisation\'s ow
   const out = classifyReadError(blockedError('task_sla'), 'task_sla');
   assert.equal(out.status, STATUS.BLOCKED);
   assert.equal(out.status, 'blocked');
-  assert.match(out.note, /Your organisation does not allow Agent Buddy to read task_sla records/);
+  assert.match(out.note, /Your organisation does not let Agent Buddy read this/);
+  assert.doesNotMatch(out.note, /task_sla|records/, 'the note is fixed: it names no table');
   assert.ok(!/cannot read|cannot see/i.test(out.note));
   // a plain 403 is still "denied"
   assert.equal(classifyReadError(Object.assign(new Error('403'), { code: 'ACCESS_DENIED' }), 'x').status, 'denied');
@@ -210,7 +213,7 @@ test('softRead and confirmEmptyIsReallyEmpty report a blocked table as blocked: 
   assert.equal(read.failure.status, 'blocked');
   const seen = await confirmEmptyIsReallyEmpty('task_sla', deps, new Map());
   assert.equal(seen.status, 'blocked');
-  assert.match(seen.note, /does not allow/);
+  assert.match(seen.note, /does not let Agent Buddy read this/);
 });
 
 test('a blocked related table is reported in `access` as blocked and the list is absent (not an empty list, not "none")', async () => {
@@ -218,7 +221,7 @@ test('a blocked related table is reported in `access` as blocked and the list is
   const pack = await readContextPack({ table: 'incident', sysId: INCIDENT_ID }, deps, { feature: 'record-summary' });
   const entry = pack.access.find((a) => a.source === 'task_sla');
   assert.equal(entry.status, 'blocked');
-  assert.match(entry.note, /Your organisation does not allow Agent Buddy to read task_sla records/);
+  assert.match(entry.note, /Your organisation does not let Agent Buddy read this/);
   assert.equal(pack.related.slas, undefined, 'absent, so nothing can read it as "no SLAs"');
   assert.ok(Array.isArray(pack.related.childTasks), 'the other lists are still read');
 });
@@ -230,7 +233,7 @@ test('the record itself being blocked fails the whole read with that message', a
   // the same through the message boundary: code and plain message reach the panel
   const wire = toWireError(await readContextPack({ table: 'incident', sysId: INCIDENT_ID }, deps, { feature: 'record-summary' }).catch((e) => e));
   assert.equal(wire.error.code, 'BLOCKED_TABLE');
-  assert.match(wire.error.message, /^Your organisation does not allow Agent Buddy to read incident records\.$/);
+  assert.match(wire.error.message, /^Your organisation does not allow Agent Buddy to read this.$/);
 });
 
 test('the notes of a record are not read from the journal table when the journal table is blocked, nor from the record\'s own columns', async () => {
@@ -239,7 +242,7 @@ test('the notes of a record are not read from the journal table when the journal
   assert.deepEqual(pack.journal, []);
   const entry = pack.access.find((a) => a.source === 'journal');
   assert.equal(entry.status, 'blocked');
-  assert.match(entry.note, /does not allow/);
+  assert.match(entry.note, /does not let Agent Buddy read this/);
   assert.ok(!JSON.stringify(pack).includes('Gateway EU-2 shows 14 session resets'), 'work note text is not in the pack');
 });
 
@@ -248,7 +251,8 @@ test('a variable answer whose reference table is blocked is left out, and the no
   const pack = await readContextPack({ table: 'sc_req_item', sysId: RITM_ID }, deps, { feature: 'record-summary' });
   const entry = pack.access.find((a) => a.source === 'sc_item_option_mtom');
   assert.equal(entry.status, 'ok');
-  assert.match(entry.note, /your organisation does not allow reading sys_user/);
+  assert.match(entry.note, /Some answers could not be shown because their lists are blocked by your organisation/);
+  assert.doesNotMatch(entry.note, /sys_user/);
   assert.ok(!pack.related.variables.some((x) => x.question === 'Manager'), 'the manager answer is left out, never shown as an id');
   const whole = await guarded({ blockedTables: ['sc_item_option_mtom'] });
   const blocked = await readContextPack({ table: 'sc_req_item', sysId: RITM_ID }, whole.deps, { feature: 'record-summary' });
@@ -264,7 +268,8 @@ test('SEC-13: a variable whose reference table is not on the allow-list is never
   assert.ok(!fake.calls.some((c) => c.table === 'u_cost_center_owner'), 'that table was not queried');
   const note = pack.access.find((a) => a.source === 'sc_item_option_mtom').note;
   assert.match(note, /could not be shown/);
-  assert.match(note, /not one Agent Buddy reads/);
+  assert.match(note, /not ones Agent Buddy reads/);
+  assert.doesNotMatch(note, /u_cost_center_owner|sys_/);
   assert.ok(fake.calls.some((c) => c.table === 'sys_user' && c.query.startsWith('sys_idIN')), 'sys_user is allowed and is read');
 });
 
@@ -289,7 +294,7 @@ test('the prompt is told that a part was blocked by the organisation, not that i
   assert.equal(answered.reference.knowledge.status, 'blocked');
   // the domain features list it under "Data not available", in fixed words
   const text = unavailableText({ access: [{ source: 'incident', status: 'blocked', note: 'Your organisation does not allow Agent Buddy to read incident records.' }, { source: 'sys_user', status: 'blocked', note: 'quiet' }] });
-  assert.match(text, /Linked incidents: not allowed by your organisation \(do not describe it as empty\)/);
+  assert.match(text, /Incidents: not allowed by your organisation \(do not describe it as empty\)/);
   assert.ok(!/quiet/.test(text), 'people lookups stay quiet');
 });
 
@@ -307,7 +312,7 @@ test('the account-cases read and the routing look-alikes read report blocked, no
   const answer = await ALL_OPS.accountCases({ table: 'sn_customerservice_case', sysId: CASE_ID }, { deps, checkRecord, checkPack });
   assert.deepEqual(answer.cases, []);
   assert.equal(answer.access[0].status, 'blocked');
-  assert.match(answer.access[0].note, /does not allow/);
+  assert.match(answer.access[0].note, /does not let Agent Buddy read this/);
   const inc = await guarded({ blockedTables: ['incident'] });
   const routing = await ALL_OPS.routingLookalikes({ pack: { table: 'incident', sysId: INCIDENT_ID, fields: { short_description: 'VPN keeps disconnecting' }, people: [] } }, { deps: inc.deps, checkRecord, checkPack });
   assert.equal(routing.access[0].status, 'blocked');

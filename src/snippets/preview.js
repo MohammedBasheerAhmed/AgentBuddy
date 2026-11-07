@@ -41,11 +41,11 @@ export function previewSnippet(body, { pack = null, agent = null, now, examples 
 
 // Why a known variable has no value, said in the panel's language.
 function missingHint(name) {
-  if (/^caller\./.test(name)) return t('No caller is known for this record.');
+  if (/^caller\./.test(name)) return t('No caller is known for this ticket.');
   if (/^agent\./.test(name)) return t('Your name is not available on this page.');
-  if (/^assigned_to\./.test(name)) return t('The record is not assigned to anyone.');
-  if (/^sla\./.test(name)) return t('The record has no open service level.');
-  if (/^(number|short_description|state|priority)$/.test(name)) return t('The record has no value for this.');
+  if (/^assigned_to\./.test(name)) return t('The ticket is not assigned to anyone.');
+  if (/^sla\./.test(name)) return t('The ticket has no open service level.');
+  if (/^(number|short_description|state|priority)$/.test(name)) return t('The ticket has no value for this.');
   return t('There is no value for it.');
 }
 

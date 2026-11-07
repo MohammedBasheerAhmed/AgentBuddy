@@ -28,6 +28,18 @@ const readCard = (page, card) =>
   );
 const readList = (page) => readCard(page, QUEUE);
 
+// The queue card shows the first five rows of a group and "Show all (n)" for the rest, by design. Open it before reading, so that a check
+// of WHICH tickets are listed does not depend on how the ties between equally urgent tickets are ordered (that order changes with the
+// seed data: wave 6 moved a catalog item above the change).
+const readListAll = async (page) => {
+  await page.evaluate((sel) => {
+    const more = [...document.querySelectorAll(`${sel} button`)].find((b) => /^Show all \(\d+\)/.test(b.innerText.trim()));
+    if (more) more.click();
+  }, QUEUE);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  return readCard(page, QUEUE);
+};
+
 module.exports = {
   id: 'g',
   title: 'My work: every open ticket, breached SLA first, time left, group queue, access notes instead of errors',
@@ -45,7 +57,7 @@ module.exports = {
     await p.waitForFunction((sel) => /INC0010100/.test(document.querySelector(sel)?.innerText || ''), { timeout: 15000 }, QUEUE);
     t.check('the My work screen shows when it was read', /Read just now|Read \d+ min ago/.test(await panel.text()), (await textOf(p, '.ab-mw-read')) || '');
 
-    let list = await readList(p);
+    let list = await readListAll(p);
     const numbers = list.map((x) => x.number);
     t.check('lists the agent\'s own tickets from the fake instance', ['INC0010100', 'INC0010001', 'INC0010101'].every((n) => numbers.includes(n)), numbers.join(', '));
     t.check('every type of ticket assigned to the agent is listed (a case and a change too, not only the old six tables)', numbers.includes('CS0001001') && numbers.includes('CHG0030001'), numbers.join(', '));
@@ -88,7 +100,7 @@ module.exports = {
     inst.setBehaviour({ expired: true });
     await clickButton(p, /^Refresh$/);
     await p.waitForSelector('.ab-note-danger', { timeout: 10000 });
-    t.check('expired session: a plain "log in again" message', /session has expired/i.test((await textOf(p, '.ab-note-danger')) || ''), await textOf(p, '.ab-note-danger'));
+    t.check('expired session: a plain "log in again" message', /signed out of ServiceNow/i.test((await textOf(p, '.ab-note-danger')) || ''), await textOf(p, '.ab-note-danger'));
 
     // Back to normal, then open the first ticket from the list: the tab navigates and the panel follows to the Ticket screen.
     inst.setBehaviour();

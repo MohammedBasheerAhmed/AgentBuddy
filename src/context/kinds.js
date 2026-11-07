@@ -34,11 +34,45 @@ const KIND_BY_TABLE = {
 // the case is about was not read as a person and not masked by name. A table of the family that ends in _task stays a task.
 const HR_CASE_RE = /^sn_hr_(?:[a-z0-9]+_)*case(?:_[a-z0-9]+)*$/;
 
-/** The pack kind for a table name; a table we know nothing about is 'other'. */
+// Custom tables that are kinds of task (u_* and x_* tables that extend `task`) are proven task-derived by something the code READS ANYWAY
+// (audit of 2026-11-07, F7): the real class a record opened through `task` reports (src/context/pack.js resolveRealClass), or a row of
+// the table that carries the columns only a task has (taskRowEvidence below, used by readContextPack). No table is read to find out.
+// Such a table gets the generic `task` kind instead of 'other', for as long as this page's script lives: nothing is stored (build rule
+// 7), and a script that has not seen the evidence yet keeps saying 'other', which is the honest "not known" answer.
+const TASK_CLASSES = new Set();
+const MAX_TASK_CLASSES = 200;
+
+/** Remember that a table is a kind of task. Only a table the product does not know by name can be remembered. */
+export function rememberTaskClass(table) {
+  const name = String(table || '').trim().toLowerCase();
+  if (!TABLE_RE.test(name) || name === 'task' || TASK_CLASSES.has(name)) return false;
+  if (Object.prototype.hasOwnProperty.call(KIND_BY_TABLE, name) || (HR_CASE_RE.test(name) && !name.endsWith('_task'))) return false;
+  if (TASK_CLASSES.size >= MAX_TASK_CLASSES) TASK_CLASSES.delete(TASK_CLASSES.values().next().value);
+  TASK_CLASSES.add(name);
+  return true;
+}
+
+/** Forget every remembered class (tests, and a script that retires). */
+export function forgetTaskClasses() {
+  TASK_CLASSES.clear();
+}
+
+// The columns only a task has: a row of an unknown table that returns all of these (even empty) is a task. They come back with the
+// record read anyway (the generic ceiling lists them); a table that is not a task does not have them, and the Table API leaves a column
+// it does not have out of the row altogether.
+const TASK_ONLY_COLUMNS = Object.freeze(['opened_at', 'opened_by', 'assignment_group']);
+
+/** Does a row read from `table` carry the columns only a task has? (A row is a plain object keyed by column.) */
+export function taskRowEvidence(row) {
+  return Boolean(row) && typeof row === 'object' && TASK_ONLY_COLUMNS.every((name) => Object.hasOwn(row, name));
+}
+
+/** The pack kind for a table name; a table we know nothing about is 'other', unless it is a custom kind of task (see above). */
 export function kindForTable(table) {
   const name = String(table || '').trim().toLowerCase();
   if (Object.prototype.hasOwnProperty.call(KIND_BY_TABLE, name)) return KIND_BY_TABLE[name];
   if (HR_CASE_RE.test(name) && !name.endsWith('_task')) return 'hr_case';
+  if (TASK_CLASSES.has(name)) return 'task';
   return 'other';
 }
 
@@ -76,6 +110,41 @@ export function isSensitiveTable(table, extraPrefixes) {
   if (!name) return false;
   const extra = Array.isArray(extraPrefixes) ? extraPrefixes.map((p) => String(p || '').trim().toLowerCase()).filter(Boolean) : [];
   return SENSITIVE_PREFIXES.some((prefix) => name.startsWith(prefix)) || extra.some((prefix) => name.startsWith(prefix));
+}
+
+// ---- Is this page a ticket? ----------------------------------------------------------------------
+//
+// An address like /ui_page.do?sys_id=<hex> (or a portal link with table=<name>, or a form that reports a table and a sys_id) names a
+// table, but not every table is a ticket: a UI page, a script, a user, a report, the home page all have forms and sys_ids. The panel
+// treats a page as "a record to work on" only when the table is
+//   1) one the product knows (kindForTable is not 'other'), or one of the built-in families the product already handles (security,
+//      vulnerability, GRC, audit, HR: BUILT_IN_SENSITIVE_PREFIXES) or the organisation's own record families (the policy's
+//      sensitiveTablePrefixes, passed in as `extraPrefixes`), or
+//   2) in a list a person with the source can extend: PORTAL_PAGE_TABLES (below) or TICKET_TABLES, or
+//   3) proven by the live form: g_form answers with a number (src/content/recordResolver.js; decided there, where the form is known).
+// Everything else is "no record": the plain "Open a ticket" help, no reads of a table named after a page, no bar, no "last viewed"
+// (audit of 2026-11-07, part 2).
+
+/**
+ * The tables of a customer's own ticket-like records that a Workspace or a portal address names (those pages have no g_form to prove
+ * it). Add the table name: `'u_facilities_request'`, `'x_acme_visit'`. A classic form of such a table needs no entry: its form has a
+ * number. Empty on purpose: ServiceNow's own tables are known already.
+ */
+export const TICKET_TABLES = Object.freeze([]);
+
+/**
+ * Is a record of this table a ticket-like record the panel works on? (Not the live-form proof: that is the resolver's.)
+ * @param {string} table
+ * @param {{ extraPrefixes?: string[], extraTables?: string[] }} [options] the organisation's own families (policy
+ *   sensitiveTablePrefixes) and any other tables the caller was told to trust
+ */
+export function isTicketTable(table, { extraPrefixes, extraTables } = {}) {
+  const name = String(table || '').trim().toLowerCase();
+  if (!TABLE_RE.test(name)) return false;
+  if (kindForTable(name) !== 'other') return true;
+  if (isSensitiveTable(name, extraPrefixes)) return true;
+  const own = (list) => Array.isArray(list) && list.some((item) => String(item || '').trim().toLowerCase() === name);
+  return own(Object.values(PORTAL_PAGE_TABLES)) || own(TICKET_TABLES) || own(extraTables);
 }
 
 // ---- Record numbers -----------------------------------------------------------------------------
@@ -152,6 +221,18 @@ function refFrom(table, params) {
   if (sysId) return { table, sysId };
   const number = numberFromQuery(params.get('sysparm_query'));
   return number ? { table, number } : null;
+}
+
+// The article reader of the classic UI: /kb_view.do?sysparm_article=KB0010001 (the very link "Copy link" gives), or ?sys_kb_id=<id>.
+// It is not a form of a table named kb_view: it shows a kb_knowledge article, so it is read as one (audit 2026-11-07, S9). The number
+// is the sure part and is used first; sys_kb_id is taken to be the article's own sys_id (docs/live-questions/audit-1107-gate.md, 10).
+const ARTICLE_READER_RE = /^kb_view(?:_customer)?$/;
+
+function articleReaderRef(params) {
+  const number = parseRecordNumber(params.get('sysparm_article'));
+  if (number) return { table: 'kb_knowledge', number };
+  const sysId = sysIdOf(params.get('sys_kb_id')) || sysIdOf(params.get('sys_id'));
+  return sysId ? { table: 'kb_knowledge', sysId } : null;
 }
 
 // ---- Portals ------------------------------------------------------------------------------------
@@ -273,6 +354,7 @@ function parseRelative(input, depth) {
   const classic = /\/([a-z][a-z0-9_]*)\.do$/i.exec(path);
   if (classic) {
     const table = classic[1].toLowerCase();
+    if (ARTICLE_READER_RE.test(table)) return articleReaderRef(params);
     return table.endsWith('_list') ? null : refFrom(table, params);
   }
 
@@ -280,24 +362,34 @@ function parseRelative(input, depth) {
   return portalRef(portalParams(url), path.split('/').filter(Boolean));
 }
 
+// A reference whose table is not a ticket's is no reference (see "Is this page a ticket?" above). `anyTable: true` gives the address
+// as it reads, for the one caller that decides with more than the address (the resolver: the policy's own families, the live form).
+const vetted = (ref, options) => (ref && (options?.anyTable === true || isTicketTable(ref.table, options)) ? ref : null);
+
 /**
  * The record a ServiceNow address points at: { table, sysId } or { table, number }, or null when it is a list, a
- * new record (sys_id -1) or something else. Accepts absolute or relative addresses.
+ * new record (sys_id -1), a page of a table that is not a ticket's (/ui_page.do?sys_id=..., /home.do?sys_id=...) or something else.
+ * Accepts absolute or relative addresses.
+ * @param {string} url
+ * @param {{ extraPrefixes?: string[], extraTables?: string[], anyTable?: boolean }} [options] see isTicketTable; anyTable: skip the check
  */
-export function parseRecordRef(url) {
+export function parseRecordRef(url, options) {
   if (typeof url !== 'string' || !url.trim()) return null;
   const ref = parseRelative(url, 0);
-  return ref && !ref.newRecord ? ref : null;
+  return ref && !ref.newRecord ? vetted(ref, options) : null;
 }
 
 /**
  * The table of a BLANK form an address points at (sys_id=-1): { table } or null. The classic form says so itself through g_form, but
  * on Next Experience the form sits in an iframe inside the page's shadow DOM, which the page bridge may not reach (or not yet, while
  * the frame loads); the address (/now/nav/ui/classic/params/target/incident.do%3Fsys_id%3D-1, a Workspace /record/incident/-1) still
- * tells which table the new record is for.
+ * tells which table the new record is for. A blank form of a table that is not a ticket's (/ui_page.do?sys_id=-1) is null.
+ * @param {string} url
+ * @param {{ extraPrefixes?: string[], extraTables?: string[], anyTable?: boolean }} [options] as for parseRecordRef
  */
-export function parseNewRecordRef(url) {
+export function parseNewRecordRef(url, options) {
   if (typeof url !== 'string' || !url.trim()) return null;
   const ref = parseRelative(url, 0);
-  return ref?.newRecord && TABLE_RE.test(ref.table) && !ref.table.endsWith('_list') ? { table: ref.table } : null;
+  const blank = ref?.newRecord && TABLE_RE.test(ref.table) && !ref.table.endsWith('_list') ? { table: ref.table } : null;
+  return vetted(blank, options);
 }

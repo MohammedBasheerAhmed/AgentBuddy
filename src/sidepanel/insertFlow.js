@@ -31,8 +31,9 @@
 // Every guard stays where it was: insert only into the record the text was written for (expect), one whitelisted field (the content
 // script refuses anything else), never a save, HTML escaped for an HTML field (the content script), the safe-to-send review first.
 
-import { buildFillMessage, buildUndoMessage, describeInsert, expectForInsert, fillModeFor, fillModesFor, fillReasonText, insertedNote, isFillable, undoStepOf, undoStillFor, wrongRecordText } from '../lib/fillable.js';
+import { buildFillMessage, buildUndoMessage, closeStep, describeInsert, expectForInsert, fillModeFor, fillModesFor, fillReasonText, insertedNote, isFillable, undoStepOf, undoStillFor, wrongRecordText } from '../lib/fillable.js';
 import { insertsFor } from '../features/registry.js';
+import { tableLabel } from '../lib/tableLabels.js';
 import { reviewForInsert } from '../safeSend/review.js';
 import { isolate, t, tm, t as tr } from '../i18n/index.js';
 
@@ -160,17 +161,22 @@ export function choicesOf(feature, plain) {
 export function insertTargets(feature, { record, page } = {}) {
   const kind = record?.kind || page?.record?.kind || 'other';
   const surface = page?.surface || 'classic';
+  // Whether the requester can read a comment on this catalog task (true / false / null = not known): src/domain/requesterReads.js
+  const requesterCanRead = typeof record?.requesterCanRead === 'boolean' ? record.requesterCanRead : null;
   return insertsForKind(feature, kind).map((spec, i) => {
     const mode = fillModeFor(spec.field, spec.mode);
-    const told = describeInsert({ field: spec.field, fieldLabel: spec.fieldLabel, mode, kind, surface, table: spec.table || '' });
+    const told = describeInsert({ field: spec.field, fieldLabel: spec.fieldLabel, mode, kind, surface, table: spec.table || '', requesterCanRead });
     return {
       key: `${spec.field}:${i}`,
       feature: feature?.id || '',
       spec,
       field: spec.field,
-      label: spec.label,
+      label: typeof spec.labelFor === 'function' ? spec.labelFor(requesterCanRead) : spec.label,
       fieldLabel: spec.fieldLabel || '',
       table: spec.table || '',
+      kind,
+      surface,
+      requesterCanRead,
       mode,
       modes: fillModesFor(spec.field),
       ...told,
@@ -182,7 +188,7 @@ export function insertTargets(feature, { record, page } = {}) {
 
 /** Where-and-next sentences for a target in another mode (the person switched Replace / Add below before inserting). */
 export function describeTarget(target, mode, { page, record } = {}) {
-  return describeInsert({ field: target.field, fieldLabel: target.fieldLabel, mode, kind: record?.kind || page?.record?.kind || '', surface: page?.surface || 'classic', table: target.table });
+  return describeInsert({ field: target.field, fieldLabel: target.fieldLabel, mode, kind: record?.kind || page?.record?.kind || '', surface: page?.surface || 'classic', table: target.table, requesterCanRead: target.requesterCanRead ?? null });
 }
 
 // (the box is named by its label, which is an English text marked in the feature: `tr` shows it in the panel's language)
@@ -213,15 +219,81 @@ export async function readFieldStates(page, targets, read, expect = null) {
   }
 }
 
-/** The targets with what the page said: `blocked` (why Insert is not offered) and `box` (the label of the box an insert will use). */
+// A page without a form of its own (a Workspace, a portal) where the box was not found: Insert cannot promise anything there.
+const MAY_NOT_TAKE = tm('This page may not take it. If it does not, your text is copied instead.');
+
+// A Workspace or portal page that was searched and has no box to fill (audit of 2026-11-07, S4): Insert is not offered, Copy leads, and
+// one plain line says why. The sentence differs only when the person can do something about it, or when it is Agent Buddy that could not look.
+const NO_BOX = tm("This page's box can't be filled automatically. Copy and paste.");
+const BOX_ALIKE = tm("Two boxes on this page look alike, so Agent Buddy can't tell which one to fill. Copy and paste.");
+const BOX_TOO_BIG = tm('This page is too big for Agent Buddy to search for the box. Copy and paste.');
+const GAP_TEXT = { absent: NO_BOX, ambiguous: BOX_ALIKE, 'too-big': BOX_TOO_BIG };
+// A composer that serves Work notes and customer comments and is set to the other one (W-12): nothing goes in until it is switched.
+const SET_TO_CUSTOMER = tm('The box on this page is set to customer comments. Switch it to Work notes, then insert, or use Copy.');
+const SET_TO_WORK_NOTES = tm('The box on this page is set to Work notes. Switch it to Additional comments, then insert, or use Copy.');
+
+const WEB_PAGES = new Set(['workspace', 'portal']);
+
+/**
+ * How soon to look at the page again, in milliseconds, or 0 for "not at all": only a Workspace or portal page that has a box Insert
+ * could not use yet (not found, two look-alikes, a composer set to the other kind) is looked at again, because the person can fix it
+ * on the page (open the Notes tab, switch the composer) without anything in the panel changing. A page too big to search is left for
+ * longer. Pure: states are what readFieldStates answered.
+ */
+export function recheckDelay(states) {
+  if (!states?.known || !WEB_PAGES.has(states.form)) return 0;
+  const fields = Object.values(states.fields || {});
+  if (fields.some((f) => f && (f.gap === 'absent' || f.gap === 'ambiguous' || f.mode === 'other'))) return 5000;
+  return fields.some((f) => f && f.gap === 'too-big') ? 20000 : 0;
+}
+
+/** Are two answers of readFieldStates the same? (the panel keeps the one it has, so nothing is drawn again for nothing) */
+export const sameStates = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * What one Insert button of a result card shows, from the targets applyFieldStates answered (the card has no probe yet = no `blocked`):
+ * `blocked` is the one plain line that says why Insert is off (empty when it is on) and `lead` is whether it is the card's filled button.
+ * A box the page could not offer drops the fill: Copy leads there (audit of 2026-11-07, S4, as on the answer cards).
+ * @param {object[]} probed from applyFieldStates (each target keeps its `spec`)
+ * @param {object} spec the insert the button is for
+ * @param {number} index the button's place among the card's inserts
+ * @param {boolean} copyFirst the feature itself leads with Copy (primaryOf)
+ */
+export function insertButtonView(probed, spec, index, copyFirst) {
+  const target = (Array.isArray(probed) ? probed : []).find((item) => item.spec === spec) || null;
+  return { blocked: target?.blocked || '', lead: index === 0 && !copyFirst && !target?.copyFirst };
+}
+
+/**
+ * The targets with what the page said: `blocked` (why Insert is not offered), `box` (the label of the box an insert will use),
+ * `copyFirst` (true when the page was searched and its box is not there, or a composer is set to the other kind of note: Insert is off,
+ * Copy leads and `blocked` is the one line that says why; audit of 2026-11-07, S4 and W-12) and `maybe` (true when the page is a
+ * Workspace or a portal and nothing more is known, so Insert may not be possible there: the line under the button then says what happens;
+ * W-07). A composer read and found set to this kind of note drops the caution that it might not be.
+ */
 export function applyFieldStates(targets, states) {
   const fields = states?.known ? states.fields || {} : {};
+  const noForm = states?.known === true && (states.form === 'workspace' || states.form === 'portal');
   return (Array.isArray(targets) ? targets : []).map((item) => {
     const found = Object.prototype.hasOwnProperty.call(fields, item.field) ? fields[item.field] : null;
     const state = found && typeof found.state === 'string' ? found.state : 'unknown';
-    const blocked = item.table ? '' : state === 'missing' ? NOT_ON_FORM(item.fieldLabel) : state === 'read-only' ? READ_ONLY(item.fieldLabel) : '';
+    let blocked = item.table ? '' : state === 'missing' ? NOT_ON_FORM(item.fieldLabel) : state === 'read-only' ? READ_ONLY(item.fieldLabel) : '';
     const box = found && typeof found.label === 'string' ? found.label.slice(0, 80) : '';
-    return { ...item, blocked, box };
+    const gap = noForm && !item.table && state === 'unknown' && Object.prototype.hasOwnProperty.call(GAP_TEXT, found?.gap) ? found.gap : '';
+    const mode = states?.form === 'workspace' && !item.table && state === 'editable' && typeof found?.mode === 'string' ? found.mode : '';
+    let copyFirst = false;
+    if (!blocked && gap) {
+      blocked = tr(GAP_TEXT[gap]);
+      copyFirst = true;
+    } else if (!blocked && mode === 'other') {
+      blocked = tr(item.field === 'work_notes' ? SET_TO_CUSTOMER : SET_TO_WORK_NOTES);
+      copyFirst = true;
+    }
+    const maybe = Boolean(noForm && !item.table && state === 'unknown' && !blocked);
+    const out = { ...item, blocked, box };
+    if (copyFirst) out.copyFirst = true;
+    if (mode === 'match') out.caution = describeInsert({ field: item.field, fieldLabel: item.fieldLabel, mode: item.mode, kind: item.kind, surface: item.surface, table: item.table, composerMode: 'match', requesterCanRead: item.requesterCanRead ?? null }).caution;
+    return maybe ? { ...out, maybe, next: `${item.next} ${tr(MAY_NOT_TAKE)}`.trim() } : out;
   });
 }
 
@@ -254,7 +326,7 @@ export async function insertText({ page, target, text, mode, source = null, pinn
   // An insert for another kind of form (an article's title and body) only goes into a form of that table.
   const here = page?.record?.table || page?.newRecord?.table || '';
   if (target.table && here !== target.table) {
-    return { status: 'blocked', why: t('This goes into a {form} form. Open that form first, then insert. Copy works now.', { form: target.table === 'kb_knowledge' ? t('knowledge article') : target.table }) };
+    return { status: 'blocked', why: t('This goes into a {form} form. Open that form first, then insert. Copy works now.', { form: tableLabel(target.table) }) };
   }
   const chosen = fillModeFor(target.field, mode || target.mode);
   // The swap is for "Try again, then Insert" in the box's usual mode. A person who chose the other mode on purpose ("Add below" on
@@ -272,7 +344,8 @@ export async function insertText({ page, target, text, mode, source = null, pinn
     number: source?.number || '',
     review,
     replacing: chosen === 'append' && usual ? lastInserted.get(key) || '' : '',
-    target: { field: target.field, fieldLabel: target.fieldLabel, mode: chosen, surface: page?.surface || 'classic', table: target.table },
+    // (the kind, so the line after the insert says who may read a comment the way the line before it did: describeInsert)
+    target: { field: target.field, fieldLabel: target.fieldLabel, mode: chosen, surface: page?.surface || 'classic', table: target.table, kind: page?.record?.kind || '' },
     send,
   });
   if (outcome?.status === 'inserted') {
@@ -343,14 +416,22 @@ export async function undoInserts({ page, steps, send }) {
  * The line after Prepare to close's Insert:
  *   "Filled Close code and Resolution notes. Press Save in ServiceNow to keep them."
  *   "Filled Resolution notes. Press Save in ServiceNow to keep it. Choose the close code Solved (Work Around) yourself."
- * @param {{ filled: object[] (the steps' targets: { fieldLabel, field }), byHand?: string (the code's label), label?: string }} args
+ * @param {{ filled: object[] (the steps' targets: { fieldLabel, field }), byHand?: string (the code's label), label?: string, kind?: string }} args
  *   label: the box the notes went into on a page without g_form, named so a wrong box is easy to see
+ *   kind: the ticket's kind. When it has a state step of its own (closeStep: "Set State to Resolved, then save.") that step ends the line and
+ *   takes the place of the two sentences about saving and about the state (F13); a kind with none keeps both, as they were.
  */
-export function closeFilledNote({ filled = [], byHand = '', label = '' } = {}) {
+export function closeFilledNote({ filled = [], byHand = '', label = '', kind = '' } = {}) {
   const names = filled.map((x) => ({ fieldLabel: x.fieldLabel, field: x.field }));
-  let base = names.length > 1 ? t('Filled {fields}. Press Save in ServiceNow to keep them.', { fields: namesOf(names) }) : t('Filled {field}. Press Save in ServiceNow to keep it.', { field: nameOf(names[0]) });
+  const step = closeStep(kind);
+  let base = step
+    ? names.length > 1 ? t('Filled {fields}.', { fields: namesOf(names) }) : t('Filled {field}.', { field: nameOf(names[0]) })
+    : names.length > 1 ? t('Filled {fields}. Press Save in ServiceNow to keep them.', { fields: namesOf(names) }) : t('Filled {field}. Press Save in ServiceNow to keep it.', { field: nameOf(names[0]) });
   if (label) base = t('{base} It went into the box labelled "{label}".', { base, label: isolate(label) });
-  return byHand ? `${base} ${t('Choose the close code {code} yourself.', { code: isolate(byHand) })}` : base;
+  if (byHand) base = `${base} ${t('Choose the close code {code} yourself.', { code: isolate(byHand) })}`;
+  // The write was read back, so "Filled" is true; what nothing here can see is whether the form will accept a save (the State, the other
+  // required fields, a field that is hidden until the State changes): say so once (audit of 2026-11-07, W-05).
+  return `${base} ${step || t('Check the state and the other required fields, then save.')}`;
 }
 
 /**
@@ -401,7 +482,10 @@ export async function insertCloseAndNotes({ page, code = null, byHand = '', note
     if (out.undo) undo.push(out.undo);
     const label = out.answer?.method === 'dom' && typeof out.answer.label === 'string' ? out.answer.label : '';
     const pick = codeState === 'by-hand' ? code.label || code.value : codeState === 'none' && typeof byHand === 'string' ? byHand : '';
-    return { status: 'inserted', code: codeState, codeWhy, undo, hints, answer: out.answer, note: closeFilledNote({ filled, byHand: pick, label }) };
+    return { status: 'inserted', code: codeState, codeWhy, undo, hints, answer: out.answer, note: closeFilledNote({ filled, byHand: pick, label, kind: notes.target.kind }) };
   }
-  return { status: out?.status === 'blocked' ? 'blocked' : 'failed', why: out?.why || fillReasonText('no-form'), code: codeState, codeWhy, undo, hints };
+  // The notes did not go in. When the close code did, say so: it is on the form now, and Undo (kept in memory) puts it back (W-04).
+  const kept = codeState === 'filled' ? t('The close code {code} is already filled on the form. Undo puts it back.', { code: isolate(code.label || code.value) }) : '';
+  const why = [out?.why || fillReasonText('no-form'), kept].filter(Boolean).join(' ');
+  return { status: out?.status === 'blocked' ? 'blocked' : 'failed', why, code: codeState, codeWhy, undo, hints };
 }

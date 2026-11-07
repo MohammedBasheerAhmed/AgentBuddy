@@ -31,7 +31,9 @@ test('prepareRun keeps what the firewall was given (memory only, frozen) so it c
   const p = prepare();
   assert.ok(Object.isFrozen(p.input) && Object.isFrozen(p.input.parts));
   assert.equal(p.input.feature, 'record-summary');
-  assert.equal(p.input.system, featureById('record-summary').system);
+  // The task text is kept whole; a fixed sentence about the kind of ticket follows it (never text from the ticket).
+  assert.ok(p.input.system.startsWith(featureById('record-summary').system));
+  assert.match(p.input.system.slice(featureById('record-summary').system.length), /^\nThis ticket is an incident:/);
   assert.ok(p.input.parts.some((x) => x.text.includes('Carol Diaz')));
   assert.equal(p.preview, p.request.preview);
 });

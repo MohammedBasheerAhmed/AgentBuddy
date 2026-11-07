@@ -114,8 +114,8 @@ test('when even the newest note does not fit, nothing is sent and the person is 
   // more, or another local model: neither would change anything)
   assert.throws(
     () => prepare('record-summary', pack, ollama()),
-    (e) => e instanceof RunBlocked && e.code === 'TOO_LONG' && /too long for the chosen AI model/.test(e.message) && /Settings/.test(e.message) &&
-      /always counts on 4,096 tokens, whatever its server is set up for/.test(e.message) && !/unless its server|Choose a model that reads more/.test(e.message)
+    (e) => e instanceof RunBlocked && e.code === 'TOO_LONG' && /too long to send to the AI in one go/.test(e.message) && /Settings/.test(e.message) &&
+      /reads a limited amount/.test(e.message) && !/tokens|unless its server|Choose a model that reads more/.test(e.message)
   );
   assert.throws(() => prepare('record-summary', pack, { ...cloud(), model: 'gpt-4' }), (e) => e.code === 'TOO_LONG' && /Choose a model that reads more in Settings\./.test(e.message) && !/this computer/.test(e.message));
   assert.doesNotThrow(() => prepare('record-summary', pack), 'a cloud model takes it');
@@ -128,11 +128,9 @@ test('"too long" after a second fit names the model\'s budget, and a size above 
   const pack = { ...hostilePack(), journal: [], fields: { short_description: 'VPN', description: Array.from({ length: 800 }, (_, i) => `u${i}@x.io`).join(' ') } };
   const budget = promptBudget(ollama()).prompt;
   assert.throws(() => prepare('record-summary', pack, ollama()), (e) => {
-    const m = /about ([\d,]+) tokens, and the model reads about ([\d,]+)\./.exec(e.message);
-    assert.ok(m, e.message);
-    const [said, reads] = [Number(m[1].replace(/,/g, '')), Number(m[2].replace(/,/g, ''))];
-    assert.equal(reads, budget, 'the model\'s budget');
-    assert.ok(said > reads, `${said} is more than ${reads}`);
+    // (the sentence has no numbers any more: the size stays on the error, in the model's own terms)
+    assert.ok(!/\d/.test(e.message), e.message);
+    assert.ok(e.tokens > budget, `${e.tokens} is more than ${budget}`);
     return e.code === 'TOO_LONG';
   });
 });
@@ -166,11 +164,11 @@ test('notes the user cannot read, lists that were denied or blocked: one part fo
   assert.equal(part, 'These parts could not be read, so do not describe them as empty or as "none":\n- Notes and comments: not readable by your user\n- SLAs: could not be read\n- Approvals: not allowed by your organisation (do not describe it as empty)');
   assert.ok(!/HTTP 500|script|quiet/.test(part), 'fixed wording only, nothing from the instance');
   assert.deepEqual(p.madeWithout, [
-    { what: 'Notes and comments', why: 'your user cannot read them', status: 'denied' },
+    { what: 'Notes and comments', why: 'you cannot read them', status: 'denied' },
     { what: 'SLAs', why: 'could not be read', status: 'error' },
     { what: 'Approvals', why: 'not allowed by your organisation', status: 'blocked' },
   ]);
-  assert.equal(madeWithoutText(p.madeWithout), 'Made without: Notes and comments (your user cannot read them); SLAs (could not be read); Approvals (not allowed by your organisation).');
+  assert.equal(madeWithoutText(p.madeWithout), 'Made without: Notes and comments (you cannot read them); SLAs (could not be read); Approvals (not allowed by your organisation).');
   assert.equal(madeWithoutText([]), '');
   // the part is at the end of the data, just before the instruction
   assert.ok(userOf(p).indexOf('data_not_available') > userOf(p).lastIndexOf('field="fields"'));
@@ -211,7 +209,7 @@ test('skipped reads say why in their fixed words; a feature\'s own "not availabl
     table: 'sn_hr_core_case',
   };
   const list = unavailable(pack);
-  assert.deepEqual(list.map((u) => u.what), ['Some fields of this record', 'Notes and comments']);
+  assert.deepEqual(list.map((u) => u.what), ['Some fields of this ticket', 'Notes and comments']);
   const fitted = fitToModel({ feature: featureById('record-summary'), pack, parts: [{ label: 'Data not available', field: 'data_not_available', text: 'old' }, { label: 'State', field: 'state', text: 'New', inline: true }], budget: 100000 });
   const own = fitted.parts.filter((p) => p.field === 'data_not_available');
   assert.equal(own.length, 1);

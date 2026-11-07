@@ -13,7 +13,7 @@ import { EMAIL_TYPES } from '../src/compose/emailRecommend.js';
 import { openFor, rankFor, stateBucket } from '../src/insights/order.js';
 import { chaseLine, fixFor } from '../src/insights/fixes.js';
 import { arrangeChanges, arrangeProblems, changeTiming } from '../src/insights/changes.js';
-import { articleShareUrl } from '../src/insights/links.js';
+import { customerArticleLink } from '../src/lib/snLinks.js';
 import { callerSummary, historyLine, relatedSummary, repeatLine } from '../src/insights/related.js';
 import { createInsightStore } from '../src/insights/cache.js';
 import { chatOverviewOf } from '../src/insights/chat.js';
@@ -171,8 +171,10 @@ test('outage: three or more other open tickets in two hours; a read that failed 
   assert.equal(outageSignal({ hits: hits([0.5, 1, 1.5], ['business_service']), access: [{ status: 'ok' }] }, p).target, 'Remote Access');
   const denied = outageSignal({ hits: [], access: [{ status: 'denied' }] }, p);
   assert.equal(denied.readable, false);
-  assert.equal(denied.line, '');
-  assert.equal(outageSignal({ hits: [], access: [{ status: 'empty' }] }, p).line, 'No other open tickets on VPN Gateway EU in the last 24 h');
+  // (a read that could not see says so: never "no other open tickets", and the card is not green: see tests/honest-reads.test.js)
+  assert.equal(denied.line, 'Could not check other open tickets on this item');
+  assert.equal(denied.checked, false);
+  assert.equal(outageSignal({ hits: [], access: [{ status: 'empty' }] }, p).line, 'No other open tickets found on VPN Gateway EU in the last 24 h');
   assert.equal(outageSignal({ hits: [], access: [{ status: 'skipped', note: 'No CI.' }] }, p).note, 'No CI.');
 });
 
@@ -292,7 +294,7 @@ test('journey: opened, the group path, the conversation, SLA events, resolved; w
   assert.equal(labels[labels.length - 1], 'Resolved');
   assert.equal(journeySummary(j), 'Reassigned 2 times · reopened 1 time · Service Desk > Network > Desktop');
   const none = buildJourney({ pack: p, audit: { available: false, note: '' }, now: NOW });
-  assert.match(none.note, /not readable/);
+  assert.match(none.note, /not available to you/);
   assert.deepEqual(none.path, []);
   assert.equal(journeySummary(none), 'Reassigned 2 times · reopened 1 time · now with Desktop');
 });
@@ -321,13 +323,22 @@ test('email templates: one per kind the recommender knows, filled from the ticke
 // ---- order -----------------------------------------------------------------------------------------------------------------------
 
 test('order: what matters for the state comes first, and only those cards open', () => {
-  assert.equal(stateBucket('New'), 'new');
-  assert.equal(stateBucket('On Hold'), 'hold');
-  assert.equal(stateBucket('Awaiting Caller'), 'hold');
-  assert.equal(stateBucket('Resolved'), 'resolved');
-  assert.equal(stateBucket('Closed Complete'), 'closed');
-  assert.equal(stateBucket('Work in Progress'), 'progress');
-  assert.equal(stateBucket(''), 'progress');
+  // (one reader of a state's meaning: src/domain/states.js, docs/states.md; the header carries the label and the stored value)
+  assert.equal(stateBucket({ state: 'New' }), 'new');
+  assert.equal(stateBucket({ state: 'On Hold' }), 'hold');
+  assert.equal(stateBucket({ state: 'Awaiting Caller' }), 'hold');
+  assert.equal(stateBucket({ state: 'Resolved' }), 'resolved');
+  assert.equal(stateBucket({ state: 'Closed Complete' }), 'closed');
+  assert.equal(stateBucket({ state: 'Work in Progress' }), 'progress');
+  assert.equal(stateBucket({ state: '' }), 'progress');
+  assert.equal(stateBucket(null), 'progress');
+  // The stored value decides when the table is known: a renamed or translated state is still understood, and an incident's 3 is On Hold.
+  assert.equal(stateBucket({ state: 'Wartend', stateValue: '3' }, { table: 'incident' }), 'hold');
+  assert.equal(stateBucket({ state: 'Zurückgestellt', stateValue: '3' }, { table: 'incident' }), 'hold');
+  assert.equal(stateBucket({ state: 'Geschlossen', stateValue: '7' }, { table: 'incident' }), 'closed');
+  // A catalog task that is "Open" is being worked, not new (it was filed as new here and as working elsewhere).
+  assert.equal(stateBucket({ state: 'Open', stateValue: '1' }, { table: 'sc_task' }), 'progress');
+  assert.equal(stateBucket({ state: 'Pending', stateValue: '-5' }, { table: 'sc_task' }), 'hold');
   const sorted = (state) => ['missing', 'routing', 'steps', 'resolve', 'email', 'journey'].sort((a, b) => rankFor(a, { state }) - rankFor(b, { state }));
   assert.deepEqual(sorted('New').slice(0, 2), ['missing', 'routing']);
   assert.equal(sorted('Resolved')[0], 'resolve');
@@ -368,14 +379,16 @@ test('changes: running now first, then the latest ended, then upcoming; problems
 
 // ---- N3 link ---------------------------------------------------------------------------------------------------------------------
 
-test('article link: the article reader on the same instance, built from a checked number', () => {
+test('article link: the article reader on the same instance, built from a checked number, the same on every tab (audit 6, 2026-11-07)', () => {
+  // (was: the portal's article page on a portal, the reader elsewhere, and only KB numbers: the address followed the agent's tab)
   const classic = { href: 'https://acme.service-now.com/incident.do?sys_id=x', surface: 'classic' };
-  assert.equal(articleShareUrl(classic, { number: 'KB0010001' }), 'https://acme.service-now.com/kb_view.do?sysparm_article=KB0010001');
+  const reader = 'https://acme.service-now.com/kb_view.do?sysparm_article=KB0010001';
+  assert.equal(customerArticleLink(classic, { number: 'KB0010001' }), reader);
   const portal = { href: 'https://acme.service-now.com/esc?id=ticket', surface: 'portal', portal: { base: '/esc', pageId: 'ticket' } };
-  assert.equal(articleShareUrl(portal, { number: 'kb0010001' }), 'https://acme.service-now.com/esc?id=kb_article_view&sysparm_article=KB0010001');
-  assert.equal(articleShareUrl(classic, { number: 'KB1&x=1', sysId: 'a'.repeat(32) }), `https://acme.service-now.com/kb_view.do?sys_kb_id=${'a'.repeat(32)}`);
-  assert.equal(articleShareUrl(classic, { number: 'nope' }), '');
-  assert.equal(articleShareUrl({ href: 'javascript:alert(1)' }, { number: 'KB0010001' }), '');
+  assert.equal(customerArticleLink(portal, { number: 'kb0010001' }), reader, 'not the portal the agent happens to be on');
+  assert.equal(customerArticleLink(classic, { number: 'KB1&x=1', sysId: 'a'.repeat(32) }), `https://acme.service-now.com/kb_view.do?sys_kb_id=${'a'.repeat(32)}`);
+  assert.equal(customerArticleLink(classic, { number: 'nope' }), '');
+  assert.equal(customerArticleLink({ href: 'javascript:alert(1)' }, { number: 'KB0010001' }), '');
 });
 
 // ---- N2 summary ------------------------------------------------------------------------------------------------------------------
@@ -400,7 +413,7 @@ test('caller summary: the repeat first, then the counts; nothing earlier, or nob
   assert.equal(callerSummary({ history: { items: [], signals: null } }).line, 'No earlier tickets from this caller');
   assert.equal(callerSummary({ history: { items: [], signals: null, noCaller: true } }).line, 'Nobody is named as the caller');
   assert.equal(callerSummary({ history: { items: [], signals: { reopenedHint: { later: 'INC2' } } } }).line, 'Looks like a repeat', 'reopened, with nothing else listed');
-  assert.deepEqual(callerSummary({ history: null }), { line: '', earlier: null, stillOpen: null, repeat: '', noCaller: false });
+  assert.deepEqual(callerSummary({ history: null }), { line: '', earlier: null, stillOpen: null, repeat: '', noCaller: false, unreadableCaller: false, complete: false });
   assert.equal(callerSummary().line, '');
   assert.equal(repeatLine({ later: 'INC2' }), 'Looks like a repeat: INC2 was reopened.');
   assert.equal(repeatLine({ later: 'INC2', earlier: 'INC1', days: 1 }), 'Looks like a repeat: INC2 came 1 day after INC1 was resolved.');
