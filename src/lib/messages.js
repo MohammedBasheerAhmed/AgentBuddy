@@ -25,6 +25,14 @@ export const MSG = Object.freeze({
   LIST_INSTANCES: 'ab:list-instances',
 });
 
+// The page script is small on purpose (it loads on every page of an added site). The reading engine (the context reads, My work, the
+// reports) is its own file, reads.bundle.js: the first READ that needs it finds it missing, the content script answers with this code, the
+// panel injects the file into the tab (src/sidepanel/ask.js) and asks again. The file puts its entry points on the page script's world
+// (an isolated world no page script can reach) under this key. A fresh page script removes a copy left by an older version.
+export const READS_NOT_LOADED_CODE = 'READS_NOT_LOADED';
+export const READS_KEY = Symbol.for('agentbuddy:reads');
+export const READS_FILE = 'reads.bundle.js';
+
 // The error code the service worker answers a content script with when its site is no longer turned on (switched off, the
 // browser's permission taken away, the organisation's list changed, "Clear everything"). The content script then retires.
 export const SITE_OFF_CODE = 'SITE_OFF';

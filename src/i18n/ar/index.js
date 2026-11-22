@@ -30,9 +30,12 @@ import { AR_STATES } from './states.js';
 import { AR_FINISH } from './finish.js';
 import { AR_CATALOG } from './catalog.js';
 import { AR_LEAD } from './lead.js';
+import { AR_LEAVEOUT } from './leaveout.js';
+import { AR_ROWS } from './rows.js';
+import { AR_WEEKLY } from './weekly.js';
 import { withKm } from './km.js';
 import { withFinish2 } from './finish2.js';
 import { withWords } from './words.js';
 
 // withWords adds the plain-words texts (words.js) and drops the English texts they replaced.
-export const AR = withKm(withFinish2(withWords({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_FORMATS, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS, ...AR_FOCUS, ...AR_CALLER, ...AR_LANGRULES, ...AR_READS, ...AR_FIX, ...AR_UNDERSTAND, ...AR_CLOSE, ...AR_MYWORK, ...AR_REPLY, ...AR_GATE, ...AR_LABELS, ...AR_LINKS, ...AR_NOTES, ...AR_HONEST, ...AR_ROLES, ...AR_FIT, ...AR_WORKSPACE, ...AR_STATES, ...AR_FINISH, ...AR_CATALOG, ...AR_LEAD })));
+export const AR = withKm(withFinish2(withWords({ ...AR_LANGUAGE, ...AR_POLICY, ...AR_BAR, ...AR_PALETTE, ...AR_FORMATS, ...AR_SHELL, ...AR_TICKET, ...AR_WRITE, ...AR_REPORTS, ...AR_FOCUS, ...AR_CALLER, ...AR_LANGRULES, ...AR_READS, ...AR_FIX, ...AR_UNDERSTAND, ...AR_CLOSE, ...AR_MYWORK, ...AR_REPLY, ...AR_GATE, ...AR_LABELS, ...AR_LINKS, ...AR_NOTES, ...AR_HONEST, ...AR_ROLES, ...AR_FIT, ...AR_WORKSPACE, ...AR_STATES, ...AR_FINISH, ...AR_CATALOG, ...AR_LEAD, ...AR_ROWS, ...AR_WEEKLY, ...AR_LEAVEOUT })));

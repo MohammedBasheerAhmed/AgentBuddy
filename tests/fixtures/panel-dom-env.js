@@ -127,6 +127,11 @@ class FakeNode {
     return this.removeChild(old);
   }
 
+  /** ChildNode.remove(): a node takes itself out of its parent (the weekly report's print host does this when its view goes away). */
+  remove() {
+    this.parentNode?.removeChild(this);
+  }
+
   contains(node) {
     for (let n = node; n; n = n.parentNode) if (n === this) return true;
     return false;

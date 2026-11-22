@@ -13,12 +13,11 @@
 // The one thing it puts on the page is the small bar of main actions (bar.js, in a closed shadow root). The bar runs nothing itself:
 // a click asks the service worker to open the side panel and run the action there. Nothing is sent to any server from here, and the
 // page cannot message this script: chrome.runtime.onMessage only receives messages from this extension.
-import { MSG, toWireError } from '../lib/messages.js';
+import { MSG, READS_KEY, READS_NOT_LOADED_CODE, toWireError } from '../lib/messages.js';
 import { tryCallPage, callPage } from './pageBridge.js';
 import { getSessionUser } from './sessionToken.js';
 import { clearTableMeta, queryTable } from './tableApi.js';
 import { makeRecordResolver } from './recordResolver.js';
-import { handleRead } from './reads.js';
 import { readHeader } from './header.js';
 import { portalInfo, surfaceOf } from '../context/surface.js';
 import { contentMessageAction } from '../lib/senderCheck.js';
@@ -49,6 +48,9 @@ if (decision === 'replace') {
 
 if (decision !== 'skip') {
   window.__abContent = { alive, retire: () => retire() };
+  // A reading engine left on this world by an older version belongs to that version: this copy asks for its own (reads.bundle.js is
+  // injected again by the panel at the first READ).
+  delete globalThis[READS_KEY];
   // (a copy that lives in another isolated world cannot be reached through window: it hears this and checks its own context)
   document.dispatchEvent(new CustomEvent(TAKEOVER_EVENT));
 
@@ -72,6 +74,7 @@ if (decision !== 'skip') {
     document.removeEventListener('keydown', onKey, true);
     records.clear();
     clearTableMeta(); // the words of the tables' columns belong to the person who was signed in
+    globalThis[READS_KEY]?.clear?.(); // (the reading engine has its own copy of them)
     bar?.stop();
   }
   // A newer copy arrived. Only a copy whose extension context is gone steps down: a page script can send the same event, and must not
@@ -122,6 +125,16 @@ if (decision !== 'skip') {
   document.addEventListener('keydown', onKey, true);
   // What the page world said is data: only a plain whole number gets through.
   const formStamp = (meta) => `${Number.isSafeInteger(meta?.loadedAt) && meta.loadedAt > 0 ? meta.loadedAt : ''}:${saves}`;
+
+  // The reading engine (reads.bundle.js), when it is loaded. When it is not, the answer says so with a code and the panel loads it and
+  // asks again (src/sidepanel/ask.js). Only this extension's own pages can send a READ, so nothing a web page does can load it.
+  function readsEngine() {
+    const engine = globalThis[READS_KEY];
+    if (typeof engine?.handleRead === 'function') return engine;
+    const err = new Error('The reading part of Agent Buddy is not loaded on this page yet.');
+    err.code = READS_NOT_LOADED_CODE;
+    throw err;
+  }
 
   async function pageState(policy) {
     // The address is read ONCE per request and used for the record, the surface and the portal alike: a portal changes it
@@ -174,7 +187,11 @@ if (decision !== 'skip') {
         case MSG.READ:
           // The panel's policy rides along with the message (see src/sidepanel/ask.js); the guard merges it with the managed policy.
           if (message.op === 'header') return readHeader(message.args || {}, { guard: policyGuard, deps: { queryTable }, policy: message.policy });
-          return handleRead(message.op, message.args || {}, { policy: message.policy, currentRecord: () => resolveRecord(location.href, undefined, message.policy) });
+          return readsEngine().handleRead(message.op, message.args || {}, {
+            policy: message.policy,
+            language: message.language,
+            currentRecord: () => resolveRecord(location.href, undefined, message.policy),
+          });
         case MSG.FILL_FIELD:
           return handleFillField(message, { callPage, currentRecord: () => resolveRecord(location.href), currentNewRecord: newRecordState, href: () => location.href });
         default:

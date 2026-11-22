@@ -53,6 +53,8 @@ export default function RunPanel({ run, eff, page, readingText = t('Reading the 
           onSend={run.confirmPreview}
           onCancel={run.cancelPreview}
           onMask={run.maskMore}
+          onChoose={run.choose}
+          onRemember={run.remember}
         />
       )}
 

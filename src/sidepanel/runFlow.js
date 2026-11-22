@@ -10,11 +10,12 @@ import { answerProblem, needsPreview } from './runLogic.js';
 
 /**
  * Read the pack, apply policy and the privacy filter, and decide about the preview. Nothing is sent.
- * @returns {Promise<{ status: 'abandoned' } | { status: 'failed', error: Error } | { status: 'ready', prepared: object, preview: boolean }>}
+ * @returns {Promise<{ status: 'abandoned' } | { status: 'failed', error: Error } | { status: 'ready', prepared: object, preview: boolean, args: object }>}
  */
 export async function prepareFlow({ feature, getPack, readPack, readOp, allowSensitive, config, values, policy, pageTable = '', isCurrent, deps }) {
   let pack;
   let prepared;
+  let args; // what prepareRun was given: the check before sending builds the request again from it when a choice changes
   try {
     // First, while the click is fresh: the browser's permission for the AI address (a prompt only the first time).
     await deps.ensureAiPermission(config);
@@ -26,8 +27,11 @@ export async function prepareFlow({ feature, getPack, readPack, readOp, allowSen
       pack = await feature.enrich(pack, { read: readOp, allowSensitive });
       if (!isCurrent()) return { status: 'abandoned' };
     }
+    // What this person left out of this action before and asked to keep (settings.aiLeaveOut, src/lib/leaveOut.js): applied here, so a
+    // request they shaped once is shaped the same way every time, and the check before sending shows what that left out.
     // pageTable: the table of the form the person is on, so a pack labelled with a made-up table can not skip the table / HR rules.
-    prepared = deps.prepareRun({ feature, pack, values, policy, config, pageTable, createFirewall: deps.createFirewall });
+    args = { feature, pack, values, policy, config, pageTable, leaveOut: Array.isArray(values?.aiLeaveOut?.[feature.id]) ? values.aiLeaveOut[feature.id] : [] };
+    prepared = deps.prepareRun({ ...args, createFirewall: deps.createFirewall });
   } catch (err) {
     // Refused by policy or by the firewall (fail closed): nothing was sent. Record that.
     if (err instanceof RunBlocked || err?.name === 'FirewallError') {
@@ -37,7 +41,7 @@ export async function prepareFlow({ feature, getPack, readPack, readOp, allowSen
   }
   // The pack itself can ask for the preview even in "first time" mode (it carries other people's tickets: pack.requirePreview).
   const preview = needsPreview({ previewMode: values.previewMode, feature, pack: prepared.pack, seen: values.previewSeen || [], previewRequired: deps.previewRequired });
-  return { status: 'ready', prepared, preview };
+  return { status: 'ready', prepared, preview, args };
 }
 
 /**

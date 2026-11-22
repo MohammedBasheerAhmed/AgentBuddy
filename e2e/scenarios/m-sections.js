@@ -52,8 +52,8 @@ module.exports = {
 
     // What each other screen shows once it has loaded (a text only that screen has).
     const expect = {
-      'My work': () => waitForText(p, /My queue/, { timeout: 20000 }),
-      Team: () => waitForText(p, /Overview|Workload|Open|Quality/, { timeout: 20000 }),
+      'My work': () => waitForText(p, /Needs you now/, { timeout: 20000 }),
+      Team: () => waitForText(p, /Read at \d\d:\d\d/, { timeout: 20000 }),
       Write: () => waitForText(p, /Snippets|Safe-to-send check/, { timeout: 20000 }),
       Knowledge: () => waitForText(p, /Knowledge search/, { timeout: 15000 }),
     };

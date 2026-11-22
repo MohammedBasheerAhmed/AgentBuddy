@@ -54,8 +54,26 @@ module.exports = {
     const panel = await ctx.openPanel();
     const p = panel.page;
     await openScreen(p, 'My work');
+    // Round 5: My work opens on five rows; the first one (Needs you now) is open with its tickets, the breached one among them.
+    await p.waitForFunction(() => /INC0010100/.test(document.querySelector('[data-row="needs"]')?.innerText || ''), { timeout: 15000 });
+    const first = await p.evaluate(() => {
+      const vis = window.__vis;
+      const rows = vis(document.querySelectorAll('[data-row]'));
+      return {
+        titles: rows.map((r) => r.querySelector('.ab-ins-pain-title').innerText.trim()),
+        lines: rows.map((r) => ({ line: r.querySelector('.ab-fr-line').innerText.trim(), num: r.querySelector('.ab-fr-num')?.innerText.trim() ?? null })),
+        open: rows.map((r) => r.querySelector('button').getAttribute('aria-expanded')),
+        all: vis(document.querySelectorAll('button')).map((b) => b.innerText.trim()).filter((s) => /^All \d+ open tickets?, with filters$|^My week/.test(s)),
+        controls: vis(document.querySelectorAll('.ab-mywork button, .ab-mywork a[href], .ab-mywork input, .ab-mywork select')).length,
+        cards: vis(document.querySelectorAll('.ab-mywork .ab-cardx')).length,
+      };
+    });
+    t.check('My work opens on five rows: Needs you now, At risk today, Replied to you, Waiting on others, Same cause?', JSON.stringify(first.titles) === JSON.stringify(['Needs you now', 'At risk today', 'Replied to you', 'Waiting on others', 'Same cause?']), JSON.stringify(first.titles));
+    t.check('...each with one finding and a number; the first (the breached tickets) is open and the others are folded', first.lines.every((r) => r.line.length > 0 && r.num !== null) && first.open[0] === 'true' && first.open.slice(1).every((v) => v === 'false') && /SLAs? breached/.test(first.lines[0].line), JSON.stringify(first));
+    t.check('...a calm first screen: about twenty controls or fewer (there were 35), none of today\'s cards, and the way to the full list and to "My week" under the rows', first.controls <= 20 && first.cards === 0 && first.all.length === 2, `${first.controls} controls; ${first.all.join(' | ')}`);
+    t.check('the My work screen shows when it was read', /Read just now|Read \d+ min ago/.test(await panel.text()), (await textOf(p, '.ab-fr-read')) || '');
+    await clickButton(p, /^All \d+ open tickets?, with filters$/);
     await p.waitForFunction((sel) => /INC0010100/.test(document.querySelector(sel)?.innerText || ''), { timeout: 15000 }, QUEUE);
-    t.check('the My work screen shows when it was read', /Read just now|Read \d+ min ago/.test(await panel.text()), (await textOf(p, '.ab-mw-read')) || '');
 
     let list = await readListAll(p);
     const numbers = list.map((x) => x.number);

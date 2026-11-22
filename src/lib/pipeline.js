@@ -22,6 +22,7 @@ import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
 import { tableLabel } from './tableLabels.js';
 import { answerLanguageRule } from '../prompts/rules.js';
 import { withFormat } from '../formats/formats.js';
+import { choicesOf, knownIds, leaveOutParts, leftOutAccess } from './leaveOut.js';
 
 // A placeholder of a kind that is never put back (a password, a card, an IBAN, an ID number), as the tokenizer writes it.
 const KEPT_PLACEHOLDER = new RegExp(`\\[(?:${NEVER_REHYDRATE.join('|')})_\\d{1,6}\\]`);
@@ -158,7 +159,10 @@ export function assertRunnable({ feature, pack, values, policy, config, pageTabl
  * `input` is what the firewall was given, kept in memory only so "Mask this too" can have the same firewall build it again.
  * @returns {{ request: object, firewall: object, preview: string, stats: object, input: object, feature: object, pack: object }}
  */
-export function prepareRun({ feature: action, pack, values, policy, config, createFirewall, pageTable = '' }) {
+export function prepareRun({ feature: action, pack, values: chosen, policy, config, createFirewall, pageTable = '', leaveOut = [], strict = false }) {
+  // "Strict for this one" (the check before sending): the person can make ONE request stricter than their setting, never looser. A
+  // setting that is already Strict or Local only is left as it is.
+  const values = strict && chosen?.piiMode === 'standard' ? { ...chosen, piiMode: 'strict' } : chosen;
   // R11: how this action writes its answer. The person's own format, or the organisation's (locked or standard), becomes the action's
   // system text here, before the size is counted and the preview is built; with none chosen the action is used as it is.
   const feature = withFormat(action, values?.formats, policy?.orgFormats);
@@ -175,8 +179,14 @@ export function prepareRun({ feature: action, pack, values, policy, config, crea
     sensitiveRecord: sensitive,
   });
   const budget = promptBudget(config);
-  const built = partsFor(feature, pack);
-  let fit = fitToModel({ feature, pack, parts: built, budget: budget.prompt, source: budget.source });
+  // What the request holds that the person may leave out (src/lib/leaveOut.js), and what they did: the groups they left out come off
+  // the parts here, before the size is counted and before the firewall sees anything, and the "Not available" part says it was their choice.
+  const everything = partsFor(feature, pack);
+  const choices = choicesOf(everything);
+  const leftOut = choices.filter((c) => knownIds(leaveOut).includes(c.id));
+  const built = leftOut.length ? leaveOutParts(everything, leftOut.map((c) => c.id)) : everything;
+  const asked = leftOut.length ? { ...pack, access: [...(Array.isArray(pack.access) ? pack.access : []), ...leftOutAccess(leftOut)] } : pack;
+  let fit = fitToModel({ feature, pack: asked, parts: built, budget: budget.prompt, source: budget.source });
   // Settings > Language of AI answers: with "The language of the panel" one fixed sentence is added to the task; nothing from the ticket.
   const languageRule = answerLanguageRule(values.answerLanguage, getLanguage());
   // A fixed sentence about what kind of ticket this is (a laptop order is not an outage): chosen from a lookup by kind, never from the ticket.
@@ -193,7 +203,7 @@ export function prepareRun({ feature: action, pack, values, policy, config, crea
     if (round < 3) {
       const target = fit.target - (tokens - budget.prompt) - 32;
       try {
-        tighter = fitToModel({ feature, pack, parts: built, budget: target, source: budget.source });
+        tighter = fitToModel({ feature, pack: asked, parts: built, budget: target, source: budget.source });
       } catch (err) {
         // Even the newest note alone is over this lowered target, an internal number: the person is told the model's own budget,
         // and the size that request would have as the finished text counts it (the estimate, plus what the target was lowered by).
@@ -217,6 +227,11 @@ export function prepareRun({ feature: action, pack, values, policy, config, crea
     pack,
     // What the answer was made without ({ what, why, status }, plain words): the panel shows "Made without: ..." next to the answer.
     madeWithout: fit.madeWithout,
+    // The check before sending: what the request holds that can be left out ({ id, label, count }), what was left out (ids), and
+    // whether this one is Strict by the person's choice for this request.
+    choices,
+    leftOut: leftOut.map((c) => c.id),
+    strict: values !== chosen,
     // About how big the request is, and what the model takes (numbers only).
     size: { tokens, window: budget.window, budget: budget.prompt, source: budget.source, notesLeftOut: fit.trimmed },
   };

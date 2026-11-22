@@ -15,6 +15,7 @@ import { read, plainError } from './ask.js';
 import { internalTextsOf } from '../safeSend/review.js';
 import { errorCodeOf, lastPackOf, makeTokens, seenAfterConfirm } from './runLogic.js';
 import { prepareFlow, sendFlow } from './runFlow.js';
+import { withLeaveOut } from '../lib/leaveOut.js';
 
 // What the flows need from the outside world (src/sidepanel/runFlow.js takes them as arguments so tests can replace them).
 // Tokens used today across providers, for the organisation's daily budget (policy.tokenBudgetPerDay).
@@ -65,7 +66,7 @@ const hostOf = (page) => {
  *   rememberSeen?: (seen: string[]) => Promise|void, now?: () => number }} options
  *   getEnv: the page, the effective settings and the record as they are now (read at each step).
  */
-export function createRunController({ getEnv, onChange = () => {}, deps = DEPS, tokensUsed = tokensUsedToday, rememberSeen = (seen) => saveSettings({ previewSeen: seen }), now = () => Date.now() }) {
+export function createRunController({ getEnv, onChange = () => {}, deps = DEPS, tokensUsed = tokensUsedToday, rememberSeen = (seen) => saveSettings({ previewSeen: seen }), rememberLeaveOut = (next) => saveSettings({ aiLeaveOut: next }), now = () => Date.now() }) {
   let state = IDLE_RUN;
   const tokens = makeTokens(); // a newer run (or reset) invalidates an older one still in flight
   let controller = null; // aborts the request in flight
@@ -193,7 +194,7 @@ export function createRunController({ getEnv, onChange = () => {}, deps = DEPS, 
       return;
     }
     if (out.preview) {
-      setPrepared({ p: out.prepared, cfg }, { phase: 'preview', since: 0 });
+      setPrepared({ p: out.prepared, cfg, args: out.args || null, masked: [] }, { phase: 'preview', since: 0 });
     } else {
       await send(out.prepared, cfg, false, mine);
     }
@@ -231,13 +232,53 @@ export function createRunController({ getEnv, onChange = () => {}, deps = DEPS, 
     const current = preparedNow;
     if (!current) return { ok: false, problem: 'GONE' };
     const out = maskInRun(current.p, text);
-    if (out.ok) setPrepared({ ...current, p: out.prepared });
+    // (the text is kept: when a choice below builds the request again, what the person hid by hand is hidden again)
+    if (out.ok) setPrepared({ ...current, p: out.prepared, masked: [...(current.masked || []), text] });
     return out.ok ? { ok: true, masked: out.masked } : { ok: false, problem: out.problem };
+  }
+
+  /**
+   * A choice in the check before sending: what to leave out of the request (`leaveOut`, ids from src/lib/leaveOut.js) and whether this
+   * one is Strict (`strict`). The request is built again from the same pack through the same firewall (src/lib/pipeline.js
+   * prepareRun), and what the person hid by hand is hidden again. A choice can only make the request smaller or stricter. Returns
+   * { ok: true } or { ok: false, problem } with the old request standing: 'GONE' (nothing waiting), 'REFUSED' (policy or the firewall
+   * would not build it: Strict blocks some field, or the request would be empty of what the action needs).
+   */
+  function choose({ leaveOut, strict } = {}) {
+    const current = preparedNow;
+    if (!current?.args) return { ok: false, problem: 'GONE' };
+    let next;
+    try {
+      next = deps.prepareRun({
+        ...current.args,
+        leaveOut: leaveOut ?? current.p.leftOut ?? [],
+        strict: strict ?? current.p.strict === true,
+        createFirewall: deps.createFirewall,
+      });
+      for (const text of current.masked || []) {
+        const again = maskInRun(next, text);
+        if (again.ok) next = again.prepared;
+      }
+    } catch {
+      return { ok: false, problem: 'REFUSED' };
+    }
+    // (the dialog keeps its place: the same run, built again, keeps the key of the first build)
+    setPrepared({ ...current, p: { ...next, runKey: current.p.runKey || current.p.firewall } });
+    return { ok: true };
+  }
+
+  /** "Remember this for <action>": keep what is left out of this action in the settings (src/lib/leaveOut.js), or forget it. */
+  function remember(ids) {
+    const current = preparedNow;
+    if (!current) return Promise.resolve();
+    const action = typeof current.p.feature === 'string' ? current.p.feature : current.p.feature?.id;
+    const next = withLeaveOut(env().eff?.values?.aiLeaveOut, action, ids);
+    return Promise.resolve(rememberLeaveOut(next)).catch(() => {});
   }
 
   const again = () => (state.active ? run(state.active, lastOptions) : undefined);
 
-  return { getState: () => state, run, again, reset, dispose, confirmPreview, cancelPreview, maskMore };
+  return { getState: () => state, run, again, reset, dispose, confirmPreview, cancelPreview, maskMore, choose, remember };
 }
 
 /**
@@ -276,5 +317,7 @@ export function useRun({ page, eff, record }) {
     confirmPreview: c.confirmPreview,
     cancelPreview: c.cancelPreview,
     maskMore: c.maskMore,
+    choose: c.choose,
+    remember: c.remember,
   };
 }

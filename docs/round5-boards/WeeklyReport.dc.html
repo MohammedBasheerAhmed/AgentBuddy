@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Weekly report in the panel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Inter,sans-serif;color:#1a1f1d}
+button{font:inherit;color:inherit;cursor:pointer}
+.panel{width:400px;height:880px;background:#fff;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+.hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e4e8e6}
+.mark{width:32px;height:32px;border-radius:8px;background:#1d6b52;display:flex;align-items:center;justify-content:center}
+.ib{width:36px;height:36px;border:0;background:none;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#44504b}
+.stat{padding:10px 8px;border:1px solid #e4e8e6;border-radius:10px;background:#fff;text-align:center}
+.sv{font-size:20px;font-weight:600;line-height:1.1}
+.sl{font-size:11px;color:#5b6561;margin-top:4px;line-height:1.25}
+.up{font-size:11px;color:#14503c;font-weight:600;margin-top:2px}
+.dn{font-size:11px;color:#b3261e;font-weight:600;margin-top:2px}
+.dec{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #eef0ef;font-size:13px;line-height:1.4}
+.btn{border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;border:1px solid #1d6b52;background:#fff;color:#1d6b52}
+.btn.p{background:#1d6b52;color:#fff}
+.bar{display:flex;border-top:1px solid #e4e8e6;background:#fff;margin-top:auto}
+.bar button{flex:1;border:0;background:none;padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:#5b6561}
+.bar button.on{color:#1d6b52;font-weight:600}
+</style>
+</helmet>
+<div class="panel">
+  <div class="hd">
+    <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10l2 2 4-4"/></svg></div>
+    <div style="flex:1"><div style="font-size:15px;font-weight:600;line-height:1.2">Agent Buddy</div><div style="font-size:12px;color:#5b6561">dev364920</div></div>
+    <button class="ib" aria-label="All tools"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></button>
+    <button class="ib" aria-label="Settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></button>
+  </div>
+
+  <div style="padding:14px 16px 8px">
+    <button style="border:0;background:none;padding:0;color:#1d6b52;font-size:13px;font-weight:600;margin-bottom:8px">‹ Team</button>
+    <h1 style="margin:0;font-size:20px;font-weight:600">Weekly report</h1>
+    <div style="font-size:12px;color:#5b6561;margin-top:4px">9 to 15 Nov · My groups (2) · read at 15:36</div>
+  </div>
+
+  <div style="margin:4px 16px 0;padding:12px 14px;border-radius:10px;background:#f3f7f5;border:1px solid #dbe7e2">
+    <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#14503c"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></svg>The week in short</div>
+    <div style="font-size:13px;line-height:1.5;margin-top:6px">The team closed 58 tickets against 63 that came in, so the backlog grew by 5. SLA held at 88%. Most breaches were in Network, and four tickets share one VPN cause.</div>
+    <div style="font-size:12px;color:#5b6561;margin-top:6px;display:flex;justify-content:space-between;align-items:center"><span>Written from counts and ticket numbers. No names, no ticket text.</span><button style="border:0;background:none;padding:0;color:#1d6b52;font-weight:600;font-size:12px;text-decoration:underline;flex:none;margin-left:8px">Change</button></div>
+  </div>
+
+  <div style="padding:12px 16px 0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px">
+    <div class="stat"><div class="sv">63</div><div class="sl">Came in</div><div class="dn">+9</div></div>
+    <div class="stat"><div class="sv">58</div><div class="sl">Closed</div><div class="up">+4</div></div>
+    <div class="stat"><div class="sv">+5</div><div class="sl">Backlog</div><div class="dn">worse</div></div>
+    <div class="stat"><div class="sv">88%</div><div class="sl">SLA kept</div><div class="dn">-3 pts</div></div>
+    <div class="stat"><div class="sv">4</div><div class="sl">Reopened</div><div class="up">-2</div></div>
+  </div>
+
+  <div style="padding:16px 16px 0">
+    <div style="font-size:14px;font-weight:600">Needs a decision</div>
+    <div class="dec"><span style="width:20px;height:20px;border-radius:50%;background:#fde8e8;color:#b3261e;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none">1</span><span>Open a problem record for <strong>VPN Gateway EU</strong>: 4 tickets, one likely cause.</span></div>
+    <div class="dec"><span style="width:20px;height:20px;border-radius:50%;background:#fdf0d5;color:#8a5a00;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none">2</span><span><strong>2 people</strong> hold 40% of open tickets. Rebalance Network.</span></div>
+    <div class="dec" style="border-bottom:0"><span style="width:20px;height:20px;border-radius:50%;background:#fdf0d5;color:#8a5a00;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none">3</span><span><strong>3 of 14</strong> closes had no fix note. Ask for one at close.</span></div>
+  </div>
+
+  <div style="padding:4px 16px 0;font-size:12px;color:#5b6561">Full tables, charts and the 8 oldest tickets are in the PDF.</div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;padding:14px 16px">
+    <button class="btn p">Download PDF</button>
+    <button class="btn">Download CSV</button>
+    <button class="btn">Copy for email</button>
+  </div>
+
+  <nav class="bar" aria-label="Screens">
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>My work</button>
+    <button class="on" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14a5 5 0 0 1 4 6"/></svg>Team</button>
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>Ticket</button>
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>Write</button>
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg>Knowledge</button>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":400,"height":880}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

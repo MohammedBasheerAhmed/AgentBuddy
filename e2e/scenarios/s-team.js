@@ -103,7 +103,30 @@ module.exports = {
     await openScreen(p, 'Team');
     await openHalf(p, 'insights');
 
-    // ============================== THE LEAD'S FIRST LOOK ===========================================================================
+    // ============================== THE LEAD'S FIRST LOOK (round 5: a Weekly report button and five rows) ======================================
+    await waitPanel(ctx, p, 'the five rows to read their numbers', async () =>
+      p.evaluate(() => {
+        const rows = window.__vis(document.querySelectorAll('[data-row]'));
+        return rows.length === 5 && rows.every((r) => !/Reading the numbers/.test(r.querySelector('.ab-fr-line')?.innerText || 'Reading the numbers'));
+      }), { timeout: 40000 });
+    const rows = await p.evaluate(() => {
+      const pane = document.querySelector('#ab-team-half-panel-insights');
+      const vis = window.__vis;
+      return {
+        titles: vis(pane.querySelectorAll('[data-row] .ab-ins-pain-title')).map((e) => e.innerText.trim()),
+        lines: vis(pane.querySelectorAll('[data-row]')).map((r) => ({ id: r.getAttribute('data-row'), line: r.querySelector('.ab-fr-line').innerText.trim(), num: r.querySelector('.ab-fr-num')?.innerText.trim() ?? null, open: r.querySelector('button').getAttribute('aria-expanded') })),
+        weekly: vis(pane.querySelectorAll('button')).some((b) => /^Weekly report/.test(b.innerText.trim()) && /One click\. Ready to send to your manager\./.test(b.innerText)),
+        chip: pane.querySelector('.ab-scope-chip')?.innerText.trim() || '',
+        controls: vis(pane.querySelectorAll('button, a[href], input, select, summary')).length,
+        widgets: vis(pane.querySelectorAll('section.ab-widget')).length,
+        ai: vis(pane.querySelectorAll('.ab-ai-badge')).length,
+      };
+    });
+    t.check('Team opens on five rows (Needs attention now, Getting old, Who is carrying the load, Coming back again, How well tickets are closed) and a Weekly report button', JSON.stringify(rows.titles) === JSON.stringify(['Needs attention now', 'Getting old', 'Who is carrying the load', 'Coming back again', 'How well tickets are closed']) && rows.weekly, JSON.stringify(rows));
+    t.check('...each row has one finding and a number or the plain words "could not be read", the lead\'s groups are chosen, and no section of the overview is drawn yet', rows.lines.every((r) => r.line.length > 0 && (r.num !== null || /could not be read/i.test(r.line))) && /^My groups \(\d+/.test(rows.chip) && rows.widgets === 0, JSON.stringify(rows.lines));
+    t.check('...a calm first screen: about twenty controls or fewer (there were 55), and no AI element', rows.controls <= 22 && rows.ai === 0, `${rows.controls} controls, ${rows.ai} AI marks`);
+    t.check('...a person is named only inside an opened row: no row\'s one line holds a name', !rows.lines.some((r) => /Anglin|Loftus|Whitherspoon|Tuter/.test(r.line)), JSON.stringify(rows.lines.map((r) => r.line)));
+    await clickButton(p, /^All team charts and tables$/);
     await widgetReady(ctx, p, 'Overview');
     const first = await p.evaluate(() => {
       const top = window.__vis(document.querySelectorAll('.ab-dash-top'))[0];
@@ -259,6 +282,7 @@ module.exports = {
     });
     await openScreen(p, 'Team');
     await openHalf(p, 'insights');
+    await clickButton(p, /^All team charts and tables$/); // (round 5: the panel reopens on the five rows)
     await p.waitForSelector('.ab-dash-toolbar select', { timeout: 20000 });
     const options = await p.$$eval('.ab-dash-toolbar select option', (os) => os.map((o) => ({ value: o.value, name: o.innerText.trim() })));
     t.check('after the panel was reloaded both saved dashboards come back: the renamed one and the new one', options.some((o) => /for the network team$/.test(o.name)) && options.some((o) => o.name === 'New dashboard'), options.map((o) => o.name).join(' | '));

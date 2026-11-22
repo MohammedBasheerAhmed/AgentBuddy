@@ -1,4 +1,4 @@
-import { MSG } from '../lib/messages.js';
+import { MSG, READS_FILE, READS_NOT_LOADED_CODE } from '../lib/messages.js';
 import { READ_REASON, readReasonOf, reasonSentence } from '../context/access.js';
 import { t, tm, t as tr, getLanguage } from '../i18n/index.js';
 
@@ -90,5 +90,33 @@ export function setReadPolicy(policy) {
     : null;
 }
 
+// The reading engine is a file of its own that the page script does not carry (src/content/readsEntry.js). The first READ on a page finds
+// it missing; it is injected into the tab (the panel has the scripting permission and the site's access, as for the page markers in
+// usePage.js) and the read is asked again. Several reads start together when a screen opens: one injection per tab serves them all.
+const loading = new Map();
+function loadReads(tabId) {
+  if (!loading.has(tabId)) {
+    const injected = Promise.resolve(chrome.scripting.executeScript({ target: { tabId }, files: [READS_FILE], world: 'ISOLATED' })).finally(() => loading.delete(tabId));
+    loading.set(tabId, injected);
+  }
+  return loading.get(tabId);
+}
+
 /** A READ operation (src/content/reads.js and src/content/ops/*). */
-export const read = (tabId, op, args = {}) => ask(tabId, { type: MSG.READ, op, args, ...(readPolicy ? { policy: readPolicy } : {}) });
+export async function read(tabId, op, args = {}) {
+  const message = { type: MSG.READ, op, args, ...(readPolicy ? { policy: readPolicy } : {}) };
+  try {
+    return await ask(tabId, message);
+  } catch (err) {
+    if (err?.code !== READS_NOT_LOADED_CODE) throw err;
+  }
+  try {
+    await loadReads(tabId);
+  } catch {
+    // (the tab went away, or the browser refused the file: the person is told the page cannot be read, as for any lost page)
+    const lost = new Error(tr(LOST_TOUCH));
+    lost.code = 'LOST_TOUCH';
+    throw lost;
+  }
+  return ask(tabId, message);
+}

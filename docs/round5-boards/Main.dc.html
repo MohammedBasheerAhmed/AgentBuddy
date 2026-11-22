@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My work, first screen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Inter,sans-serif;color:#1a1f1d}
+button{font:inherit;color:inherit;cursor:pointer}
+.panel{width:400px;height:880px;background:#fff;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+.hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e4e8e6}
+.mark{width:32px;height:32px;border-radius:8px;background:#1d6b52;display:flex;align-items:center;justify-content:center}
+.ib{width:36px;height:36px;border:0;background:none;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#44504b}
+.row{display:flex;gap:12px;padding:14px 16px;border:0;border-bottom:1px solid #eef0ef;background:#fff;align-items:flex-start;width:100%;text-align:left;box-sizing:border-box}
+.tile{width:32px;height:32px;border-radius:8px;background:#eef0ef;flex:none;display:flex;align-items:center;justify-content:center;position:relative;color:#44504b}
+.dot{position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;border:2px solid #fff}
+.rt{font-size:14px;font-weight:600;line-height:1.3}
+.rl{font-size:13px;color:#5b6561;margin-top:2px;line-height:1.35}
+.num{font-size:12px;font-weight:600;background:#eef0ef;border-radius:10px;padding:2px 8px;color:#33403a;flex:none}
+.chip{display:inline-block;font-size:12px;border-radius:12px;padding:2px 8px;margin-right:6px}
+.tk{padding:10px 16px 10px 60px;border-bottom:1px solid #eef0ef;background:#f8faf9}
+.bar{display:flex;border-top:1px solid #e4e8e6;background:#fff;margin-top:auto}
+.bar button{flex:1;border:0;background:none;padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:#5b6561}
+.bar button.on{color:#1d6b52;font-weight:600}
+</style>
+</helmet>
+<div class="panel">
+  <div class="hd">
+    <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10l2 2 4-4"/></svg></div>
+    <div style="flex:1"><div style="font-size:15px;font-weight:600;line-height:1.2">Agent Buddy</div><div style="font-size:12px;color:#5b6561">dev364920</div></div>
+    <button class="ib" aria-label="All tools"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></button>
+    <button class="ib" aria-label="Settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></button>
+  </div>
+
+  <div style="padding:16px 16px 12px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <h1 style="margin:0;font-size:20px;font-weight:600">My work</h1>
+      <span style="font-size:12px;color:#5b6561">Read just now · <button style="border:0;background:none;padding:0;color:#1d6b52;font-weight:600;font-size:12px">Refresh</button></span>
+    </div>
+    <div style="font-size:13px;color:#5b6561;margin-top:4px">6 open tickets. Two need you first.</div>
+  </div>
+
+  <div style="border-top:1px solid #e4e8e6">
+    <button class="row" aria-expanded="true">
+      <span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg><span class="dot" style="background:#c4262e"></span></span>
+      <span style="flex:1"><div class="rt">Needs you now</div><div class="rl">2 SLA breached · 1 customer waiting</div></span>
+      <span class="num">3</span>
+    </button>
+    <div class="tk"><div class="rt" style="font-size:13px"><span style="font-family:Consolas,monospace">INC0010100</span> Printer offline in Finance</div><div style="margin-top:4px"><span class="chip" style="background:#fde8e8;color:#b3261e">SLA breached 28 d</span><span class="chip" style="background:#eef0ef;color:#33403a">P3</span></div></div>
+    <div class="tk"><div class="rt" style="font-size:13px"><span style="font-family:Consolas,monospace">CS0001001</span> Cloud Gateway returns 502 for Acme Corp users</div><div style="margin-top:4px"><span class="chip" style="background:#fde8e8;color:#b3261e">SLA breached 5 h</span><span class="chip" style="background:#eef0ef;color:#33403a">P2</span></div></div>
+
+    <button class="row">
+      <span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="dot" style="background:#8a5a00"></span></span>
+      <span style="flex:1"><div class="rt">At risk today</div><div class="rl">3 tickets will breach within 4 hours</div></span>
+      <span class="num">3</span>
+    </button>
+    <button class="row">
+      <span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 6 6v1"/></svg></span>
+      <span style="flex:1"><div class="rt">Replied to you</div><div class="rl">1 customer wrote back since you last looked</div></span>
+      <span class="num">1</span>
+    </button>
+    <button class="row">
+      <span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+      <span style="flex:1"><div class="rt">Waiting on others</div><div class="rl">2 tickets, the longest for 6 days</div></span>
+      <span class="num">2</span>
+    </button>
+    <button class="row">
+      <span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14a5 5 0 0 1 4 6"/></svg></span>
+      <span style="flex:1"><div class="rt">Same cause?</div><div class="rl">4 of your tickets are on VPN Gateway EU</div></span>
+      <span class="num">4</span>
+    </button>
+  </div>
+
+  <div style="padding:6px 16px">
+    <button style="display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:12px 0;text-align:left;color:#1d6b52;font-size:14px;font-weight:600;border-bottom:1px solid #eef0ef"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span style="flex:1">All 6 open tickets, with filters</span></button>
+    <button style="display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:12px 0;text-align:left;font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d6b52" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span style="flex:1"><span style="font-weight:600;color:#1d6b52">My week</span><span style="color:#5b6561"> · 11 closed, first reply in 42 min</span></span></button>
+  </div>
+
+  <div style="padding:8px 16px;font-size:12px;color:#5b6561;display:flex;gap:6px;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Stays in ServiceNow. Nothing is sent anywhere.</div>
+
+  <nav class="bar" aria-label="Screens">
+    <button class="on" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>My work</button>
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14a5 5 0 0 1 4 6"/></svg>Team</button>
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>Ticket</button>
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>Write</button>
+    <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg>Knowledge</button>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":400,"height":880}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

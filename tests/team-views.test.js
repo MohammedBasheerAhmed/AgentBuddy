@@ -55,9 +55,12 @@ function world({ session = false } = {}) {
 const settleMore = () => settle(8);
 // Every mounted view is unmounted after its test, failed or not: a view left mounted keeps its timers and the run never ends.
 const mounted = [];
+// Round 5: the Team screen opens on five rows; "All team charts and tables" is today's Team overview, and these tests are about that one.
 const show = async (element) => {
   const ui = await mount(element);
   mounted.push(ui);
+  const all = ui.$$('button', { all: true }).find((b) => b.shown && b.textContent.trim() === 'All team charts and tables');
+  if (all) await click(all);
   return ui;
 };
 test.afterEach(async () => {
@@ -88,9 +91,10 @@ test('Insights: a quiet top row (dashboard, scope chip, one menu) before the fir
   assert.equal(ui.$$('.ab-btn-primary').length, 0, 'no filled button competes with the numbers');
   // What could not be read is said once, folded, for the whole dashboard (with the time zone note).
   assert.match(t, /\d notes about these numbers/);
-  const said = ui.$$('.ab-dash-notes-list li', { all: true }).map((li) => li.textContent);
+  const dash = ui.$('.ab-dash'); // (round 5: the five rows stay mounted, hidden, behind the overview; what is said once is said once on the overview)
+  const said = [...dash.querySelectorAll('.ab-dash-notes-list li')].map((li) => li.textContent);
   assert.ok(said.length >= 1);
-  for (const note of said) assert.equal(ui.container.textContent.split(note).length - 1, 1, `said once: ${note}`);
+  for (const note of said) assert.equal(dash.textContent.split(note).length - 1, 1, `said once: ${note}`);
   assert.match(ui.container.textContent, /counted in your browser's time zone/);
   assert.ok(fake.readsOf('reportContext').length >= 1);
   await ui.unmount();
@@ -228,12 +232,20 @@ test('AI Assist on its own: it reads the dashboard and the hand-over itself, mar
 
 test('AI Assist next to Insights works from the numbers Insights read: it reads no section of the dashboard again', async () => {
   const { runs } = world();
-  const both = await mount(
+  // Round 5: Insights opens on its five rows; the full overview (today's dashboard) is what AI Assist shares its numbers with. Open it
+  // first, then wake AI Assist (shown for the first time).
+  const tree = (assistOn) => (
     <>
       <TeamInsights page={page} eff={eff()} active={false} />
-      <TeamAssist page={page} eff={eff()} active />
+      <TeamAssist page={page} eff={eff()} active={assistOn} />
     </>
   );
+  const both = await mount(tree(false));
+  await settleMore();
+  assert.equal(teamShare(page).live, 0, 'the five rows load no dashboard section of their own to share');
+  await click(both.$$('button', { all: true }).find((b) => b.textContent.trim() === 'All team charts and tables'));
+  await settleMore();
+  await both.rerender(tree(true));
   await settleMore();
   const count = (section) => runs().filter((a) => a.section === section).length;
   assert.equal(count('overview'), 1, 'read once, by the Insights dashboard');

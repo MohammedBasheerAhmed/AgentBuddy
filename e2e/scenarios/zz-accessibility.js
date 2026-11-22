@@ -11,8 +11,8 @@ const { openScreen, openHalf, waitForText, clickButton } = require('../ui.js');
 
 const SCHEMES = ['light', 'dark'];
 const SCREENS = {
-  'My work': [/My queue/, 20000],
-  Team: [/Overview|Workload|Open|Quality/, 20000],
+  'My work': [/Needs you now/, 20000],
+  Team: [/Read at \d\d:\d\d/, 20000],
   Write: [/Snippets|Safe-to-send check/, 20000],
   Knowledge: [/Knowledge search/, 20000],
 };

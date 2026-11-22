@@ -228,6 +228,7 @@ test('the Team screen: Needs attention now is first, the fold lines are closed, 
   const { fake, created } = teamWorld();
   const ui = await mount(<TeamInsights page={classic} eff={eff()} active />);
   mounted.push(ui);
+  await click(ui.$$('button', { all: true }).find((b) => b.textContent.trim() === 'All team charts and tables')); // round 5: the five rows come first
   await settle(16);
   const widgets = ui.$$('section.ab-widget', { all: true });
   assert.equal(widgets[0].getAttribute('aria-label'), 'Needs attention now', widgets.map((w) => w.getAttribute('aria-label')).join(' | '));
@@ -266,6 +267,7 @@ test('printing: the folded parts are opened for the print and closed again after
     teamWorld();
     const ui = await mount(<TeamInsights page={classic} eff={eff()} active />);
     mounted.push(ui);
+    await click(ui.$$('button', { all: true }).find((b) => b.textContent.trim() === 'All team charts and tables')); // round 5: the five rows come first
     await settle(16);
     const folds = () => ui.$$('details[data-fold]', { all: true });
     assert.ok(folds().length >= 4);

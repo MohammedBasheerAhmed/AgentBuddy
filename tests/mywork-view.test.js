@@ -44,8 +44,15 @@ const linkOf = (ui, number) => ui.$$('a').find((a) => a.textContent.includes(num
 // Every view a test mounts is unmounted after it, even when the test fails half-way: the screen's timers (the "Read 2 min ago"
 // tick) would otherwise keep the test process alive.
 const mounted = new Set();
+/** Round 5: the first screen is five rows; "All N open tickets, with filters" is today's screen, and most of these tests are about that one. */
+async function openAll(ui) {
+  const open = ui.$$('button', { all: true }).find((b) => b.shown && /^All \d+ (or more )?open tickets?, with filters$/.test(b.textContent.trim()));
+  if (open) await click(open);
+  return Boolean(open);
+}
 async function mount(element) {
   const ui = await mountView(element);
+  await openAll(ui);
   const unmount = ui.unmount;
   ui.unmount = async () => {
     if (!mounted.delete(ui)) return;
@@ -275,6 +282,7 @@ test('a read can be stopped: its late answer is dropped, "Try again" reads again
   await during(() => held.resolve(answer({ items: [item({ title: 'Late answer' })] })));
   assert.ok(!/Late answer/.test(ui.text()));
   await click(ui.button('Try again'));
+  await openAll(ui);
   assert.match(ui.text(), /Second read/);
   assert.equal(fake.readsOf('myWork').length, 2);
   await ui.unmount();

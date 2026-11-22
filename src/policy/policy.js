@@ -20,6 +20,7 @@ import { t, tm } from '../i18n/core.js'; // (the mechanism only: the Arabic text
 import { HIDEABLE_SCREENS, PROFILE_IDS, cleanProfilesFor } from '../profiles/ids.js';
 import { LAYOUT_KIND, LAYOUT_MAX_CHARS, LAYOUT_VERSION, layoutEnvelopeProblem } from '../reports/layoutFile.js';
 import { FORMAT_LIMITS, cleanFormats, normalizeFormat, readOrgFormats, specOf } from '../formats/formats.js';
+import { cleanLeaveOut } from '../lib/leaveOut.js';
 import { TABLE_RE } from '../context/util.js';
 import { BUILT_IN_SENSITIVE_PREFIXES } from '../context/kinds.js';
 
@@ -756,6 +757,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   halves: {}, // per screen: 'insights' | 'assist', the half last chosen
   followUpDays: 3, // My work: a customer not updated (or not answering) for this many days is a follow-up due
   formats: {}, // per AI action (by id): how it writes its answer (src/formats/formats.js); {} = every action's own default
+  aiLeaveOut: {}, // per AI action (by id): the groups of the request the person asked to leave out (src/lib/leaveOut.js); {} = everything the action builds
 });
 
 /**
@@ -781,6 +783,7 @@ export function effectiveSettings(user, policyInput) {
   if (!['system', 'light', 'dark'].includes(values.theme)) values.theme = DEFAULT_SETTINGS.theme;
   values.profilesFor = values.profilesConfirmed === true ? cleanProfilesFor(values.profilesFor) : ''; // only the 16-character hash, only for a confirmed set
   values.formats = cleanFormats(values.formats); // only known actions, each part in range; a stored value that is not a format is dropped
+  values.aiLeaveOut = cleanLeaveOut(values.aiLeaveOut); // only plain action handles and known groups
 
   if (policy.piiMode) {
     // The policy is a floor: a stricter personal choice is kept.

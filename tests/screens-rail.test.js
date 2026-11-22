@@ -168,11 +168,14 @@ function myWork({ items = [], approvals = [], groups = [] } = {}) {
 const myWorkEff = () => ({ ready: true, values: {}, locked: {}, policy: normalizePolicy({}) });
 const myWorkPage = { status: 'other', tabId: 7, href: 'https://acme.service-now.com/now/nav/ui/home', surface: 'classic', portal: null, record: null, newRecord: null, user: { name: 'Beth' } };
 
-async function myWorkScreen(answer) {
+// Round 5: My work opens on five rows (tests/round5-rows-mywork.test.js); "All N open tickets, with filters" is the screen these tests are about.
+async function myWorkScreen(answer, { all = true } = {}) {
   const fake = makeChrome();
   globalThis.chrome = fake.chrome;
   fake.onRead('myWork', () => answer);
-  return onScreen('mywork', 'My work', { Insights: MyWorkView, page: myWorkPage, eff: myWorkEff(), extra: { onOpenTicket: () => {} } });
+  const s = await onScreen('mywork', 'My work', { Insights: MyWorkView, page: myWorkPage, eff: myWorkEff(), extra: { onOpenTicket: () => {} } });
+  if (all) await click(s.ui.$$('button', { all: true }).find((b) => b.shown && /^All \d+ open tickets?, with filters$/.test(b.textContent.trim())));
+  return s;
 }
 
 test('My work: the rail lists its four sections in the page\'s order, named as on screen, marked where a breach or a late approval is', async () => {
@@ -247,8 +250,15 @@ async function teamScreen(policy = {}) {
   return s;
 }
 
+// Round 5: Team opens on five rows (tests/round5-rows-team.test.js); "All team charts and tables" is the dashboard this test is about.
+async function openOverview(s) {
+  await click(s.ui.$$('button', { all: true }).find((b) => b.shown && b.textContent.trim() === 'All team charts and tables'));
+  await settle(8);
+}
+
 test('Team, Insights: one item per section of the dashboard, in its order, named by the heading the section draws', async () => {
   const s = await teamScreen();
+  await openOverview(s);
   assert.equal(s.rail().title, 'Insights');
   const slots = s.ui.$$('.ab-widgets > .ab-widget-slot');
   assert.ok(slots.length >= 2, 'the dashboard drew its sections');
@@ -408,4 +418,27 @@ test('RailCard: a card the rail lists, its own element registered, its mark on t
   const alone = await mount(<RailCard rail={rail}>x</RailCard>);
   assert.equal(alone.errors.length, 0, alone.errors.join('\n'));
   assert.match(alone.text(), /My queue/);
+});
+
+// ---- round 5: the five rows of My work and Team are items of the rail ----------------------------------------------------------------
+
+test('My work, five rows: the rail lists the five rows in order, the first marked while a breach is on it; the full list lists its cards instead', async () => {
+  const now = Date.now();
+  const breached = ticket({ title: 'Printer offline', sla: { breached: true, paused: false, percentage: 140, dueAt: now - DAY, risk: 'breached' } });
+  const s = await myWorkScreen(myWork({ items: [breached, ticket()] }), { all: false });
+  const rows = [['mywork-row-needs', 'Needs you now', 'alert', 'warn'], ['mywork-row-risk', 'At risk today', 'flag', ''], ['mywork-row-replied', 'Replied to you', 'reply', ''], ['mywork-row-waiting', 'Waiting on others', 'clock', ''], ['mywork-row-cause', 'Same cause?', 'refresh', '']];
+  assert.deepEqual(s.items().map((it) => [it.id, it.label, it.icon, it.attention]), rows);
+  for (const [, , icon] of rows) assert.equal(typeof PATHS[icon], 'string', `${icon} can be drawn`);
+  await s.select('mywork-row-waiting');
+  assert.equal(s.ui.$('[data-row="waiting"] > button').getAttribute('aria-expanded'), 'true', 'a click in the rail opens the folded row');
+  await click(s.ui.button(/^All \d+ open tickets?, with filters$/));
+  assert.deepEqual(s.ids(), ['mywork-queue', 'mywork-followups', 'mywork-groups'], 'behind the full list the rows are gone from the rail');
+});
+
+test('Team, five rows: the rail lists the five rows; behind the full overview it lists the overview\'s sections only', async () => {
+  const s = await teamScreen();
+  assert.deepEqual(s.ids(), ['team-row-needs', 'team-row-old', 'team-row-load', 'team-row-back', 'team-row-closed']);
+  assert.deepEqual(s.items().map((it) => it.label), ['Needs attention now', 'Getting old', 'Who is carrying the load', 'Coming back again', 'How well tickets are closed']);
+  await openOverview(s);
+  assert.ok(s.ids().length >= 2 && s.ids().every((id) => !id.startsWith('team-row-')), 'the rows are not listed twice');
 });

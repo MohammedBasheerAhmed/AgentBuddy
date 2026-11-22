@@ -27,7 +27,7 @@ const NO_ANSWERS = [];
  *                                focus is remembered so the focus can go back to it
  *   reset()                      stop this ticket's run (Stop waiting) and put its error away; answers stay
  *   again()                      run the last run of this ticket again
- *   confirmPreview / cancelPreview / maskMore   the check of what will be sent
+ *   confirmPreview / cancelPreview / maskMore / choose / remember   the check of what will be sent (choose: what to leave out, Strict)
  *   refine(answer, preset, choice)  rewrite an answer (Shorter, Translate...): a new answer for the same ticket
  *   retryAnswer(answer)          ask what made this answer again
  *   closeAnswer(answer), seen()
@@ -88,6 +88,16 @@ export function useAnswers({ page, eff, record }) {
       const k = cur.current.key;
       const e = k ? peekRun(k) : null;
       return e ? e.ctl.maskMore(text) : { ok: false, problem: 'GONE' };
+    },
+    choose: (choice) => {
+      const k = cur.current.key;
+      const e = k ? peekRun(k) : null;
+      return e ? e.ctl.choose(choice) : { ok: false, problem: 'GONE' };
+    },
+    remember: (ids) => {
+      const k = cur.current.key;
+      const e = k ? peekRun(k) : null;
+      return e ? e.ctl.remember(ids) : Promise.resolve();
     },
     refine,
     retryAnswer,

@@ -51,8 +51,8 @@ test('SEC-11: every feature that sends text reads every person column of every k
 
 test('SEC-11: every feature in the registry has a context spec, and the spec reads the people of every kind it applies to', () => {
   const searchOnly = new Set(SEARCH_ONLY_FEATURES);
-  // These two are built from the reports engine's own figures (src/reports/ai), not from a record: they read no record, so they have no spec.
-  const notFromARecord = new Set(['shift-handover', 'dashboard-insights']);
+  // These are built from the reports engine's own figures (the weekly ones: counts and ticket numbers only) (src/reports/ai), not from a record: they read no record, so they have no spec.
+  const notFromARecord = new Set(['shift-handover', 'dashboard-insights', 'weekly-summary', 'my-week-tip']);
   for (const feature of FEATURES) {
     const spec = contextFor(feature);
     if (notFromARecord.has(feature.id)) {

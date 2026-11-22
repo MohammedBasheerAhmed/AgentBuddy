@@ -156,6 +156,82 @@ function HiddenSummary({ stats }) {
   );
 }
 
+// "What goes in" (round 5, board F; src/lib/leaveOut.js): the groups of this request that can be left out (notes, comments, the caller's
+// other tickets, look-alike tickets, articles) as ticks, Strict privacy for this one request, and "Remember this" for the action. A
+// change builds the request again from the same pack through the same firewall (useRun choose); it can only make the request smaller
+// or stricter, and the readable view below shows exactly what is left. The ticket's own details are not a choice: they always go.
+function Choices({ feature, prepared, onChoose, onRemember }) {
+  const choices = Array.isArray(prepared.choices) ? prepared.choices : [];
+  const left = Array.isArray(prepared.leftOut) ? prepared.leftOut : [];
+  const strict = prepared.strict === true;
+  const canStrict = strict || prepared.request?.mode === 'standard';
+  // A choice that was kept for this action earlier is already applied when the check opens: the tick says so.
+  const [remember, setRemember] = useState(left.length > 0);
+  const [problem, setProblem] = useState('');
+  const uid = useId().replace(/:/g, '');
+  if (typeof onChoose !== 'function' || (!choices.length && !canStrict)) return null;
+  const apply = (patch, nextLeft) => {
+    const out = onChoose(patch);
+    if (!out?.ok) {
+      setProblem(t('That choice is not possible for this request, so it was kept as it was.'));
+      return;
+    }
+    setProblem('');
+    if (remember && nextLeft && typeof onRemember === 'function') onRemember(nextLeft);
+  };
+  const toggle = (id, include) => {
+    const next = include ? left.filter((x) => x !== id) : [...left, id];
+    apply({ leaveOut: next }, next);
+  };
+  const title = typeof feature === 'object' && feature ? feature.title : '';
+  return (
+    <section className="ab-surface ab-choices" aria-label={t('What goes in')}>
+      <h3 className="ab-check-h">{t('What goes in')}</h3>
+      <p className="ab-check-hint">{t("The ticket's own details always go. Untick what this one does not need.")}</p>
+      {choices.length > 0 && (
+        <ul className="ab-choice-list">
+          {choices.map((c) => {
+            const id = `ab-choice-${uid}-${c.id}`;
+            return (
+              <li key={c.id} className="ab-choice">
+                <input id={id} type="checkbox" checked={!left.includes(c.id)} onChange={(e) => toggle(c.id, e.target.checked)} />
+                <label htmlFor={id}>
+                  {t(c.label)}
+                  {c.count > 1 && <span className="ab-choice-n"> ({c.count})</span>}
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {canStrict && (
+        <div className="ab-choice">
+          <input id={`ab-choice-${uid}-strict`} type="checkbox" checked={strict} onChange={(e) => apply({ strict: e.target.checked }, null)} />
+          <label htmlFor={`ab-choice-${uid}-strict`}>
+            {t('Use Strict privacy for this one')}
+            <span className="ab-hint ab-choice-hint">{t('Strict hides more, and some requests cannot be made in it.')}</span>
+          </label>
+        </div>
+      )}
+      {choices.length > 0 && typeof onRemember === 'function' && (
+        <div className="ab-choice ab-choice-remember">
+          <input
+            id={`ab-choice-${uid}-remember`}
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => {
+              setRemember(e.target.checked);
+              onRemember(e.target.checked ? left : []);
+            }}
+          />
+          <label htmlFor={`ab-choice-${uid}-remember`}>{title ? t('Remember this for "{title}"', { title }) : t('Remember this for this action')}</label>
+        </div>
+      )}
+      <span className="ab-hint ab-choice-problem" role="status">{problem}</span>
+    </section>
+  );
+}
+
 // Something that opens in place below its button (the rules, the exact text): a quiet row with a chevron that points down.
 function Disclosure({ label, open, onToggle, children }) {
   return (
@@ -177,7 +253,7 @@ let runCount = 0;
 
 /** The dialog's key for a prepared run (prepareRun's result, or maskMore's for the same run). */
 export function previewKey(prepared) {
-  const run = prepared?.firewall || prepared?.input || prepared;
+  const run = prepared?.runKey || prepared?.firewall || prepared?.input || prepared;
   if (!run || typeof run !== 'object') return 'preview';
   if (!runKeys.has(run)) runKeys.set(run, `run-${(runCount += 1)}`);
   return runKeys.get(run);
@@ -200,11 +276,12 @@ export function previewKey(prepared) {
  *
  * props: feature, prepared (from prepareRun or maskMore), config, canSkipNext, onSend({ shown }), onCancel,
  * onMask? (text) => { ok, masked } | { ok: false, problem } (useRun's maskMore; without it the box is not shown),
+ * onChoose? ({ leaveOut?, strict? }) => { ok } | { ok: false, problem } and onRemember? (ids) (useRun's choose and remember: "What goes in"),
  * short?, others? (the other records, counted: runLogic otherRecordsSummary)
  *
  * Render it with key={previewKey(prepared)}: its state belongs to one run.
  */
-export default function PreviewDialog({ feature, prepared, config, canSkipNext, onSend, onCancel, onMask, short = false, others = '' }) {
+export default function PreviewDialog({ feature, prepared, config, canSkipNext, onSend, onCancel, onMask, onChoose, onRemember, short = false, others = '' }) {
   const backdropRef = useRef(null);
   const sendRef = useRef(null);
   const previewRef = useRef(null);
@@ -376,6 +453,7 @@ export default function PreviewDialog({ feature, prepared, config, canSkipNext, 
         </div>
         <div className="ab-dialog-body">
           <HiddenSummary stats={prepared.stats} />
+          <Choices feature={feature} prepared={prepared} onChoose={onChoose} onRemember={onRemember} />
           <h3 className="ab-check-h">{t('What will be sent')}</h3>
           <p className="ab-check-hint">
             {onMask

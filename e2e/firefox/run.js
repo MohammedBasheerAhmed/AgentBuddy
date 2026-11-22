@@ -341,6 +341,10 @@ const STEPS = [
         ctx.ext(
           async (job) => {
             try {
+              const answer = await chrome.tabs.sendMessage(job.tabId, job.message);
+              // The reading engine is its own file, loaded into the tab on the first read (what src/sidepanel/ask.js does for the panel).
+              if (answer?.error?.code !== 'READS_NOT_LOADED') return answer;
+              await chrome.scripting.executeScript({ target: { tabId: job.tabId }, files: ['reads.bundle.js'], world: 'ISOLATED' });
               return await chrome.tabs.sendMessage(job.tabId, job.message);
             } catch (err) {
               return { sendError: String(err.message || err) };

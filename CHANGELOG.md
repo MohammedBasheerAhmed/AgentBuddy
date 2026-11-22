@@ -3,6 +3,24 @@
 All notable changes to Agent Buddy. The version stays 0.1.0 until the first release is cut (the lead decides the number). Rows in
 brackets are the `TRACKER.md` items.
 
+## Unreleased: round 5, calm first screens, reports and control before AI (2026-11-22, not committed, not pushed)
+
+Leaders said Agent Buddy is heavy and has no story. The product comes first (`docs/round5.md`). [R25 to R28]
+
+- **My work and Team open on five rows.** One finding on each row, the detail one tap down; today's full screens are still there ("All N
+  open tickets, with filters", "All team charts and tables"). At 400 px: My work 35 to 11 controls (about 1,780 to 925 px), Team 55 to 13
+  (about 3,650 to 1,130 px). [R27]
+- **My week and the weekly report.** "My week" on My work and a one-click "Weekly report" on Team: the week in five numbers, what needs a
+  decision, an AI line written from counts and ticket numbers only (preview first), PDF, CSV and copy for email. A number that cannot be
+  read honestly is left out, never shown as zero. [R28]
+
+- **A small page script.** The script that loads on every page of an added site is 205 KB minified (it was 512 KB). The reading engine is
+  a file of its own, `reads.bundle.js`, which the panel loads into the tab the first time it reads (once per page). No manifest change.
+- **What goes in.** The check before sending has a "What goes in" section: untick the groups of the request you do not want to send
+  (comments, work notes, the caller's other tickets, look-alike tickets, articles...), choose Strict privacy for one request, and
+  "Remember this" per action. A choice can only make a request smaller or stricter; the request says it was your choice and the answer
+  says "left out by you". Every choice is built again through the same firewall.
+
 ## Unreleased: audit of 2026-11-07, agents and fulfillers (not committed, not pushed)
 
 You said the panel showed table names (`ui_page` on the home page), did not evaluate access levels, opened knowledge articles in

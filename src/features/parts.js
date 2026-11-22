@@ -157,6 +157,7 @@ const PERSON_PHRASE = {
   'empty-or-hidden': tm('may be hidden from you'),
   error: tm('could not be read'),
   skipped: tm('not read'),
+  leftOut: tm('left out by you'),
   partial: tm('some may be hidden from you'),
 };
 // The two kinds of note a journal read can come back without (src/context/journal.js workNotesHidden / commentsHidden).
@@ -188,12 +189,14 @@ export function unavailable(pack) {
     }
     if (!PHRASE[status] && !(status === 'skipped' && present(a.note))) continue;
     const source = String(a.source || '');
+    // A group the person left out in the check before sending (src/lib/leaveOut.js): named by its own words, said to be their choice.
+    const leftOut = a.leftOut === true && status === 'skipped' && present(a.what);
     // (a skip on the record's own table is the record's own fields; any other status on that table is a read of OTHER records of it)
-    const what = source && source === pack?.table && status === 'skipped' ? 'Some fields of this ticket' : sourceWords(source);
+    const what = leftOut ? present(a.what) : source && source === pack?.table && status === 'skipped' ? 'Some fields of this ticket' : sourceWords(source);
     const key = `${what}|${status}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ source, what, status, why: PERSON_PHRASE[status], note: status === 'skipped' ? present(a.note).slice(0, 300) : '' });
+    out.push({ source, what, status, why: leftOut ? PERSON_PHRASE.leftOut : PERSON_PHRASE[status], note: status === 'skipped' ? present(a.note).slice(0, 300) : '', ...(leftOut ? { leftOut: true } : {}) });
   }
   return out;
 }
@@ -252,7 +255,7 @@ export const madeWithoutText = (list) =>
 /** "Made without: ..." for the panel: `{ what, why, status }` in plain words, nothing from the instance. */
 export function madeWithout(list, cut = null) {
   // (for the person only, so it is said in the language of the panel; what the model reads is unavailableText above)
-  const out = list.map((u) => ({ what: u.what === 'Some fields of this ticket' ? t('Some fields of this ticket') : u.status === 'partial' ? t(u.what) : sourceWords(u.source, { english: false }), why: t(u.why), status: u.status }));
+  const out = list.map((u) => ({ what: u.what === 'Some fields of this ticket' ? t('Some fields of this ticket') : u.status === 'partial' || u.leftOut ? t(u.what) : sourceWords(u.source, { english: false }), why: t(u.why), status: u.status }));
   if (cut) {
     const why = cut.trimmed
       ? t('left out to fit the AI model (the newest {sent} of {total} were sent)', { sent: cut.sent, total: cut.total })

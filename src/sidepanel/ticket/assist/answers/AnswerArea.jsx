@@ -83,6 +83,8 @@ export default function AnswerArea({ assist, page, eff, record, active = true })
           onSend={assist.confirmPreview}
           onCancel={assist.cancelPreview}
           onMask={assist.maskMore}
+          onChoose={assist.choose}
+          onRemember={assist.remember}
         />
       )}
       {answers.map((a, i) => (

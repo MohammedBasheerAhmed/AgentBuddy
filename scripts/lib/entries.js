@@ -10,6 +10,9 @@ const ENTRIES = [
   { entry: 'src/background/service-worker.js', outfile: 'background.bundle.js' },
   // The content script and the page bridge are registered at run time (service worker), only on enabled instances.
   { entry: 'src/content/index.js', outfile: 'content.bundle.js' },
+  // The reading engine, split off the content script so the script that loads on every page stays small. Not registered: the panel
+  // injects it into a tab the first time a read needs it (src/content/readsEntry.js, src/sidepanel/ask.js).
+  { entry: 'src/content/readsEntry.js', outfile: 'reads.bundle.js' },
   { entry: 'src/page/bridge.js', outfile: 'pagebridge.js' },
   { entry: 'src/sidepanel/index.jsx', outfile: 'sidepanel.bundle.js' },
   { entry: 'src/options/index.jsx', outfile: 'options.bundle.js' },

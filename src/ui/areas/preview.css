@@ -91,3 +91,16 @@
 /* ---- while a run waits, and after it failed ---- */
 .ab-note.ab-runstatus { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 10px 14px; border: 0; border-radius: var(--ab-radius-lg); background: var(--ab-surface); color: var(--ab-fg-soft); }
 .ab-note.ab-runerror { padding: 12px 14px; border: 0; border-radius: var(--ab-radius-lg); }
+
+/* ---- what goes in (round 5, board F): ticks for the groups of the request that can be left out ---- */
+.ab-choices { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; margin-top: 12px; }
+.ab-choices .ab-check-h { margin-top: 0; }
+.ab-choice-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.ab-choice { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--ab-border); }
+.ab-choice:last-child { border-bottom: 0; }
+.ab-choice input[type="checkbox"] { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--ab-accent); }
+.ab-choice label { flex: 1; min-width: 0; font-size: var(--ab-text-base); line-height: 1.35; }
+.ab-choice-n { color: var(--ab-fg-muted); }
+.ab-choice-hint { display: block; margin-top: 2px; }
+.ab-choice-remember { margin-top: 4px; border-bottom: 0; }
+.ab-choice-problem:empty { display: none; }

@@ -30,6 +30,7 @@ module.exports = {
     await ctx.waitUntil('the state and priority chips', async () => /In Progress/.test((await textOf(p, '.ab-glance')) || '') && /High/.test((await textOf(p, '.ab-glance')) || ''), { timeout: 15000 }).catch(() => {});
     const glance = (await textOf(p, '.ab-glance')) || '';
     t.check('the glance shows the number, the title, the state and the priority', /INC0010001/.test(glance) && /VPN keeps disconnecting/.test(glance) && /In Progress/.test(glance) && /High/.test(glance), glance.replace(/\s+/g, ' ').slice(0, 200));
+    await p.waitForSelector('.ab-glance-more', { timeout: 15000 }); // (the details come from a read, which first loads the reading engine into the tab)
     const folded = await p.evaluate(() => ({ more: document.querySelector('.ab-glance-more')?.getAttribute('aria-expanded'), shown: [...document.querySelectorAll('.ab-glance-details')].some((d) => d.getClientRects().length > 0) }));
     t.check('the glance is calm: the other facts wait behind "Ticket details"', folded.more === 'false' && !folded.shown, JSON.stringify(folded));
     await p.click('.ab-glance-more');

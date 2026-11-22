@@ -79,3 +79,56 @@
 
 /* text for screen readers only (the follow-up period's label) */
 .ab-mw-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---- round 5 (docs/round5.md): the first screens of My work and Team are five rows ----
+   The row is the Ticket screen's (insights.css: .ab-ins-group-row, .ab-ins-tile, .ab-ins-tile-dot, .ab-ins-pain-*); what is new is the
+   number the row stands for (a pill before the chevron), the screen's title line, and a calm line for a row with nothing to report.
+   The pill is fg-soft on bg-sunken, a pair tests/panel-contrast.test.js checks. Team's first screen uses the same classes. */
+.ab-fr-screen { gap: 0; }
+.ab-fr-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; min-width: 0; }
+.ab-fr-title { margin: 0; font-size: var(--ab-text-xl); font-weight: 600; line-height: 1.4; color: var(--ab-fg); }
+.ab-fr-read { display: inline-flex; align-items: center; gap: 4px; min-width: 0; font-size: var(--ab-text-sm); color: var(--ab-fg-muted); }
+.ab-fr-read .ab-btn { min-height: 28px; padding-inline: 6px; color: var(--ab-accent); font-weight: 600; font-size: var(--ab-text-sm); }
+.ab-fr-sub { margin: 2px 0 10px; font-size: var(--ab-text-md); color: var(--ab-fg-muted); overflow-wrap: anywhere; }
+.ab-fr-screen > .ab-note, .ab-fr-screen > .ab-errnote { margin-bottom: 8px; }
+.ab-fr-rows { border-top: 1px solid var(--ab-divider); }
+/* the one finding of a row: two lines at most (a 320 px panel needs the second) */
+.ab-fr-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ab-fr-num { flex: none; min-width: 22px; padding: 2px 8px; border-radius: 999px; background: var(--ab-bg-sunken); color: var(--ab-fg-soft); font-size: var(--ab-text-sm); font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
+/* the opened row: its tickets run to the panel's edges, a calm line when there is nothing to list */
+.ab-fr-body { background: var(--ab-bg-subtle); }
+.ab-mywork .ab-fr-body .ab-mw-rows { margin-inline: 0; }
+.ab-mywork .ab-fr-body .ab-mw-rows > .ab-mw-row > .ab-mw-link { padding-inline-start: 56px; }
+.ab-mywork .ab-fr-body .ab-mw-link > .ab-dot { margin-inline-start: -16px; }
+.ab-mywork .ab-fr-body .ab-mw-row-act { padding-inline-start: 60px; }
+.ab-fr-empty { margin: 0; padding: 10px 16px 12px 60px; font-size: var(--ab-text-md); color: var(--ab-fg-muted); }
+.ab-fr-hint { margin: 0; padding: 0 16px 10px 60px; }
+.ab-fr-body .ab-fr-more { align-self: flex-start; margin-inline-start: 50px; margin-bottom: 6px; }
+.ab-fr-cluster-head { margin: 0; padding: 10px 16px 2px 60px; font-size: var(--ab-text-md); font-weight: 500; }
+.ab-fr-cluster + .ab-fr-cluster { border-top: 1px solid var(--ab-divider); }
+.ab-fr-body .ab-mw-more { margin-inline-start: 50px; }
+/* under the five: the way to everything else, in the accent words of "More for this ticket" */
+.ab-fr-quiet-rows { margin-top: 2px; }
+.ab-fr-quiet-detail { font-weight: 400; color: var(--ab-fg-muted); }
+.ab-fr-quiet .ab-more-tools-text { color: inherit; }
+.ab-fr-back { margin-bottom: 4px; }
+.ab-fr-screen > .ab-halfrule { margin-top: 8px; }
+/* Team's "Weekly report": the screen's one filled button, a title and one line, an arrow */
+.ab-fr-weekly { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 12px 14px; text-align: start; border-radius: 10px; }
+.ab-fr-weekly-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ab-fr-weekly-title { font-size: var(--ab-text-base); font-weight: 600; }
+.ab-fr-weekly-sub { font-size: var(--ab-text-sm); font-weight: 400; opacity: 0.92; }
+.ab-fr-weekly > .ab-icon { flex: none; }
+.ab-fr-scope { margin-bottom: 10px; }
+.ab-fr-refresh { min-height: 24px; padding-inline: 4px; color: var(--ab-accent); font-weight: 600; font-size: var(--ab-text-sm); vertical-align: baseline; }
+/* Team's lists inside an opened row: the tickets and the facts in line with the row's text */
+.ab-fr-body .ab-fr-tlist { padding-block: 4px; padding-inline: 60px 16px; }
+.ab-fr-body .ab-fr-tlist .ab-tlist-row:first-child { padding-top: 8px; }
+ul.ab-fr-facts { list-style: none; margin: 0; padding: 8px 16px 8px 60px; display: flex; flex-direction: column; gap: 4px; font-size: var(--ab-text-md); }
+.ab-fr-facts li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ab-fr-fact-label { min-width: 0; overflow-wrap: anywhere; }
+.ab-fr-fact-value { flex: none; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ab-fr-subhead { margin: 0; padding: 6px 16px 0 60px; font-size: var(--ab-text-sm); font-weight: 600; color: var(--ab-fg-soft); }
+.ab-fr-notready .ab-fr-more { margin-top: -4px; }
+.ab-fr-notes { margin-top: 8px; }
+.ab-fr-view { display: flex; flex-direction: column; min-width: 0; }

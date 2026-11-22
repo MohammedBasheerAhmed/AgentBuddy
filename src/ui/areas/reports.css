@@ -461,3 +461,100 @@ a.ab-tlist-number, button.ab-tlist-number { display: inline-flex; align-items: c
   .ab-dash-top, .ab-more, .ab-menu, .ab-export-panel, .ab-dash-session, .ab-showmore, .ab-team-assist .ab-btn-ai, .ab-team-assist .ab-btn-ai-quiet { display: none !important; }
   .ab-tlist-line { display: block; }
 }
+
+/* ==== "My week" and the weekly report (round 5, docs/round5.md, boards B, D and E): src/sidepanel/mywork/MyWeek.jsx,
+   src/sidepanel/team/WeeklyReport.jsx, src/sidepanel/reports/weekly/*. Tokens from theme.css only. ==== */
+.ab-weekly { display: flex; flex-direction: column; gap: 12px; min-width: 0; container-type: inline-size; }
+.ab-weekly-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ab-weekly-back { display: inline-flex; align-items: center; gap: 2px; min-height: 32px; padding: 0; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-accent); font: inherit; font-size: var(--ab-text-md); font-weight: 600; cursor: pointer; }
+.ab-weekly-back:focus-visible, .ab-weekly-linkbtn:focus-visible { outline: none; box-shadow: var(--ab-ring); }
+.ab-weekly-titlebar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ab-weekly-title { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.ab-weekly-period { margin: -4px 0 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); overflow-wrap: anywhere; }
+.ab-weekly-seg { flex: none; }
+
+/* the numbers: two to a row (My week), five to a row (the weekly report), three to a row when the panel is narrow */
+.ab-weekly-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ab-weekly-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 14px; border: 1px solid var(--ab-border); border-radius: var(--ab-radius-lg); background: var(--ab-bg-raised); color: var(--ab-fg); }
+.ab-weekly-tile-wide { grid-column: 1 / -1; }
+.ab-weekly-value { font-size: 22px; font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
+.ab-weekly-label { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); line-height: 1.3; overflow-wrap: anywhere; }
+.ab-weekly-sub { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); line-height: 1.3; }
+.ab-weekly-change { font-size: var(--ab-text-sm); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.ab-weekly-good { color: var(--ab-ok); }
+.ab-weekly-bad { color: var(--ab-danger); }
+.ab-weekly-neutral { color: var(--ab-fg-muted); font-weight: 500; }
+.ab-weekly-tiles-compact { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.ab-weekly-tiles-compact .ab-weekly-tile { align-items: center; padding: 10px 4px; text-align: center; }
+.ab-weekly-tiles-compact .ab-weekly-value { font-size: 20px; }
+.ab-weekly-tiles-compact .ab-weekly-label, .ab-weekly-tiles-compact .ab-weekly-change { font-size: var(--ab-text-xs); }
+@container (max-width: 339px) {
+  .ab-weekly-tiles-compact { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.ab-weekly-compared, .ab-weekly-notes, .ab-weekly-copied { margin: 0; }
+.ab-weekly-copied:empty { display: none; }
+
+/* where the week went: a bar per area, with its count */
+.ab-weekly-section { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ab-weekly-h { margin: 0; font-size: var(--ab-text-lg); font-weight: 600; }
+.ab-weekly-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ab-weekly-bar { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: var(--ab-text-md); }
+.ab-weekly-bar-name { overflow-wrap: anywhere; }
+.ab-weekly-bar-track { display: block; block-size: 8px; border-radius: 4px; background: var(--ab-chart-track); }
+.ab-weekly-bar-fill { display: block; block-size: 100%; border-radius: 4px; background: var(--ab-chart-1); }
+.ab-weekly-bar-count { min-width: 2ch; color: var(--ab-fg-muted); text-align: end; }
+
+/* needs a decision */
+.ab-weekly-decisions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ab-weekly-decision { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; font-size: var(--ab-text-md); line-height: 1.4; overflow-wrap: anywhere; }
+.ab-weekly-decision + .ab-weekly-decision { border-top: 1px solid var(--ab-divider); }
+.ab-weekly-badge { flex: none; display: inline-flex; align-items: center; justify-content: center; inline-size: 20px; block-size: 20px; border-radius: 50%; font-size: var(--ab-text-sm); font-weight: 600; }
+.ab-weekly-badge-bad { background: var(--ab-danger-soft); color: var(--ab-danger); }
+.ab-weekly-badge-warn { background: var(--ab-warn-soft); color: var(--ab-warn); }
+
+/* the numbers that were left out, and why */
+.ab-weekly-missing > summary { color: var(--ab-fg-muted); font-size: var(--ab-text-sm); }
+.ab-weekly-missing-list { margin: 4px 0 0; padding-inline-start: 18px; color: var(--ab-fg-soft); font-size: var(--ab-text-sm); display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+
+/* the AI line: a soft panel, the grey spark, what it was written from, what was sent */
+.ab-weekly-ai { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 14px; border-radius: var(--ab-radius-lg); background: var(--ab-surface); }
+.ab-weekly-ai-h { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--ab-text-md); font-weight: 600; color: var(--ab-fg); }
+.ab-weekly-ai-text { font-size: var(--ab-text-md); line-height: 1.5; overflow-wrap: anywhere; }
+.ab-weekly-ai-text p { margin: 0; }
+.ab-weekly-ai-why, .ab-weekly-ai-note { margin: 0; color: var(--ab-fg-muted); font-size: var(--ab-text-sm); line-height: 1.4; }
+.ab-weekly-linkbtn { min-height: 24px; padding: 0; border: 0; border-radius: var(--ab-radius-xs); background: transparent; color: var(--ab-accent); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.ab-weekly-sent { margin: 0; max-height: 14rem; overflow: auto; padding: 10px 12px; border-radius: var(--ab-radius); background: var(--ab-bg-sunken); color: var(--ab-fg); font-family: var(--ab-mono); font-size: var(--ab-text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ab-weekly-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The page the browser saves as a PDF (board E): an A4 page, drawn outside the panel, shown only while printing. It is light in dark mode
+   too: the page asks for the light colour scheme, so the system colours the print block above maps the tokens to are black on white. */
+.ab-weekly-pdf-host { display: none; }
+@page weekly { size: A4; margin: 14mm; }
+@media print {
+  body.ab-printing-weekly > *:not(.ab-weekly-pdf-host) { display: none !important; }
+  body.ab-printing-weekly > .ab-weekly-pdf-host.ab-pdf-live { display: block !important; }
+  .ab-weekly-pdf { --ab-weekly-line: color-mix(in srgb, CanvasText 22%, Canvas); color-scheme: light; page: weekly; display: flex; flex-direction: column; gap: 14px; min-height: 255mm; color: var(--ab-fg); background: var(--ab-bg); font-family: var(--ab-font); font-size: 12px; line-height: 1.4; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .ab-weekly-pdf-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--ab-fg); }
+  .ab-weekly-pdf-kicker, .ab-weekly-pdf-period { margin: 0; color: var(--ab-fg-muted); font-size: 12px; }
+  .ab-weekly-pdf-title { margin: 4px 0 2px; font-size: 24px; font-weight: 600; line-height: 1.2; }
+  .ab-weekly-pdf-paragraph { margin: 0; font-size: 13px; line-height: 1.55; white-space: pre-line; }
+  .ab-weekly-pdf-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .ab-weekly-pdf-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border: 1px solid var(--ab-weekly-line); border-radius: var(--ab-radius); text-align: center; break-inside: avoid; }
+  .ab-weekly-pdf-value { font-size: 22px; font-weight: 600; line-height: 1.1; }
+  .ab-weekly-pdf-label, .ab-weekly-pdf-note { color: var(--ab-fg-muted); font-size: 11px; }
+  .ab-weekly-pdf-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .ab-weekly-pdf h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+  .ab-weekly-pdf .ab-weekly-bar-track { background: var(--ab-weekly-line); }
+  .ab-weekly-pdf .ab-weekly-bar-fill { background: var(--ab-fg-soft); }
+  .ab-weekly-pdf-decisions { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .ab-weekly-pdf table { border-collapse: collapse; inline-size: 100%; font-size: 12px; }
+  .ab-weekly-pdf th { padding: 6px 8px; border-bottom: 1px solid var(--ab-fg-muted); color: var(--ab-fg-muted); font-weight: 600; text-align: start; }
+  .ab-weekly-pdf td { padding: 6px 8px; border-bottom: 1px solid var(--ab-weekly-line); overflow-wrap: anywhere; }
+  .ab-weekly-pdf tr { break-inside: avoid; }
+  .ab-weekly-pdf-footnote { margin: 0; color: var(--ab-fg-muted); font-size: 11px; }
+  .ab-weekly-pdf-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--ab-weekly-line); color: var(--ab-fg-muted); font-size: 11px; }
+}
+
+/* The line under the Insights / AI Assist switch says "Nothing is sent anywhere". The weekly report has one AI line (counts only, checked
+   first), so while it is open that sentence is not shown: the AI line says where its text goes. */
+.ab-pane:has([data-view="weekly"]) > .ab-halfrule-insights { display: none; }

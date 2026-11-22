@@ -225,7 +225,7 @@ The HR case brief also needs Strict (or Local-only) privacy mode.
 | Knowledge tools | `kb-merge-draft`, `kb-gap-outline` |
 | Write: email drafts | `email-ask-info`, `email-status-update`, `email-resolution`, `email-approval-nudge`, `email-apology`, `email-closure` |
 | Write: rewrite and notes | `rewrite-short`, `rewrite-friendly`, `rewrite-plain`, `rewrite-formal`, `rewrite-fix`, `rewrite-translate`, `rewrite-bilingual`, `notes-to-ticket` |
-| Team (reports) | `reports` (the whole section), `shift-handover`, `dashboard-insights`, `coaching-snapshot` (off until `coachingEnabled` is `true`; needs Strict mode) |
+| Team (reports) | `reports` (the whole section), `shift-handover`, `dashboard-insights`, `weekly-summary`, `my-week-tip`, `coaching-snapshot` (off until `coachingEnabled` is `true`; needs Strict mode) |
 | Record tabs | `request-explain`, `resolution-improve`, `fulfilment-checklist` |
 | AI Assist on the ticket | `ask-ticket` (Ask about this ticket), `rewrite-own` (refine an answer with your own instruction) |
 
